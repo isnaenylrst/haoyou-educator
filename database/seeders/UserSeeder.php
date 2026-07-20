@@ -37,5 +37,21 @@ class UserSeeder extends Seeder
             'status'=>true
 
         ]);
+
+         User::create([
+            'name' => 'Kepala Kurikulum',
+            'email' => 'kurikulum@haoyou.com',
+            'password' => Hash::make('password'),
+            'role' => 'curriculum',
+            'status' => true,
+        ]);
+
+        User::create([
+            'name' => 'Guru',
+            'email' => 'guru@haoyou.com',
+            'password' => Hash::make('password'),
+            'role' => 'teacher',
+            'status' => true,
+        ]);
     }
 }

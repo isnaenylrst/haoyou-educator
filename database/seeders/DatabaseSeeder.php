@@ -11,7 +11,11 @@ class DatabaseSeeder extends Seeder
         $this->call([
 
             UserSeeder::class,
+            TeacherSeeder::class,
+            CurriculumSeeder::class,
+            StudentSeeder::class,
             ProgramSeeder::class,
+            ClassScheduleSeeder::class,
             ProgramPriceSeeder::class,
             FollowupTemplateSeeder::class,
             PdfTemplateSeeder::class,
@@ -26,6 +30,7 @@ class DatabaseSeeder extends Seeder
             ProgressReportSeeder::class,
             ConsultationScheduleSeeder::class,
             LeaveRequestSeeder::class,
+            OfficialLetterSeeder::class,
             UserNotificationSeeder::class,
             ReviewLogSeeder::class,
 

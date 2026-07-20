@@ -6,19 +6,28 @@ use App\Models\Curriculum;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<Curriculum>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Curriculum>
  */
 class CurriculumFactory extends Factory
 {
+    protected $model = Curriculum::class;
+
     /**
      * Define the model's default state.
-     *
-     * @return array<string, mixed>
      */
     public function definition(): array
     {
         return [
-            //
+
+            // Sesuaikan dengan id user yang sudah ada
+            'user_id' => 1,
+
+            'nama' => fake()->randomElement([
+                'Kepala Kurikulum',
+            ]),
+
+            'status' => fake()->boolean(90),
+
         ];
     }
 }
