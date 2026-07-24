@@ -6,29 +6,43 @@ use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
+    /**
+     * Seed the application's database.
+     */
     public function run(): void
     {
         $this->call([
 
+            // Master
+            LevelSeeder::class,
             UserSeeder::class,
-            ProgramSeeder::class,
-            ProgramPriceSeeder::class,
-            FollowupTemplateSeeder::class,
-            PdfTemplateSeeder::class,
-            SopSeeder::class,
-            LearningMaterialSeeder::class,
-            SyllabusSeeder::class,
-            VocabularySeeder::class,
-            LessonPlanSeeder::class,
-            PptSeeder::class,
-            AttendanceSeeder::class,
-            TeachingLogSeeder::class,
-            ProgressReportSeeder::class,
-            ConsultationScheduleSeeder::class,
-            LeaveRequestSeeder::class,
-            UserNotificationSeeder::class,
-            ReviewLogSeeder::class,
+            TeacherSeeder::class,
+            StudentSeeder::class,
 
+            // Academic
+            ProgramSeeder::class,
+            ProgramPackageSeeder::class,
+            ClassSeeder::class,
+            ClassScheduleSeeder::class,
+            ClassEnrollmentSeeder::class,
+
+            // Learning
+            MaterialSeeder::class,
+            MaterialVocabSeeder::class,
+            TeacherMaterialSeeder::class,
+
+            // Administration
+            ProgramSeeder::class,
+            TeacherLeaveSeeder::class,
+
+            // Teaching
+            TeachingJournalSeeder::class,
+            AttendanceSeeder::class,
+            ProgressReportSeeder::class,
+
+            // Document
+            DocumentTemplateSeeder::class,
+            DocumentSeeder::class,
         ]);
     }
 }

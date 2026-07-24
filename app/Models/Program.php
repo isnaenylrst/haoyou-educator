@@ -2,46 +2,24 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class Program extends Model
 {
     use HasFactory;
 
+    protected $table = 'programs';
+
+    public $timestamps = false;
+
     protected $fillable = [
-        'nama_program',
-        'tipe_kelas',
-        'fokus',
-        'durasi',
-        'jumlah_pertemuan',
-        'min_siswa',
-        'max_siswa',
-        'aktif',
+        'program_name',
+        'description',
     ];
 
-    protected $casts = [
-        'aktif' => 'boolean',
-    ];
-
-    /*
-    |--------------------------------------------------------------------------
-    | Relationships
-    |--------------------------------------------------------------------------
-    */
-
-    public function prices()
+    public function programPackages()
     {
-        return $this->hasMany(ProgramPrice::class);
-    }
-
-    public function classes()
-    {
-        return $this->hasMany(CourseClass::class);
-    }
-
-    public function certificates()
-    {
-        return $this->hasMany(Certificate::class);
+        return $this->hasMany(ProgramPackage::class);
     }
 }
