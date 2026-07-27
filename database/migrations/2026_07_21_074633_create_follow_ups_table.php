@@ -1,0 +1,44 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('follow_ups', function (Blueprint $table) {
+
+            $table->id();
+
+            $table->foreignId('candidate_student_id')
+                ->constrained('candidate_students')
+                ->cascadeOnDelete();
+
+            $table->foreignId('follow_up_template_id')
+                ->constrained('follow_up_templates')
+                ->restrictOnDelete();
+
+            $table->date('followup_date');
+
+            $table->string('followup_method');
+
+            $table->text('note')->nullable();
+
+            $table->date('next_followup')->nullable();
+
+            $table->enum('status',[
+                'Pending',
+                'Done'
+            ])->default('Pending');
+
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('follow_ups');
+    }
+};

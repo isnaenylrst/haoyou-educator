@@ -2,53 +2,33 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, SoftDeletes;
+    use HasFactory, Notifiable;
 
     protected $fillable = [
-        'name',
-        'email',
+        'level_id',
+        'username',
         'password',
-        'role',
         'status',
-        'last_login',
     ];
 
     protected $hidden = [
         'password',
-        'remember_token',
     ];
 
-    protected function casts(): array
+    public function level()
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'last_login' => 'datetime',
-            'password' => 'hashed',
-            'status' => 'boolean',
-        ];
+        return $this->belongsTo(Level::class);
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Relationships
-    |--------------------------------------------------------------------------
-    */
 
     public function teacher()
     {
         return $this->hasOne(Teacher::class);
-    }
-
-    public function curriculum()
-    {
-        return $this->hasOne(Curriculum::class);
     }
 
     public function student()
@@ -56,28 +36,43 @@ class User extends Authenticatable
         return $this->hasOne(Student::class);
     }
 
-    public function followUps()
+    public function curriculum()
     {
-        return $this->hasMany(FollowUp::class, 'admin_id');
+        return $this->hasOne(Curriculum::class);
     }
 
-    public function payments()
+    public function uploadedMaterials()
     {
-        return $this->hasMany(Payment::class, 'admin_id');
+        return $this->hasMany(Material::class, 'uploaded_by');
+    }
+
+    public function uploadedProgressReports()
+    {
+        return $this->hasMany(ProgressReport::class, 'uploaded_by');
+    }
+
+    public function uploadedTemplates()
+    {
+        return $this->hasMany(DocumentTemplate::class, 'uploaded_by');
+    }
+
+    public function uploadedDocuments()
+    {
+        return $this->hasMany(Document::class, 'uploaded_by');
     }
 
     public function documents()
     {
-        return $this->hasMany(StudentDocument::class, 'uploaded_by');
+        return $this->hasMany(Document::class);
     }
 
-    public function alumniUpdates()
+    public function approvedTeacherMaterials()
     {
-        return $this->hasMany(Alumni::class, 'updated_by');
+        return $this->hasMany(TeacherMaterial::class, 'approved_by');
     }
 
-    public function pointHistories()
+    public function approvedTeacherLeaves()
     {
-        return $this->hasMany(PointHistory::class, 'given_by');
+        return $this->hasMany(TeacherLeave::class, 'approved_by');
     }
 }

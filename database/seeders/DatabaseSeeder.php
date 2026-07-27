@@ -9,31 +9,30 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call([
-
+            LevelSeeder::class,
             UserSeeder::class,
-            TeacherSeeder::class,
             CurriculumSeeder::class,
+            TeacherSeeder::class,
+            CandidateStudentSeeder::class,
+            CandidateStudentAvailableScheduleSeeder::class,
             StudentSeeder::class,
+            FollowUpTemplateSeeder::class,
+            FollowUpSeeder::class,
             ProgramSeeder::class,
+            ProgramPackageSeeder::class,
+            ClassSeeder::class,
             ClassScheduleSeeder::class,
-            ProgramPriceSeeder::class,
-            FollowupTemplateSeeder::class,
-            PdfTemplateSeeder::class,
-            SopSeeder::class,
-            LearningMaterialSeeder::class,
-            SyllabusSeeder::class,
-            VocabularySeeder::class,
-            LessonPlanSeeder::class,
-            PptSeeder::class,
+            ClassEnrollmentSeeder::class,
+            PaymentSeeder::class,
+            MaterialSeeder::class,
+            TeachingJournalSeeder::class,
             AttendanceSeeder::class,
-            TeachingLogSeeder::class,
+            MaterialVocabSeeder::class,
+            TeacherMaterialSeeder::class,
+            TeacherLeaveSeeder::class,
             ProgressReportSeeder::class,
-            ConsultationScheduleSeeder::class,
-            LeaveRequestSeeder::class,
-            OfficialLetterSeeder::class,
-            UserNotificationSeeder::class,
-            ReviewLogSeeder::class,
-
+            DocumentTemplateSeeder::class,
+            DocumentSeeder::class,
         ]);
     }
 }
