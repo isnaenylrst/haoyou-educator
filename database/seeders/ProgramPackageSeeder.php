@@ -8,10 +8,7 @@ use Illuminate\Support\Facades\DB;
 class ProgramPackageSeeder extends Seeder
 {
     /**
-     * Data harga & paket berdasarkan brosur Haoyou Educator.
-     * Angka kedua pada "Pertemuan: 24/48" dst (HSK 3-6) tidak konsisten sebagai
-     * kelipatan, sehingga total_meetings memakai angka PERTAMA (24), konsisten
-     * dengan HSK 1 & 2.
+     * DATA PASTI - harga & paket sesuai brosur Haoyou Educator.
      */
     public function run(): void
     {
@@ -20,7 +17,6 @@ class ProgramPackageSeeder extends Seeder
         $dailyActivityId = DB::table('programs')->where('program_name', 'Daily Activity')->value('id');
         $hskId = DB::table('programs')->where('program_name', 'HSK')->value('id');
 
-        // Regular Class (group 4-8 orang, 90 menit)
         $regularPackages = [
             ['name' => 'Regular Class - 1x/Minggu (1 Bulan / 4 Pertemuan)', 'meetings' => 4, 'price' => 550000],
             ['name' => 'Regular Class - 2x/Minggu (1 Bulan / 8 Pertemuan)', 'meetings' => 8, 'price' => 950000],
@@ -31,23 +27,18 @@ class ProgramPackageSeeder extends Seeder
             $this->insertPackage($dailyActivityId, 'Regular', $pkg['name'], 90, $pkg['meetings'], 4, 8, $pkg['price'], $now);
         }
 
-        // Private VIP (1 orang, guru lokal, 90 menit)
         $this->insertPackage($dailyActivityId, 'Private', 'Private VIP (1 Orang) - 4 Pertemuan (1 Bulan)', 90, 4, 1, 1, 1200000, $now);
         $this->insertPackage($dailyActivityId, 'Private', 'Private VIP (1 Orang) - 8 Pertemuan (1 Bulan)', 90, 8, 1, 1, 2000000, $now);
 
-        // Private Exclusive (2-4 orang, guru lokal, 90 menit)
         $this->insertPackage($dailyActivityId, 'Private', 'Private Exclusive (2-4 Orang) - 4 Pertemuan (1 Bulan)', 90, 4, 2, 4, 800000, $now);
         $this->insertPackage($dailyActivityId, 'Private', 'Private Exclusive (2-4 Orang) - 8 Pertemuan (1 Bulan)', 90, 8, 2, 4, 1400000, $now);
 
-        // Private Native VIP (1 on 1, guru asli China, 60 menit)
         $this->insertPackage($dailyActivityId, 'Private', 'Private Native VIP (1 on 1) - 4 Pertemuan (60 Menit)', 60, 4, 1, 1, 1600000, $now);
         $this->insertPackage($dailyActivityId, 'Private', 'Private Native VIP (1 on 1) - 8 Pertemuan (60 Menit)', 60, 8, 1, 1, 2800000, $now);
 
-        // Private Native Exclusive (2-4 orang, guru asli China, 60 menit)
         $this->insertPackage($dailyActivityId, 'Private', 'Private Native Exclusive (2-4 Orang) - 4 Pertemuan (60 Menit)', 60, 4, 2, 4, 1200000, $now);
         $this->insertPackage($dailyActivityId, 'Private', 'Private Native Exclusive (2-4 Orang) - 8 Pertemuan (60 Menit)', 60, 8, 2, 4, 2000000, $now);
 
-        // HSK 1-6
         $hskPackages = [
             ['name' => 'HSK 1 (60 Menit / 2 Bulan)', 'minutes' => 60, 'meetings' => 16, 'min' => 2, 'max' => 6, 'price' => 1500000],
             ['name' => 'HSK 2 (60 Menit / 3 Bulan)', 'minutes' => 60, 'meetings' => 24, 'min' => 2, 'max' => 6, 'price' => 2500000],

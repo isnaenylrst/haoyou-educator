@@ -2,33 +2,33 @@
 
 namespace Database\Seeders;
 
+use App\Models\Curriculum;
+use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class CurriculumSeeder extends Seeder
 {
-    /**
-     * Satu baris curriculum untuk tiap user ber-level 'Curriculum' (relasi 1-1).
-     */
     public function run(): void
     {
-        $now = now();
+        $name = 'Curriculum Haoyou';
 
-        $curriculumLevelId = DB::table('levels')->where('nama_level', 'Curriculum')->value('id_level');
-        $userIds = DB::table('users')->where('level_id', $curriculumLevelId)->pluck('id');
-
-        foreach ($userIds as $userId) {
-            DB::table('curriculum')->insert([
-                'user_id' => $userId,
-                'name' => fake()->name(),
-                'phone' => fake()->numerify('08##########'),
-                'address' => fake()->address(),
-                'specialist' => fake()->randomElement(['HSK Preparation']),
-                'join_date' => fake()->dateTimeBetween('-3 years', '-6 months')->format('Y-m-d'),
-                'status' => 'Active',
-                'created_at' => $now,
-                'updated_at' => $now,
+        $user = User::factory()
+            ->curriculum()
+            ->create([
+                'username' => Str::slug($name,'.'),
+                'password' => Hash::make('password'),
             ]);
-        }
+
+        Curriculum::create([
+            'user_id' => $user->id,
+            'name' => $name,
+            'phone' => '081234567890',
+            'address' => 'Malang',
+            'specialist' => 'Mandarin Curriculum',
+            'join_date' => now()->toDateString(),
+            'status' => 'Active',
+        ]);
     }
 }
