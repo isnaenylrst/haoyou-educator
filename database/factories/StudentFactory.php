@@ -12,12 +12,9 @@ class StudentFactory extends Factory
     public function definition(): array
     {
         return [
-
-            'name' => fake()->name(),
-
             'points' => fake()->numberBetween(0,100),
 
-            'join_date' => fake()->date(),
+            'join_date' => fake()->dateTimeBetween('2024-01-01', 'now')->format('Y-m-d'),
 
             'status' => 'Active',
         ];

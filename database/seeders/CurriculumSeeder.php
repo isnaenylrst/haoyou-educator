@@ -12,12 +12,12 @@ class CurriculumSeeder extends Seeder
 {
     public function run(): void
     {
-        $name = 'Curriculum Haoyou';
+        $name = 'Kepala Kurikulum';
 
         $user = User::factory()
             ->curriculum()
             ->create([
-                'username' => Str::slug($name,'.'),
+                'username' => 'curriculum',
                 'password' => Hash::make('password'),
             ]);
 

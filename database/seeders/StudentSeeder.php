@@ -13,38 +13,64 @@ class StudentSeeder extends Seeder
 {
     public function run(): void
     {
-        $candidateIds = CandidateStudent::pluck('id')->shuffle()->values();
+        // =========================
+        // Student Tetap
+        // =========================
 
-        Student::factory()
-            ->count(30)
-            ->make()
-            ->each(function ($student, $index) use ($candidateIds) {
+        $candidate = CandidateStudent::where('phone' ,'081234567890')->first();
 
-                $username = Str::slug($student->name, ' ');
+        $user = User::factory()
+            ->student()
+            ->create([
+                'username' => 'student',
+                'password' => Hash::make('student123'),
+            ]);
 
-                // Jika ada nama yang sama, tambahkan angka
-                if (User::where('username', $username)->exists()) {
-                    $username .= fake()->numberBetween(100,999);
-                }
+        Student::factory()->create([
+            'candidate_student_id' => $candidate->id,
+            'user_id' => $user->id,
+            'name' => $candidate->name,
+        ]);
 
-                $user = User::factory()
-                    ->student()
-                    ->create([
-                        'username' => $username,
-                        'password' => Hash::make('password'),
-                    ]);
+        $candidate->update([
+            'trial_status' => 'Completed',
+            'lead_status' => 'Hot',
+        ]);
 
-                $student->user_id = $user->id;
+        // =========================
+        // Student Dummy
+        // =========================
 
-                $student->candidate_student_id = $candidateIds[$index];
+        $candidates = CandidateStudent::where('id', '!=', $candidate->id)
+            ->inRandomOrder()
+            ->take(14)
+            ->get();
 
-                $student->save();
+        foreach ($candidates as $candidate) {
 
-                CandidateStudent::find($candidateIds[$index])
-                    ->update([
-                        'trial_status' => 'Completed',
-                        'lead_status' => 'Hot',
-                    ]);
-            });
+            $username = Str::slug($candidate->name, '_');
+
+            if (User::where('username', $username)->exists()) {
+                $username .= fake()->numberBetween(100, 999);
+            }
+
+            $user = User::factory()
+                ->student()
+                ->create([
+                    'username' => $username,
+                    'password' => Hash::make('password'),
+                ]);
+
+            Student::factory()->create([
+                'candidate_student_id' => $candidate->id,
+                'user_id' => $user->id,
+                'name' => $candidate->name,
+            ]);
+
+            $candidate->update([
+                'trial_status' => 'Completed',
+                'lead_status' => 'Hot',
+            ]);
+        }
     }
 }
