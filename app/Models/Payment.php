@@ -4,59 +4,38 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Payment extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory;
+
+    protected $table = 'payments';
+
+    public $timestamps = false;
 
     protected $fillable = [
-        'student_id',
-        'program_price_id',
-        'admin_id',
+        'enrollment_id',
         'invoice_number',
-        'invoice_pdf',
-        'payment_type',
-        'total_tagihan',
-        'total_bayar',
-        'sisa_tagihan',
+        'invoice_file',
+        'payment_stage',
+        'total_bill',
+        'amount_bill',
+        'remaining_bill',
+        'payment_method',
+        'payment_date',
+        'payment_proof',
         'status',
-        'tanggal_invoice',
-        'jatuh_tempo',
-        'catatan',
     ];
 
     protected $casts = [
-        'tanggal_invoice' => 'date',
-        'jatuh_tempo' => 'date',
-        'total_tagihan' => 'decimal:2',
-        'total_bayar' => 'decimal:2',
-        'sisa_tagihan' => 'decimal:2',
+        'total_bill' => 'decimal:2',
+        'amount_bill' => 'decimal:2',
+        'remaining_bill' => 'decimal:2',
+        'payment_date' => 'date',
     ];
 
-    /*
-    |--------------------------------------------------------------------------
-    | Relationships
-    |--------------------------------------------------------------------------
-    */
-
-    public function student()
+    public function enrollment()
     {
-        return $this->belongsTo(Student::class);
-    }
-
-    public function programPrice()
-    {
-        return $this->belongsTo(ProgramPrice::class);
-    }
-
-    public function admin()
-    {
-        return $this->belongsTo(User::class, 'admin_id');
-    }
-
-    public function paymentDetails()
-    {
-        return $this->hasMany(PaymentDetail::class);
+        return $this->belongsTo(ClassEnrollment::class, 'enrollment_id');
     }
 }

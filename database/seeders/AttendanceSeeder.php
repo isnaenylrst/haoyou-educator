@@ -2,70 +2,37 @@
 
 namespace Database\Seeders;
 
-use App\Models\Attendance;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class AttendanceSeeder extends Seeder
 {
     /**
-     * Run the database seeds.
+     * Tiap jurnal mengajar mencatat kehadiran siswa yang terdaftar di kelas
+     * terkait. unique(teaching_journal_id, student_id) dijaga karena tiap
+     * siswa hanya dicatat sekali per jurnal.
      */
     public function run(): void
     {
+        $now = now();
 
-        Attendance::insert([
+        $journals = DB::table('teaching_journals')->select('id', 'class_id')->get();
 
-            [
-                'class_schedule_id' => 1,
-                'student_id' => 1,
-                'teacher_id' => 1,
-                'status' => 'present',
-                'notes' => 'Hadir tepat waktu.',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
+        foreach ($journals as $journal) {
+            $studentIds = DB::table('class_enrollments')
+                ->where('class_id', $journal->class_id)
+                ->pluck('student_id');
 
-            [
-                'class_schedule_id' => 1,
-                'student_id' => 2,
-                'teacher_id' => 1,
-                'status' => 'late',
-                'notes' => 'Terlambat 10 menit.',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-
-            [
-                'class_schedule_id' => 2,
-                'student_id' => 3,
-                'teacher_id' => 2,
-                'status' => 'permission',
-                'notes' => 'Izin karena sakit.',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-
-            [
-                'class_schedule_id' => 2,
-                'student_id' => 4,
-                'teacher_id' => 2,
-                'status' => 'present',
-                'notes' => null,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-
-            [
-                'class_schedule_id' => 3,
-                'student_id' => 5,
-                'teacher_id' => 3,
-                'status' => 'absent',
-                'notes' => 'Tidak hadir tanpa keterangan.',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-
-        ]);
-
+            foreach ($studentIds as $studentId) {
+                DB::table('attendances')->insert([
+                    'teaching_journal_id' => $journal->id,
+                    'student_id' => $studentId,
+                    'status' => fake()->randomElement(['Present', 'Present', 'Present', 'Absent', 'Sick', 'Permission']),
+                    'remarks' => fake()->optional()->sentence(),
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
+        }
     }
 }

@@ -9,27 +9,30 @@ class ClassSchedule extends Model
 {
     use HasFactory;
 
+    protected $table = 'class_schedules';
+
+    public $timestamps = false;
+
     protected $fillable = [
         'class_id',
-        'tanggal',
-        'hari',
-        'jam_mulai',
-        'jam_selesai',
-        'ruangan',
-        'status',
+        'day',
+        'start_time',
+        'end_time',
+        'room',
     ];
 
-    protected $casts = [
-        'tanggal' => 'date',
-    ];
-
-    public function courseClass()
+    public function class()
     {
-        return $this->belongsTo(CourseClass::class, 'class_id');
+        return $this->belongsTo(ClassModel::class, 'class_id');
     }
 
-    public function pointHistories()
+    public function teachingJournals()
     {
-        return $this->hasMany(PointHistory::class);
+        return $this->hasMany(TeachingJournal::class, 'class_schedule_id');
+    }
+
+    public function teacherLeaves()
+    {
+        return $this->hasMany(TeacherLeave::class, 'class_schedule_id');
     }
 }

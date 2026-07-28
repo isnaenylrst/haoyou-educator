@@ -9,35 +9,27 @@ class FollowUp extends Model
 {
     use HasFactory;
 
+    protected $table = 'follow_ups';
+
+    public $timestamps = false;
+
     protected $fillable = [
+        'follow_up_template_id',
         'candidate_student_id',
-        'template_id',
-        'admin_id',
-        'tanggal_followup',
-        'media',
-        'hasil_followup',
+        'followup_date',
+        'followup_method',
+        'note',
         'next_followup',
-        'notes',
         'status',
     ];
 
-    protected $casts = [
-        'tanggal_followup' => 'datetime',
-        'next_followup' => 'datetime',
-    ];
+    public function template()
+    {
+        return $this->belongsTo(FollowUpTemplate::class, 'follow_up_template_id');
+    }
 
     public function candidateStudent()
     {
         return $this->belongsTo(CandidateStudent::class);
-    }
-
-    public function template()
-    {
-        return $this->belongsTo(FollowupTemplate::class, 'template_id');
-    }
-
-    public function admin()
-    {
-        return $this->belongsTo(User::class, 'admin_id');
     }
 }

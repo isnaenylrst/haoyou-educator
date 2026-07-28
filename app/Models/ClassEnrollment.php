@@ -9,6 +9,10 @@ class ClassEnrollment extends Model
 {
     use HasFactory;
 
+    protected $table = 'class_enrollments';
+
+    public $timestamps = false;
+
     protected $fillable = [
         'student_id',
         'class_id',
@@ -16,17 +20,23 @@ class ClassEnrollment extends Model
         'status',
     ];
 
-    protected $casts = [
-        'enrollment_date' => 'date',
-    ];
-
     public function student()
     {
         return $this->belongsTo(Student::class);
     }
 
-    public function courseClass()
+    public function class()
     {
-        return $this->belongsTo(CourseClass::class, 'class_id');
+        return $this->belongsTo(ClassModel::class, 'class_id');
+    }
+
+    public function payments()
+    {
+        return $this->hasMany(Payment::class, 'enrollment_id');
+    }
+
+    public function progressReports()
+    {
+        return $this->hasMany(ProgressReport::class, 'enrollment_id');
     }
 }

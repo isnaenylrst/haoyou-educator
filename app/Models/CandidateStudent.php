@@ -2,64 +2,42 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Model;
 
 class CandidateStudent extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory;
+
+    protected $table = 'candidate_student';
+
+    public $timestamps = false;
 
     protected $fillable = [
-        'nama',
-        'jenis_kelamin',
-        'tanggal_lahir',
-        'usia',
-        'no_hp',
-        'email',
-        'nama_ortu',
-        'no_hp_ortu',
-        'alamat',
-        'sekolah',
-        'sumber',
-        'kebutuhan_belajar',
-        'available_schedule',
+        'name',
+        'gender',
+        'birth_date',
+        'phone',
+        'parent_name',
+        'no_parents',
+        'address',
+        'school',
+        'source',
         'alergi',
-        'catatan',
-        'status_lead',
+        'interested_program',
         'status_trial',
         'tanggal_trial',
+        'status_lead',
     ];
 
-    protected $casts = [
-        'tanggal_lahir' => 'date',
-        'tanggal_trial' => 'date',
-    ];
-
-    /*
-    |--------------------------------------------------------------------------
-    | Relationships
-    |--------------------------------------------------------------------------
-    */
+    public function availableSchedules()
+    {
+        return $this->hasMany(CandidateStudentAvailableSchedule::class);
+    }
 
     public function followUps()
     {
         return $this->hasMany(FollowUp::class);
-    }
-
-    public function trialSessions()
-    {
-        return $this->hasMany(TrialSession::class);
-    }
-
-    public function agreement()
-    {
-        return $this->hasOne(StudentAgreement::class);
-    }
-
-    public function documents()
-    {
-        return $this->hasMany(StudentDocument::class);
     }
 
     public function student()
