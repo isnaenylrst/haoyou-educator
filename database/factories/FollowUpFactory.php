@@ -2,23 +2,18 @@
 
 namespace Database\Factories;
 
-use App\Models\FollowUp;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
-/**
- * @extends Factory<FollowUp>
- */
 class FollowUpFactory extends Factory
 {
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
     public function definition(): array
     {
         return [
-            //
+            'followup_date' => fake()->dateTimeBetween('-1 month', 'now')->format('Y-m-d'),
+            'followup_method' => fake()->randomElement(['WhatsApp', 'Telepon', 'Email']),
+            'note' => fake()->sentence(),
+            'next_followup' => fake()->optional()->dateTimeBetween('now', '+2 weeks')?->format('Y-m-d'),
+            'status' => fake()->randomElement(['Pending', 'Done']),
         ];
     }
 }

@@ -9,7 +9,7 @@ class CandidateStudent extends Model
 {
     use HasFactory;
 
-    protected $table = 'candidate_student';
+    protected $table = 'candidate_students';
 
     public $timestamps = false;
 

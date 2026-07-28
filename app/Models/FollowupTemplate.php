@@ -9,7 +9,7 @@ class FollowUpTemplate extends Model
 {
     use HasFactory;
 
-    protected $table = 'follow_up_template';
+    protected $table = 'follow_up_templates';
 
     public $timestamps = false;
 

@@ -2,29 +2,28 @@
 
 namespace Database\Seeders;
 
+use App\Models\ClassSchedule;
+use App\Models\Material;
+use App\Models\Teacher;
+use App\Models\TeachingJournal;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 
 class TeachingJournalSeeder extends Seeder
 {
     /**
-     * Dibuat berbasis class_schedules: tiap jadwal kelas mendapat 1 jurnal
-     * mengajar, memakai teacher pemegang kelas & materi dari package terkait.
+     * DUMMY DATA - tiap jadwal kelas mendapat 1 jurnal mengajar, memakai
+     * teacher pemegang kelas & materi dari package terkait.
      */
     public function run(): void
     {
-        $now = now();
+        $teacherIds = Teacher::pluck('id')->toArray();
 
-        $teacherIds = DB::table('teachers')->pluck('id')->toArray();
-
-        $schedules = DB::table('class_schedules')
-            ->join('classes', 'classes.id', '=', 'class_schedules.class_id')
+        $schedules = ClassSchedule::join('classes', 'classes.id', '=', 'class_schedules.class_id')
             ->select('class_schedules.id as schedule_id', 'classes.id as class_id', 'classes.teacher_id', 'classes.program_package_id')
             ->get();
 
         foreach ($schedules as $schedule) {
-            $materialId = DB::table('materials')
-                ->where('program_package_id', $schedule->program_package_id)
+            $materialId = Material::where('program_package_id', $schedule->program_package_id)
                 ->inRandomOrder()
                 ->value('id');
 
@@ -40,21 +39,15 @@ class TeachingJournalSeeder extends Seeder
                 $substituteTeacherId = $candidates ? fake()->randomElement($candidates) : null;
             }
 
-            DB::table('teaching_journals')->insert([
+            $factory = $substituteTeacherId
+                ? TeachingJournal::factory()->substitute($substituteTeacherId)
+                : TeachingJournal::factory();
+
+            $factory->create([
                 'teacher_id' => $schedule->teacher_id,
                 'class_id' => $schedule->class_id,
                 'class_schedule_id' => $schedule->schedule_id,
                 'material_id' => $materialId,
-                'is_substitute' => $isSubstitute,
-                'substitute_teacher_id' => $substituteTeacherId,
-                'class_status' => fake()->randomElement(['Conducted', 'Conducted', 'Conducted', 'Cancelled', 'Rescheduled']),
-                'learning_activities' => fake()->paragraph(),
-                'problems' => fake()->optional()->sentence(),
-                'solutions' => fake()->optional()->sentence(),
-                'results' => fake()->optional()->sentence(),
-                'notes' => fake()->optional()->sentence(),
-                'created_at' => $now,
-                'updated_at' => $now,
             ]);
         }
     }

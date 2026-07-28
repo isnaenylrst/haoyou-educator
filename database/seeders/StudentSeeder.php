@@ -2,59 +2,49 @@
 
 namespace Database\Seeders;
 
+use App\Models\CandidateStudent;
+use App\Models\Student;
+use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class StudentSeeder extends Seeder
 {
-    /**
-     * Satu baris student untuk tiap user ber-level 'Student' (relasi 1-1).
-     * SEMUA student WAJIB berelasi ke candidate_students (tidak ada yang null),
-     * mensimulasikan bahwa setiap siswa aktif berasal dari calon siswa yang
-     * dikonversi. Candidate yang dipakai akan ditandai trial_status='Completed'
-     * dan lead_status='Hot' untuk mencerminkan bahwa dia sudah jadi siswa.
-     *
-     * PENTING: jumlah candidate_students (lihat CandidateStudentSeeder) harus
-     * >= jumlah user ber-level Student, supaya tidak ada candidate yang
-     * dipakai dua kali.
-     */
     public function run(): void
     {
-        $now = now();
+        $candidateIds = CandidateStudent::pluck('id')->shuffle()->values();
 
-        $studentLevelId = DB::table('levels')->where('nama_level', 'Student')->value('id_level');
-        $userIds = DB::table('users')->where('level_id', $studentLevelId)->pluck('id')->toArray();
+        Student::factory()
+            ->count(30)
+            ->make()
+            ->each(function ($student, $index) use ($candidateIds) {
 
-        $candidateIds = DB::table('candidate_students')->pluck('id')->shuffle()->toArray();
+                $username = Str::slug($student->name, ' ');
 
-        if (count($candidateIds) < count($userIds)) {
-            throw new \RuntimeException(
-                'Jumlah candidate_students (' . count($candidateIds) . ') kurang dari jumlah user Student (' . count($userIds) . '). '
-                . 'Tambah jumlah data di CandidateStudentSeeder supaya setiap student punya candidate yang unik.'
-            );
-        }
+                // Jika ada nama yang sama, tambahkan angka
+                if (User::where('username', $username)->exists()) {
+                    $username .= fake()->numberBetween(100,999);
+                }
 
-        foreach ($userIds as $index => $userId) {
-            $candidateId = $candidateIds[$index];
+                $user = User::factory()
+                    ->student()
+                    ->create([
+                        'username' => $username,
+                        'password' => Hash::make('password'),
+                    ]);
 
-            DB::table('students')->insert([
-                'candidate_student_id' => $candidateId,
-                'user_id' => $userId,
-                'name' => fake()->name(),
-                'points' => fake()->numberBetween(0, 500),
-                'join_date' => fake()->dateTimeBetween('-2 years', 'now')->format('Y-m-d'),
-                'status' => fake()->randomElement(['Active', 'Active', 'Active', 'Inactive', 'Graduated']),
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
+                $student->user_id = $user->id;
 
-            DB::table('candidate_students')
-                ->where('id', $candidateId)
-                ->update([
-                    'trial_status' => 'Completed',
-                    'lead_status' => 'Hot',
-                    'updated_at' => $now,
-                ]);
-        }
+                $student->candidate_student_id = $candidateIds[$index];
+
+                $student->save();
+
+                CandidateStudent::find($candidateIds[$index])
+                    ->update([
+                        'trial_status' => 'Completed',
+                        'lead_status' => 'Hot',
+                    ]);
+            });
     }
 }
