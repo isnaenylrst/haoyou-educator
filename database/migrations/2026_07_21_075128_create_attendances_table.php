@@ -36,7 +36,7 @@ return new class extends Migration
             ]);
 
             // Catatan jika diperlukan
-            $table->text('remarks')->nullable();
+            $table->text('note')->nullable();
 
             $table->timestamps();
 

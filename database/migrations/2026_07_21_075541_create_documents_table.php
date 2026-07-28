@@ -19,6 +19,11 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->nullOnDelete();
 
+            $table->foreignId('document_template_id')
+                ->nullable()
+                ->constrained('document_templates')
+                ->nullOnDelete(); 
+            
             $table->string('title');
 
             $table->enum('document_type', [
@@ -48,6 +53,7 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->restrictOnDelete();
 
+            $table->timestamp('uploaded_at')->nullable();
             $table->timestamps();
         });
     }

@@ -31,7 +31,7 @@ class DocumentTemplateSeeder extends Seeder
         foreach ($templates as $index => $template) {
             DB::table('document_templates')->insert([
                 'name' => $template['name'],
-                'template_type' => $template['template_type'],
+                'document_type' => $template['template_type'],
                 'file_path' => 'document_templates/template_' . ($index + 1) . '.docx',
                 'description' => $template['name'] . ' resmi Haoyou Educator.',
                 'uploaded_by' => $uploaderId,

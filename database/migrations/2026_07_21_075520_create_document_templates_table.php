@@ -14,7 +14,7 @@ return new class extends Migration
 
             $table->string('name');
 
-            $table->enum('template_type', [
+            $table->enum('document_type', [
                 'Agreement',
                 'Progress Report',
                 'Certificate',

@@ -32,8 +32,6 @@ return new class extends Migration
                 'Pending',
                 'Done'
             ])->default('Pending');
-
-            $table->timestamps();
         });
     }
 
