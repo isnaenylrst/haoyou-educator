@@ -26,6 +26,26 @@ class Program extends Model
 
     /*
     |--------------------------------------------------------------------------
+    | Helper Methods
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Menentukan apakah program termasuk program HSK.
+     */
+    public function isHsk(): bool
+    {
+        // Cek berdasarkan kolom fokus
+        if (!empty($this->fokus) && strtoupper($this->fokus) === 'HSK') {
+            return true;
+        }
+
+        // Alternatif: cek dari nama program
+        return str_contains(strtolower($this->nama_program), 'hsk');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | Relationships
     |--------------------------------------------------------------------------
     */

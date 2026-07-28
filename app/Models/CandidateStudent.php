@@ -3,12 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class CandidateStudent extends Model
 {
-    use HasFactory, SoftDeletes;
+    use SoftDeletes;
+
+    protected $table = 'candidate_students';
 
     protected $fillable = [
         'nama',
@@ -31,39 +32,33 @@ class CandidateStudent extends Model
         'tanggal_trial',
     ];
 
-    protected $casts = [
-        'tanggal_lahir' => 'date',
-        'tanggal_trial' => 'date',
-    ];
-
-    /*
-    |--------------------------------------------------------------------------
-    | Relationships
-    |--------------------------------------------------------------------------
-    */
-
-    public function followUps()
+    protected function casts(): array
     {
-        return $this->hasMany(FollowUp::class);
+        return [
+            'tanggal_lahir' => 'date',
+            'tanggal_trial' => 'date',
+        ];
     }
 
-    public function trialSessions()
+    // ----- Helper status_lead -----
+    public function isConverted(): bool
     {
-        return $this->hasMany(TrialSession::class);
+        return $this->status_lead === 'Converted';
     }
 
-    public function agreement()
+    public function isLost(): bool
     {
-        return $this->hasOne(StudentAgreement::class);
+        return $this->status_lead === 'Lost';
     }
 
-    public function documents()
+    // ----- Scope untuk dashboard admin nanti -----
+    public function scopeBelumDihubungi($query)
     {
-        return $this->hasMany(StudentDocument::class);
+        return $query->where('status_lead', 'Inquiry');
     }
 
-    public function student()
+    public function scopeButuhTrial($query)
     {
-        return $this->hasOne(Student::class);
+        return $query->whereIn('status_trial', ['Belum', 'Menunggu']);
     }
 }

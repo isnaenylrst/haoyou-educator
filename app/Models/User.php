@@ -2,82 +2,58 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, SoftDeletes;
+    use Notifiable;
 
     protected $fillable = [
-        'name',
+        'nama_lengkap',
         'email',
+        'no_whatsapp',
         'password',
         'role',
-        'status',
-        'last_login',
+        'status_akun',
+        'akses_diberikan_oleh',
+        'akses_diberikan_pada',
+        'foto_profil',
     ];
 
     protected $hidden = [
         'password',
-        'remember_token',
     ];
 
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
-            'last_login' => 'datetime',
-            'password' => 'hashed',
-            'status' => 'boolean',
+            'akses_diberikan_pada' => 'datetime',
         ];
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Relationships
-    |--------------------------------------------------------------------------
-    */
-
-    public function teacher()
+    // ----- Relasi -----
+    public function wali()
     {
-        return $this->hasOne(Teacher::class);
+        return $this->hasOne(Wali::class, 'siswa_id');
     }
 
-    public function curriculum()
+    // ----- Helper status (dipakai LoginController) -----
+    public function isAktif(): bool
     {
-        return $this->hasOne(Curriculum::class);
+        return $this->status_akun === 'aktif';
     }
 
-    public function student()
+    public function isAlumni(): bool
     {
-        return $this->hasOne(Student::class);
+        return $this->status_akun === 'alumni';
     }
 
-    public function followUps()
+    public function isPendingVerifikasi(): bool
     {
-        return $this->hasMany(FollowUp::class, 'admin_id');
+        return $this->status_akun === 'pending_verifikasi';
     }
 
-    public function payments()
-    {
-        return $this->hasMany(Payment::class, 'admin_id');
-    }
-
-    public function documents()
-    {
-        return $this->hasMany(StudentDocument::class, 'uploaded_by');
-    }
-
-    public function alumniUpdates()
-    {
-        return $this->hasMany(Alumni::class, 'updated_by');
-    }
-
-    public function pointHistories()
-    {
-        return $this->hasMany(PointHistory::class, 'given_by');
-    }
+    // Relasi poin/jadwal/sertifikat/progress report ditambahkan lagi
+    // nanti saat modul Dashboard mulai dikerjakan.
 }
