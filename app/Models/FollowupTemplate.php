@@ -2,34 +2,25 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
-class FollowupTemplate extends Model
+class FollowUpTemplate extends Model
 {
     use HasFactory;
 
+    protected $table = 'follow_up_templates';
+
+    public $timestamps = false;
+
     protected $fillable = [
-        'nama_template',
-        'kategori',
-        'media',
-        'isi_template',
-        'version',
-        'status',
+        'template_name',
+        'category',
+        'description',
     ];
-
-    protected $casts = [
-        'status' => 'boolean',
-    ];
-
-    /*
-    |--------------------------------------------------------------------------
-    | Relationships
-    |--------------------------------------------------------------------------
-    */
 
     public function followUps()
     {
-        return $this->hasMany(FollowUp::class, 'template_id');
+        return $this->hasMany(FollowUp::class);
     }
 }

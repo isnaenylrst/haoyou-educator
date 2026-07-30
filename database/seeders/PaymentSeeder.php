@@ -2,16 +2,21 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\ClassEnrollment;
+use App\Models\Payment;
 use Illuminate\Database\Seeder;
 
 class PaymentSeeder extends Seeder
 {
     /**
-     * Run the database seeds.
+     * DUMMY DATA - tiap enrollment mendapat 1 pembayaran.
      */
     public function run(): void
     {
-        //
+        $enrollmentIds = ClassEnrollment::pluck('id');
+
+        foreach ($enrollmentIds as $enrollmentId) {
+            Payment::factory()->create(['enrollment_id' => $enrollmentId]);
+        }
     }
 }

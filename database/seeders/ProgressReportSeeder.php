@@ -2,78 +2,29 @@
 
 namespace Database\Seeders;
 
+use App\Models\ClassEnrollment;
 use App\Models\ProgressReport;
 use Illuminate\Database\Seeder;
 
 class ProgressReportSeeder extends Seeder
 {
     /**
-     * Run the database seeds.
+     * DUMMY DATA - tiap enrollment mendapat 1 laporan progres, ditulis oleh
+     * guru pengajar kelas terkait.
      */
     public function run(): void
     {
+        $enrollments = ClassEnrollment::join('classes', 'classes.id', '=', 'class_enrollments.class_id')
+            ->select('class_enrollments.id as enrollment_id', 'class_enrollments.student_id', 'classes.teacher_id')
+            ->whereNotNull('classes.teacher_id')
+            ->get();
 
-        ProgressReport::insert([
-
-            [
-
-                'student_id'=>1,
-                'class_id'=>1,
-                'teacher_id'=>1,
-                'template_progress_report_id'=>1,
-
-                'report_date'=>now(),
-
-                'communication'=>90,
-                'confidence'=>88,
-                'listening'=>92,
-                'reading'=>85,
-                'writing'=>83,
-                'behavior'=>95,
-
-                'homework'=>'Mengerjakan latihan halaman 12-15.',
-
-                'teacher_notes'=>'Perkembangan sangat baik. Tetap latihan speaking di rumah.',
-
-                'pdf_file'=>'progress_reports/report_1.pdf',
-
-                'status'=>'approved',
-
-                'created_at'=>now(),
-                'updated_at'=>now(),
-
-            ],
-
-            [
-
-                'student_id'=>2,
-                'class_id'=>1,
-                'teacher_id'=>1,
-                'template_progress_report_id'=>2,
-
-                'report_date'=>now(),
-
-                'communication'=>82,
-                'confidence'=>80,
-                'listening'=>85,
-                'reading'=>78,
-                'writing'=>75,
-                'behavior'=>90,
-
-                'homework'=>'Menghafalkan kosakata Bab 3.',
-
-                'teacher_notes'=>'Perlu meningkatkan kemampuan membaca Hanzi.',
-
-                'pdf_file'=>'progress_reports/report_2.pdf',
-
-                'status'=>'submitted',
-
-                'created_at'=>now(),
-                'updated_at'=>now(),
-
-            ],
-
-        ]);
-
+        foreach ($enrollments as $enrollment) {
+            ProgressReport::factory()->create([
+                'student_id' => $enrollment->student_id,
+                'teacher_id' => $enrollment->teacher_id,
+                'enrollment_id' => $enrollment->enrollment_id,
+            ]);
+        }
     }
 }

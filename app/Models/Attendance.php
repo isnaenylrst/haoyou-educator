@@ -4,41 +4,36 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Attendance extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory;
+
+    protected $table = 'attendances';
+
+    public $timestamps = false;
 
     protected $fillable = [
-        'class_schedule_id',
+        'teaching_jurnal_id',
         'student_id',
-        'teacher_id',
         'status',
-        'notes',
+        'note',
+        'attendance_date',
+        'created_at',
     ];
 
-    /**
-     * Relasi ke Jadwal Kelas
-     */
-    public function classSchedule()
+    protected $casts = [
+        'attendance_date' => 'date',
+        'created_at' => 'datetime',
+    ];
+
+    public function teachingJournal()
     {
-        return $this->belongsTo(ClassSchedule::class);
+        return $this->belongsTo(TeachingJournal::class, 'teaching_jurnal_id');
     }
 
-    /**
-     * Relasi ke Student
-     */
     public function student()
     {
         return $this->belongsTo(Student::class);
-    }
-
-    /**
-     * Relasi ke Teacher
-     */
-    public function teacher()
-    {
-        return $this->belongsTo(Teacher::class);
     }
 }

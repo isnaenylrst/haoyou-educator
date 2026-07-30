@@ -2,63 +2,46 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class CandidateStudent extends Model
 {
-    use SoftDeletes;
+    use HasFactory;
 
     protected $table = 'candidate_students';
 
+    public $timestamps = false;
+
     protected $fillable = [
-        'nama',
-        'jenis_kelamin',
-        'tanggal_lahir',
-        'usia',
-        'no_hp',
-        'email',
-        'nama_ortu',
-        'no_hp_ortu',
-        'alamat',
-        'sekolah',
-        'sumber',
-        'kebutuhan_belajar',
-        'available_schedule',
-        'alergi',
-        'catatan',
-        'status_lead',
-        'status_trial',
-        'tanggal_trial',
+        'name',
+        'gender',
+        'birth_date',
+        'phone',
+        'parent_name',
+        'parent_phone',
+        'address',
+        'school',
+        'source',
+        'allergy',
+        'interested_program',
+        'trial_status',
+        'trial_date',
+        'lead_status',
     ];
 
-    protected function casts(): array
+    public function availableSchedules()
     {
-        return [
-            'tanggal_lahir' => 'date',
-            'tanggal_trial' => 'date',
-        ];
+        return $this->hasMany(CandidateStudentAvailableSchedule::class);
     }
 
-    // ----- Helper status_lead -----
-    public function isConverted(): bool
+    public function followUps()
     {
-        return $this->status_lead === 'Converted';
+        return $this->hasMany(FollowUp::class);
     }
 
-    public function isLost(): bool
+    public function student()
     {
-        return $this->status_lead === 'Lost';
-    }
-
-    // ----- Scope untuk dashboard admin nanti -----
-    public function scopeBelumDihubungi($query)
-    {
-        return $query->where('status_lead', 'Inquiry');
-    }
-
-    public function scopeButuhTrial($query)
-    {
-        return $query->whereIn('status_trial', ['Belum', 'Menunggu']);
+        return $this->hasOne(Student::class);
     }
 }

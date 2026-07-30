@@ -3,57 +3,82 @@
 namespace App\Models;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
-    use Notifiable;
+    use HasFactory, Notifiable;
+
+    protected $table = 'users';
 
     protected $fillable = [
-        'nama_lengkap',
-        'email',
-        'no_whatsapp',
+        'level_id',
+        'username',
         'password',
-        'role',
-        'status_akun',
-        'akses_diberikan_oleh',
-        'akses_diberikan_pada',
-        'foto_profil',
+        'status',
     ];
 
     protected $hidden = [
         'password',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'akses_diberikan_pada' => 'datetime',
-        ];
-    }
+public function level()
+{
+    return $this->belongsTo(
+        Level::class,
+        'level_id', // foreign key di tabel users
+        'id_level'  // primary key di tabel levels
+    );
+}
 
-    // ----- Relasi -----
-    public function wali()
+    public function teacher()
     {
         return $this->hasOne(Wali::class, 'siswa_id');
     }
 
-    // ----- Helper status (dipakai LoginController) -----
-    public function isAktif(): bool
-    {
-        return $this->status_akun === 'aktif';
-    }
-
-    public function isAlumni(): bool
+    public function student()
     {
         return $this->status_akun === 'alumni';
     }
 
-    public function isPendingVerifikasi(): bool
+    public function curriculum()
     {
-        return $this->status_akun === 'pending_verifikasi';
+        return $this->hasOne(Curriculum::class);
     }
 
-    // Relasi poin/jadwal/sertifikat/progress report ditambahkan lagi
-    // nanti saat modul Dashboard mulai dikerjakan.
+    public function uploadedMaterials()
+    {
+        return $this->hasMany(Material::class, 'uploaded_by');
+    }
+
+    public function uploadedProgressReports()
+    {
+        return $this->hasMany(ProgressReport::class, 'uploaded_by');
+    }
+
+    public function uploadedTemplates()
+    {
+        return $this->hasMany(DocumentTemplate::class, 'uploaded_by');
+    }
+
+    public function uploadedDocuments()
+    {
+        return $this->hasMany(Document::class, 'uploaded_by');
+    }
+
+    public function documents()
+    {
+        return $this->hasMany(Document::class);
+    }
+
+    public function approvedTeacherMaterials()
+    {
+        return $this->hasMany(TeacherMaterial::class, 'approved_by');
+    }
+
+    public function approvedTeacherLeaves()
+    {
+        return $this->hasMany(TeacherLeave::class, 'approved_by');
+    }
 }
