@@ -19,16 +19,23 @@ class AuthController extends Controller
             'password' => ['required'],
         ]);
 
-        // Hanya user yang statusnya Active yang boleh login
+        // Hanya user dengan status Active yang boleh login
         $credentials['status'] = 'Active';
 
-        if (Auth::attempt($credentials, $request->filled('remember'))) {
+        if (Auth::attempt(
+            $credentials,
+            $request->boolean('remember')
+        )) {
 
             $request->session()->regenerate();
 
             $user = Auth::user();
 
-            switch ($user->level->level_name) {
+            // Ambil nama level dari kolom nama_level
+            $levelName = $user->level?->nama_level;
+
+            switch ($levelName) {
+
                 case 'Owner':
                     return redirect()->route('owner.dashboard');
 
@@ -41,18 +48,30 @@ class AuthController extends Controller
                 case 'Student':
                     return redirect()->route('student.dashboard');
 
+                case 'Curriculum':
+                    return redirect()->route('curriculum.dashboard');
+
                 default:
+
                     Auth::logout();
 
                     return redirect()
                         ->route('login')
-                        ->with('error', 'Level tidak dikenali.');
+                        ->with(
+                            'error',
+                            'Level pengguna tidak dikenali.'
+                        );
             }
         }
 
         return back()
-            ->withInput()
-            ->with('error', 'Username atau Password salah.');
+            ->withInput(
+                $request->only('username')
+            )
+            ->with(
+                'error',
+                'Username atau Password salah, atau akun tidak aktif.'
+            );
     }
 
     public function logout(Request $request)
