@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PendaftaranController;
 use App\Http\Controllers\LandingController;
+use App\Http\Controllers\Siswa\SiswaDashboardController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -31,6 +32,15 @@ Route::middleware('guest')->group(function () {
 Route::post('/logout', [LoginController::class, 'logout'])
     ->middleware('auth')
     ->name('logout');
+
+Route::get('/dashboard', [SiswaDashboardController::class, 'dashboard'])->name('dashboard');
+Route::get('/program', [SiswaDashboardController::class, 'program'])->name('program.index');
+Route::get('/booking', [SiswaDashboardController::class, 'booking'])->name('booking.index');
+Route::get('/kelas-saya', [SiswaDashboardController::class, 'kelasSaya'])->name('kelassaya.index');
+Route::get('/profil', [SiswaDashboardController::class, 'profil'])->name('profil.index');
+Route::get('/notifikasi', [SiswaDashboardController::class, 'notifikasi'])->name('notifikasi.index');
+Route::get('/sertifikat', [SiswaDashboardController::class, 'sertifikat'])->name('sertifikat.index');
+Route::get('/progress-report', [SiswaDashboardController::class, 'progresReport'])->name('progresreport.index');
 
 /*
 |--------------------------------------------------------------------------
