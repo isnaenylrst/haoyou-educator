@@ -34,12 +34,12 @@ public function level()
 
     public function teacher()
     {
-        return $this->hasOne(Teacher::class);
+        return $this->hasOne(Wali::class, 'siswa_id');
     }
 
     public function student()
     {
-        return $this->hasOne(Student::class);
+        return $this->status_akun === 'alumni';
     }
 
     public function curriculum()
