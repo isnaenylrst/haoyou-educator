@@ -8,6 +8,7 @@ use App\Http\Controllers\CalonSiswa\PendaftaranController;
 use App\Http\Controllers\Siswa\SiswaDashboardController;
 use App\Http\Controllers\Kurikulum\DashboardController;
 use App\Http\Controllers\Kurikulum\SopController;
+use App\Http\Controllers\Kurikulum\DocumentTemplateController;
 
 /*
 |--------------------------------------------------------------------------
@@ -34,7 +35,6 @@ Route::middleware('guest')->group(function () {
 
     Route::post('/login', [AuthController::class, 'login'])
         ->name('login.process');
-
 });
 
 /*
@@ -43,8 +43,11 @@ Route::middleware('guest')->group(function () {
 |--------------------------------------------------------------------------
 */
 
-Route::post('/logout', [AuthController::class, 'logout'])
-    ->name('logout');
+Route::middleware('auth')->group(function () {
+
+    Route::post('/logout', [AuthController::class, 'logout'])
+        ->name('logout');
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -67,29 +70,32 @@ Route::get('/daftar/sukses', [PendaftaranController::class, 'sukses'])
 |--------------------------------------------------------------------------
 */
 
-Route::get('/dashboard', [SiswaDashboardController::class, 'dashboard'])
-    ->name('dashboard');
+Route::middleware('auth')->group(function () {
 
-Route::get('/program', [SiswaDashboardController::class, 'program'])
-    ->name('program.index');
+    Route::get('/dashboard', [SiswaDashboardController::class, 'dashboard'])
+        ->name('dashboard');
 
-Route::get('/booking', [SiswaDashboardController::class, 'booking'])
-    ->name('booking.index');
+    Route::get('/program', [SiswaDashboardController::class, 'program'])
+        ->name('program.index');
 
-Route::get('/kelas-saya', [SiswaDashboardController::class, 'kelasSaya'])
-    ->name('kelassaya.index');
+    Route::get('/booking', [SiswaDashboardController::class, 'booking'])
+        ->name('booking.index');
 
-Route::get('/profil', [SiswaDashboardController::class, 'profil'])
-    ->name('profil.index');
+    Route::get('/kelas-saya', [SiswaDashboardController::class, 'kelasSaya'])
+        ->name('kelassaya.index');
 
-Route::get('/notifikasi', [SiswaDashboardController::class, 'notifikasi'])
-    ->name('notifikasi.index');
+    Route::get('/profil', [SiswaDashboardController::class, 'profil'])
+        ->name('profil.index');
 
-Route::get('/sertifikat', [SiswaDashboardController::class, 'sertifikat'])
-    ->name('sertifikat.index');
+    Route::get('/notifikasi', [SiswaDashboardController::class, 'notifikasi'])
+        ->name('notifikasi.index');
 
-Route::get('/progress-report', [SiswaDashboardController::class, 'progresReport'])
-    ->name('progresreport.index');
+    Route::get('/sertifikat', [SiswaDashboardController::class, 'sertifikat'])
+        ->name('sertifikat.index');
+
+    Route::get('/progress-report', [SiswaDashboardController::class, 'progresReport'])
+        ->name('progresreport.index');
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -97,36 +103,99 @@ Route::get('/progress-report', [SiswaDashboardController::class, 'progresReport'
 |--------------------------------------------------------------------------
 */
 
-Route::prefix('kurikulum')->group(function () {
+Route::middleware('auth')
+    ->prefix('kurikulum')
+    ->name('kurikulum.')
+    ->group(function () {
 
-    Route::get('/dashboard', [DashboardController::class, 'index'])
-        ->name('kurikulum.dashboard');
+        /*
+        |--------------------------------------------------------------------------
+        | Dashboard
+        |--------------------------------------------------------------------------
+        */
 
-    Route::get('/sop', [SopController::class, 'index'])
-        ->name('kurikulum.sop');
+        Route::get('/dashboard', [DashboardController::class, 'index'])
+            ->name('dashboard');
 
-    Route::post('/sop', [SopController::class, 'store'])
-        ->name('kurikulum.sop.store');
+        /*
+        |--------------------------------------------------------------------------
+        | SOP
+        |--------------------------------------------------------------------------
+        */
 
-    Route::put('/sop/{document}', [SopController::class, 'update'])
-        ->name('kurikulum.sop.update');
+        // Halaman SOP
+        Route::get('/sop', [SopController::class, 'index'])
+            ->name('sop');
 
-    Route::delete('/sop/{document}', [SopController::class, 'destroy'])
-        ->name('kurikulum.sop.destroy');
+        // Upload SOP Baru
+        Route::post('/sop', [SopController::class, 'store'])
+            ->name('sop.store');
 
-    Route::get('/sop/{document}/download', [SopController::class, 'download'])
-        ->name('kurikulum.sop.download');
+        // Lihat SOP di Browser
+        Route::get('/sop/{document}', [SopController::class, 'show'])
+            ->name('sop.show');
 
-    Route::get('/sop/{document}/edit', [SopController::class, 'edit'])
-        ->name('kurikulum.sop.edit');
+        // Upload Ulang SOP
+        Route::patch('/sop/{document}', [SopController::class, 'update'])
+            ->name('sop.update');
 
+        // Download SOP
+        Route::get('/sop/{document}/download', [SopController::class, 'download'])
+            ->name('sop.download');
+
+        // Hapus SOP
+        Route::delete('/sop/{document}', [SopController::class, 'destroy'])
+            ->name('sop.destroy');
+    
+        /*
+        |--------------------------------------------------------------------------
+        | TEMPLATE PROGRESS REPORT
+        |--------------------------------------------------------------------------
+        */
+
+        // Upload Template Progress Report
+        Route::post(
+            '/template/upload',
+            [DocumentTemplateController::class, 'store']
+            )->name('template.upload');
+
+        // Update Template
+        Route::put(
+            '/template/{documentTemplate}',
+            [DocumentTemplateController::class, 'update']
+            )->name('template.update');
+
+        // Download Template
+        Route::get(
+            '/template/{documentTemplate}/download',
+            [DocumentTemplateController::class, 'download']
+            )->name('template.download');
+
+        // Hapus Template
+        Route::delete(
+            '/template/{documentTemplate}',
+            [DocumentTemplateController::class, 'destroy']
+        )->name('template.destroy');
+    
+    });
+/*
+|--------------------------------------------------------------------------
+| HALAMAN KURIKULUM LAINNYA
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware('auth')->group(function () {
+
+    Route::view('/kurikulum/materi', 'kurikulum.materi');
+
+    Route::view('/kurikulum/jadwal-konsultasi', 'kurikulum.jadwal-konsultasi');
+
+    Route::view('/kurikulum/review-pengajuan', 'kurikulum.review-pengajuan');
+
+    Route::view('/kurikulum/monitoring', 'kurikulum.monitoring');
+
+    Route::view('/kurikulum/surat', 'kurikulum.surat');
 });
-
-Route::view('/kurikulum/materi', 'kurikulum.materi');
-Route::view('/kurikulum/jadwal-konsultasi', 'kurikulum.jadwal-konsultasi');
-Route::view('/kurikulum/review-pengajuan', 'kurikulum.review-pengajuan');
-Route::view('/kurikulum/monitoring', 'kurikulum.monitoring');
-Route::view('/kurikulum/surat', 'kurikulum.surat');
 
 /*
 |--------------------------------------------------------------------------
@@ -134,13 +203,25 @@ Route::view('/kurikulum/surat', 'kurikulum.surat');
 |--------------------------------------------------------------------------
 */
 
-Route::view('/guru/dashboard', 'guru.dashboard');
-Route::view('/guru/notifikasi', 'guru.notifikasi');
-Route::view('/guru/sop', 'guru.sop');
-Route::view('/guru/materi', 'guru.materi');
-Route::view('/guru/kelas', 'guru.kelas');
-Route::view('/guru/attendance', 'guru.attendance');
-Route::view('/guru/progress-report', 'guru.progress-report');
-Route::view('/guru/schedule', 'guru.schedule');
-Route::view('/guru/teaching-log', 'guru.teaching-log');
-Route::view('/guru/cuti', 'guru.cuti');
+Route::middleware('auth')->group(function () {
+
+    Route::view('/guru/dashboard', 'guru.dashboard');
+
+    Route::view('/guru/notifikasi', 'guru.notifikasi');
+
+    Route::view('/guru/sop', 'guru.sop');
+
+    Route::view('/guru/materi', 'guru.materi');
+
+    Route::view('/guru/kelas', 'guru.kelas');
+
+    Route::view('/guru/attendance', 'guru.attendance');
+
+    Route::view('/guru/progress-report', 'guru.progress-report');
+
+    Route::view('/guru/schedule', 'guru.schedule');
+
+    Route::view('/guru/teaching-log', 'guru.teaching-log');
+
+    Route::view('/guru/cuti', 'guru.cuti');
+});

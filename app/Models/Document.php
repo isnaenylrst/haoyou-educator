@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class Document extends Model
 {
@@ -27,6 +28,29 @@ class Document extends Model
         'uploaded_at' => 'datetime',
     ];
 
+    /*
+    |--------------------------------------------------------------------------
+    | Boot
+    |--------------------------------------------------------------------------
+    */
+
+    protected static function booted()
+    {
+        static::creating(function ($document) {
+
+            if (empty($document->uploaded_at)) {
+                $document->uploaded_at = now();
+            }
+
+        });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Relationships
+    |--------------------------------------------------------------------------
+    */
+
     public function template()
     {
         return $this->belongsTo(DocumentTemplate::class, 'document_template_id');
@@ -40,5 +64,32 @@ class Document extends Model
     public function uploader()
     {
         return $this->belongsTo(User::class, 'uploaded_by');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Scope
+    |--------------------------------------------------------------------------
+    */
+
+    public function scopeSop($query)
+    {
+        return $query->where('document_type', 'SOP');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Accessor
+    |--------------------------------------------------------------------------
+    */
+
+    public function getFileUrlAttribute()
+    {
+        return Storage::url($this->file_path);
+    }
+
+    public function getExtensionAttribute()
+    {
+        return strtoupper(pathinfo($this->file_path, PATHINFO_EXTENSION));
     }
 }

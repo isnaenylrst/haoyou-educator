@@ -193,7 +193,7 @@
 
         <strong>
 
-            {{ $item->material->title }}
+            {{ $item->title }}
 
         </strong>
 
@@ -201,7 +201,7 @@
 
         <small class="text-muted">
 
-            Meeting {{ $item->material->meeting_number }}
+            Meeting {{ $item->meeting_number }}
 
         </small>
 
@@ -209,7 +209,7 @@
 
     <td>
 
-        {{ $item->teacher->name }}
+        {{ $item->uploader->name }}
 
     </td>
 
