@@ -24,6 +24,7 @@ class TeachingJournal extends Model
         'solutions',
         'results',
         'notes',
+        'status',
     ];
 
     protected $casts = [

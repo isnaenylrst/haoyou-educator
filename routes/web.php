@@ -1,13 +1,18 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Kurikulum\DashboardController;
+
 
 Route::view('/', 'dashboard');
 
 Route::view('/dashboard', 'dashboard');
 
 //KURIKULUM
-Route::view('/kurikulum/dashboard', 'kurikulum.dashboard');
+Route::get(
+    '/kurikulum/dashboard',
+    [DashboardController::class,'index']
+)->name('kurikulum.dashboard');
 
 Route::view('/kurikulum/sop', 'kurikulum.sop');
 

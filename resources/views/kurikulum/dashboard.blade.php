@@ -5,10 +5,28 @@
 @section('content')
 
 <div class="mb-4">
+
     <h2 class="fw-bold">Dashboard Kepala Kurikulum</h2>
+
     <p class="text-muted mb-0">
-        Semua yang perlu ditindaklanjuti dari upload & pengajuan guru
+        Semua Pengajuan, PPT dan Jurnal Guru dapat dilihat di sini. Silakan tindaklanjuti sesuai kebutuhan.
     </p>
+
+    @if($curriculum)
+
+        <div class="alert alert-info mt-3">
+
+            <strong>{{ $curriculum->name }}</strong>
+
+            <br>
+
+            Specialist :
+            {{ $curriculum->specialist }}
+
+        </div>
+
+    @endif
+
 </div>
 
 <div class="row">
@@ -17,7 +35,7 @@
         <div class="card shadow-sm border-0">
             <div class="card-body d-flex justify-content-between align-items-center">
                 <div>
-                    <h3 class="fw-bold">18</h3>
+                    <h3 class="fw-bold">{{ $guruAktif }}</h3>
                     <p class="mb-0">Guru Aktif</p>
                 </div>
 
@@ -31,7 +49,7 @@
         <div class="card shadow-sm border-0">
             <div class="card-body d-flex justify-content-between align-items-center">
                 <div>
-                    <h3 class="fw-bold text-warning">4</h3>
+                    <h3 class="fw-bold text-warning">{{$materiPending}}</h3>
                     <p class="mb-0">Materi/PPT/LP Menunggu</p>
                 </div>
 
@@ -45,7 +63,7 @@
         <div class="card shadow-sm border-0">
             <div class="card-body d-flex justify-content-between align-items-center">
                 <div>
-                    <h3 class="fw-bold text-warning">6</h3>
+                    <h3 class="fw-bold text-warning">{{ $jurnalPending }}</h3>
                     <p class="mb-0">Jurnal Belum Direview</p>
                 </div>
 
@@ -59,7 +77,7 @@
         <div class="card shadow-sm border-0">
             <div class="card-body d-flex justify-content-between align-items-center">
                 <div>
-                    <h3 class="fw-bold text-danger">2</h3>
+                    <h3 class="fw-bold text-danger">{{ $cutiPending }}</h3>
                     <p class="mb-0">Cuti/Ganti Kelas Pending</p>
                 </div>
 
@@ -89,101 +107,63 @@
 
         <table class="table table-hover mb-0">
 
-            <tbody>
+          <tbody>
 
-            <tr>
-                <td>
-                    <b>Rina Wulandari</b><br>
-                    Konsultasi Direktur (H-14) belum terjadwal, Jianer 2B
-                    <br>
-                    <small class="text-danger">
-                        Batas waktu 12 Juli 2026 · 6 hari lagi
-                    </small>
-                </td>
+@if($pendingMaterials->count())
 
-                <td width="120">
-                    <button class="btn btn-outline-primary btn-sm">
-                        Jadwalkan
-                    </button>
-                </td>
-            </tr>
+    @foreach($pendingMaterials as $item)
 
-            <tr>
-                <td>
-                    <b>Rina Wulandari</b><br>
-                    Upload LP & PPT kelas 7B
-                    <br>
-                    <small class="text-muted">Menunggu 2 hari</small>
-                </td>
+    <tr>
 
-                <td>
-                    <button class="btn btn-outline-secondary btn-sm">
-                        Lihat
-                    </button>
-                </td>
-            </tr>
+        <td>
 
-            <tr>
-                <td>
-                    <b>Budi Santoso</b><br>
-                    Upload LP & PPT Feixiang 1C
-                    <br>
-                    <small class="text-muted">Menunggu 1 hari</small>
-                </td>
+            <b>{{ $item->teacher->name }}</b>
 
-                <td>
-                    <button class="btn btn-outline-secondary btn-sm">
-                        Lihat
-                    </button>
-                </td>
-            </tr>
+            <br>
 
-            <tr>
-                <td>
-                    <b>Ahmad Fauzi</b><br>
-                    Jurnal & Absensi kelas 9A
-                    <br>
-                    <small class="text-muted">Menunggu direview</small>
-                </td>
+            Upload PPT :
+            {{ $item->ppt_title }}
 
-                <td>
-                    <button class="btn btn-outline-secondary btn-sm">
-                        Lihat
-                    </button>
-                </td>
-            </tr>
+            <br>
 
-            <tr>
-                <td>
-                    <b>Rina Wulandari</b><br>
-                    Progress Report Mid 2 kelas 7B
-                    <br>
-                    <small class="text-muted">Menunggu direview</small>
-                </td>
+            <small class="text-muted">
 
-                <td>
-                    <button class="btn btn-outline-secondary btn-sm">
-                        Lihat
-                    </button>
-                </td>
-            </tr>
+                {{ $item->created_at->diffForHumans() }}
 
-            <tr>
-                <td>
-                    <b>Siti Nurhaliza</b><br>
-                    Ganti kelas 6C (Pengganti : Rina)
-                    <br>
-                    <small class="text-muted">Menunggu persetujuan</small>
-                </td>
+            </small>
 
-                <td>
-                    <button class="btn btn-outline-secondary btn-sm">
-                        Lihat
-                    </button>
-                </td>
-            </tr>
+        </td>
 
-            </tbody>
+        <td width="120">
+
+            <a href="#"
+               class="btn btn-outline-primary btn-sm">
+
+                Review
+
+            </a>
+
+        </td>
+
+    </tr>
+
+    @endforeach
+
+@else
+
+<tr>
+
+    <td colspan="2" class="text-center text-muted">
+
+        Tidak ada PPT yang perlu ditindaklanjuti.
+
+    </td>
+
+</tr>
+
+@endif
+
+</tbody>  
 
         </table>
 
@@ -201,43 +181,87 @@
 
         <table class="table table-hover mb-0">
 
-            <tbody>
+           <tbody>
 
-            <tr>
+@if($latestMaterials->count())
 
-                <td>
-                    SOP Pengajaran Umum diperbarui
-                    <br>
-                    <small class="text-muted">3 hari lalu</small>
-                </td>
+@foreach($latestMaterials as $item)
 
-                <td width="180">
-                    <span class="badge bg-success">
-                        Aktif
-                    </span>
-                </td>
+<tr>
 
-            </tr>
+    <td>
 
-            <tr>
+        <strong>
 
-                <td>
-                    4 materi masih berstatus draft
-                    <br>
-                    <small class="text-muted">
-                        Jianer • Feixiang • Private
-                    </small>
-                </td>
+            {{ $item->material->title }}
 
-                <td>
-                    <span class="badge bg-warning text-dark">
-                        Perlu Diselesaikan
-                    </span>
-                </td>
+        </strong>
 
-            </tr>
+        <br>
 
-            </tbody>
+        <small class="text-muted">
+
+            Meeting {{ $item->material->meeting_number }}
+
+        </small>
+
+    </td>
+
+    <td>
+
+        {{ $item->teacher->name }}
+
+    </td>
+
+    <td>
+
+        @if($item->status=='Pending')
+
+            <span class="badge bg-warning">
+
+                Pending
+
+            </span>
+
+        @elseif($item->status=='Approved')
+
+            <span class="badge bg-success">
+
+                Approved
+
+            </span>
+
+        @else
+
+            <span class="badge bg-danger">
+
+                Rejected
+
+            </span>
+
+        @endif
+
+    </td>
+
+</tr>
+
+@endforeach
+
+@else
+
+<tr>
+
+<td colspan="3" class="text-center text-muted">
+
+Belum ada data materi.
+
+</td>
+
+</tr>
+
+@endif
+
+</tbody>
 
         </table>
 
