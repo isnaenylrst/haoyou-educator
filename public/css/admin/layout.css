@@ -41,18 +41,20 @@ body {
 ===================================================== */
 
 .sidebar {
-    width: 248px;
+    width: 240px;
     flex-shrink: 0;
-    background: #050505;
-    border-right: 1px solid #1a1a1a;
+    background: #ffffff;
+    border-right: 1px solid #f1f5f9;
+    border-right: 1px solid #d1d5db;
     display: flex;
     flex-direction: column;
-    padding: 20px 14px;
+    padding: 14px;
     transition: width .22s ease;
     position: sticky;
     top: 0;
     height: 100vh;
     z-index: 20;
+    cursor: pointer;
 }
 
 .app.collapsed .sidebar {
@@ -63,25 +65,32 @@ body {
    BRAND
 ===================================================== */
 
+.logo{
+    width:70px;
+    height: 70px;;
+    object-fit:contain;
+}
+
 .brand {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 10px;
-    padding: 6px 8px 22px 8px;
+    justify-content: center;
+    padding: 12px 8px;
+    border-bottom: 1px solid #d1d5db;
 }
 
 .brand-mark {
     width: 34px;
     height: 34px;
     border-radius: 10px;
-    background: #ffdf00;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #050505;
+    color: #FFDD05;
     font-family: 'Poppins', sans-serif;
     font-weight: 800;
-    font-size: 16px;
+    font-size: 20px;
     flex-shrink: 0;
 }
 
@@ -112,6 +121,27 @@ body {
 }
 
 /* =====================================================
+    ICON
+===================================================== */
+
+.nav-icon{
+    width:20px;
+    min-width:20px;
+    text-align:center;
+    font-size:16px;
+    color:#6B7280;
+    transition:.2s;
+}
+
+.nav-item:hover .nav-icon{
+    color:#FF5D05;
+}
+
+.nav-item.active .nav-icon{
+    color:#FF5D05;
+}
+
+/* =====================================================
    SIDEBAR NAV
 ===================================================== */
 
@@ -119,6 +149,7 @@ body {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
+    margin-top: 10px;
 }
 
 .sidebar-nav::-webkit-scrollbar {
@@ -126,7 +157,7 @@ body {
 }
 
 .sidebar-nav::-webkit-scrollbar-thumb {
-    background: #333333;
+    background: #d1d5db;
     border-radius: 10px;
 }
 
@@ -160,10 +191,10 @@ body {
 .nav-item {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     padding: 9px 12px;
     border-radius: 7px;
-    color: #d1d5db;
+    color: #1c1a14;
     font-size: 13.5px;
     font-weight: 500;
     margin-bottom: 2px;
@@ -174,13 +205,13 @@ body {
 }
 
 .nav-item:hover {
-    background: #1a1a1a;
-    color: #ffffff;
+    background: #FFF8CC;
+    color: #1c1a14;
 }
 
 .nav-item.active {
-    background: rgba(255, 221, 5, 0.12);
-    color: #ffdf00;
+    background: #FFDD05;
+    color: #1c1a14;
     font-weight: 600;
 }
 
@@ -246,15 +277,15 @@ body {
 }
 
 .user-chip:hover {
-    background: #1a1a1a;
+    background: #F8FAFC;
 }
 
 .avatar {
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: #ffdf00;
-    color: #050505;
+    background: #FFDD05;
+    color: #111827;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -271,12 +302,12 @@ body {
 .user-meta .name {
     font-size: 12.5px;
     font-weight: 600;
-    color: #ffffff;
+    color: #111827;
 }
 
 .user-meta .role {
     font-size: 11px;
-    color: #9ca3af;
+    color: #6B7280;
 }
 
 .app.collapsed .user-meta {
@@ -327,11 +358,11 @@ body {
 ===================================================== */
 
 .topbar {
-    height: 47px;
+    height: 60px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 16px;
+    padding: 0 24px;
     background: #ffffff;
     border-bottom: 1px solid #e8e9ec;
     flex-shrink: 0;
@@ -343,7 +374,7 @@ body {
 
 .search-box {
     width: 238px;
-    height: 27px;
+    height: 33px;
     display: flex;
     align-items: center;
     gap: 7px;
@@ -364,7 +395,7 @@ body {
     border: none;
     outline: none;
     background: transparent;
-    font-size: 9px;
+    font-size: 12px;
     color: #374151;
 }
 
@@ -384,7 +415,7 @@ body {
 .topbar-actions {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 9px;
 }
 
 .topbar-button {
@@ -432,7 +463,7 @@ body {
     background: #ffdf00;
     color: #050505;
     border-radius: 50%;
-    font-size: 8px;
+    font-size: 10px;
     font-weight: 700;
 }
 
@@ -442,13 +473,13 @@ body {
 }
 
 .profile-info strong {
-    font-size: 9px;
+    font-size: 12px;
     line-height: 1.1;
 }
 
 .profile-info span {
     color: #8c94a0;
-    font-size: 7px;
+    font-size: 8px;
 }
 
 /* =====================================================

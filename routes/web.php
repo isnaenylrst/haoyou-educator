@@ -6,6 +6,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\CalonSiswa\PendaftaranController;
 use App\Http\Controllers\Siswa\SiswaDashboardController;
+use App\Http\Controllers\Admin\DashboardController;
 
 
 /*
@@ -97,3 +98,10 @@ Route::get('/sertifikat', [SiswaDashboardController::class, 'sertifikat'])
 
 Route::get('/progress-report', [SiswaDashboardController::class, 'progresReport'])
     ->name('progresreport.index');
+
+
+Route::middleware(['auth']) ->prefix('admin') ->name('admin.') ->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'index'])
+        ->name('dashboard');
+
+});

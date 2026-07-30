@@ -35,9 +35,9 @@
 
       <div class="mb-4">
         <label class="text-xs font-semibold block mb-1.5" style="color:#000000;"> 
-          username
+          Nama Lengkap
         </label>
-        <input type="text" name="username" value="{{ old('username') }}" required
+        <input type="text" name="nama_lengkap" value="{{ old('nama_lengkap') }}" required
                placeholder="Sesuai data pendaftaran"
                class="w-full px-3.5 py-3 border-[1.5px] border-line rounded-[10px] bg-cream text-[13.5px] focus:outline-none focus:border-gold focus:bg-white">
       </div>

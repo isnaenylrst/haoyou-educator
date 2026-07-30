@@ -1,4 +1,4 @@
-@extends('layouts.admin.app')
+@extends('admin.app')
 
 
 @section('title', 'Dashboard | Haoyou Educator')
