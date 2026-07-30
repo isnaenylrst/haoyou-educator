@@ -1,205 +1,399 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>@yield('title','Haoyou Educator')</title>
 
-    {{-- Bootstrap --}}
+    <!-- Google Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
-    {{-- Font Awesome --}}
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <!-- Font Awesome -->
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 
-    <style>
+<style>
 
-        *{
-            margin:0;
-            padding:0;
-            box-sizing:border-box;
-        }
+/* =====================================================
+                    RESET
+===================================================== */
 
-        html,
-        body{
-            width:100%;
-            height:100%;
-            background:#FFFFFF;
-            font-family:'Segoe UI',sans-serif;
-        }
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
 
-        .wrapper{
-            display:flex;
-            min-height:100vh;
-            background:#FFFFFF;
-        }
+html,
+body{
 
-        /* =========================
-                SIDEBAR
-        ========================= */
+    width:100%;
 
-        .sidebar{
-            width:240px;
-            min-height:100vh;
-            background:#FFFFFF;
-            border-right:1px solid #E6E6E0;
-            position:fixed;
-            left:0;
-            top:0;
-            bottom:0;
-            z-index:100;
-        }
+    min-height:100%;
 
-        /* =========================
-                LOGO
-        ========================= */
+    background:#f7f8fa;
 
-        .logo{
-            text-align:center;
-            padding:30px 20px;
-        }
+    font-family:'Poppins',sans-serif;
 
-        .logo img{
-            width:70px;
-            margin-bottom:10px;
-        }
+    color:#333;
 
-        .logo h5{
-            color:#A9822C;
-            font-weight:bold;
-            letter-spacing:2px;
-        }
+}
 
-        /* =========================
-                MENU
-        ========================= */
+body{
 
-        .menu{
-            margin-top:20px;
-        }
+    overflow-x:hidden;
 
-        .menu a{
-            display:block;
-            text-decoration:none;
-            color:#444;
-            padding:14px 25px;
-            margin:6px 10px;
-            border-radius:10px;
-            transition:.3s;
-            font-size:15px;
-        }
+}
 
-        .menu a:hover{
-            background:#FFF6BF;
-            color:#A9822C;
-        }
+/* =====================================================
+                    WRAPPER
+===================================================== */
 
-        .menu a.active{
-            background:#FFDD00;
-            color:#A9822C;
-            font-weight:700;
-        }
+.wrapper{
 
-        /* =========================
-                CONTENT
-        ========================= */
+    display:flex;
 
-        .content{
-            margin-left:240px;
-            width:calc(100% - 240px);
-            min-height:100vh;
-            background:#FFFFFF;
-            padding:35px;
-        }
+    min-height:100vh;
 
-        /* =========================
-                CARD
-        ========================= */
+    background:#f7f8fa;
 
-        .card{
-            background:#FFFFFF;
-            border:none;
-            border-radius:16px;
-            box-shadow:0 3px 12px rgba(0,0,0,.08);
-            margin-bottom:25px;
-        }
+}
 
-        /* =========================
-            SMALL BOX
-        ========================= */
+/* =====================================================
+                    SIDEBAR
+===================================================== */
 
-        .small-box{
-            background:#FFFFFF !important;
-            border:none;
-            border-radius:15px;
-            box-shadow:0 3px 10px rgba(0,0,0,.08);
-        }
+.sidebar{
 
-        /* =========================
-                BUTTON
-        ========================= */
+    width:240px;
 
-        .btn-primary{
-            background:#FFDD00;
-            border-color:#FFDD00;
-            color:#A9822C;
-            font-weight:600;
-        }
+    min-height:100vh;
 
-        .btn-primary:hover{
-            background:#FFD000;
-            border-color:#FFD000;
-            color:#A9822C;
-        }
+    position:fixed;
 
-        .btn-outline-primary{
-            border-color:#FFDD00;
-            color:#A9822C;
-        }
+    left:0;
 
-        .btn-outline-primary:hover{
-            background:#FFDD00;
-            color:#A9822C;
-        }
+    top:0;
 
-        /* =========================
-                BADGE
-        ========================= */
+    bottom:0;
 
-        .badge-success{
-            background:#6CC070;
-            color:white;
-        }
+    z-index:100;
 
-        .badge-warning{
-            background:#FFDD00;
-            color:#A9822C;
-        }
+    background:#FFFFFF;
 
-        .badge-danger{
-            background:#E95A5A;
-            color:white;
-        }
+    border-right:1px solid #ECECEC;
 
-        /* =========================
-                TABLE
-        ========================= */
+    overflow-y:auto;
 
-        .table td{
-            vertical-align:middle;
-        }
+}
 
-    </style>
+/* =====================================================
+                    LOGO
+===================================================== */
+
+.logo{
+
+    text-align:center;
+
+    padding:30px 20px;
+
+    border-bottom:1px solid #f3f3f3;
+
+}
+
+.logo img{
+
+    width:72px;
+
+    margin-bottom:10px;
+
+}
+
+.logo h5{
+
+    color:#A9822C;
+
+    font-weight:700;
+
+    letter-spacing:2px;
+
+    margin:0;
+
+}
+
+/* =====================================================
+                    MENU
+===================================================== */
+
+.menu{
+
+    padding:18px 10px;
+
+}
+
+.menu a{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:12px;
+
+    text-decoration:none;
+
+    color:#555;
+
+    padding:13px 16px;
+
+    margin-bottom:8px;
+
+    border-radius:12px;
+
+    transition:.25s;
+
+    font-size:14px;
+
+    font-weight:500;
+
+}
+
+.menu a i{
+
+    width:22px;
+
+    text-align:center;
+
+}
+
+.menu a:hover{
+
+    background:#FFF8CC;
+
+    color:#A9822C;
+
+}
+
+.menu a.active{
+
+    background:#FFDD00;
+
+    color:#A9822C;
+
+    font-weight:600;
+
+}
+
+/* =====================================================
+                    CONTENT
+===================================================== */
+
+.content{
+
+    margin-left:240px;
+
+    width:calc(100% - 240px);
+
+    min-height:100vh;
+
+    background:#f7f8fa;
+
+    padding:35px;
+
+}
+
+/* =====================================================
+                    TYPOGRAPHY
+===================================================== */
+
+h1,h2,h3,h4,h5,h6{
+
+    font-weight:600;
+
+    color:#222;
+
+}
+
+p{
+
+    color:#6B7280;
+
+}
+
+/* =====================================================
+                    CARD
+===================================================== */
+
+.card{
+
+    background:#FFFFFF;
+
+    border:none;
+
+    border-radius:16px;
+
+    box-shadow:0 4px 15px rgba(0,0,0,.06);
+
+    margin-bottom:25px;
+
+}
+
+/* =====================================================
+                    SMALL BOX
+===================================================== */
+
+.small-box{
+
+    background:#FFFFFF !important;
+
+    border:none;
+
+    border-radius:16px;
+
+    box-shadow:0 4px 15px rgba(0,0,0,.06);
+
+}
+
+/* =====================================================
+                    BUTTON
+===================================================== */
+
+.btn-primary{
+
+    background:#FFDD00;
+
+    border-color:#FFDD00;
+
+    color:#A9822C;
+
+    font-weight:600;
+
+}
+
+.btn-primary:hover{
+
+    background:#F5D300;
+
+    border-color:#F5D300;
+
+    color:#A9822C;
+
+}
+
+.btn-outline-primary{
+
+    border:1px solid #FFDD00;
+
+    color:#A9822C;
+
+}
+
+.btn-outline-primary:hover{
+
+    background:#FFDD00;
+
+    color:#A9822C;
+
+}
+
+/* =====================================================
+                    BADGE
+===================================================== */
+
+.badge-success{
+
+    background:#6CC070;
+
+    color:#fff;
+
+}
+
+.badge-warning{
+
+    background:#FFDD00;
+
+    color:#A9822C;
+
+}
+
+.badge-danger{
+
+    background:#E95A5A;
+
+    color:#fff;
+
+}
+
+/* =====================================================
+                    TABLE
+===================================================== */
+
+.table{
+
+    background:#FFFFFF;
+
+}
+
+.table td{
+
+    vertical-align:middle;
+
+}
+
+.table thead{
+
+    background:#fafafa;
+
+}
+
+/* =====================================================
+                    SCROLLBAR
+===================================================== */
+
+::-webkit-scrollbar{
+
+    width:8px;
+
+}
+
+::-webkit-scrollbar-thumb{
+
+    background:#d8d8d8;
+
+    border-radius:20px;
+
+}
+
+::-webkit-scrollbar-thumb:hover{
+
+    background:#bfbfbf;
+
+}
+
+</style>
 
 </head>
-
 <body>
 
 <div class="wrapper">
 
-    <!-- Sidebar -->
+    <!-- =====================================
+                SIDEBAR
+    ====================================== -->
 
     <div class="sidebar">
 
+        <!-- Logo -->
         <div class="logo">
 
             <img src="{{ asset('image/Logo-Haoyou.jpeg') }}" alt="Logo">
@@ -208,73 +402,106 @@
 
         </div>
 
+        <!-- Menu -->
         <div class="menu">
 
             <a href="{{ url('/guru/dashboard') }}"
                class="{{ request()->is('guru/dashboard') ? 'active' : '' }}">
-                <i class="fas fa-home me-2"></i>
-                Dashboard
+
+                <i class="fas fa-home"></i>
+
+                <span>Dashboard</span>
+
             </a>
 
             <a href="{{ url('/guru/notifikasi') }}"
                class="{{ request()->is('guru/notifikasi') ? 'active' : '' }}">
-                <i class="fas fa-bell me-2"></i>
-                Notifikasi
+
+                <i class="fas fa-bell"></i>
+
+                <span>Notifikasi</span>
+
             </a>
 
             <a href="{{ url('/guru/sop') }}"
                class="{{ request()->is('guru/sop') ? 'active' : '' }}">
-                <i class="fas fa-book me-2"></i>
-                SOP
+
+                <i class="fas fa-book"></i>
+
+                <span>SOP</span>
+
             </a>
 
             <a href="{{ url('/guru/materi') }}"
                class="{{ request()->is('guru/materi') ? 'active' : '' }}">
-                <i class="fas fa-folder-open me-2"></i>
-                Materi & Silabus
+
+                <i class="fas fa-folder-open"></i>
+
+                <span>Materi & Silabus</span>
+
             </a>
 
             <a href="{{ url('/guru/kelas') }}"
                class="{{ request()->is('guru/kelas') ? 'active' : '' }}">
-                <i class="fas fa-chalkboard me-2"></i>
-                Kelas
+
+                <i class="fas fa-chalkboard"></i>
+
+                <span>Kelas</span>
+
             </a>
 
             <a href="{{ url('/guru/attendance') }}"
                class="{{ request()->is('guru/attendance') ? 'active' : '' }}">
-                <i class="fas fa-user-check me-2"></i>
-                Attendance & Journal
+
+                <i class="fas fa-user-check"></i>
+
+                <span>Attendance & Journal</span>
+
             </a>
 
             <a href="{{ url('/guru/progress-report') }}"
                class="{{ request()->is('guru/progress-report') ? 'active' : '' }}">
-                <i class="fas fa-chart-bar me-2"></i>
-                Progress Report
+
+                <i class="fas fa-chart-bar"></i>
+
+                <span>Progress Report</span>
+
             </a>
 
             <a href="{{ url('/guru/schedule') }}"
                class="{{ request()->is('guru/schedule') ? 'active' : '' }}">
-                <i class="fas fa-calendar-alt me-2"></i>
-                Schedule
+
+                <i class="fas fa-calendar-alt"></i>
+
+                <span>Schedule</span>
+
             </a>
 
             <a href="{{ url('/guru/teaching-log') }}"
                class="{{ request()->is('guru/teaching-log') ? 'active' : '' }}">
-                <i class="fas fa-clipboard-list me-2"></i>
-                Teaching Log
+
+                <i class="fas fa-clipboard-list"></i>
+
+                <span>Teaching Log</span>
+
             </a>
 
             <a href="{{ url('/guru/cuti') }}"
                class="{{ request()->is('guru/cuti') ? 'active' : '' }}">
-                <i class="fas fa-plane-departure me-2"></i>
-                Cuti / Ganti Kelas
+
+                <i class="fas fa-plane-departure"></i>
+
+                <span>Cuti / Ganti Kelas</span>
+
             </a>
 
         </div>
 
     </div>
 
-    <!-- Content -->
+    <!-- =====================================
+                CONTENT
+    ====================================== -->
 
     <div class="content">
 
@@ -284,7 +511,9 @@
 
 </div>
 
+<!-- Bootstrap -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 </body>
+
 </html>

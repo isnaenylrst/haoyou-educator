@@ -1,194 +1,356 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Haoyou Educator</title>
 
-    {{-- Bootstrap --}}
+    <!-- Google Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
-    {{-- Font Awesome --}}
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <!-- Font Awesome -->
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"/>
 
-    <style>
+<style>
 
-        *{
-            margin:0;
-            padding:0;
-            box-sizing:border-box;
-        }
+/* ==========================================
+        GLOBAL
+========================================== */
 
-        html,
-        body{
-            width:100%;
-            height:100%;
-            background:#FFFFFF;
-            font-family:'Segoe UI',sans-serif;
-        }
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
 
-        .wrapper{
-            display:flex;
-            min-height:100vh;
-            background:#FFFFFF;
-        }
+html,
+body{
+    width:100%;
+    min-height:100%;
+    background:#f7f8fa;
+    font-family:'Poppins',sans-serif;
+    color:#2c2c2c;
+}
 
-        /* =========================
-                SIDEBAR
-        ========================= */
+body{
+    overflow-x:hidden;
+}
 
-        .sidebar{
-            width:240px;
-            min-height:100vh;
-            background:#FFFFFF;
-            border-right:1px solid #E6E6E0;
-            position:fixed;
-            left:0;
-            top:0;
-            bottom:0;
-            z-index:100;
-        }
+.wrapper{
+    display:flex;
+    min-height:100vh;
+    background:#f7f8fa;
+}
 
-        /* =========================
-                LOGO
-        ========================= */
+/* ==========================================
+        SIDEBAR
+========================================== */
 
-        .logo{
-            text-align:center;
-            padding:30px 20px;
-        }
+.sidebar{
 
-        .logo img{
-            width:70px;
-            margin-bottom:10px;
-        }
+    width:240px;
+    min-height:100vh;
 
-        .logo h5{
-            color:#A9822C;
-            font-weight:bold;
-            letter-spacing:2px;
-        }
+    background:#ffffff;
 
-        /* =========================
-                MENU
-        ========================= */
+    border-right:1px solid #ececec;
 
-        .menu{
-            margin-top:20px;
-        }
+    position:fixed;
 
-        .menu a{
-            display:block;
-            text-decoration:none;
-            color:#444;
-            padding:14px 25px;
-            margin:6px 10px;
-            border-radius:10px;
-            transition:.3s;
-            font-size:15px;
-        }
+    left:0;
+    top:0;
+    bottom:0;
 
-        .menu a:hover{
-            background:#FFF6BF;
-            color:#A9822C;
-        }
+    z-index:100;
 
-        .menu a.active{
-            background:#FFDD00;
-            color:#A9822C;
-            font-weight:700;
-        }
+}
 
-        /* =========================
-                CONTENT
-        ========================= */
+/* ==========================================
+        LOGO
+========================================== */
 
-        .content{
-            margin-left:240px;
-            width:calc(100% - 240px);
-            min-height:100vh;
-            background:#FFFFFF;
-            padding:35px;
-        }
+.logo{
 
-        /* =========================
-                CARD
-        ========================= */
+    text-align:center;
 
-        .card{
-            background:#FFFFFF;
-            border:none;
-            border-radius:16px;
-            box-shadow:0 3px 12px rgba(0,0,0,.08);
-            margin-bottom:25px;
-        }
+    padding:30px 20px;
 
-        /* =========================
-            DASHBOARD BOX
-        ========================= */
+    border-bottom:1px solid #f1f1f1;
 
-        .small-box{
-            background:#FFFFFF !important;
-            border:none;
-            border-radius:15px;
-            box-shadow:0 3px 10px rgba(0,0,0,.08);
-        }
+}
 
-        /* =========================
-                BUTTON
-        ========================= */
+.logo img{
 
-        .btn-primary{
-            background:#FFDD00;
-            border-color:#FFDD00;
-            color:#A9822C;
-            font-weight:600;
-        }
+    width:70px;
 
-        .btn-primary:hover{
-            background:#FFD000;
-            border-color:#FFD000;
-            color:#A9822C;
-        }
+    margin-bottom:10px;
 
-        .btn-outline-primary{
-            border-color:#FFDD00;
-            color:#A9822C;
-        }
+}
 
-        .btn-outline-primary:hover{
-            background:#FFDD00;
-            color:#A9822C;
-        }
+.logo h5{
 
-        /* =========================
-                BADGE
-        ========================= */
+    color:#A9822C;
 
-        .badge-success{
-            background:#6CC070;
-            color:white;
-        }
+    font-weight:700;
 
-        .badge-warning{
-            background:#FFDD00;
-            color:#A9822C;
-        }
+    letter-spacing:2px;
 
-        .badge-danger{
-            background:#E95A5A;
-            color:white;
-        }
+    margin:0;
 
-        /* =========================
-                TABLE
-        ========================= */
+}
 
-        .table td{
-            vertical-align:middle;
-        }
+/* ==========================================
+        MENU
+========================================== */
 
-    </style>
+.menu{
+
+    margin-top:20px;
+
+}
+
+.menu a{
+
+    display:block;
+
+    text-decoration:none;
+
+    color:#555;
+
+    padding:13px 18px;
+
+    margin:8px 12px;
+
+    border-radius:12px;
+
+    transition:.25s;
+
+    font-size:14px;
+
+    font-weight:500;
+
+}
+
+.menu a i{
+
+    width:22px;
+
+}
+
+.menu a:hover{
+
+    background:#FFF8CC;
+
+    color:#A9822C;
+
+}
+
+.menu a.active{
+
+    background:#FFDD00;
+
+    color:#A9822C;
+
+    font-weight:600;
+
+}
+
+/* ==========================================
+        CONTENT
+========================================== */
+
+.content{
+
+    margin-left:240px;
+
+    width:calc(100% - 240px);
+
+    min-height:100vh;
+
+    background:#f7f8fa;
+
+    padding:35px;
+
+}
+
+/* ==========================================
+        TYPOGRAPHY
+========================================== */
+
+h1,h2,h3,h4,h5,h6{
+
+    font-weight:600;
+
+    color:#222;
+
+}
+
+p{
+
+    color:#6b7280;
+
+}
+
+/* ==========================================
+        CARD
+========================================== */
+
+.card{
+
+    background:#ffffff;
+
+    border:none;
+
+    border-radius:16px;
+
+    box-shadow:0 4px 15px rgba(0,0,0,.06);
+
+    margin-bottom:25px;
+
+}
+
+/* ==========================================
+        SMALL BOX
+========================================== */
+
+.small-box{
+
+    background:#ffffff !important;
+
+    border:none;
+
+    border-radius:16px;
+
+    box-shadow:0 3px 12px rgba(0,0,0,.06);
+
+}
+
+/* ==========================================
+        BUTTON
+========================================== */
+
+.btn-primary{
+
+    background:#FFDD00;
+
+    border-color:#FFDD00;
+
+    color:#A9822C;
+
+    font-weight:600;
+
+}
+
+.btn-primary:hover{
+
+    background:#f5d300;
+
+    border-color:#f5d300;
+
+    color:#A9822C;
+
+}
+
+.btn-outline-primary{
+
+    border-color:#FFDD00;
+
+    color:#A9822C;
+
+}
+
+.btn-outline-primary:hover{
+
+    background:#FFDD00;
+
+    color:#A9822C;
+
+}
+
+/* ==========================================
+        BADGE
+========================================== */
+
+.badge-success{
+
+    background:#6CC070;
+
+    color:white;
+
+}
+
+.badge-warning{
+
+    background:#FFDD00;
+
+    color:#A9822C;
+
+}
+
+.badge-danger{
+
+    background:#E95A5A;
+
+    color:white;
+
+}
+
+/* ==========================================
+        TABLE
+========================================== */
+
+.table{
+
+    background:white;
+
+}
+
+.table td{
+
+    vertical-align:middle;
+
+}
+
+.table thead{
+
+    background:#fafafa;
+
+}
+
+/* ==========================================
+        SCROLLBAR
+========================================== */
+
+::-webkit-scrollbar{
+
+    width:8px;
+
+}
+
+::-webkit-scrollbar-thumb{
+
+    background:#d9d9d9;
+
+    border-radius:20px;
+
+}
+
+::-webkit-scrollbar-thumb:hover{
+
+    background:#bfbfbf;
+
+}
+
+</style>
 
 </head>
 
@@ -196,12 +358,18 @@
 
 <div class="wrapper">
 
-    <!-- Sidebar -->
+    <!-- =========================
+            SIDEBAR
+    ========================== -->
+
     <div class="sidebar">
 
         <div class="logo">
+
             <img src="{{ asset('image/Logo-Haoyou.jpeg') }}" alt="Logo">
+
             <h5>HAOYOU</h5>
+
         </div>
 
         <div class="menu">
@@ -252,7 +420,10 @@
 
     </div>
 
-    <!-- Content -->
+    <!-- =========================
+            CONTENT
+    ========================== -->
+
     <div class="content">
 
         @yield('content')
@@ -260,6 +431,8 @@
     </div>
 
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 </body>
 </html>
