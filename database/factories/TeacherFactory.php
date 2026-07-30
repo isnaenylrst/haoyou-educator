@@ -26,7 +26,7 @@ class TeacherFactory extends Factory
                 'Kids'
             ]),
 
-            'join_date' => fake()->date(),
+            'join_date' => fake()->dateTimeBetween('2024-01-01', 'now')->format('Y-m-d'),
 
             'training_status' => fake()->randomElement([
                 'Training',

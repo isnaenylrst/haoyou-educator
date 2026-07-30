@@ -19,6 +19,7 @@ class MaterialVocab extends Model
         'pinyin',
         'meaning',
         'example_sentence',
+        'notes',
     ];
 
     public function material()

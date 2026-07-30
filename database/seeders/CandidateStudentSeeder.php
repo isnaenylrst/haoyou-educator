@@ -7,12 +7,29 @@ use Illuminate\Database\Seeder;
 
 class CandidateStudentSeeder extends Seeder
 {
-    /**
-     * DUMMY DATA. Jumlah 40 (harus >= jumlah user Student, lihat StudentSeeder
-     * yang mewajibkan tiap student berelasi ke satu candidate_student unik).
-     */
     public function run(): void
     {
-        CandidateStudent::factory()->count(50)->create();
+        // Candidate Student tetap
+        CandidateStudent::create([
+            'name' => 'Isnaeny Larassati',
+            'gender' => 'Female',
+            'birth_date' => '2004-01-01',
+            'phone' => '081234567890',
+            'parent_name' => 'Orang Tua Isnaeny',
+            'parent_phone' => '081234567891',
+            'address' => 'Malang',
+            'school' => 'Politeknik Negeri Malang',
+            'source' => 'Instagram',
+            'allergy' => null,
+            'interested_program' => 'HSK 1',
+            'trial_date' => now()->toDateString(),
+            'trial_status' => 'Pending',
+            'lead_status' => 'Warm',
+        ]);
+
+        // Dummy data
+        CandidateStudent::factory()
+            ->count(39)
+            ->create();
     }
 }

@@ -10,7 +10,7 @@ class AttendanceFactory extends Factory
     {
         return [
             'status' => fake()->randomElement(['Present', 'Present', 'Present', 'Absent', 'Sick', 'Permission']),
-            'remarks' => fake()->optional()->sentence(),
+            'note' => fake()->optional()->sentence(),
         ];
     }
 }
