@@ -2,17 +2,22 @@
 
 namespace Database\Seeders;
 
+use App\Models\Level;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
 class DocumentTemplateSeeder extends Seeder
 {
+    /**
+     * DATA PASTI - daftar template dokumen resmi yang dipakai sistem.
+     */
     public function run(): void
     {
         $now = now();
 
-        $adminLevelId = DB::table('levels')->where('nama_level', 'Admin')->value('id_level');
-        $uploaderId = DB::table('users')->where('level_id', $adminLevelId)->value('id');
+        $adminLevelId = Level::where('nama_level', 'Admin')->value('id_level');
+        $uploaderId = User::where('level_id', $adminLevelId)->value('id');
 
         $templates = [
             ['name' => 'Template Perjanjian Kursus', 'template_type' => 'Agreement'],
@@ -26,9 +31,9 @@ class DocumentTemplateSeeder extends Seeder
         foreach ($templates as $index => $template) {
             DB::table('document_templates')->insert([
                 'name' => $template['name'],
-                'template_type' => $template['template_type'],
+                'document_type' => $template['template_type'],
                 'file_path' => 'document_templates/template_' . ($index + 1) . '.docx',
-                'description' => fake()->sentence(),
+                'description' => $template['name'] . ' resmi Haoyou Educator.',
                 'uploaded_by' => $uploaderId,
                 'status' => 'Active',
                 'created_at' => $now,

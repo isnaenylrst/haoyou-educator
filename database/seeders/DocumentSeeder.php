@@ -2,50 +2,44 @@
 
 namespace Database\Seeders;
 
+use App\Models\Document;
+use App\Models\Level;
+use App\Models\Student;
+use App\Models\Teacher;
+use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 
 class DocumentSeeder extends Seeder
 {
     /**
-     * Dokumen milik guru (CV, sertifikat) dan siswa (agreement), diunggah
-     * oleh Admin.
+     * DUMMY DATA - dokumen milik guru (CV) dan siswa (perjanjian kursus),
+     * diunggah oleh Admin.
      */
     public function run(): void
     {
-        $now = now();
+        $adminLevelId = Level::where('nama_level', 'Admin')->value('id_level');
+        $uploaderId = User::where('level_id', $adminLevelId)->value('id');
 
-        $adminLevelId = DB::table('levels')->where('nama_level', 'Admin')->value('id_level');
-        $uploaderId = DB::table('users')->where('level_id', $adminLevelId)->value('id');
-
-        $teacherUserIds = DB::table('teachers')->pluck('user_id');
-        $studentUserIds = DB::table('students')->pluck('user_id');
+        $teacherUserIds = Teacher::pluck('user_id');
+        $studentUserIds = Student::pluck('user_id');
 
         foreach ($teacherUserIds as $index => $userId) {
-            DB::table('documents')->insert([
+            Document::factory()->create([
                 'user_id' => $userId,
+                'uploaded_by' => $uploaderId,
                 'title' => 'CV Guru #' . ($index + 1),
                 'document_type' => 'CV',
-                'description' => fake()->sentence(),
-                'file_path' => 'documents/cv_teacher_' . ($index + 1) . '.pdf',
                 'visibility' => 'Private',
-                'uploaded_by' => $uploaderId,
-                'created_at' => $now,
-                'updated_at' => $now,
             ]);
         }
 
         foreach ($studentUserIds as $index => $userId) {
-            DB::table('documents')->insert([
+            Document::factory()->create([
                 'user_id' => $userId,
+                'uploaded_by' => $uploaderId,
                 'title' => 'Perjanjian Kursus Siswa #' . ($index + 1),
                 'document_type' => 'Agreement',
-                'description' => fake()->sentence(),
-                'file_path' => 'documents/agreement_student_' . ($index + 1) . '.pdf',
                 'visibility' => 'Student',
-                'uploaded_by' => $uploaderId,
-                'created_at' => $now,
-                'updated_at' => $now,
             ]);
         }
     }

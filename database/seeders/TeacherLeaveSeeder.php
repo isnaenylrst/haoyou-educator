@@ -2,47 +2,51 @@
 
 namespace Database\Seeders;
 
+use App\Models\ClassSchedule;
+use App\Models\Level;
+use App\Models\Teacher;
+use App\Models\TeacherLeave;
+use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 
 class TeacherLeaveSeeder extends Seeder
 {
     /**
-     * Beberapa pengajuan cuti guru, dikaitkan ke jadwal kelas yang terdampak.
+     * DUMMY DATA - 6 pengajuan cuti guru, dikaitkan ke jadwal kelas terdampak.
      */
     public function run(): void
     {
-        $now = now();
+        $teacherIds = Teacher::pluck('id')->toArray();
 
-        $teacherIds = DB::table('teachers')->pluck('id')->toArray();
+        $adminLevelId = Level::where('nama_level', 'Admin')->value('id_level');
+        $approverIds = User::where('level_id', $adminLevelId)->pluck('id')->toArray();
 
-        $adminLevelId = DB::table('levels')->where('nama_level', 'Admin')->value('id_level');
-        $approverIds = DB::table('users')->where('level_id', $adminLevelId)->pluck('id')->toArray();
-
-        $scheduleIds = DB::table('class_schedules')->pluck('id')->toArray();
+        $scheduleIds = ClassSchedule::pluck('id')->toArray();
 
         for ($i = 0; $i < 6; $i++) {
             $teacherId = fake()->randomElement($teacherIds);
-            $status = fake()->randomElement(['Pending', 'Approved', 'Approved', 'Rejected']);
-            $isDecided = $status !== 'Pending';
 
-            $replacementCandidates = array_diff($teacherIds, [$teacherId]);
-
-            DB::table('teacher_leaves')->insert([
+            $teacherLeave = TeacherLeave::factory()->create([
                 'teacher_id' => $teacherId,
                 'class_schedule_id' => fake()->randomElement($scheduleIds),
-                'leave_type' => fake()->randomElement(['Sick', 'Permission']),
-                'reason' => fake()->sentence(),
-                'supporting_document' => fake()->optional()->randomElement(['leaves/surat_dokter_' . $i . '.pdf']),
-                'replacement_teacher_id' => $status === 'Approved' && $replacementCandidates
-                    ? fake()->randomElement($replacementCandidates)
-                    : null,
-                'status' => $status,
-                'approved_by' => $isDecided ? fake()->randomElement($approverIds) : null,
-                'approved_at' => $isDecided ? $now : null,
-                'created_at' => $now,
-                'updated_at' => $now,
             ]);
+
+            $update = [];
+
+            if ($teacherLeave->status !== 'Pending') {
+                $update['approved_by'] = fake()->randomElement($approverIds);
+            }
+
+            if ($teacherLeave->status === 'Approved') {
+                $replacementCandidates = array_diff($teacherIds, [$teacherId]);
+                if ($replacementCandidates) {
+                    $update['replacement_teacher_id'] = fake()->randomElement($replacementCandidates);
+                }
+            }
+
+            if ($update) {
+                $teacherLeave->update($update);
+            }
         }
     }
 }

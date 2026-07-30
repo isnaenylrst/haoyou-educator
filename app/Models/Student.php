@@ -16,7 +16,6 @@ class Student extends Model
     protected $fillable = [
         'candidate_student_id',
         'user_id',
-        'level_id',
         'name',
         'points',
         'join_date',
@@ -31,11 +30,6 @@ class Student extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
-    }
-
-    public function level()
-    {
-        return $this->belongsTo(Level::class);
     }
 
     public function enrollments()

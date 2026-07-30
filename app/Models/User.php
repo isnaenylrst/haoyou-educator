@@ -10,6 +10,8 @@ class User extends Authenticatable
 {
     use HasFactory, Notifiable;
 
+    protected $table = 'users';
+
     protected $fillable = [
         'level_id',
         'username',
@@ -21,10 +23,14 @@ class User extends Authenticatable
         'password',
     ];
 
-    public function level()
-    {
-        return $this->belongsTo(Level::class);
-    }
+public function level()
+{
+    return $this->belongsTo(
+        Level::class,
+        'level_id', // foreign key di tabel users
+        'id_level'  // primary key di tabel levels
+    );
+}
 
     public function teacher()
     {

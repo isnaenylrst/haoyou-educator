@@ -2,59 +2,75 @@
 
 namespace Database\Seeders;
 
+use App\Models\CandidateStudent;
+use App\Models\Student;
+use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class StudentSeeder extends Seeder
 {
-    /**
-     * Satu baris student untuk tiap user ber-level 'Student' (relasi 1-1).
-     * SEMUA student WAJIB berelasi ke candidate_students (tidak ada yang null),
-     * mensimulasikan bahwa setiap siswa aktif berasal dari calon siswa yang
-     * dikonversi. Candidate yang dipakai akan ditandai trial_status='Completed'
-     * dan lead_status='Hot' untuk mencerminkan bahwa dia sudah jadi siswa.
-     *
-     * PENTING: jumlah candidate_students (lihat CandidateStudentSeeder) harus
-     * >= jumlah user ber-level Student, supaya tidak ada candidate yang
-     * dipakai dua kali.
-     */
     public function run(): void
     {
-        $now = now();
+        // =========================
+        // Student Tetap
+        // =========================
 
-        $studentLevelId = DB::table('levels')->where('nama_level', 'Student')->value('id_level');
-        $userIds = DB::table('users')->where('level_id', $studentLevelId)->pluck('id')->toArray();
+        $candidate = CandidateStudent::where('phone' ,'081234567890')->first();
 
-        $candidateIds = DB::table('candidate_students')->pluck('id')->shuffle()->toArray();
-
-        if (count($candidateIds) < count($userIds)) {
-            throw new \RuntimeException(
-                'Jumlah candidate_students (' . count($candidateIds) . ') kurang dari jumlah user Student (' . count($userIds) . '). '
-                . 'Tambah jumlah data di CandidateStudentSeeder supaya setiap student punya candidate yang unik.'
-            );
-        }
-
-        foreach ($userIds as $index => $userId) {
-            $candidateId = $candidateIds[$index];
-
-            DB::table('students')->insert([
-                'candidate_student_id' => $candidateId,
-                'user_id' => $userId,
-                'name' => fake()->name(),
-                'points' => fake()->numberBetween(0, 500),
-                'join_date' => fake()->dateTimeBetween('-2 years', 'now')->format('Y-m-d'),
-                'status' => fake()->randomElement(['Active', 'Active', 'Active', 'Inactive', 'Graduated']),
-                'created_at' => $now,
-                'updated_at' => $now,
+        $user = User::factory()
+            ->student()
+            ->create([
+                'username' => 'student',
+                'password' => Hash::make('student123'),
             ]);
 
-            DB::table('candidate_students')
-                ->where('id', $candidateId)
-                ->update([
-                    'trial_status' => 'Completed',
-                    'lead_status' => 'Hot',
-                    'updated_at' => $now,
+        Student::factory()->create([
+            'candidate_student_id' => $candidate->id,
+            'user_id' => $user->id,
+            'name' => $candidate->name,
+        ]);
+
+        $candidate->update([
+            'trial_status' => 'Completed',
+            'lead_status' => 'Hot',
+        ]);
+
+        // =========================
+        // Student Dummy
+        // =========================
+
+        $candidates = CandidateStudent::where('id', '!=', $candidate->id)
+            ->inRandomOrder()
+            ->take(14)
+            ->get();
+
+        foreach ($candidates as $candidate) {
+
+            $username = Str::slug($candidate->name, '_');
+
+            if (User::where('username', $username)->exists()) {
+                $username .= fake()->numberBetween(100, 999);
+            }
+
+            $user = User::factory()
+                ->student()
+                ->create([
+                    'username' => $username,
+                    'password' => Hash::make('password'),
                 ]);
+
+            Student::factory()->create([
+                'candidate_student_id' => $candidate->id,
+                'user_id' => $user->id,
+                'name' => $candidate->name,
+            ]);
+
+            $candidate->update([
+                'trial_status' => 'Completed',
+                'lead_status' => 'Hot',
+            ]);
         }
     }
 }

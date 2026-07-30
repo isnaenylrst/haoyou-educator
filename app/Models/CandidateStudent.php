@@ -9,7 +9,7 @@ class CandidateStudent extends Model
 {
     use HasFactory;
 
-    protected $table = 'candidate_student';
+    protected $table = 'candidate_students';
 
     public $timestamps = false;
 
@@ -19,15 +19,15 @@ class CandidateStudent extends Model
         'birth_date',
         'phone',
         'parent_name',
-        'no_parents',
+        'parent_phone',
         'address',
         'school',
         'source',
-        'alergi',
+        'allergy',
         'interested_program',
-        'status_trial',
-        'tanggal_trial',
-        'status_lead',
+        'trial_status',
+        'trial_date',
+        'lead_status',
     ];
 
     public function availableSchedules()

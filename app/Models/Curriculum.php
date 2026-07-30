@@ -9,13 +9,10 @@ class Curriculum extends Model
 {
     use HasFactory;
 
-    protected $table = 'curriculum';
-
     protected $table = 'curriculums';
 
     protected $fillable = [
         'user_id',
-        'level_id',
         'name',
         'phone',
         'address',
@@ -27,10 +24,5 @@ class Curriculum extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
-    }
-
-    public function level()
-    {
-        return $this->belongsTo(Level::class);
     }
 }

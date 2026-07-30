@@ -35,7 +35,13 @@ return new class extends Migration
                 'Submitted'
             ])->default('Draft');            
 
-            $table->timestamps();
+            $table->foreignId('uploaded_by')
+                ->nullable()
+                ->constrained('users')
+                ->cascadeOnUpdate()
+                ->nullOnDelete();
+
+            $table->timestamp('uploaded_at')->nullable();
 
         });
     }

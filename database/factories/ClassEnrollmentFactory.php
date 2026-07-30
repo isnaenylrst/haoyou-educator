@@ -2,23 +2,15 @@
 
 namespace Database\Factories;
 
-use App\Models\ClassEnrollment;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
-/**
- * @extends Factory<ClassEnrollment>
- */
 class ClassEnrollmentFactory extends Factory
 {
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
     public function definition(): array
     {
         return [
-            //
+            'enrollment_date' => fake()->dateTimeBetween('-5 months', 'now')->format('Y-m-d'),
+            'status' => fake()->randomElement(['Active', 'Active', 'Completed', 'Cancelled']),
         ];
     }
 }
