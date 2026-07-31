@@ -20,13 +20,13 @@ class SopController extends Controller
 
     public function index()
     {
-        $sops = Document::where('document_type', 'SOP')
-            ->latest()
-            ->get();
-            $templates = DocumentTemplate::where(
-            'template_type',
-            'Progress Report'
-        )
+    // Ambil semua SOP
+    $sops = Document::where('document_type', 'SOP')
+        ->latest()
+        ->get();
+
+    // Ambil Template Progress Report
+    $templates = DocumentTemplate::where('document_type', 'Progress Report')
         ->where('status', 'Active')
         ->latest()
         ->get();
@@ -38,7 +38,7 @@ class SopController extends Controller
             'templates'
         )
     );
-    }
+}
 
     /*
     |--------------------------------------------------------------------------
@@ -175,4 +175,15 @@ class SopController extends Controller
             ->route('kurikulum.sop')
             ->with('success', 'SOP berhasil dihapus.');
     }
+
+    public function show(Document $document)
+{
+    if (!Storage::disk('public')->exists($document->file_path)) {
+        abort(404);
+    }
+
+    return response()->file(
+        Storage::disk('public')->path($document->file_path)
+    );
+}
 }
