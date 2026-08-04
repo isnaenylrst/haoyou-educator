@@ -30,6 +30,11 @@ class CandidateStudent extends Model
         'lead_status',
     ];
 
+    protected $casts = [
+        'birth_date' => 'date',
+        'trial_date' => 'date',
+    ];
+
     public function availableSchedules()
     {
         return $this->hasMany(CandidateStudentAvailableSchedule::class);
@@ -38,6 +43,12 @@ class CandidateStudent extends Model
     public function followUps()
     {
         return $this->hasMany(FollowUp::class);
+    }
+
+    public function latestFollowUp()
+    {
+        return $this->hasOne(FollowUp::class)
+                    ->latestOfMany('followup_date');
     }
 
     public function student()

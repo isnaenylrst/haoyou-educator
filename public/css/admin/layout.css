@@ -66,8 +66,8 @@ body {
 ===================================================== */
 
 .logo{
-    width:70px;
-    height: 70px;;
+    width:100px;
+    height: 100px;;
     object-fit:contain;
 }
 
@@ -76,8 +76,7 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 12px 8px;
-    border-bottom: 1px solid #d1d5db;
+    padding: 4px 8px;
 }
 
 .brand-mark {
@@ -134,11 +133,11 @@ body {
 }
 
 .nav-item:hover .nav-icon{
-    color:#FF5D05;
+    color:#111827;
 }
 
 .nav-item.active .nav-icon{
-    color:#FF5D05;
+    color:#111827;
 }
 
 /* =====================================================
@@ -149,11 +148,12 @@ body {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    margin-top: 10px;
+    margin-top: 3px;
+    padding-right: 2px;
 }
 
 .sidebar-nav::-webkit-scrollbar {
-    width: 3px;
+    width: 7px;
 }
 
 .sidebar-nav::-webkit-scrollbar-thumb {
@@ -224,10 +224,6 @@ body {
     align-items: center;
     justify-content: center;
     font-size: 16px;
-}
-
-.nav-item.active .nav-icon {
-    color: #ffdf00;
 }
 
 .nav-item .nav-badge {
@@ -358,11 +354,12 @@ body {
 ===================================================== */
 
 .topbar {
-    height: 60px;
+    height: 68px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0 24px;
+    position: sticky;
     background: #ffffff;
     border-bottom: 1px solid #e8e9ec;
     flex-shrink: 0;
@@ -373,15 +370,15 @@ body {
 ===================================================== */
 
 .search-box {
-    width: 238px;
-    height: 33px;
+    width: 340px;
+    height: 35px;
     display: flex;
     align-items: center;
-    gap: 7px;
-    padding: 0 9px;
+    gap: 8px;
+    padding: 8px 12px;
     background: #f5f6f8;
     border: 1px solid #eceef1;
-    border-radius: 7px;
+    border-radius: 12px;
 }
 
 .search-box span {
@@ -395,7 +392,7 @@ body {
     border: none;
     outline: none;
     background: transparent;
-    font-size: 12px;
+    font-size: 13px;
     color: #374151;
 }
 
@@ -416,18 +413,23 @@ body {
     display: flex;
     align-items: center;
     gap: 9px;
+    margin-left: auto;
+}
+
+.topbar-icon{
+    font-size: 16.7px;
 }
 
 .topbar-button {
     position: relative;
-    width: 28px;
-    height: 28px;
+    width: 38px;
+    height: 38px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: #ffffff;
     border: 1px solid #e8e9ec;
-    border-radius: 7px;
+    border-radius: 8px;
     color: #374151;
     cursor: pointer;
 }
@@ -443,6 +445,12 @@ body {
     border-radius: 50%;
 }
 
+.topbar-divider {
+    width: 1px;
+    height: 29px;
+    background:#E5E7EB;
+}
+
 /* =====================================================
    TOPBAR PROFILE
 ===================================================== */
@@ -450,20 +458,20 @@ body {
 .topbar-profile {
     display: flex;
     align-items: center;
-    gap: 7px;
-    margin-left: 5px;
+    gap: 10px;
+    padding-left: 4px;
 }
 
 .profile-avatar {
-    width: 25px;
-    height: 25px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: #ffdf00;
     color: #050505;
     border-radius: 50%;
-    font-size: 10px;
+    font-size: 12.5px;
     font-weight: 700;
 }
 
@@ -473,13 +481,14 @@ body {
 }
 
 .profile-info strong {
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 600;
     line-height: 1.1;
 }
 
 .profile-info span {
     color: #8c94a0;
-    font-size: 8px;
+    font-size: 11px;
 }
 
 /* =====================================================
@@ -488,7 +497,10 @@ body {
 
 .page-content {
     flex: 1;
-    padding: 20px;
+    padding: 26px 28px 60px;
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
     min-height: calc(100vh - 47px);
     background: #f7f8fa;
 }

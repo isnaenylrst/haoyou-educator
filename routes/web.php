@@ -7,6 +7,7 @@ use App\Http\Controllers\LandingController;
 use App\Http\Controllers\CalonSiswa\PendaftaranController;
 use App\Http\Controllers\Siswa\SiswaDashboardController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\CalonSiswaController;
 
 
 /*
@@ -104,4 +105,21 @@ Route::middleware(['auth']) ->prefix('admin') ->name('admin.') ->group(function 
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->name('dashboard');
 
+});
+
+Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('/calon-siswa', [CalonSiswaController::class, 'index'])
+        ->name('calon-siswa');
+    Route::post('/calon-siswa', [CalonSiswaController::class, 'store'])
+        ->name('calon-siswa.store');
+
+    // Route spesifik (/edit) HARUS didaftarkan sebelum route wildcard generik,
+    // supaya tidak ketimpa kalau nanti wildcard-nya diubah jadi lebih longgar.
+    Route::get('/calon-siswa/{candidateStudent}/edit', [CalonSiswaController::class, 'edit'])
+        ->name('calon-siswa.edit');
+    Route::put('/calon-siswa/{candidateStudent}', [CalonSiswaController::class, 'update'])
+        ->name('calon-siswa.update');
+
+    Route::delete('/calon-siswa/{candidateStudent}', [CalonSiswaController::class, 'destroy'])
+        ->name('calon-siswa.destroy');
 });

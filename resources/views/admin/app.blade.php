@@ -43,7 +43,7 @@
 
             {{-- DASHBOARD --}}
             <a href="{{ route('admin.dashboard') }}"class="nav-item {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">
-                <i class="fa-solid fa-gauge nav-icon" title="Dashboard"></i>
+                <i class="fa-solid fa-house nav-icon" title="Dashboard"></i>
                 <span class="label">Dashboard</span>
             </a>
 
@@ -51,7 +51,7 @@
             <div class="nav-group">
                 <div class="nav-group-label">CRM</div>
 
-                <a href="#" class="nav-item">
+                <a href="{{ route('admin.calon-siswa') }}"class="nav-item {{ request()->routeIs('admin.calon-siswa') ? 'active' : '' }}">
                     <i class="fa-solid fa-user-plus nav-icon" title="Calon Siswa"></i>
                     <span class="label">Calon Siswa</span>
 
@@ -179,18 +179,20 @@
             <div class="topbar-actions">
                 {{-- Kalender --}}
                 <button class="topbar-button" title="Kalender">
-                    <i class="fa-solid fa-calendar-check"></i>
+                    <i class="fa-solid fa-calendar-check topbar-icon"></i>
                 </button>
 
                 {{-- Reminder / Tugas --}}
                 <button class="topbar-button notification" title="Reminder">
-                    <i class="fa-solid fa-list-check"></i>
+                    <i class="fa-solid fa-list-check topbar-icon"></i>
                 </button>
 
                 {{-- Notifikasi --}}
                 <button class="topbar-button notification" title="Notifikasi">
-                    <i class="fa-regular fa-bell"></i>
+                    <i class="fa-regular fa-bell topbar-icon"></i>
                 </button>
+
+                <div class="topbar-divider"></div>
 
                 <div class="topbar-profile">
                     <div class="profile-avatar">IE</div>
