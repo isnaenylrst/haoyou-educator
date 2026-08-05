@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Material extends Model
 {
@@ -12,7 +14,7 @@ class Material extends Model
     protected $table = 'materials';
 
     protected $fillable = [
-        'program_package_id',
+        'class_id',
         'uploaded_by',
         'meeting_number',
         'title',
@@ -20,28 +22,37 @@ class Material extends Model
         'material_file_path',
     ];
 
-    public function programPackage()
+    protected $appends = [
+        'material_url'
+    ];
+
+    public function classroom(): BelongsTo
     {
-        return $this->belongsTo(ProgramPackage::class);
+        return $this->belongsTo(ClassModel::class, 'class_id');
     }
 
-    public function uploader()
+    public function uploader(): BelongsTo
     {
         return $this->belongsTo(User::class, 'uploaded_by');
     }
 
-    public function vocabularies()
+    public function vocabularies(): HasMany
     {
         return $this->hasMany(MaterialVocab::class, 'material_id');
     }
 
-    public function teacherMaterials()
+    public function teacherMaterials(): HasMany
     {
         return $this->hasMany(TeacherMaterial::class, 'material_id');
     }
 
-    public function teachingJournals()
+    public function teachingJournals(): HasMany
     {
         return $this->hasMany(TeachingJournal::class, 'material_id');
+    }
+
+    public function getMaterialUrlAttribute(): string
+    {
+        return asset('storage/' . $this->material_file_path);
     }
 }

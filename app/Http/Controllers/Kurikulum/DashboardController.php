@@ -66,7 +66,7 @@ class DashboardController extends Controller
         */
 
         $latestMaterials = Material::with([
-            'programPackage',
+            'classroom.programPackage.program',
             'uploader'
         ])
         ->latest()

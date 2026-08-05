@@ -48,4 +48,8 @@ class ClassModel extends Model
     {
         return $this->hasMany(TeachingJournal::class, 'class_id');
     }
+    public function materials()
+    {
+    return $this->hasMany(Material::class, 'class_id');
+    }
 }

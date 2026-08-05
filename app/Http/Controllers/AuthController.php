@@ -28,7 +28,7 @@ class AuthController extends Controller
 
             $user = Auth::user();
 
-            switch ($user->level->level_name) {
+            switch ($user->level->nama_level) {
                 case 'Owner':
                     return redirect()->route('owner.dashboard');
 

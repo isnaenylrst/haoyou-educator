@@ -9,6 +9,7 @@ use App\Http\Controllers\Siswa\SiswaDashboardController;
 use App\Http\Controllers\Kurikulum\DashboardController;
 use App\Http\Controllers\Kurikulum\SopController;
 use App\Http\Controllers\Kurikulum\DocumentTemplateController;
+use App\Http\Controllers\Kurikulum\MaterialController;
 
 /*
 |--------------------------------------------------------------------------
@@ -177,24 +178,41 @@ Route::middleware('auth')
             [DocumentTemplateController::class, 'destroy']
         )->name('template.destroy');
     
-    });
+/*
+|--------------------------------------------------------------------------
+| MATERIAL
+|--------------------------------------------------------------------------
+*/
+
+Route::get('/materi', [MaterialController::class, 'index'])
+    ->name('materi');
+
+Route::post('/materi', [MaterialController::class, 'store'])
+    ->name('materi.store');
+
+Route::put('/materi/{material}', [MaterialController::class, 'update'])
+    ->name('materi.update');
+
+Route::delete('/materi/{material}', [MaterialController::class, 'destroy'])
+    ->name('materi.destroy');
 /*
 |--------------------------------------------------------------------------
 | HALAMAN KURIKULUM LAINNYA
 |--------------------------------------------------------------------------
 */
 
-Route::middleware('auth')->group(function () {
 
-    Route::view('/kurikulum/materi', 'kurikulum.materi');
+    Route::view('/jadwal-konsultasi', 'kurikulum.jadwal-konsultasi')
+    ->name('jadwal-konsultasi');
 
-    Route::view('/kurikulum/jadwal-konsultasi', 'kurikulum.jadwal-konsultasi');
+    Route::view('/review-pengajuan', 'kurikulum.review-pengajuan')
+    ->name('review-pengajuan');
 
-    Route::view('/kurikulum/review-pengajuan', 'kurikulum.review-pengajuan');
+    Route::view('/monitoring', 'kurikulum.monitoring')
+    ->name('monitoring');
 
-    Route::view('/kurikulum/monitoring', 'kurikulum.monitoring');
-
-    Route::view('/kurikulum/surat', 'kurikulum.surat');
+    Route::view('/surat', 'kurikulum.surat')
+    ->name('surat');
 });
 
 /*

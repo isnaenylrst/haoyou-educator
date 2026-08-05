@@ -1,95 +1,295 @@
 @extends('layouts.kurikulum')
 
-@section('title','Materi & Silabus')
+@section('title', 'Materi & Silabus')
 
 @section('content')
 
 <div class="container-fluid">
 
-    {{-- Header --}}
+    {{-- =========================
+        HEADER
+    ========================== --}}
     <div class="mb-4">
-        <h3 class="fw-bold mb-1">Materi & Silabus</h3>
+
+        <h3 class="fw-bold mb-1">
+            Materi & Silabus
+        </h3>
 
         <small class="text-muted">
-            Materi, silabus, kosakata seluruhnya dibuat & diupload oleh Kurikulum —
-            guru hanya melihat, download, dan membuat PPT mengikuti acuan ini.
+            Materi, Silabus, dan Kosakata dibuat oleh Kurikulum.
+            Guru hanya dapat melihat, mengunduh, dan menggunakan materi
+            sebagai acuan mengajar.
         </small>
+
     </div>
 
-    {{-- =======================
-        Upload Materi
-    ======================= --}}
+
+    {{-- =========================
+        SUCCESS MESSAGE
+    ========================== --}}
+
+    @if(session('success'))
+
+        <div class="alert alert-success alert-dismissible fade show">
+
+            {{ session('success') }}
+
+            <button
+                type="button"
+                class="btn-close"
+                data-bs-dismiss="alert">
+            </button>
+
+        </div>
+
+    @endif
+
+
+    {{-- =========================
+        ERROR MESSAGE
+    ========================== --}}
+
+    @if(session('error'))
+
+        <div class="alert alert-danger alert-dismissible fade show">
+
+            {{ session('error') }}
+
+            <button
+                type="button"
+                class="btn-close"
+                data-bs-dismiss="alert">
+            </button>
+
+        </div>
+
+    @endif
+
+
+    {{-- =========================
+        VALIDATION ERROR
+    ========================== --}}
+
+    @if($errors->any())
+
+        <div class="alert alert-danger alert-dismissible fade show">
+
+            <strong>Terjadi Kesalahan :</strong>
+
+            <ul class="mb-0 mt-2">
+
+                @foreach($errors->all() as $error)
+
+                    <li>{{ $error }}</li>
+
+                @endforeach
+
+            </ul>
+
+            <button
+                type="button"
+                class="btn-close"
+                data-bs-dismiss="alert">
+            </button>
+
+        </div>
+
+    @endif
+
+
+    {{-- =========================================================
+        FORM UPLOAD MATERI BARU
+    ========================================================== --}}
 
     <div class="card shadow-sm border-0 mb-4">
 
         <div class="card-body">
 
-            <h4 class="fw-bold mb-2">
-                Upload Materi / Silabus Baru
+            <h4 class="fw-bold">
+                Upload Materi Baru
             </h4>
 
             <small class="text-muted">
-                Materi yang diupload di sini langsung menjadi acuan materi bagi semua guru.
+                Materi yang diupload akan digunakan seluruh guru.
             </small>
 
-            <form class="mt-3">
+
+            <form
+                action="{{ route('kurikulum.materi.store') }}"
+                method="POST"
+                enctype="multipart/form-data"
+                class="mt-4">
+
+                @csrf
+
+
+                {{-- PILIH KELAS --}}
 
                 <div class="mb-3">
 
                     <label class="form-label">
-                        Kategori Kelas
+                        Pilih Kelas
                     </label>
 
-                    <select class="form-select">
-                        <option>Maochong</option>
-                        <option>Jianer</option>
-                        <option>Hudie</option>
-                        <option>Feixiang</option>
-                        <option>HSK</option>
-                        <option>Private</option>
+                    <select
+                        name="class_id"
+                        class="form-select"
+                        required>
+
+                        <option value="">
+                            -- Pilih Kelas --
+                        </option>
+
+                        @foreach($classes as $class)
+
+                            <option
+                                value="{{ $class->id }}"
+                                {{ old('class_id') == $class->id ? 'selected' : '' }}>
+
+                                {{ $class->programPackage?->program?->program_name ?? '-' }}
+                                -
+                                {{ $class->class_name }}
+
+                            </option>
+
+                        @endforeach
+
                     </select>
 
                 </div>
 
+
+                {{-- PERTEMUAN --}}
+
                 <div class="mb-3">
 
                     <label class="form-label">
-                        Nama Materi / Unit
+                        Pertemuan
                     </label>
 
-                    <input type="text"
-                           class="form-control"
-                           placeholder="Contoh : Unit 6 - Aktivitas Sehari-hari">
+                    <input
+                        type="number"
+                        name="meeting_number"
+                        class="form-control"
+                        value="{{ old('meeting_number') }}"
+                        min="1"
+                        required>
 
                 </div>
 
+
+                {{-- JUDUL --}}
+
                 <div class="mb-3">
 
                     <label class="form-label">
-                        File Silabus
+                        Judul Materi
                     </label>
 
-                    <input type="file"
-                           class="form-control">
+                    <input
+                        type="text"
+                        name="title"
+                        class="form-control"
+                        value="{{ old('title') }}"
+                        required>
 
                 </div>
 
+
+                {{-- SILABUS --}}
+
                 <div class="mb-3">
 
                     <label class="form-label">
-                        Daftar Kosakata (Mandarin, Pinyin, Arti)
+                        Silabus
                     </label>
 
                     <textarea
-                        class="form-control"
-                        rows="4"
-                        placeholder="爸爸 - bàba - Ayah"></textarea>
+                        name="syllabus"
+                        rows="5"
+                        class="form-control">{{ old('syllabus') }}</textarea>
 
                 </div>
 
-                <button class="btn btn-success">
-                    Publish Materi & Silabus
-                </button>
+
+                {{-- FILE --}}
+
+                <div class="mb-3">
+
+                    <label class="form-label">
+                        Upload File Materi
+                    </label>
+
+                    <input
+                        type="file"
+                        name="material_file"
+                        class="form-control"
+                        accept=".pdf,.doc,.docx,.ppt,.pptx"
+                        required>
+
+                    <small class="text-muted">
+                        Maksimal 10 MB
+                    </small>
+
+                </div>
+
+
+                {{-- VOCABULARY --}}
+
+                <div class="mb-3">
+
+                    <label class="form-label">
+                        Daftar Kosakata
+                    </label>
+
+                    <textarea
+                        name="vocabularies"
+                        rows="6"
+                        class="form-control"
+                        placeholder="爸爸|bàba|Ayah
+妈妈|māma|Ibu
+哥哥|gēge|Kakak Laki-laki">{{ old('vocabularies') }}</textarea>
+
+                    <small class="text-muted">
+
+                        Format penulisan :
+
+                        <br>
+
+                        <strong>Hanzi | Pinyin | Arti</strong>
+
+                        <br><br>
+
+                        Contoh :
+
+                        <br>
+
+                        爸爸|bàba|Ayah
+
+                        <br>
+
+                        妈妈|māma|Ibu
+
+                    </small>
+
+                </div>
+
+
+                {{-- BUTTON --}}
+
+                <div class="text-end">
+
+                    <button
+                        type="submit"
+                        class="btn btn-success">
+
+                        <i class="fa-solid fa-upload me-2"></i>
+
+                        Publish Materi
+
+                    </button>
+
+                </div>
 
             </form>
 
@@ -97,240 +297,568 @@
 
     </div>
 
-    {{-- =======================
-        Filter
-    ======================= --}}
 
-    <div class="mb-3">
 
-        <span class="badge bg-dark px-3 py-2">Semua</span>
+    {{-- =========================================================
+        DAFTAR MATERI
+    ========================================================== --}}
 
-        <span class="badge bg-light text-dark border px-3 py-2">Maochong</span>
+    <div class="card shadow-sm border-0">
 
-        <span class="badge bg-light text-dark border px-3 py-2">Jianer</span>
+        <div class="card-header bg-white">
 
-        <span class="badge bg-light text-dark border px-3 py-2">Hudie</span>
+            <div class="d-flex justify-content-between align-items-center">
 
-        <span class="badge bg-light text-dark border px-3 py-2">Feixiang</span>
+                <h5 class="fw-bold mb-0">
+                    Daftar Materi
+                </h5>
 
-        <span class="badge bg-light text-dark border px-3 py-2">HSK</span>
-
-        <span class="badge bg-light text-dark border px-3 py-2">Private</span>
-
-        <span class="badge bg-light text-dark border px-3 py-2">Bisnis</span>
-
-        <span class="badge bg-light text-dark border px-3 py-2">Traditional / TOCFL</span>
-
-    </div>
-
-    {{-- =======================
-        LIST MATERI
-    ======================= --}}
-
-    <div class="card shadow-sm border-0 mb-4">
-
-        <div class="list-group list-group-flush">
-
-            <div class="list-group-item d-flex justify-content-between align-items-center">
-
-                <div>
-
-                    <div class="fw-semibold">
-                        HSK 3 (A) — Silabus & Kosakata Lengkap
-                    </div>
-
-                    <small class="text-muted">
-                        v4 • Dipublikasikan
-                    </small>
-
-                </div>
-
-                <div>
-
-                    <button class="btn btn-outline-dark btn-sm">
-                        Lihat / Edit
-                    </button>
-
-                    <span class="badge bg-success">
-                        Terpublikasi
-                    </span>
-
-                </div>
-
-            </div>
-
-            <div class="list-group-item d-flex justify-content-between align-items-center">
-
-                <div>
-
-                    <div class="fw-semibold">
-                        Maochong 3A — Unit 5 Keluarga
-                    </div>
-
-                    <small class="text-muted">
-                        v2 • Dipublikasikan
-                    </small>
-
-                </div>
-
-                <div>
-
-                    <button class="btn btn-outline-dark btn-sm">
-                        Lihat / Edit
-                    </button>
-
-                    <span class="badge bg-success">
-                        Terpublikasi
-                    </span>
-
-                </div>
-
-            </div>
-
-            <div class="list-group-item d-flex justify-content-between align-items-center">
-
-                <div>
-
-                    <div class="fw-semibold">
-                        Hudie 1A — Unit 1 Salam
-                    </div>
-
-                    <small class="text-muted">
-                        v1 • Dipublikasikan
-                    </small>
-
-                </div>
-
-                <div>
-
-                    <button class="btn btn-outline-dark btn-sm">
-                        Lihat / Edit
-                    </button>
-
-                    <span class="badge bg-success">
-                        Terpublikasi
-                    </span>
-
-                </div>
-
-            </div>
-
-            <div class="list-group-item d-flex justify-content-between align-items-center">
-
-                <div>
-
-                    <div class="fw-semibold">
-                        Jianer 2B — Unit 3 Warna & Bentuk
-                    </div>
-
-                    <small class="text-muted">
-                        v1 • Draft
-                    </small>
-
-                </div>
-
-                <div>
-
-                    <button class="btn btn-warning btn-sm">
-                        Lanjutkan Edit
-                    </button>
-
-                    <span class="badge bg-warning text-dark">
-                        Draft
-                    </span>
-
-                </div>
+                <span class="badge bg-primary">
+                    {{ $materials->count() }} Materi
+                </span>
 
             </div>
 
         </div>
 
-    </div>
 
-    <small class="text-muted">
-        Status "Draft" berarti belum selesai disusun Kurikulum dan belum terlihat oleh guru.
-    </small>
+        <div class="card-body p-0">
 
-    {{-- =======================
-        SILABUS KOSAKATA
-    ======================= --}}
+            @forelse($materials as $material)
 
-    <div class="card shadow-sm border-0 mt-4">
+                <div class="list-group list-group-flush">
 
-        <div class="card-body">
+                    <div class="list-group-item py-4">
 
-            <h4 class="fw-bold">
-                Silabus — Kosakata yang Diajarkan (Berkesinambungan per Pertemuan)
-            </h4>
+                        <div class="row">
 
-            <small class="text-muted">
-                Maochong 3A, Unit 5 (Keluarga)
-            </small>
+                            {{-- =================================================
+                                INFORMASI MATERI
+                            ================================================== --}}
 
-            <div class="table-responsive mt-3">
+                            <div class="col-lg-9">
 
-                <table class="table">
+                                <h5 class="fw-bold mb-2">
+                                    {{ $material->title }}
+                                </h5>
 
-                    <thead>
 
-                    <tr>
+                                <div class="mb-2">
 
-                        <th>Pertemuan</th>
-                        <th>Kata Mandarin</th>
-                        <th>Pinyin</th>
-                        <th>Arti</th>
+                                    <span class="badge bg-primary">
 
-                    </tr>
+                                        Pertemuan
+                                        {{ $material->meeting_number }}
 
-                    </thead>
+                                    </span>
 
-                    <tbody>
+                                </div>
 
-                    <tr>
 
-                        <td>Pertemuan 1</td>
-                        <td>爸爸</td>
-                        <td>bàba</td>
-                        <td>Ayah</td>
+                                <div class="text-muted mb-1">
 
-                    </tr>
+                                    <strong>Kelas :</strong>
 
-                    <tr>
+                                    {{ $material->classroom?->class_name ?? '-' }}
 
-                        <td></td>
-                        <td>妈妈</td>
-                        <td>māma</td>
-                        <td>Ibu</td>
+                                </div>
 
-                    </tr>
 
-                    <tr>
+                                <div class="text-muted mb-1">
 
-                        <td>Pertemuan 2</td>
-                        <td>哥哥</td>
-                        <td>gēge</td>
-                        <td>Kakak laki-laki</td>
+                                    <strong>Program :</strong>
 
-                    </tr>
+                                    {{ $material->classroom?->programPackage?->program?->program_name ?? '-' }}
 
-                    <tr>
+                                </div>
 
-                        <td></td>
-                        <td>姐姐</td>
-                        <td>jiějie</td>
-                        <td>Kakak perempuan</td>
 
-                    </tr>
+                                <div class="text-muted mb-1">
 
-                    </tbody>
+                                    <strong>Uploader :</strong>
 
-                </table>
+                                    {{ $material->uploader?->name ?? '-' }}
 
-            </div>
+                                </div>
 
-            <button class="btn btn-outline-secondary btn-sm">
-                Lihat PDF
-            </button>
+
+                                <div class="text-muted mb-3">
+
+                                    <strong>Tanggal Upload :</strong>
+
+                                    {{ $material->created_at?->format('d M Y H:i') }}
+
+                                </div>
+
+
+                                {{-- SILABUS --}}
+
+                                @if($material->syllabus)
+
+                                    <div class="mb-3">
+
+                                        <strong>
+                                            Silabus
+                                        </strong>
+
+                                        <div class="border rounded p-3 bg-light mt-2">
+
+                                            {!! nl2br(e($material->syllabus)) !!}
+
+                                        </div>
+
+                                    </div>
+
+                                @endif
+
+
+                                {{-- VOCABULARY PREVIEW --}}
+
+                                @if($material->vocabularies->count())
+
+                                    <div class="mb-3">
+
+                                        <strong>
+                                            Kosakata
+                                        </strong>
+
+                                        <div class="border rounded p-3 bg-light mt-2">
+
+                                            <div class="row">
+
+                                                @foreach($material->vocabularies as $vocab)
+
+                                                    <div class="col-md-6 mb-2">
+
+                                                        <strong>
+                                                            {{ $vocab->hanzi }}
+                                                        </strong>
+
+                                                        <span class="text-muted">
+                                                            ({{ $vocab->pinyin }})
+                                                        </span>
+
+                                                        -
+                                                        {{ $vocab->meaning }}
+
+                                                    </div>
+
+                                                @endforeach
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                @endif
+
+                            </div>
+
+
+                            {{-- =================================================
+                                ACTION BUTTON
+                            ================================================== --}}
+
+                            <div class="col-lg-3">
+
+                                <div class="d-grid gap-2">
+
+
+                                    {{-- DOWNLOAD / LIHAT FILE --}}
+
+                                    <a
+                                        href="{{ $material->material_url }}"
+                                        target="_blank"
+                                        class="btn btn-primary">
+
+                                        <i class="fa-solid fa-download me-2"></i>
+
+                                        Download Materi
+
+                                    </a>
+
+
+                                    {{-- =================================================
+                                        EDIT
+                                    ================================================== --}}
+
+                                    <button
+                                        type="button"
+                                        class="btn btn-warning"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#editMaterialModal{{ $material->id }}">
+
+                                        <i class="fa-solid fa-pen me-2"></i>
+
+                                        Edit
+
+                                    </button>
+
+
+                                    {{-- =================================================
+                                        DELETE
+                                    ================================================== --}}
+
+                                    <form
+                                        action="{{ route('kurikulum.materi.destroy', $material->id) }}"
+                                        method="POST"
+                                        onsubmit="return confirm('Yakin ingin menghapus materi ini?')">
+
+                                        @csrf
+
+                                        @method('DELETE')
+
+                                        <button
+                                            type="submit"
+                                            class="btn btn-danger w-100">
+
+                                            <i class="fa-solid fa-trash me-2"></i>
+
+                                            Hapus
+
+                                        </button>
+
+                                    </form>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                {{-- =========================================================
+                    MODAL EDIT MATERI
+                ========================================================== --}}
+
+                <div
+                    class="modal fade"
+                    id="editMaterialModal{{ $material->id }}"
+                    tabindex="-1"
+                    aria-labelledby="editMaterialModalLabel{{ $material->id }}"
+                    aria-hidden="true">
+
+                    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+
+                        <div class="modal-content">
+
+
+                            {{-- MODAL HEADER --}}
+
+                            <div class="modal-header">
+
+                                <div>
+
+                                    <h5
+                                        class="modal-title fw-bold"
+                                        id="editMaterialModalLabel{{ $material->id }}">
+
+                                        Edit Materi
+
+                                    </h5>
+
+                                    <small class="text-muted">
+
+                                        Pertemuan
+                                        {{ $material->meeting_number }}
+
+                                        -
+                                        {{ $material->classroom?->class_name ?? '-' }}
+
+                                    </small>
+
+                                </div>
+
+                                <button
+                                    type="button"
+                                    class="btn-close"
+                                    data-bs-dismiss="modal">
+                                </button>
+
+                            </div>
+
+
+                            {{-- MODAL BODY --}}
+
+                            <form
+                                action="{{ route('kurikulum.materi.update', $material->id) }}"
+                                method="POST"
+                                enctype="multipart/form-data">
+
+                                @csrf
+
+                                @method('PUT')
+
+
+                                <div class="modal-body">
+
+
+                                    {{-- PILIH KELAS --}}
+
+                                    <div class="mb-3">
+
+                                        <label class="form-label fw-semibold">
+                                            Pilih Kelas
+                                        </label>
+
+                                        <select
+                                            name="class_id"
+                                            class="form-select"
+                                            required>
+
+                                            @foreach($classes as $class)
+
+                                                <option
+                                                    value="{{ $class->id }}"
+                                                    {{ $material->class_id == $class->id ? 'selected' : '' }}>
+
+                                                    {{ $class->programPackage?->program?->program_name ?? '-' }}
+                                                    -
+                                                    {{ $class->class_name }}
+
+                                                </option>
+
+                                            @endforeach
+
+                                        </select>
+
+                                    </div>
+
+
+                                    {{-- PERTEMUAN --}}
+
+                                    <div class="mb-3">
+
+                                        <label class="form-label fw-semibold">
+                                            Pertemuan
+                                        </label>
+
+                                        <input
+                                            type="number"
+                                            name="meeting_number"
+                                            class="form-control"
+                                            min="1"
+                                            value="{{ $material->meeting_number }}"
+                                            required>
+
+                                    </div>
+
+
+                                    {{-- JUDUL --}}
+
+                                    <div class="mb-3">
+
+                                        <label class="form-label fw-semibold">
+                                            Judul Materi
+                                        </label>
+
+                                        <input
+                                            type="text"
+                                            name="title"
+                                            class="form-control"
+                                            value="{{ $material->title }}"
+                                            required>
+
+                                    </div>
+
+
+                                    {{-- SILABUS --}}
+
+                                    <div class="mb-3">
+
+                                        <label class="form-label fw-semibold">
+                                            Silabus
+                                        </label>
+
+                                        <textarea
+                                            name="syllabus"
+                                            rows="6"
+                                            class="form-control">{{ $material->syllabus }}</textarea>
+
+                                    </div>
+
+
+                                    {{-- FILE SAAT INI --}}
+
+                                    <div class="mb-3">
+
+                                        <label class="form-label fw-semibold">
+                                            File Materi Saat Ini
+                                        </label>
+
+                                        <div class="border rounded p-3 bg-light">
+
+                                            <div class="d-flex justify-content-between align-items-center">
+
+                                                <div>
+
+                                                    <i class="fa-solid fa-file-lines me-2"></i>
+
+                                                    {{ basename($material->material_file_path) }}
+
+                                                </div>
+
+
+                                                <a
+                                                    href="{{ $material->material_url }}"
+                                                    target="_blank"
+                                                    class="btn btn-sm btn-primary">
+
+                                                    <i class="fa-solid fa-eye me-1"></i>
+
+                                                    Lihat
+
+                                                </a>
+
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+
+                                    {{-- GANTI FILE --}}
+
+                                    <div class="mb-3">
+
+                                        <label class="form-label fw-semibold">
+                                            Ganti File Materi
+                                        </label>
+
+                                        <input
+                                            type="file"
+                                            name="material_file"
+                                            class="form-control"
+                                            accept=".pdf,.doc,.docx,.ppt,.pptx">
+
+                                        <small class="text-muted">
+
+                                            Kosongkan jika tidak ingin mengganti file.
+
+                                            <br>
+
+                                            Maksimal 10 MB.
+
+                                        </small>
+
+                                    </div>
+
+
+                                    {{-- VOCABULARY --}}
+
+                                    <div class="mb-3">
+
+                                        <label class="form-label fw-semibold">
+                                            Daftar Kosakata
+                                        </label>
+
+                                        <textarea
+                                            name="vocabularies"
+                                            rows="10"
+                                            class="form-control"
+                                            placeholder="爸爸|bàba|Ayah
+妈妈|māma|Ibu">{{ $material->vocabularies
+    ->map(function ($vocab) {
+        return $vocab->hanzi . '|' . $vocab->pinyin . '|' . $vocab->meaning;
+    })
+    ->implode("\n") }}</textarea>
+
+                                        <small class="text-muted">
+
+                                            Format:
+
+                                            <strong>
+                                                Hanzi | Pinyin | Arti
+                                            </strong>
+
+                                            <br>
+
+                                            Satu kosakata per baris.
+
+                                        </small>
+
+                                    </div>
+
+
+                                    {{-- INFO --}}
+
+                                    <div class="alert alert-warning mb-0">
+
+                                        <i class="fa-solid fa-circle-info me-2"></i>
+
+                                        Jika kosakata diubah, data kosakata lama
+                                        akan diganti dengan data yang baru.
+
+                                    </div>
+
+                                </div>
+
+
+                                {{-- MODAL FOOTER --}}
+
+                                <div class="modal-footer">
+
+                                    <button
+                                        type="button"
+                                        class="btn btn-secondary"
+                                        data-bs-dismiss="modal">
+
+                                        Batal
+
+                                    </button>
+
+
+                                    <button
+                                        type="submit"
+                                        class="btn btn-success">
+
+                                        <i class="fa-solid fa-save me-2"></i>
+
+                                        Simpan Perubahan
+
+                                    </button>
+
+                                </div>
+
+                            </form>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+            @empty
+
+
+                {{-- =========================================================
+                    EMPTY DATA
+                ========================================================== --}}
+
+                <div class="text-center py-5">
+
+                    <img
+                        src="https://cdn-icons-png.flaticon.com/512/7486/7486740.png"
+                        width="120"
+                        class="mb-3">
+
+                    <h5 class="fw-bold">
+                        Belum Ada Materi
+                    </h5>
+
+                    <p class="text-muted mb-0">
+                        Silakan upload materi pertama.
+                    </p>
+
+                </div>
+
+            @endforelse
 
         </div>
 
