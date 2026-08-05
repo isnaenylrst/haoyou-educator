@@ -20,22 +20,30 @@ Route::get('/', [LandingController::class, 'index'])
 Route::get('/konsultasi-gratis', [LandingController::class, 'konsultasiGratis'])
     ->name('konsultasi.gratis');
 
-
 /*
 |--------------------------------------------------------------------------
 | LOGIN
 |--------------------------------------------------------------------------
-| Untuk pengembangan, halaman login tetap bisa dibuka.
+*/
+// Route::middleware('guest')->group(function () {
+
+    // Menampilkan halaman login
+    Route::get('/login', [AuthController::class, 'index'])
+        ->name('login');
+
+    // Memproses login
+    Route::post('/login', [AuthController::class, 'login'])
+        ->name('login.process');
+
+
+/*
+|--------------------------------------------------------------------------
+| LOGOUT
 |--------------------------------------------------------------------------
 */
-
-Route::get('/login', [AuthController::class, 'index'])
-    ->name('login');
-
-Route::post('/login', [AuthController::class, 'login'])
-    ->name('login.process');
-
-
+Route::post('/logout', [AuthController::class, 'logout'])
+    ->middleware('auth')
+    ->name('logout');
 /*
 |--------------------------------------------------------------------------
 | PENDAFTARAN CALON SISWA
@@ -53,29 +61,16 @@ Route::post('/daftar', [PendaftaranController::class, 'store'])
 Route::get('/daftar/sukses', [PendaftaranController::class, 'sukses'])
     ->name('pendaftaran.sukses');
 
-
 /*
 |--------------------------------------------------------------------------
-| LOGOUT
+| PORTAL SISWA
 |--------------------------------------------------------------------------
-| Untuk pengembangan tidak perlu auth middleware.
-|--------------------------------------------------------------------------
-*/
-
-Route::post('/logout', [AuthController::class, 'logout'])
-    ->name('logout');
-
-
-/*
-|--------------------------------------------------------------------------
-| DASHBOARD SISWA
-|--------------------------------------------------------------------------
-| TANPA LOGIN SEMENTARA UNTUK PENGEMBANGAN
+| WAJIB LOGIN
 |--------------------------------------------------------------------------
 */
 
 Route::get('/dashboard', [SiswaDashboardController::class, 'dashboard'])
-    ->name('dashboard');
+    ->name('student.dashboard');
 
 Route::get('/program', [SiswaDashboardController::class, 'program'])
     ->name('program.index');

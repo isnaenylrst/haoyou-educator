@@ -4,8 +4,13 @@
 
 @push('styles')
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+
+  body {
+    font-family: 'Poppins', sans-serif;
+  }
   .side-link{ display:flex; align-items:center; gap:10px; padding:11px 12px; border-radius:10px; font-size:13.5px; color:#1c1a14; margin-bottom:4px; transition:.15s; text-decoration:none; }
-  .side-link:hover{ background:#f3e6a0; color:#1c1a14; }
+  .side-link:hover{ background:#fff; color:#1c1a14; }
   .side-link.is-active{ background:#FFDD05; color:#1c1a14; font-weight:600; }
   .side-link.alumni-restricted{ position:relative; }
   body.alumni-mode .side-link.alumni-restricted{ opacity:.35; pointer-events:none; }
@@ -19,7 +24,7 @@
 @endpush
 
 @section('content')
-<div class="flex min-h-screen bg-cream">
+<div class="flex min-h-screen bg-[#f7f8fa]">
 
   {{-- ===================== SIDEBAR ===================== --}}
   <aside class="w-[230px] bg-white text-ink p-5 flex-shrink-0 hidden md:block border-r border-line">
@@ -35,7 +40,7 @@
     </div>
     <div class="border-b border-line mb-6"></div>
 
-    <a href="{{ route('dashboard') }}" class="side-link alumni-restricted {{ request()->routeIs('dashboard') ? 'is-active' : '' }}">
+    <a href="{{ route('student.dashboard') }}" class="side-link alumni-restricted {{ request()->routeIs('student.dashboard') ? 'is-active' : '' }}">
     <span>🏠</span> Dashboard
     </a>
 
@@ -86,9 +91,14 @@
   <main class="flex-1 p-6 md:p-10">
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-semibold">{{ $title ?? 'Dashboard' }}</h1>
+        <h1 class="text-2xl font-semibold text-black">
+            Selamat Datang Kembali 👋🏻
+        </h1>
+        
         @if(!empty($subtitle))
-          <p class="font-serif2 italic text-oliveDark text-sm mt-0.5">{{ $subtitle }}</p>
+         <p class="italic text-black text-sm mt-0.5">
+         Selamat belajar hari ini
+         </p>
         @endif
       </div>
       <a href="{{ route('notifikasi.index') }}" class="bell-btn relative w-11 h-11 rounded-full bg-white border border-line flex items-center justify-center">🔔</a>

@@ -29,7 +29,7 @@
         <div class="text-xs text-gray-500">Sesuai level siswa</div>
       </div>
     </div>
-    <button class="text-xs font-semibold bg-ink text-white rounded-full px-4 py-2 hover:bg-oliveDark transition">Download</button>
+    <button class="text-xs font-semibold border border-ink rounded-full  px-4 py-2 hover:bg-ink hover:text-white transition">Download</button>
   </div>
 </div>
 

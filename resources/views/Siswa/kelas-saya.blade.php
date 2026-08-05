@@ -15,7 +15,7 @@
         </div>
       </div>
       @if ($kelas['platform'] === 'online')
-        <button class="text-xs font-semibold bg-ink text-white rounded-full px-4 py-2 hover:bg-oliveDark transition">Join Zoom →</button>
+        <button class="text-xs font-semibold border border-ink rounded-full  px-4 py-2 hover:bg-ink hover:text-white transition">Join Zoom →</button>
       @else
         <span class="text-[11px] font-semibold px-3 py-1 rounded-full bg-pale text-oliveDark">{{ $kelas['detail'] }}</span>
       @endif

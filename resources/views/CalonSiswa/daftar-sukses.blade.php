@@ -13,7 +13,7 @@
       Silakan tunggu Admin menghubungi Anda via WA/Email maksimal 1x24 Jam
       untuk proses pembayaran dan aktivasi akun.
     </p>
-    <a href="{{ route('landing') }}" class="inline-block px-6 py-3 rounded-full text-sm font-semibold bg-ink text-white hover:bg-oliveDark transition">
+    <a href="{{ route('landing') }}" class="inline-block px-6 py-3 rounded-full text-sm font-semibold bg-ink text-white hover:bg-inkDark transition">
       Kembali ke Halaman Utama
     </a>
   </div>

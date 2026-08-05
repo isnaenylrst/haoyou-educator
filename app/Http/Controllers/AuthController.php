@@ -15,8 +15,8 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $credentials = $request->validate([
-            'username' => ['required'],
-            'password' => ['required'],
+            'username' => ['required', 'string'],
+            'password' => ['required', 'string'],
         ]);
 
         // Hanya user yang statusnya Active yang boleh login
@@ -28,7 +28,7 @@ class AuthController extends Controller
 
             $user = Auth::user();
 
-            switch ($user->level->level_name) {
+            switch ($user->level->nama_level) {
                 case 'Owner':
                     return redirect()->route('owner.dashboard');
 

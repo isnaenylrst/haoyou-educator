@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Masuk Portal Siswa — Haoyou Educator')
+@section('title', 'Login Page — Haoyou Educator')
 
 @section('content')
 <div class="min-h-[80vh] flex items-center justify-center bg-paper px-5 py-10">
@@ -13,7 +13,7 @@
          class="w-24 object-contain">
   </div>
 
-    <h2 class="text-center text-[22px] font-semibold mb-1.5">Masuk Portal Siswa</h2>
+    <h2 class="text-center text-[22px] font-semibold mb-1.5">Login Page</h2>
     <p class="text-center text-[12.5px] text-[#8a8571] mb-7">Akses diberikan setelah admin memverifikasi pendaftaran kamu.</p>
 
     @if ($errors->any())

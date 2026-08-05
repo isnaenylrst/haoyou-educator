@@ -21,8 +21,8 @@
   .mock-wrap{ max-width:1180px; margin:0 auto; padding-left:6%; padding-right:6%; }
 
 .dark-section{
-    position:relative; overflow:hidden; color:#ffff07;
-    background: linear-gradient(100deg, #ffffff 0%, #fffffd 62%, #fffef7 85%, #ffff00 100%);
+    position:relative; overflow:hidden; color:#ecec7d;
+    background: linear-gradient(100deg, #ffffff 0%, #ffffe9 62%, #fffce6 85%, #ffffff 100%);
   }
   
   .dark-section .blob{ position:absolute; border-radius:50%; filter:blur(70px); pointer-events:none; z-index:0; }
@@ -311,7 +311,7 @@
     <a href="#tentang" class="opacity-80 hover:opacity-100">Tentang Kami</a>
   </nav>
   <div class="flex gap-2.5">
-    <a href="{{ route('login') }}" class="px-5 py-2.5 rounded-full text-sm font-semibold border-[1.5px] border-ink hover:bg-ink hover:text-white transition">Masuk Portal Siswa</a>
+    <a href="{{ route('login') }}" class="px-5 py-2.5 rounded-full text-sm font-semibold border-[1.5px] border-ink hover:bg-ink hover:text-white transition">Login</a>
     <a href="{{ route('pendaftaran.create') }}" class="px-5 py-2.5 rounded-full text-sm font-semibold bg-[#ffDD00] text-black font-semibold hover:bg-[#f7cf00]">Daftar Sekarang</a>
   </div>
 </header>
@@ -330,6 +330,39 @@
         <a href="{{ route('pendaftaran.create') }}" class="mock-btn mock-btn-gold">Mulai Belajar</a>
         <a href="{{ route('konsultasi.gratis') }}" class="mock-btn mock-btn-ghost-dark">Konsultasi Gratis</a>
       </div>
+      
+    <div class="flex items-center gap-3 mt-12">
+    <div class="flex items-center">
+        <img src="{{ asset('assets/img/student1.jpg') }}"
+             class="w-9 h-9 rounded-full object-cover border-2 border-white shadow-sm">
+
+        <img src="{{ asset('assets/img/student2.jpg') }}"
+             class="w-9 h-9 rounded-full object-cover border-2 border-white shadow-sm -ml-2">
+
+        <img src="{{ asset('assets/img/student3.jpg') }}"
+             class="w-9 h-9 rounded-full object-cover border-2 border-white shadow-sm -ml-2">
+
+        <img src="{{ asset('assets/img/student4.jpg') }}"
+             class="w-9 h-9 rounded-full object-cover border-2 border-white shadow-sm -ml-2">
+
+        <div class="w-9 h-9 rounded-full bg-[#FFDD05] border-2 border-white
+                    flex items-center justify-center -ml-2
+                    text-[10px] font-bold text-black">
+            +100
+        </div>
+    </div>
+
+    <div>
+      <p class="text-sm font-semibold" style="color: #8c8989 !important;">
+          100+ siswa sudah mendaftar
+      </p>
+
+      <p class="text-[11px]" style="color: #8c8989 !important;">
+          Belajar Mandarin bersama Haoyou
+      </p>
+      </div>
+
+</div>
     </div>
     <div class="hero-visual">
       <div class="stamp">好友<span class="stamp-label">HAOYOU</span></div>

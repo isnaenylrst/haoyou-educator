@@ -20,7 +20,7 @@
         <div class="text-xs text-gray-500">Diterbitkan Jan 2026 · Program HSK</div>
       </div>
     </div>
-    <button class="text-xs font-semibold bg-gold text-white rounded-full px-4 py-2 hover:brightness-105 transition">Download PDF</button>
+    <button class="text-xs font-semibold border border-ink rounded-full  px-4 py-2 hover:bg-ink hover:text-white transition">Download PDF</button>
   </div>
   <div class="border border-dashed border-line rounded-xl p-4 text-xs text-gray-500">
     Sertifikat hanya tersedia untuk siswa program <strong>HSK</strong>. Program non-HSK (kelas Reguler biasa) tidak menerbitkan sertifikat.

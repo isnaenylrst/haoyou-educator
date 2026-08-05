@@ -9,110 +9,118 @@ use Illuminate\Http\Request;
 class PendaftaranController extends Controller
 {
     /**
-     * Tampilkan form pendaftaran calon siswa.
+     * Menampilkan halaman pendaftaran
      */
     public function create()
     {
-        return view('calonsiswa.daftar');
+        return view('CalonSiswa.daftar');
     }
 
     /**
-     * Simpan data calon siswa.
+     * Menyimpan pendaftaran calon siswa
      */
     public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+{
+    $validated = $request->validate([
+        'name' => ['required', 'string', 'max:255'],
 
-            'gender' => [
-                'required',
-                'in:Male,Female'
-            ],
+        'gender' => [
+            'required',
+            'in:Male,Female'
+        ],
 
-            'birth_date' => [
-                'nullable',
-                'date'
-            ],
+        'birth_date' => [
+            'nullable',
+            'date'
+        ],
 
-            'phone' => [
-                'required',
-                'string',
-                'max:255'
-            ],
+        'phone' => [
+            'required',
+            'string',
+            'max:255'
+        ],
 
-            'parent_name' => [
-                'nullable',
-                'string',
-                'max:255'
-            ],
+        'parent_name' => [
+            'nullable',
+            'string',
+            'max:255'
+        ],
 
-            'parent_phone' => [
-                'nullable',
-                'string',
-                'max:255'
-            ],
+        'parent_phone' => [
+            'nullable',
+            'string',
+            'max:255'
+        ],
 
-            'address' => [
-                'nullable',
-                'string'
-            ],
+        'address' => [
+            'nullable',
+            'string'
+        ],
 
-            'school' => [
-                'nullable',
-                'string',
-                'max:255'
-            ],
+        'school' => [
+            'nullable',
+            'string',
+            'max:255'
+        ],
 
-            'source' => [
-                'nullable',
-                'string',
-                'max:255'
-            ],
+        'source' => [
+            'nullable',
+            'string',
+            'max:255'
+        ],
 
-            'allergy' => [
-                'nullable',
-                'string'
-            ],
+        'allergy' => [
+            'nullable',
+            'string'
+        ],
 
-            'interested_program' => [
-                'required',
-                'string',
-                'max:255'
-            ],
-        ]);
+        'interested_program' => [
+            'required',
+            'string',
+            'max:255'
+        ],
 
-        $candidate = CandidateStudent::create([
-            'name' => $validated['name'],
-            'gender' => $validated['gender'],
-            'birth_date' => $validated['birth_date'] ?? null,
+        'available_schedule' => [
+            'nullable',
+            'string',
+            'max:500'
+        ],
+    ]);
 
-            'phone' => $validated['phone'],
+    $candidate = CandidateStudent::create([
+        'name' => $validated['name'],
+        'gender' => $validated['gender'],
+        'birth_date' => $validated['birth_date'] ?? null,
+        'phone' => $validated['phone'],
 
-            'parent_name' => $validated['parent_name'] ?? null,
-            'parent_phone' => $validated['parent_phone'] ?? null,
+        'parent_name' => $validated['parent_name'] ?? null,
+        'parent_phone' => $validated['parent_phone'] ?? null,
 
-            'address' => $validated['address'] ?? null,
-            'school' => $validated['school'] ?? null,
+        'address' => $validated['address'] ?? null,
+        'school' => $validated['school'] ?? null,
 
-            // Jika tidak diisi, otomatis dianggap dari Website
-            'source' => $validated['source'] ?? 'Website',
+        'source' => $validated['source'] ?? 'Website',
 
-            'allergy' => $validated['allergy'] ?? null,
+        'allergy' => $validated['allergy'] ?? null,
 
-            'interested_program' => $validated['interested_program'],
+        'interested_program' => $validated['interested_program'],
 
-        ]);
+        'trial_status' => 'Pending',
+        'lead_status' => 'Warm',
+    ]);
 
-        return redirect()
-            ->route('pendaftaran.sukses')
-            ->with('candidate_id', $candidate->id);
-    }
+    return redirect()
+        ->route('pendaftaran.sukses')
+        ->with('candidate_id', $candidate->id);
+}
+/*
+|--------------------------------------------------------------------------
+| HALAMAN SUKSES
+|--------------------------------------------------------------------------
+*/
 
-    /**
-     * Halaman setelah pendaftaran berhasil.
-     */
-    public function sukses()
-    {
-        return view('calonsiswa.daftar-sukses');
-    }
+public function sukses()
+{
+    return view('CalonSiswa.daftar-sukses');
+}
 }
