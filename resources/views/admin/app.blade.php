@@ -68,7 +68,7 @@
             <div class="nav-group">
                 <div class="nav-group-label">Akademik</div>
 
-                <a href="#" class="nav-item">
+                <a href="{{ route('admin.siswa') }}"class="nav-item {{ request()->routeIs('admin.siswa') ? 'active' : '' }}">
                     <i class="fa-solid fa-graduation-cap nav-icon" title="Siswa"></i>
                     <span class="label">Siswa</span>
                 </a>

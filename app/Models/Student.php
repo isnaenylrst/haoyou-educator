@@ -22,6 +22,10 @@ class Student extends Model
         'status',
     ];
 
+    protected $casts = [
+        'join_date' => 'date',
+    ];
+
     public function candidateStudent()
     {
         return $this->belongsTo(CandidateStudent::class);
@@ -36,6 +40,13 @@ class Student extends Model
     {
         return $this->hasMany(ClassEnrollment::class);
     }
+
+    public function activeEnrollment()
+    {
+        return $this->hasOne(ClassEnrollment::class)
+            ->where('status', 'Active')
+            ->latestOfMany('enrollment_date');
+    }    
 
     public function attendances()
     {

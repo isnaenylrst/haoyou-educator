@@ -22,7 +22,7 @@ return new class extends Migration
                 'Private'
             ]);
 
-            $table->string('package_name');
+            $table->string('package_name')->unique();
 
             $table->integer('duration_minutes');
 

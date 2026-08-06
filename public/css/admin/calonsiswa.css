@@ -336,6 +336,36 @@ table {
     justify-content: center;
     color: #6b7280;
     font-size: 12.5px;
+    cursor: pointer;
+    transition: all .2s ease;
+}
+
+/* icon mengikuti warna parent */
+.icon-btn i{
+    color: inherit;
+    background: transparent;
+    transition: color .2s ease;
+}
+
+/* Edit */
+.icon-btn:hover{
+    background:#f8f9fb;
+    border-color:#2563eb;
+    color:#2563eb;
+}
+
+/* WhatsApp */
+.icon-btn.wa:hover{
+    background:#25D366;
+    border-color:#25D366;
+    color:#fff;
+}
+
+/* Delete */
+.icon-btn.danger:hover{
+    background:#ef4444;
+    border-color:#ef4444;
+    color:#fff;
 }
 
 thead th {
@@ -356,6 +386,10 @@ tbody td {
     font-size: 13px;
     color: #374151;
     vertical-align: middle;
+}
+
+tbody tr:hover {
+    background: #FBFBFC;
 }
 
 /* ==========================================================
@@ -503,17 +537,55 @@ tbody td {
 }
 
 .modal-close {
-    width: 32px; 
-    height: 32px; 
-    border-radius: 8px; 
-    border: 1px solid #edeef1; 
+    width: 38px;
+    height: 38px;
+    border: 1px solid #edeef1;
+    border-radius: 10px;
     background: #fff;
-    display: flex; 
-    align-items: center; 
-    justify-content: center; 
-    color: #6b7280; 
-    font-size: 13px; 
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    cursor: pointer;
     flex-shrink: 0;
+
+    color: #6b7280;
+
+    transition:
+        background-color .2s ease,
+        border-color .2s ease,
+        color .2s ease,
+        transform .15s ease,
+        box-shadow .2s ease;
+}
+
+/* Ikon mengikuti warna button */
+.modal-close i {
+    font-size: 16px;
+    color: inherit;
+    line-height: 1;
+    pointer-events: none;
+}
+
+/* Hover */
+.modal-close:hover {
+    background: #FEF2F2;
+    border-color: #FECACA;
+    color: #DC2626;
+    transform: rotate(90deg);
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.12);
+}
+
+/* Active */
+.modal-close:active {
+    transform: rotate(90deg) scale(0.94);
+}
+
+/* Focus */
+.modal-close:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.18);
 }
 
 .modal-body { 
@@ -716,14 +788,39 @@ tbody td {
     color: #b8860b;
 }
 
-.modal-foot {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 10px;
+.modal-foot{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:20px 28px;
+    border-top:1px solid #edeef1;
+}
 
-    padding: 16px 24px;
+.modal-foot-actions{
+    display:flex;
+    gap:12px;
+    align-items:center;
+}
 
-    border-top: 1px solid #f0f1f3;
-    background: #fafbfc;
+.btn-convert{
+    display:flex;
+    align-items:center;
+    gap:8px;
+
+    padding:10px 16px;
+    border-radius:12px;
+
+    background:#FFF8D6;
+    border:1px solid #FFD54A;
+
+    color:#A46A00;
+    font-weight:600;
+
+    cursor:pointer;
+    transition:.2s;
+}
+
+.btn-convert:hover{
+    background:#FFEFA8;
+    border-color:#FFB300;
 }

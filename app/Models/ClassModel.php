@@ -24,6 +24,11 @@ class ClassModel extends Model
         'status',
     ];
 
+    protected $casts = [
+        'start_date' => 'date',
+        'end_date' => 'date',
+    ];
+        
     public function programPackage()
     {
         return $this->belongsTo(ProgramPackage::class);

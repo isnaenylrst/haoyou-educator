@@ -14,7 +14,7 @@ return new class extends Migration
 
             $table->string('name');
             $table->enum('gender',['Male','Female']);
-            $table->date('birth_date')->nullable();
+            $table->date('birth_date');
 
             $table->string('phone');
             $table->string('parent_name')->nullable();
@@ -28,7 +28,13 @@ return new class extends Migration
 
             $table->text('allergy')->nullable();
 
-            $table->string('interested_program');
+            $table->string('program_package');
+
+            $table->foreign('program_package')
+                ->references('package_name')
+                ->on('program_packages')
+                ->cascadeOnUpdate()
+                ->restrictOnDelete();
 
             $table->date('trial_date')->nullable();
 

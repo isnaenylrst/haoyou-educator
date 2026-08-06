@@ -130,12 +130,12 @@
                     <th>Status Trial</th>
                     <th>Tanggal Trial</th>
                     <th>Follow-up Berikutnya</th>
-                    <th width="120">Aksi</th>
+                    <th width="120" style="text-align: center;">Aksi</th>
                 </tr>
             </thead>
 
             <tbody>
-                @forelse($candidateStudents as $candidate)
+                @forelse ($candidateStudents as $candidate)
                     <tr>
                         <td>
                             <div class="name-cell">
@@ -144,12 +144,14 @@
                                 </div>
                                 <div>
                                     <div class="cand-name">{{ $candidate->name }}</div>
-                                    <div class="cand-sub">{{ $candidate->phone ?: '-' }}</div>
+                                    <div class="cand-sub">
+                                        {{ $candidate->age ? $candidate->age . ' Tahun' : '-' }}
+                                    </div>
                                 </div>
                             </div>
                         </td>
 
-                        <td>{{ $candidate->interested_program ?: '-' }}</td>
+                        <td>{{ $candidate->program_package ?: '-' }}</td>
                         <td>{{ $candidate->source ?: '-' }}</td>
 
                         <td>
@@ -301,7 +303,7 @@
     </div>
 
     {{-- ========================= MODAL — TAMBAH LEAD ========================= --}}
-    <div class="modal-overlay" id="leadModalOverlay">
+<div class="modal-overlay" id="leadModalOverlay">
         <div class="modal">
             <form action="{{ route('admin.calon-siswa.store') }}" method="POST">
                 @csrf
@@ -331,7 +333,7 @@
                                 </div>
                             </div>
                             <div class="form-field">
-                                <label>Tanggal Lahir</label>
+                                <label>Tanggal Lahir *</label>
                                 <input type="date" name="birth_date">
                             </div>
                             <div class="form-field">
@@ -368,19 +370,34 @@
                     </div>
 
                     <div class="form-section">
-                        <div class="form-section-title"><i class="fa-solid fa-graduation-cap"></i> Program & Sumber Lead</div>
+                        <div class="form-section-title"><i class="fa-solid fa-graduation-cap"></i> Program Diminati</div>
                         <div class="form-grid">
-                            <div class="form-field">
+                            <div class="form-field full">
                                 <label>Program Diminati *</label>
-                                <select name="interested_program" required>
-                                    <option value="">Pilih Program</option>
-                                    <option value="Daily Activity - Regular">Daily Activity - Regular</option>
-                                    <option value="Daily Activity - Private">Daily Activity - Private</option>
-                                    <option value="HSK 1">HSK 1</option>
-                                    <option value="HSK 2">HSK 2</option>
-                                    <option value="HSK 3">HSK 3</option>
-                                </select>
+                                <input
+                                    type="text"
+                                    name="program_package"
+                                    id="program_package"
+                                    list="program_package_list"
+                                    autocomplete="off"
+                                    placeholder="Ketik nama program..."
+                                    required>
+                                <datalist id="program_package_list">
+                                    @foreach ($programPackages as $programName => $packages)
+                                        @foreach ($packages as $package)
+                                            <option value="{{ $package->package_name }}">
+                                                {{ $programName }} — {{ $package->course_type }} (Rp {{ number_format($package->price, 0, ',', '.') }})
+                                            </option>
+                                        @endforeach
+                                    @endforeach
+                                </datalist>
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-bullhorn"></i> Sumber Lead</div>
+                        <div class="form-grid">
                             <div class="form-field">
                                 <label>Sumber Lead *</label>
                                 <select name="source" required>
@@ -440,8 +457,6 @@
     </div>
 
     {{-- ========================= MODAL — EDIT CALON SISWA ========================= --}}
-    {{-- Menggantikan modal Detail (read-only). Tampilan sama, tapi field sekarang
-         bisa disunting dan form ini submit ke CalonSiswaController@update. --}}
     <div class="modal-overlay" id="editModalOverlay">
         <div class="modal">
             <form id="editForm" method="POST">
@@ -453,7 +468,13 @@
                         <div class="modal-title">Edit Calon Siswa</div>
                         <div class="modal-sub">Perbarui data calon siswa ini.</div>
                     </div>
-                    <button type="button" class="modal-close" onclick="closeEditModal()"><i class="fa-solid fa-xmark"></i></button>
+                    <button
+                        type="button"
+                        class="modal-close"
+                        onclick="closeEditModal()"
+                        aria-label="Tutup">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
                 </div>
 
                 <div class="modal-body" id="editModalBody">
@@ -473,7 +494,7 @@
                                 </div>
                             </div>
                             <div class="form-field">
-                                <label>Tanggal Lahir</label>
+                                <label>Tanggal Lahir *</label>
                                 <input type="date" name="birth_date" id="edit_birth_date">
                             </div>
                             <div class="form-field">
@@ -510,19 +531,34 @@
                     </div>
 
                     <div class="form-section">
-                        <div class="form-section-title"><i class="fa-solid fa-graduation-cap"></i> Program & Sumber Lead</div>
+                        <div class="form-section-title"><i class="fa-solid fa-graduation-cap"></i> Program Diminati</div>
                         <div class="form-grid">
-                            <div class="form-field">
+                            <div class="form-field full">
                                 <label>Program Diminati *</label>
-                                <select name="interested_program" id="edit_interested_program" required>
-                                    <option value="">Pilih Program</option>
-                                    <option value="Daily Activity - Regular">Daily Activity - Regular</option>
-                                    <option value="Daily Activity - Private">Daily Activity - Private</option>
-                                    <option value="HSK 1">HSK 1</option>
-                                    <option value="HSK 2">HSK 2</option>
-                                    <option value="HSK 3">HSK 3</option>
-                                </select>
+                                <input
+                                    type="text"
+                                    name="program_package"
+                                    id="edit_program_package"
+                                    list="edit_program_package_list"
+                                    autocomplete="off"
+                                    placeholder="Ketik nama program..."
+                                    required>
+                                <datalist id="edit_program_package_list">
+                                    @foreach ($programPackages as $programName => $packages)
+                                        @foreach ($packages as $package)
+                                            <option value="{{ $package->package_name }}">
+                                                {{ $programName }} — {{ $package->course_type }} (Rp {{ number_format($package->price, 0, ',', '.') }})
+                                            </option>
+                                        @endforeach
+                                    @endforeach
+                                </datalist>
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-bullhorn"></i> Sumber Lead</div>
+                        <div class="form-grid">
                             <div class="form-field">
                                 <label>Sumber Lead *</label>
                                 <select name="source" id="edit_source" required>
@@ -576,8 +612,23 @@
                 </div>
 
                 <div class="modal-foot">
-                    <button type="button" class="btn" onclick="closeEditModal()">Batal</button>
-                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Simpan Perubahan</button>
+                    <div class="modal-foot-left">
+                        <button type="button" class="btn btn-convert">
+                            <i class="fa-solid fa-user-plus"></i>
+                            Jadikan Siswa
+                        </button>
+                    </div>
+
+                    <div class="modal-foot-right">
+                        <button type="button" class="btn btn-secondary" onclick="closeEditModal()">
+                            Batal
+                        </button>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fa-solid fa-check"></i>
+                            Simpan Perubahan
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -669,10 +720,7 @@
     function setSelectValue(id, value) {
         const el = document.getElementById(id);
         el.value = value ?? '';
-        // Kalau value dari database tidak match opsi manapun di dropdown,
-        // browser otomatis jatuh ke opsi pertama (biasanya kosong) tanpa
-        // ada tanda error apapun — form jadi gagal submit diam-diam kalau
-        // field ini required. Ini kasih peringatan di Console biar ketahuan.
+
         if (value && el.value !== value) {
             console.warn(`[Edit Calon Siswa] Nilai "${value}" untuk #${id} tidak ada di pilihan dropdown.`);
         }
@@ -704,7 +752,7 @@
             document.getElementById('edit_allergy').value = data.allergy ?? '';
             document.getElementById('edit_parent_name').value = data.parent_name ?? '';
             document.getElementById('edit_parent_phone').value = data.parent_phone ?? '';
-            setSelectValue('edit_interested_program', data.interested_program);
+            document.getElementById('edit_program_package').value = data.program_package ?? '';
             setSelectValue('edit_source', data.source);
             document.getElementById('edit_lead_status').value = data.lead_status ?? 'Cold';
             document.getElementById('edit_trial_date').value = data.trial_date ?? '';

@@ -7,6 +7,7 @@ use App\Models\CandidateStudent;
 use App\Models\FollowUp;
 use App\Models\FollowUpTemplate;
 use App\Models\CandidateStudentAvailableSchedule;
+use App\Models\ProgramPackage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -104,12 +105,24 @@ class CalonSiswaController extends Controller
             ? round(($convertedStudent / $totalLeadKeseluruhan) * 100, 1)
             : 0;
 
+        /*
+        |--------------------------------------------------------------------------
+        | Daftar Program Package untuk dropdown "Program Diminati"
+        |--------------------------------------------------------------------------
+        */
+        $programPackages = ProgramPackage::with('program')
+            ->orderBy('program_id')
+            ->orderBy('course_type')
+            ->get()
+            ->groupBy(fn ($p) => $p->program->program_name);
+
         return view('admin.calonsiswa', compact(
             'candidateStudents',
             'totalLead',
             'trialScheduled',
             'followUpOverdue',
-            'conversionRate'
+            'conversionRate',
+            'programPackages'
         ));
     }
 
@@ -118,7 +131,7 @@ class CalonSiswaController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'gender' => 'required|in:Male,Female',
-            'birth_date' => 'nullable|date',
+            'birth_date' => 'required|date',
             'phone' => 'required|string|max:20',
 
             'parent_name' => 'nullable|string|max:255',
@@ -129,7 +142,7 @@ class CalonSiswaController extends Controller
             'source' => 'required|string|max:100',
             'allergy' => 'nullable|string',
 
-            'interested_program' => 'required|string|max:255',
+            'program_package' => 'required|exists:program_packages,package_name',
             'trial_date' => 'nullable|date',
 
             'day.*' => 'nullable|string',
@@ -157,10 +170,10 @@ class CalonSiswaController extends Controller
                 'school' => $request->school,
                 'source' => $request->source,
                 'allergy' => $request->allergy,
-                'interested_program' => $request->interested_program,
+                'program_package' => $request->program_package,
                 'trial_date' => $request->trial_date,
                 'trial_status' => 'Pending',
-                'lead_status' => 'Cold',
+                'lead_status' => 'Warm',
 
             ]);
 
@@ -223,13 +236,13 @@ class CalonSiswaController extends Controller
 
     public function edit(CandidateStudent $candidateStudent)
     {
-        $candidateStudent->load('availableSchedules');
+        $candidateStudent->load(['availableSchedules', 'programPackage.program']);
  
         return response()->json([
             'id' => $candidateStudent->id,
             'name' => $candidateStudent->name,
             'gender' => $candidateStudent->gender,
-            'birth_date' => optional($candidateStudent->birth_date)->format('Y-m-d'),
+            'birth_date' => $candidateStudent->birth_date->format('Y-m-d'),
             'phone' => $candidateStudent->phone,
             'parent_name' => $candidateStudent->parent_name,
             'parent_phone' => $candidateStudent->parent_phone,
@@ -237,7 +250,13 @@ class CalonSiswaController extends Controller
             'school' => $candidateStudent->school,
             'source' => $candidateStudent->source,
             'allergy' => $candidateStudent->allergy,
-            'interested_program' => $candidateStudent->interested_program,
+            'program_package' => $candidateStudent->program_package,
+            'program_package_detail' => $candidateStudent->programPackage ? [
+                'program_name' => $candidateStudent->programPackage->program->program_name,
+                'course_type'  => $candidateStudent->programPackage->course_type,
+                'package_name' => $candidateStudent->programPackage->package_name,
+                'price'        => $candidateStudent->programPackage->price,
+            ] : null,
             'trial_date' => optional($candidateStudent->trial_date)->format('Y-m-d'),
             'trial_status' => $candidateStudent->trial_status,
             'lead_status' => $candidateStudent->lead_status,
@@ -259,7 +278,7 @@ class CalonSiswaController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'gender' => 'required|in:Male,Female',
-            'birth_date' => 'nullable|date',
+            'birth_date' => 'required|date',
             'phone' => 'required|string|max:20',
  
             'parent_name' => 'nullable|string|max:255',
@@ -270,7 +289,7 @@ class CalonSiswaController extends Controller
             'source' => 'required|string|max:100',
             'allergy' => 'nullable|string',
  
-            'interested_program' => 'required|string|max:255',
+            'program_package' => 'required|exists:program_packages,package_name',
             'trial_date' => 'nullable|date',
             'trial_status' => 'required|in:Pending,Completed,Cancelled',
             'lead_status' => 'required|in:Cold,Warm,Hot',
@@ -292,7 +311,7 @@ class CalonSiswaController extends Controller
                 'school' => $request->school,
                 'source' => $request->source,
                 'allergy' => $request->allergy,
-                'interested_program' => $request->interested_program,
+                'program_package' => $request->program_package,
                 'trial_date' => $request->trial_date,
                 'trial_status' => $request->trial_status,
                 'lead_status' => $request->lead_status,

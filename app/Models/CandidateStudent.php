@@ -24,7 +24,7 @@ class CandidateStudent extends Model
         'school',
         'source',
         'allergy',
-        'interested_program',
+        'program_package',
         'trial_status',
         'trial_date',
         'lead_status',
@@ -34,6 +34,19 @@ class CandidateStudent extends Model
         'birth_date' => 'date',
         'trial_date' => 'date',
     ];
+
+    protected $appends = [
+        'age',
+    ];
+    
+    public function getAgeAttribute()
+    {
+        if (!$this->birth_date) {
+            return null;
+        }
+
+        return $this->birth_date->age;
+    }    
 
     public function availableSchedules()
     {
@@ -54,5 +67,10 @@ class CandidateStudent extends Model
     public function student()
     {
         return $this->hasOne(Student::class);
+    }
+
+    public function programPackage()
+    {
+        return $this->belongsTo(ProgramPackage::class, 'program_package', 'package_name');
     }
 }
