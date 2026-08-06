@@ -12,6 +12,7 @@ class Document extends Model
 
     protected $table = 'documents';
 
+
     protected $fillable = [
         'user_id',
         'document_template_id',
@@ -24,13 +25,15 @@ class Document extends Model
         'uploaded_at',
     ];
 
+
     protected $casts = [
         'uploaded_at' => 'datetime',
     ];
 
+
     /*
     |--------------------------------------------------------------------------
-    | Boot
+    | BOOT
     |--------------------------------------------------------------------------
     */
 
@@ -39,57 +42,160 @@ class Document extends Model
         static::creating(function ($document) {
 
             if (empty($document->uploaded_at)) {
+
                 $document->uploaded_at = now();
+
             }
 
         });
     }
 
+
     /*
     |--------------------------------------------------------------------------
-    | Relationships
+    | RELATIONSHIPS
     |--------------------------------------------------------------------------
     */
 
     public function template()
     {
-        return $this->belongsTo(DocumentTemplate::class, 'document_template_id');
+        return $this->belongsTo(
+            DocumentTemplate::class,
+            'document_template_id'
+        );
     }
+
+
+    /*
+    | User penerima
+    */
 
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(
+            User::class,
+            'user_id'
+        );
     }
+
+
+    /*
+    | User yang mengupload
+    */
 
     public function uploader()
     {
-        return $this->belongsTo(User::class, 'uploaded_by');
+        return $this->belongsTo(
+            User::class,
+            'uploaded_by'
+        );
     }
+
 
     /*
     |--------------------------------------------------------------------------
-    | Scope
+    | SCOPE
     |--------------------------------------------------------------------------
     */
 
     public function scopeSop($query)
     {
-        return $query->where('document_type', 'SOP');
+        return $query->where(
+            'document_type',
+            'SOP'
+        );
     }
+
 
     /*
     |--------------------------------------------------------------------------
-    | Accessor
+    | ACCESSOR FILE URL
     |--------------------------------------------------------------------------
     */
 
     public function getFileUrlAttribute()
     {
-        return Storage::url($this->file_path);
+        if (!$this->file_path) {
+            return null;
+        }
+
+        return Storage::url(
+            $this->file_path
+        );
     }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | ACCESSOR EXTENSION
+    |--------------------------------------------------------------------------
+    */
 
     public function getExtensionAttribute()
     {
-        return strtoupper(pathinfo($this->file_path, PATHINFO_EXTENSION));
+        if (!$this->file_path) {
+            return null;
+        }
+
+        return strtoupper(
+            pathinfo(
+                $this->file_path,
+                PATHINFO_EXTENSION
+            )
+        );
     }
-}
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | ACCESSOR NAMA JENIS SURAT
+    |--------------------------------------------------------------------------
+    */
+
+    public function getLetterTypeNameAttribute()
+    {
+        return match ($this->document_type) {
+
+            'SURAT_LIBUR' =>
+                'Surat Libur',
+
+            'SURAT_DINAS' =>
+                'Surat Dinas',
+
+            'LOA' =>
+                'LoA',
+
+            'SURAT' =>
+                'Surat',
+
+            default =>
+                $this->document_type,
+
+        };
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | ACCESSOR NAMA PENERIMA
+    |--------------------------------------------------------------------------
+    */
+
+    public function getRecipientNameAttribute()
+    {
+        if ($this->visibility === 'Teacher') {
+
+            return 'Semua Guru';
+
+        }
+
+        if (
+            $this->visibility === 'Private'&& $this->user) {
+
+            return $this->user->name;
+
+        }
+
+        return '-';
+    }
+}  

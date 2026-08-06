@@ -10,6 +10,7 @@ use App\Http\Controllers\Kurikulum\DashboardController;
 use App\Http\Controllers\Kurikulum\SopController;
 use App\Http\Controllers\Kurikulum\DocumentTemplateController;
 use App\Http\Controllers\Kurikulum\MaterialController;
+use App\Http\Controllers\Kurikulum\LetterController;
 
 /*
 |--------------------------------------------------------------------------
@@ -195,6 +196,17 @@ Route::put('/materi/{material}', [MaterialController::class, 'update'])
 
 Route::delete('/materi/{material}', [MaterialController::class, 'destroy'])
     ->name('materi.destroy');
+
+
+    //Pemberitahuan Surat
+    Route::get('/surat', [LetterController::class, 'index'])
+    ->name('surat');
+
+    Route::post('/surat', [LetterController::class, 'store'])
+    ->name('surat.store');
+
+    Route::delete('/surat/{document}', [LetterController::class, 'destroy'])
+    ->name('surat.destroy');
 /*
 |--------------------------------------------------------------------------
 | HALAMAN KURIKULUM LAINNYA
@@ -211,8 +223,7 @@ Route::delete('/materi/{material}', [MaterialController::class, 'destroy'])
     Route::view('/monitoring', 'kurikulum.monitoring')
     ->name('monitoring');
 
-    Route::view('/surat', 'kurikulum.surat')
-    ->name('surat');
+    
 });
 
 /*
