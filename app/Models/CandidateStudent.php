@@ -4,14 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Program;
 
 class CandidateStudent extends Model
 {
     use HasFactory;
 
     protected $table = 'candidate_students';
-
-    public $timestamps = false;
 
     protected $fillable = [
         'name',
@@ -24,7 +23,7 @@ class CandidateStudent extends Model
         'school',
         'source',
         'allergy',
-        'program_package',
+        'program_id',
         'trial_status',
         'trial_date',
         'lead_status',
@@ -55,13 +54,13 @@ class CandidateStudent extends Model
 
     public function followUps()
     {
-        return $this->hasMany(FollowUp::class);
+        return $this->morphMany(FollowUp::class, 'followupable');
     }
 
     public function latestFollowUp()
     {
-        return $this->hasOne(FollowUp::class)
-                    ->latestOfMany('followup_date');
+        return $this->morphOne(FollowUp::class, 'followupable')
+                    ->latestOfMany(['followup_date', 'id']);
     }
 
     public function student()
@@ -69,8 +68,8 @@ class CandidateStudent extends Model
         return $this->hasOne(Student::class);
     }
 
-    public function programPackage()
+    public function program()
     {
-        return $this->belongsTo(ProgramPackage::class, 'program_package', 'package_name');
+        return $this->belongsTo(Program::class, 'program_id');
     }
 }

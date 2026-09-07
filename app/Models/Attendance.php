@@ -11,25 +11,20 @@ class Attendance extends Model
 
     protected $table = 'attendances';
 
-    public $timestamps = false;
-
     protected $fillable = [
-        'teaching_jurnal_id',
+        'teaching_journal_id',
         'student_id',
         'status',
         'note',
-        'attendance_date',
-        'created_at',
     ];
 
     protected $casts = [
         'attendance_date' => 'date',
-        'created_at' => 'datetime',
     ];
 
     public function teachingJournal()
     {
-        return $this->belongsTo(TeachingJournal::class, 'teaching_jurnal_id');
+        return $this->belongsTo(TeachingJournal::class, 'teaching_journal_id');
     }
 
     public function student()

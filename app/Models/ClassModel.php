@@ -11,8 +11,6 @@ class ClassModel extends Model
 
     protected $table = 'classes';
 
-    public $timestamps = false;
-
     protected $fillable = [
         'program_package_id',
         'teacher_id',

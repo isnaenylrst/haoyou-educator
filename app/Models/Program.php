@@ -11,8 +11,6 @@ class Program extends Model
 
     protected $table = 'programs';
 
-    public $timestamps = false;
-
     protected $fillable = [
         'program_name',
         'description',

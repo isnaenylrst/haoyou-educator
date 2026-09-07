@@ -824,3 +824,80 @@ tbody tr:hover {
     background:#FFEFA8;
     border-color:#FFB300;
 }
+
+/* ============================================================
+   HALAMAN CONVERT CALON SISWA — tambahan untuk calonsiswa.css
+   (form-section, form-grid, form-field, card, modal-foot,
+    btn-convert sudah ada, tidak perlu diubah)
+============================================================ */
+
+/* Container form full-page (pengganti inline style="max-width") */
+.convert-card {
+    max-width: 720px;
+    padding: 24px;
+}
+
+.convert-card .form-section:first-child {
+    padding-top: 0;
+}
+
+/* Alert error validasi form */
+.alert-error {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #dc2626;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+}
+
+.alert-error ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.alert-error li {
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+/* Input disabled (data calon siswa, read-only) */
+.form-field input:disabled {
+    background: #f9fafb;
+    color: #6b7280;
+    cursor: not-allowed;
+    border-color: #e5e7eb;
+}
+
+/* Teks info kecil di bawah section (mis. keterangan dokumen belum tersedia) */
+.form-section-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    margin-top: 10px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #6b7280;
+}
+
+.form-section-note i {
+    margin-top: 1px;
+    color: #b8860b;
+}
+
+/* Opsi kelas yang disembunyikan lewat JS saat filter package */
+#class_id option[hidden] {
+    display: none;
+}
+
+a.icon-btn {
+    text-decoration: none;
+}
+
+/* Responsif */
+@media (max-width: 640px) {
+    .convert-card {
+        max-width: 100%;
+        padding: 18px;
+    }
+}

@@ -28,11 +28,8 @@ return new class extends Migration
 
             $table->text('allergy')->nullable();
 
-            $table->string('program_package');
-
-            $table->foreign('program_package')
-                ->references('package_name')
-                ->on('program_packages')
+            $table->foreignId('program_id')
+                ->constrained('programs')
                 ->cascadeOnUpdate()
                 ->restrictOnDelete();
 

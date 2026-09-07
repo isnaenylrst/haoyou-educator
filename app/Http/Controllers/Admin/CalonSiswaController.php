@@ -7,7 +7,7 @@ use App\Models\CandidateStudent;
 use App\Models\FollowUp;
 use App\Models\FollowUpTemplate;
 use App\Models\CandidateStudentAvailableSchedule;
-use App\Models\ProgramPackage;
+use App\Models\Program;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -17,6 +17,19 @@ class CalonSiswaController extends Controller
      * Menampilkan halaman CRM Calon Siswa
      */
     public function index(Request $request) {
+
+        // ID follow-up "terbaru" per candidate_student, khusus untuk yang followupable_type-nya CandidateStudent
+        $latestFollowUpIds = DB::table('follow_ups as f1')
+            ->where('f1.followupable_type', CandidateStudent::class)
+            ->whereRaw('f1.id = (
+                select f2.id from follow_ups f2
+                where f2.followupable_id = f1.followupable_id
+                and f2.followupable_type = f1.followupable_type
+                order by f2.followup_date desc, f2.id desc
+                limit 1
+            )')
+            ->pluck('id');
+
         /*
         |--------------------------------------------------------------------------
         | Query Data Calon Siswa
@@ -30,10 +43,13 @@ class CalonSiswaController extends Controller
             $search = $request->search;
 
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%")
-                    ->orWhere('school', 'like', "%{$search}%");
+                $q->where('name', 'like', "%{$search}%");
             });
+        }
+
+        // Filter Program
+        if ($request->filled('program_id')) {
+            $query->where('program_id', $request->program_id);
         }
 
         // Filter Status Lead
@@ -46,24 +62,21 @@ class CalonSiswaController extends Controller
             $query->where('trial_status', $request->trial_status);
         }
 
-        // Filter Sumber
-        if ($request->filled('source')) {
-            $query->where('source', $request->source);
-        }
-
         // Filter Follow Up
         if ($request->filled('followup')) {
 
             if ($request->followup == 'today') {
 
-                $query->whereHas('latestFollowUp', function ($q) {
-                    $q->whereDate('next_followup', today());
+                $query->whereHas('followUps', function ($q) use ($latestFollowUpIds) {
+                    $q->whereIn('id', $latestFollowUpIds)
+                    ->whereDate('next_followup', today());
                 });
 
             } elseif ($request->followup == 'overdue') {
 
-                $query->whereHas('latestFollowUp', function ($q) {
-                    $q->whereDate('next_followup', '<', today());
+                $query->whereHas('followUps', function ($q) use ($latestFollowUpIds) {
+                    $q->whereIn('id', $latestFollowUpIds)
+                    ->whereDate('next_followup', '<', today());
                 });
 
             }
@@ -81,18 +94,18 @@ class CalonSiswaController extends Controller
         */
 
         // Total Lead
-        $totalLead = CandidateStudent::whereDoesntHave('student') ->count();
+        $totalLead = CandidateStudent::whereDoesntHave('student')->count();
 
         // Trial Pending
         $trialScheduled = CandidateStudent::whereDoesntHave('student')
             ->where('trial_status', 'Pending')
             ->count();
 
-        // Follow Up Overdue
-        $followUpOverdue = FollowUp::whereNotNull('next_followup')
-            ->whereDate('next_followup', '<', today())
-            ->whereHas('candidateStudent', function($q) {
-                $q->whereDoesntHave('student');
+        // Follow Up Overdue (pakai latestFollowUpIds yang sama, konsisten dengan filter di atas)
+        $followUpOverdue = CandidateStudent::whereDoesntHave('student')
+            ->whereHas('followUps', function ($q) use ($latestFollowUpIds) {
+                $q->whereIn('id', $latestFollowUpIds)
+                ->whereDate('next_followup', '<', today());
             })
             ->count();
 
@@ -107,14 +120,10 @@ class CalonSiswaController extends Controller
 
         /*
         |--------------------------------------------------------------------------
-        | Daftar Program Package untuk dropdown "Program Diminati"
+        | Daftar Program untuk dropdown "Program Diminati"
         |--------------------------------------------------------------------------
         */
-        $programPackages = ProgramPackage::with('program')
-            ->orderBy('program_id')
-            ->orderBy('course_type')
-            ->get()
-            ->groupBy(fn ($p) => $p->program->program_name);
+        $programs = Program::orderBy('program_name')->get(['id', 'program_name']);
 
         return view('admin.calonsiswa', compact(
             'candidateStudents',
@@ -122,7 +131,7 @@ class CalonSiswaController extends Controller
             'trialScheduled',
             'followUpOverdue',
             'conversionRate',
-            'programPackages'
+            'programs'
         ));
     }
 
@@ -142,7 +151,7 @@ class CalonSiswaController extends Controller
             'source' => 'required|string|max:100',
             'allergy' => 'nullable|string',
 
-            'program_package' => 'required|exists:program_packages,package_name',
+            'program_id' => 'required|exists:programs,id',
             'trial_date' => 'nullable|date',
 
             'day.*' => 'nullable|string',
@@ -170,7 +179,7 @@ class CalonSiswaController extends Controller
                 'school' => $request->school,
                 'source' => $request->source,
                 'allergy' => $request->allergy,
-                'program_package' => $request->program_package,
+                'program_id' => $request->program_id,
                 'trial_date' => $request->trial_date,
                 'trial_status' => 'Pending',
                 'lead_status' => 'Warm',
@@ -217,9 +226,8 @@ class CalonSiswaController extends Controller
                 abort(500, 'Template follow up default tidak ditemukan. Jalankan FollowUpTemplateSeeder terlebih dahulu.');
             }
 
-            FollowUp::create([
-
-                'candidate_student_id' => $candidate->id,
+            // Pakai relasi morphMany supaya followupable_id & followupable_type terisi otomatis
+            $candidate->followUps()->create([
                 'follow_up_template_id' => $defaultTemplate->id,
                 'followup_date' => now(),
                 'followup_method' => 'Manual',
@@ -236,8 +244,8 @@ class CalonSiswaController extends Controller
 
     public function edit(CandidateStudent $candidateStudent)
     {
-        $candidateStudent->load(['availableSchedules', 'programPackage.program']);
- 
+        $candidateStudent->load(['availableSchedules', 'program']);
+
         return response()->json([
             'id' => $candidateStudent->id,
             'name' => $candidateStudent->name,
@@ -250,12 +258,9 @@ class CalonSiswaController extends Controller
             'school' => $candidateStudent->school,
             'source' => $candidateStudent->source,
             'allergy' => $candidateStudent->allergy,
-            'program_package' => $candidateStudent->program_package,
-            'program_package_detail' => $candidateStudent->programPackage ? [
-                'program_name' => $candidateStudent->programPackage->program->program_name,
-                'course_type'  => $candidateStudent->programPackage->course_type,
-                'package_name' => $candidateStudent->programPackage->package_name,
-                'price'        => $candidateStudent->programPackage->price,
+            'program_id' => $candidateStudent->program_id,
+            'program_detail' => $candidateStudent->program ? [
+                'program_name' => $candidateStudent->program->program_name,
             ] : null,
             'trial_date' => optional($candidateStudent->trial_date)->format('Y-m-d'),
             'trial_status' => $candidateStudent->trial_status,
@@ -269,7 +274,7 @@ class CalonSiswaController extends Controller
             }),
         ]);
     }
- 
+
     /**
      * Menyimpan perubahan dari form Edit (submit modal Edit).
      */
@@ -280,25 +285,25 @@ class CalonSiswaController extends Controller
             'gender' => 'required|in:Male,Female',
             'birth_date' => 'required|date',
             'phone' => 'required|string|max:20',
- 
+
             'parent_name' => 'nullable|string|max:255',
             'parent_phone' => 'nullable|string|max:20',
- 
+
             'address' => 'nullable|string',
             'school' => 'nullable|string|max:255',
             'source' => 'required|string|max:100',
             'allergy' => 'nullable|string',
- 
-            'program_package' => 'required|exists:program_packages,package_name',
+
+            'program_id' => 'required|exists:programs,id',
             'trial_date' => 'nullable|date',
             'trial_status' => 'required|in:Pending,Completed,Cancelled',
             'lead_status' => 'required|in:Cold,Warm,Hot',
- 
+
             'day.*' => 'nullable|string',
             'start_time.*' => 'nullable',
             'end_time.*' => 'nullable',
         ]);
- 
+
         DB::transaction(function () use ($request, $candidateStudent) {
             $candidateStudent->update([
                 'name' => $request->name,
@@ -311,20 +316,20 @@ class CalonSiswaController extends Controller
                 'school' => $request->school,
                 'source' => $request->source,
                 'allergy' => $request->allergy,
-                'program_package' => $request->program_package,
+                'program_id' => $request->program_id,
                 'trial_date' => $request->trial_date,
                 'trial_status' => $request->trial_status,
                 'lead_status' => $request->lead_status,
             ]);
- 
+
             $this->syncSchedules($candidateStudent, $request);
         });
- 
+
         return redirect()
             ->route('admin.calon-siswa')
             ->with('success', 'Data calon siswa berhasil diperbarui.');
     }
- 
+
     /**
      * Menghapus data calon siswa beserta relasi terkait.
      */
@@ -335,16 +340,16 @@ class CalonSiswaController extends Controller
                 ->route('admin.calon-siswa')
                 ->with('error', 'Lead ini sudah menjadi siswa aktif dan tidak bisa dihapus.');
         }
- 
+
         DB::transaction(function () use ($candidateStudent) {
             $candidateStudent->delete();
         });
- 
+
         return redirect()
             ->route('admin.calon-siswa')
             ->with('success', 'Data calon siswa berhasil dihapus.');
     }
- 
+
     /**
      * Hapus jadwal tersedia lama lalu simpan ulang sesuai input form.
      * Dipakai bersama oleh store() dan update() supaya tidak duplikasi logika.
@@ -352,11 +357,11 @@ class CalonSiswaController extends Controller
     private function syncSchedules(CandidateStudent $candidate, Request $request): void
     {
         $candidate->availableSchedules()->delete();
- 
+
         if (!$request->has('day')) {
             return;
         }
- 
+
         foreach ($request->day as $index => $day) {
             if (
                 empty($day) ||
@@ -365,7 +370,7 @@ class CalonSiswaController extends Controller
             ) {
                 continue;
             }
- 
+
             CandidateStudentAvailableSchedule::create([
                 'candidate_student_id' => $candidate->id,
                 'day' => $day,
@@ -373,5 +378,5 @@ class CalonSiswaController extends Controller
                 'end_time' => $request->end_time[$index],
             ]);
         }
-    }   
+    }
 }

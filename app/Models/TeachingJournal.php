@@ -57,6 +57,6 @@ class TeachingJournal extends Model
 
     public function attendances()
     {
-        return $this->hasMany(Attendance::class, 'teaching_jurnal_id');
+        return $this->hasMany(Attendance::class, 'teaching_journal_id');
     }
 }

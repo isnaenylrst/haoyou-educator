@@ -73,12 +73,12 @@
                     <span class="label">Siswa</span>
                 </a>
 
-                <a href="#" class="nav-item">
+                <a href="{{ route('admin.kelas') }}"class="nav-item {{ request()->routeIs('admin.kelas') ? 'active' : '' }}">
                     <i class="fa-solid fa-users nav-icon" title="Kelas"></i>
                     <span class="label">Kelas</span>
                 </a>
 
-                <a href="#" class="nav-item">
+                <a href="{{ route('admin.jadwal') }}"class="nav-item {{ request()->routeIs('admin.jadwal') ? 'active' : '' }}">
                     <i class="fa-solid fa-calendar-days nav-icon" title="Jadwal"></i>
                     <span class="label">Jadwal</span>
                 </a>

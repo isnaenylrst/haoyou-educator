@@ -32,14 +32,24 @@ public function level()
     );
 }
 
+    // public function teacher()
+    // {
+    //     return $this->hasOne(Wali::class, 'siswa_id');
+    // }
+
+    // public function student()
+    // {
+    //     return $this->status_akun === 'alumni';
+    // }
+
     public function teacher()
     {
-        return $this->hasOne(Wali::class, 'siswa_id');
+        return $this->hasOne(Teacher::class);
     }
 
     public function student()
     {
-        return $this->status_akun === 'alumni';
+        return $this->hasOne(Student::class);
     }
 
     public function curriculum()

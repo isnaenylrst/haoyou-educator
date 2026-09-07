@@ -3,17 +3,18 @@
 namespace Database\Seeders;
 
 use App\Models\CandidateStudent;
-use App\Models\ProgramPackage;
+use App\Models\Program;
 use Illuminate\Database\Seeder;
 
 class CandidateStudentSeeder extends Seeder
 {
     public function run(): void
     {
-        $defaultPackage = ProgramPackage::where('package_name', 'like', '%HSK%')->first();
+        $defaultProgram = Program::where('program_name', 'like', '%HSK%')->first()
+            ?? Program::first();
 
-        if (!$defaultPackage) {
-            $this->command->warn('Belum ada data program_packages. Jalankan ProgramSeeder & ProgramPackageSeeder dulu sebelum CandidateStudentSeeder.');
+        if (!$defaultProgram) {
+            $this->command->warn('Belum ada data programs. Jalankan ProgramSeeder dulu sebelum CandidateStudentSeeder.');
             return;
         }
 
@@ -28,7 +29,7 @@ class CandidateStudentSeeder extends Seeder
             'school' => 'Politeknik Negeri Malang',
             'source' => 'Instagram',
             'allergy' => null,
-            'program_package' => $defaultPackage->package_name,
+            'program_id' => $defaultProgram->id,
             'trial_date' => now()->toDateString(),
             'trial_status' => 'Pending',
             'lead_status' => 'Warm',

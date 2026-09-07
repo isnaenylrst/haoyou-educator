@@ -80,8 +80,17 @@
                     id="searchInput"
                     name="search"
                     value="{{ request('search') }}"
-                    placeholder="Cari nama, telepon, sekolah...">
+                    placeholder="Cari nama calon siswa">
             </div>
+
+            <select name="program_id" class="select-chip" onchange="this.form.submit()">
+                <option value="">Semua Program</option>
+                @foreach ($programs as $program)
+                    <option value="{{ $program->id }}" {{ request('program_id') == $program->id ? 'selected' : '' }}>
+                        {{ $program->program_name }}
+                    </option>
+                @endforeach
+            </select>
 
             <select name="lead_status" class="select-chip" onchange="this.form.submit()">
                 <option value="">Status Lead</option>
@@ -97,14 +106,6 @@
                 <option value="Cancelled" {{ request('trial_status') == 'Cancelled' ? 'selected' : '' }}>Cancelled</option>
             </select>
 
-            <select name="source" class="select-chip" onchange="this.form.submit()">
-                <option value="">Semua Sumber</option>
-                <option value="Instagram" {{ request('source') == 'Instagram' ? 'selected' : '' }}>Instagram</option>
-                <option value="TikTok" {{ request('source') == 'TikTok' ? 'selected' : '' }}>TikTok</option>
-                <option value="Website" {{ request('source') == 'Website' ? 'selected' : '' }}>Website</option>
-                <option value="Referral" {{ request('source') == 'Referral' ? 'selected' : '' }}>Referral</option>
-                <option value="Walk-in" {{ request('source') == 'Walk-in' ? 'selected' : '' }}>Walk-in</option>
-            </select>
 
             <select name="followup" class="select-chip" onchange="this.form.submit()">
                 <option value="">Semua Follow-up</option>
@@ -112,10 +113,10 @@
                 <option value="overdue" {{ request('followup') == 'overdue' ? 'selected' : '' }}>Overdue</option>
             </select>
 
-            <a href="{{ route('admin.calon-siswa') }}" class="btn">
+            {{-- <a href="{{ route('admin.calon-siswa') }}" class="btn">
                 <i class="fa-solid fa-rotate-right"></i>
                 Reset
-            </a>
+            </a> --}}
         </div>
     </form>
 
@@ -151,7 +152,7 @@
                             </div>
                         </td>
 
-                        <td>{{ $candidate->program_package ?: '-' }}</td>
+                        <td>{{ $candidate->program->program_name ?: '-' }}</td>
                         <td>{{ $candidate->source ?: '-' }}</td>
 
                         <td>
@@ -189,13 +190,14 @@
                         </td>
 
                         <td>
-                            @if($candidate->latestFollowUp)
+                            @if($candidate->latestFollowUp && $candidate->latestFollowUp->next_followup)
                                 @php
-                                    $next = \Carbon\Carbon::parse($candidate->latestFollowUp->next_followup);
+                                    $next = \Carbon\Carbon::parse($candidate->latestFollowUp->next_followup)->startOfDay();
+                                    $today = \Carbon\Carbon::today();
                                 @endphp
-                                @if($next->isPast())
+                                @if($next->lt($today))
                                     <span class="followup-flag overdue"><i class="fa-solid fa-circle"></i> Overdue</span>
-                                @elseif($next->isToday())
+                                @elseif($next->eq($today))
                                     <span class="followup-flag today"><i class="fa-solid fa-circle"></i> Hari Ini</span>
                                 @else
                                     <span class="followup-flag upcoming"><i class="fa-solid fa-circle"></i> {{ $next->format('d M Y') }}</span>
@@ -220,17 +222,11 @@
                                     <i class="fa-brands fa-whatsapp"></i>
                                 </button>
 
-                                <form
-                                    action="{{ route('admin.calon-siswa.destroy', $candidate->id) }}"
-                                    method="POST"
-                                    class="delete-form"
-                                    onsubmit="return confirm('Yakin ingin menghapus data {{ $candidate->name }}? Tindakan ini tidak bisa dibatalkan.');">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="icon-btn danger" title="Hapus">
-                                        <i class="fa-regular fa-trash-can"></i>
-                                    </button>
-                                </form>
+                                <a href="{{ route('admin.calon-siswa.convert', $candidate->id) }}"
+                                    class="icon-btn convert"
+                                    title="Jadikan Siswa">
+                                    <i class="fa-solid fa-user-check"></i>
+                                </a>
                             </div>
                         </td>
                     </tr>
@@ -374,23 +370,12 @@
                         <div class="form-grid">
                             <div class="form-field full">
                                 <label>Program Diminati *</label>
-                                <input
-                                    type="text"
-                                    name="program_package"
-                                    id="program_package"
-                                    list="program_package_list"
-                                    autocomplete="off"
-                                    placeholder="Ketik nama program..."
-                                    required>
-                                <datalist id="program_package_list">
-                                    @foreach ($programPackages as $programName => $packages)
-                                        @foreach ($packages as $package)
-                                            <option value="{{ $package->package_name }}">
-                                                {{ $programName }} — {{ $package->course_type }} (Rp {{ number_format($package->price, 0, ',', '.') }})
-                                            </option>
-                                        @endforeach
+                                <select name="program_id" id="program_id" required>
+                                    <option value="">Pilih Program</option>
+                                    @foreach ($programs as $program)
+                                        <option value="{{ $program->id }}">{{ $program->program_name }}</option>
                                     @endforeach
-                                </datalist>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -535,23 +520,12 @@
                         <div class="form-grid">
                             <div class="form-field full">
                                 <label>Program Diminati *</label>
-                                <input
-                                    type="text"
-                                    name="program_package"
-                                    id="edit_program_package"
-                                    list="edit_program_package_list"
-                                    autocomplete="off"
-                                    placeholder="Ketik nama program..."
-                                    required>
-                                <datalist id="edit_program_package_list">
-                                    @foreach ($programPackages as $programName => $packages)
-                                        @foreach ($packages as $package)
-                                            <option value="{{ $package->package_name }}">
-                                                {{ $programName }} — {{ $package->course_type }} (Rp {{ number_format($package->price, 0, ',', '.') }})
-                                            </option>
-                                        @endforeach
+                                <select name="program_id" id="edit_program_id" required>
+                                    <option value="">Pilih Program</option>
+                                    @foreach ($programs as $program)
+                                        <option value="{{ $program->id }}">{{ $program->program_name }}</option>
                                     @endforeach
-                                </datalist>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -613,10 +587,10 @@
 
                 <div class="modal-foot">
                     <div class="modal-foot-left">
-                        <button type="button" class="btn btn-convert">
-                            <i class="fa-solid fa-user-plus"></i>
-                            Jadikan Siswa
-                        </button>
+                            <a href="#" id="btnConvertToStudent" class="btn btn-convert">
+                                <i class="fa-solid fa-user-plus"></i>
+                                Jadikan Siswa
+                            </a>
                     </div>
 
                     <div class="modal-foot-right">
@@ -726,6 +700,12 @@
         }
     }
 
+    // function openConvertModal(id) {
+    //     document.getElementById('btnConvertToStudent').href = `/admin/calon-siswa/${id}/convert`;
+    //     // munculkan modal konfirmasi convert (sesuaikan dengan cara kamu buka modal edit)
+    //     document.getElementById('convertModal').style.display = 'flex';
+    // }
+
     function openEditModal(id) {
         const overlay = document.getElementById('editModalOverlay');
         const form = document.getElementById('editForm');
@@ -752,11 +732,12 @@
             document.getElementById('edit_allergy').value = data.allergy ?? '';
             document.getElementById('edit_parent_name').value = data.parent_name ?? '';
             document.getElementById('edit_parent_phone').value = data.parent_phone ?? '';
-            document.getElementById('edit_program_package').value = data.program_package ?? '';
+            document.getElementById('edit_program_id').value = data.program_id ?? '';
             setSelectValue('edit_source', data.source);
             document.getElementById('edit_lead_status').value = data.lead_status ?? 'Cold';
             document.getElementById('edit_trial_date').value = data.trial_date ?? '';
             document.getElementById('edit_trial_status').value = data.trial_status ?? 'Pending';
+            document.getElementById('btnConvertToStudent').href = `/admin/calon-siswa/${id}/convert`;
 
             if (data.schedules && data.schedules.length > 0) {
                 data.schedules.forEach(s => addScheduleRow('scheduleRowsEdit', s));

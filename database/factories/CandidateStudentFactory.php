@@ -3,7 +3,7 @@
 namespace Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
-use App\Models\ProgramPackage; 
+use App\Models\Program; 
 
 class CandidateStudentFactory extends Factory
 {
@@ -20,7 +20,7 @@ class CandidateStudentFactory extends Factory
             'school' => fake()->randomElement(['SD Kartika', 'SMP Negeri 1', 'SMA Negeri 3', null]),
             'source' => fake()->randomElement(['Instagram', 'Referral', 'Website', 'Walk-in', 'TikTok']),
             'allergy' => fake()->randomElement([null, null, 'Kacang', 'Debu']),
-            'program_package' => ProgramPackage::inRandomOrder()->first()->package_name,
+            'program_id' => Program::inRandomOrder()->first()->id,
             'trial_date' => fake()->dateTimeBetween('-2 months', '+2 weeks')->format('Y-m-d'),
             'trial_status' => fake()->randomElement(['Pending', 'Completed', 'Cancelled']),
             'lead_status' => fake()->randomElement(['Cold', 'Warm', 'Hot']),

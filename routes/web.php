@@ -9,6 +9,9 @@ use App\Http\Controllers\Siswa\SiswaDashboardController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\CalonSiswaController;
 use App\Http\Controllers\Admin\SiswaController;
+use App\Http\Controllers\Admin\ConvertController;
+use App\Http\Controllers\Admin\JadwalController;
+use App\Http\Controllers\Admin\KelasController;
 
 
 /*
@@ -124,5 +127,18 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('/siswa', [SiswaController::class, 'index'])->name('siswa');
     Route::get('/siswa/{siswa}/edit', [SiswaController::class, 'edit'])->name('siswa.edit');
     Route::put('/siswa/{siswa}', [SiswaController::class, 'update'])->name('siswa.update');
-    // Route::delete('/siswa/{siswa}', [SiswaController::class, 'destroy'])->name('siswa.destroy');  
+    Route::get('/siswa/{siswa}', [SiswaController::class, 'show'])->name('siswa.show');
+    Route::get('/siswa/{siswa}/continue', [SiswaController::class, 'continueProgramForm'])->name('siswa.continue.form');
+    Route::post('/siswa/{siswa}/continue', [SiswaController::class, 'continueProgram'])->name('siswa.continue');
+
+    //CONVERT CALON SISWA MENJADI SISWA
+    Route::get('calon-siswa/{candidateStudent}/convert', [ConvertController::class, 'create'])
+    ->name('calon-siswa.convert');
+    Route::post('calon-siswa/{candidateStudent}/convert', [ConvertController::class, 'store'])
+    ->name('calon-siswa.convert.store');
+
+    Route::get('/jadwal', [JadwalController::class, 'index'])
+        ->name('jadwal');
+    Route::get('/kelas', [KelasController::class, 'index'])
+        ->name('kelas');
 });

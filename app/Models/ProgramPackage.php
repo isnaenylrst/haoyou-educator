@@ -11,8 +11,6 @@ class ProgramPackage extends Model
 
     protected $table = 'program_packages';
 
-    public $timestamps = false;
-
     protected $fillable = [
         'program_id',
         'course_type',
