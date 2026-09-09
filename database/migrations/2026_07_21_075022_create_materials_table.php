@@ -12,8 +12,8 @@ return new class extends Migration
 
             $table->id();
 
-            $table->foreignId('program_package_id')
-                ->constrained()
+            $table->foreignId('level_id')
+                ->constrained('program_levels')
                 ->cascadeOnUpdate()
                 ->cascadeOnDelete();
 
@@ -21,7 +21,7 @@ return new class extends Migration
                 ->constrained('users')
                 ->cascadeOnUpdate()
                 ->restrictOnDelete();
-            
+
             $table->unsignedTinyInteger('meeting_number');
 
             $table->string('title');
@@ -30,8 +30,7 @@ return new class extends Migration
 
             $table->timestamps();
 
-            $table->unique(['program_package_id', 'meeting_number']);
-
+            $table->unique(['level_id', 'meeting_number']);
         });
     }
 

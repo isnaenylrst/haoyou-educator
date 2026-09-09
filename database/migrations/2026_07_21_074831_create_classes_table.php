@@ -9,11 +9,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('classes', function (Blueprint $table) {
-
             $table->id();
 
             $table->foreignId('program_package_id')
                 ->constrained()
+                ->cascadeOnUpdate()
+                ->restrictOnDelete();
+
+            $table->foreignId('level_id')
+                ->constrained('program_levels')
                 ->cascadeOnUpdate()
                 ->restrictOnDelete();
 
@@ -25,23 +29,14 @@ return new class extends Migration
 
             $table->string('class_name');
 
-            $table->enum('delivery_mode', [
-                'Offline',
-                'Online'
-            ]);
+            $table->enum('delivery_mode', ['Offline', 'Online']);
 
             $table->date('start_date');
-
             $table->date('end_date')->nullable();
 
             $table->unsignedTinyInteger('capacity');
 
-            $table->enum('status',[
-                'Open',
-                'Running',
-                'Completed',
-                'Closed'
-            ])->default('Open');
+            $table->enum('status', ['Open', 'Running', 'Completed', 'Closed'])->default('Open');
 
             $table->timestamps();
         });

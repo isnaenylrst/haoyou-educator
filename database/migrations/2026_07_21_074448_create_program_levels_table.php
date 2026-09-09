@@ -1,0 +1,37 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('program_levels', function (Blueprint $table) {
+            $table->id();
+
+            $table->foreignId('program_id')
+                ->constrained()
+                ->cascadeOnUpdate()
+                ->cascadeOnDelete();
+
+            // nullable: HSK tidak punya kategori
+            $table->foreignId('category_id')
+                ->nullable()
+                ->constrained('program_categories')
+                ->cascadeOnUpdate()
+                ->nullOnDelete();
+
+            $table->string('level_name');
+            $table->unsignedSmallInteger('sort_order')->default(0);
+
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('program_levels');
+    }
+};

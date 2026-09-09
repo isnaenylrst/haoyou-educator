@@ -4,14 +4,14 @@ namespace Database\Seeders;
 
 use App\Models\ClassModel;
 use App\Models\Teacher;
+use App\Models\Program;
+use App\Models\ProgramCategory;
+use App\Models\ProgramLevel;
+use App\Models\ProgramPackage;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 
 class ClassSeeder extends Seeder
 {
-    /**
-     * DATA DISESUAIKAN - class dibuat per LEVEL sesuai brosur Haoyou Educator
-     */
     public function run(): void
     {
         $teacherIds = Teacher::pluck('id')->toArray();
@@ -21,17 +21,21 @@ class ClassSeeder extends Seeder
             return;
         }
 
-        // Paket Regular Anak (60 menit) - untuk Maochong & Jianer
-        $regularAnakPackageIds = DB::table('program_packages')
-            ->where('course_type', 'Regular')
+        $dailyActivity = Program::where('program_name', 'Daily Activity')->first();
+
+        if (! $dailyActivity) {
+            $this->command?->warn('Program Daily Activity tidak ditemukan.');
+            return;
+        }
+
+        // course_type_id sudah tidak ada lagi — cukup filter program_id
+        $regularAnakPackageIds = ProgramPackage::where('program_id', $dailyActivity->id)
             ->where('duration_minutes', 60)
             ->where('package_name', 'like', 'Regular Class Anak%')
             ->pluck('id')
             ->toArray();
 
-        // Paket Regular Dewasa (90 menit) - untuk Hudie & Feixiang
-        $regularDewasaPackageIds = DB::table('program_packages')
-            ->where('course_type', 'Regular')
+        $regularDewasaPackageIds = ProgramPackage::where('program_id', $dailyActivity->id)
             ->where('duration_minutes', 90)
             ->where('package_name', 'like', 'Regular Class Dewasa%')
             ->pluck('id')
@@ -42,62 +46,95 @@ class ClassSeeder extends Seeder
             return;
         }
 
-        // Level per group sesuai brosur
         $levelsAB = ['1A', '1B', '2A', '2B', '3A', '3B', '4A', '4B', '5A', '5B', '6A', '6B'];
         $levelsAD = ['1A', '1B', '1C', '1D', '2A', '2B', '2C', '2D', '3A', '3B', '3C', '3D'];
 
         $groups = [
-            'Maochong' => ['levels' => $levelsAB, 'packages' => $regularAnakPackageIds],   // 3-6 tahun, 60 menit
-            'Jianer'   => ['levels' => $levelsAB, 'packages' => $regularAnakPackageIds],   // 7-9 tahun, 60 menit
-            'Hudie'    => ['levels' => $levelsAD, 'packages' => $regularDewasaPackageIds], // 10-14 tahun, 90 menit
-            'Feixiang' => ['levels' => $levelsAD, 'packages' => $regularDewasaPackageIds], // 15+ tahun, 90 menit
+            'Maochong' => ['levels' => $levelsAB, 'packages' => $regularAnakPackageIds],
+            'Jianer'   => ['levels' => $levelsAB, 'packages' => $regularAnakPackageIds],
+            'Hudie'    => ['levels' => $levelsAD, 'packages' => $regularDewasaPackageIds],
+            'Feixiang' => ['levels' => $levelsAD, 'packages' => $regularDewasaPackageIds],
         ];
 
         foreach ($groups as $groupName => $data) {
+            $category = ProgramCategory::where('program_id', $dailyActivity->id)
+                ->where('category_name', $groupName)
+                ->first();
+
+            if (! $category) {
+                $this->command?->warn("Kategori '{$groupName}' tidak ditemukan, dilewati.");
+                continue;
+            }
+
             $packageIds = $data['packages'];
 
-            foreach ($data['levels'] as $index => $level) {
+            foreach ($data['levels'] as $index => $levelName) {
+                $level = ProgramLevel::where('category_id', $category->id)
+                    ->where('level_name', $levelName)
+                    ->first();
+
+                if (! $level) {
+                    $this->command?->warn("Level '{$levelName}' pada kategori '{$groupName}' tidak ditemukan, dilewati.");
+                    continue;
+                }
+
                 $packageId = $packageIds[$index % count($packageIds)];
 
                 ClassModel::factory()->create([
-                    'class_name'         => "{$groupName} {$level}",
+                    'class_name'         => "{$groupName} {$levelName}",
                     'program_package_id' => $packageId,
+                    'level_id'           => $level->id,
                     'teacher_id'         => fake()->randomElement($teacherIds),
                 ]);
             }
         }
 
-        // HSK 1 - HSK 6, masing-masing 1 batch class, dicocokkan by nama paket HSK Class
-        $hskClasses = [
-            'HSK 1' => 'HSK 1 (60 Menit / 2 Bulan)',
-            'HSK 2' => 'HSK 2 (60 Menit / 3 Bulan)',
-            'HSK 3' => 'HSK 3 (90 Menit / 6 Bulan)',
-            'HSK 4' => 'HSK 4 (90 Menit / 12 Bulan)',
-            'HSK 5' => 'HSK 5 (90 Menit / 24 Bulan)',
-            'HSK 6' => 'HSK 6 (90 Menit / 30 Bulan)',
-        ];
-
-        foreach ($hskClasses as $className => $packageName) {
-            $this->createClassByPackageName($className, $packageName, $teacherIds);
-        }
+        $this->seedHskClasses($teacherIds);
     }
 
-    private function createClassByPackageName(string $className, string $packageName, array $teacherIds): void
+    private function seedHskClasses(array $teacherIds): void
     {
-        $packageId = DB::table('program_packages')
-            ->where('course_type', 'Regular')
-            ->where('package_name', $packageName)
-            ->value('id');
+        $hsk = Program::where('program_name', 'HSK')->first();
 
-        if (! $packageId) {
-            $this->command?->warn("Package '{$packageName}' tidak ditemukan, class '{$className}' dilewati.");
+        if (! $hsk) {
+            $this->command?->warn('Program HSK tidak ditemukan.');
             return;
         }
 
-        ClassModel::factory()->create([
-            'class_name'         => $className,
-            'program_package_id' => $packageId,
-            'teacher_id'         => fake()->randomElement($teacherIds),
-        ]);
+        $hskClassCategory = ProgramCategory::where('program_id', $hsk->id)
+            ->where('category_name', 'HSK Class')
+            ->first();
+
+        if (! $hskClassCategory) {
+            $this->command?->warn('Kategori HSK Class tidak ditemukan.');
+            return;
+        }
+
+        foreach (range(1, 6) as $levelNumber) {
+            $level = ProgramLevel::where('category_id', $hskClassCategory->id)
+                ->where('level_name', "HSK {$levelNumber}")
+                ->first();
+
+            if (! $level) {
+                $this->command?->warn("Level 'HSK {$levelNumber}' tidak ditemukan, dilewati.");
+                continue;
+            }
+
+            // Dicari lewat level_id, bukan nama paket persis — lebih aman karena
+            // package_name HSK Class sekarang menyertakan catatan durasi bulan
+            $package = ProgramPackage::where('level_id', $level->id)->first();
+
+            if (! $package) {
+                $this->command?->warn("Package untuk 'HSK {$levelNumber}' tidak ditemukan, dilewati.");
+                continue;
+            }
+
+            ClassModel::factory()->create([
+                'class_name'         => "HSK {$levelNumber}",
+                'program_package_id' => $package->id,
+                'level_id'           => $level->id,
+                'teacher_id'         => fake()->randomElement($teacherIds),
+            ]);
+        }
     }
 }

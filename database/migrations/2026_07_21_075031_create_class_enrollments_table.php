@@ -21,16 +21,17 @@ return new class extends Migration
                 ->constrained()
                 ->cascadeOnDelete();
 
+            $table->foreignId('private_package_id')
+                ->nullable()
+                ->constrained('private_packages')
+                ->cascadeOnUpdate()
+                ->nullOnDelete();
+
             $table->date('enrollment_date');
 
-            $table->enum('status',[
-                'Active',
-                'Completed',
-                'Cancelled'
-            ])->default('Active');
+            $table->enum('status', ['Active', 'Completed', 'Cancelled'])->default('Active');
 
             $table->timestamps();
-
         });
     }
 
