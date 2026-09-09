@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\SiswaController;
 use App\Http\Controllers\Admin\ConvertController;
 use App\Http\Controllers\Admin\JadwalController;
 use App\Http\Controllers\Admin\KelasController;
+use App\Http\Controllers\Admin\ProgramLevelController;
 
 
 /*
@@ -141,4 +142,58 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
         ->name('jadwal');
     Route::get('/kelas', [KelasController::class, 'index'])
         ->name('kelas');
+
+    //PROGRAM & LEVEL (index + paket reguler program_packages + paket private private_packages)
+    Route::get('/program-level', [ProgramLevelController::class, 'index'])
+        ->name('program-level');
+        
+    Route::get('/program-level/struktur', [ProgramLevelController::class, 'struktur'])
+        ->name('program-level.struktur');
+    //PROGRAM, KATEGORI, LEVEL (CRUD)
+    Route::post('/program-level/program', [ProgramLevelController::class, 'storeProgram'])
+        ->name('program-level.program.store');
+    Route::get('/program-level/program/{program}/edit', [ProgramLevelController::class, 'editProgram'])
+        ->name('program-level.program.edit');
+    Route::put('/program-level/program/{program}', [ProgramLevelController::class, 'updateProgram'])
+        ->name('program-level.program.update');
+    Route::delete('/program-level/program/{program}', [ProgramLevelController::class, 'destroyProgram'])
+        ->name('program-level.program.destroy');
+
+    Route::post('/program-level/category', [ProgramLevelController::class, 'storeCategory'])
+        ->name('program-level.category.store');
+    Route::get('/program-level/category/{category}/edit', [ProgramLevelController::class, 'editCategory'])
+        ->name('program-level.category.edit');
+    Route::put('/program-level/category/{category}', [ProgramLevelController::class, 'updateCategory'])
+        ->name('program-level.category.update');
+    Route::delete('/program-level/category/{category}', [ProgramLevelController::class, 'destroyCategory'])
+        ->name('program-level.category.destroy');
+
+    Route::post('/program-level/level', [ProgramLevelController::class, 'storeLevel'])
+        ->name('program-level.level.store');
+    Route::get('/program-level/level/{level}/edit', [ProgramLevelController::class, 'editLevel'])
+        ->name('program-level.level.edit');
+    Route::put('/program-level/level/{level}', [ProgramLevelController::class, 'updateLevel'])
+        ->name('program-level.level.update');
+    Route::delete('/program-level/level/{level}', [ProgramLevelController::class, 'destroyLevel'])
+        ->name('program-level.level.destroy');
+
+    //PAKET REGULER
+    Route::post('/program-level/paket', [ProgramLevelController::class, 'storePackage'])
+        ->name('program-level.paket.store');
+    Route::get('/program-level/paket/{package}/edit', [ProgramLevelController::class, 'editPackage'])
+        ->name('program-level.paket.edit');
+    Route::put('/program-level/paket/{package}', [ProgramLevelController::class, 'updatePackage'])
+        ->name('program-level.paket.update');
+    Route::delete('/program-level/paket/{package}', [ProgramLevelController::class, 'destroyPackage'])
+        ->name('program-level.paket.destroy');
+
+    //PAKET PRIVATE
+    Route::post('/program-level/private', [ProgramLevelController::class, 'storePrivate'])
+        ->name('program-level.private.store');
+    Route::get('/program-level/private/{privatePackage}/edit', [ProgramLevelController::class, 'editPrivate'])
+        ->name('program-level.private.edit');
+    Route::put('/program-level/private/{privatePackage}', [ProgramLevelController::class, 'updatePrivate'])
+        ->name('program-level.private.update');
+    Route::delete('/program-level/private/{privatePackage}', [ProgramLevelController::class, 'destroyPrivate'])
+        ->name('program-level.private.destroy');
 });

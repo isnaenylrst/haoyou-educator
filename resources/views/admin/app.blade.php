@@ -54,14 +54,12 @@
                 <a href="{{ route('admin.calon-siswa') }}"class="nav-item {{ request()->routeIs('admin.calon-siswa') ? 'active' : '' }}">
                     <i class="fa-solid fa-user-plus nav-icon" title="Calon Siswa"></i>
                     <span class="label">Calon Siswa</span>
-
-                    <span class="nav-badge">24</span>
                 </a>
 
-                <a href="#" class="nav-item">
+                {{-- <a href="#" class="nav-item">
                     <i class="fa-solid fa-comments nav-icon" title="Follow Up"></i>
                     <span class="label">Follow Up</span>
-                </a>
+                </a> --}}
             </div>
 
             {{-- AKADEMIK --}}
@@ -134,7 +132,8 @@
             <div class="nav-group">
                 <div class="nav-group-label">Pengaturan</div>
 
-                <a href="#" class="nav-item">
+                <a href="{{ route('admin.program-level') }}"
+                class="nav-item {{ request()->routeIs('admin.program-level*') ? 'active' : '' }}">
                     <i class="fa-solid fa-layer-group nav-icon" title="Program & Level"></i>
                     <span class="label">Program & Level</span>
                 </a>
