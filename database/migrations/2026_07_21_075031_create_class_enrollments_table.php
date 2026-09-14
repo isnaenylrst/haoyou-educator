@@ -21,6 +21,11 @@ return new class extends Migration
                 ->constrained()
                 ->cascadeOnDelete();
 
+            $table->foreignId('program_package_id')
+                ->nullable()
+                ->constrained('program_packages')
+                ->nullOnDelete();
+
             $table->foreignId('private_package_id')
                 ->nullable()
                 ->constrained('private_packages')
@@ -29,7 +34,7 @@ return new class extends Migration
 
             $table->date('enrollment_date');
 
-            $table->enum('status', ['Active', 'Completed', 'Cancelled'])->default('Active');
+            $table->enum('status', ['Waiting Class', 'Active', 'Completed', 'Cancelled'])->default('Active');
 
             $table->timestamps();
         });

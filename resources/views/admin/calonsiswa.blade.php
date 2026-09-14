@@ -51,14 +51,14 @@
             <div class="stat-note">Status Pending</div>
         </div>
 
-        <div class="stat-card c-red">
+        {{-- <div class="stat-card c-red">
             <div class="stat-top">
                 <span class="stat-label">Follow-up Overdue</span>
                 <i class="fa-solid fa-triangle-exclamation stat-icon"></i>
             </div>
             <div class="stat-value">{{ $followUpOverdue }}</div>
             <div class="stat-note warn">Perlu ditindaklanjuti</div>
-        </div>
+        </div> --}}
 
         <div class="stat-card c-green">
             <div class="stat-top">
@@ -107,11 +107,11 @@
             </select>
 
 
-            <select name="followup" class="select-chip" onchange="this.form.submit()">
+            {{-- <select name="followup" class="select-chip" onchange="this.form.submit()">
                 <option value="">Semua Follow-up</option>
                 <option value="today" {{ request('followup') == 'today' ? 'selected' : '' }}>Hari Ini</option>
                 <option value="overdue" {{ request('followup') == 'overdue' ? 'selected' : '' }}>Overdue</option>
-            </select>
+            </select> --}}
 
             {{-- <a href="{{ route('admin.calon-siswa') }}" class="btn">
                 <i class="fa-solid fa-rotate-right"></i>
@@ -130,7 +130,7 @@
                     <th>Status Lead</th>
                     <th>Status Trial</th>
                     <th>Tanggal Trial</th>
-                    <th>Follow-up Berikutnya</th>
+                    {{-- <th>Follow-up Berikutnya</th> --}}
                     <th width="120" style="text-align: center;">Aksi</th>
                 </tr>
             </thead>
@@ -189,7 +189,7 @@
                             {{ $candidate->trial_date ? \Carbon\Carbon::parse($candidate->trial_date)->format('d M Y') : '-' }}
                         </td>
 
-                        <td>
+                        {{-- <td>
                             @if($candidate->latestFollowUp && $candidate->latestFollowUp->next_followup)
                                 @php
                                     $next = \Carbon\Carbon::parse($candidate->latestFollowUp->next_followup)->startOfDay();
@@ -205,7 +205,7 @@
                             @else
                                 <span class="followup-flag upcoming">-</span>
                             @endif
-                        </td>
+                        </td> --}}
 
                         {{-- Action --}}
                         <td>

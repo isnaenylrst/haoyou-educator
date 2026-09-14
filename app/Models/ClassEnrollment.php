@@ -14,6 +14,7 @@ class ClassEnrollment extends Model
     protected $fillable = [
         'student_id',
         'class_id',
+        'program_package_id',   // <-- ditambahkan
         'private_package_id',
         'enrollment_date',
         'status',
@@ -26,13 +27,21 @@ class ClassEnrollment extends Model
     protected static function booted()
     {
         static::saving(function (ClassEnrollment $enrollment) {
-            $filled = collect([$enrollment->class_id, $enrollment->private_package_id])
-                ->filter()
-                ->count();
-
-            if ($filled !== 1) {
+            // Tidak boleh reguler DAN private sekaligus
+            if ($enrollment->class_id && $enrollment->private_package_id) {
                 throw new \InvalidArgumentException(
-                    'Enrollment harus punya tepat satu target: class_id ATAU private_package_id.'
+                    'Enrollment tidak boleh punya class_id dan private_package_id sekaligus.'
+                );
+            }
+
+            // Harus tetap ada satu "identitas paket": program_package_id (reguler, kelas boleh menyusul)
+            // ATAU private_package_id (private, class_id memang selalu kosong)
+            $hasProgramTrack = $enrollment->program_package_id !== null;
+            $hasPrivateTrack = $enrollment->private_package_id !== null;
+
+            if (!$hasProgramTrack && !$hasPrivateTrack) {
+                throw new \InvalidArgumentException(
+                    'Enrollment harus punya program_package_id (paket reguler) atau private_package_id (paket private).'
                 );
             }
         });
@@ -46,6 +55,11 @@ class ClassEnrollment extends Model
     public function class()
     {
         return $this->belongsTo(ClassModel::class, 'class_id');
+    }
+
+    public function programPackage()
+    {
+        return $this->belongsTo(ProgramPackage::class);
     }
 
     public function privatePackage()

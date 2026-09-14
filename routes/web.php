@@ -138,6 +138,13 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::post('calon-siswa/{candidateStudent}/convert', [ConvertController::class, 'store'])
     ->name('calon-siswa.convert.store');
 
+    //ASSIGN KELAS UNTUK ENROLLMENT YANG MASIH WAITING CLASS
+    Route::patch('enrollments/{enrollment}/assign-class', [ConvertController::class, 'assignClass'])
+        ->name('enrollments.assign-class');
+        
+    //SISWA — ASSIGN KELAS UNTUK ENROLLMENT WAITING CLASS
+    Route::get('enrollments/{enrollment}/waiting-class-options', [SiswaController::class, 'waitingClassOptions'])
+        ->name('enrollments.waiting-class-options');        
     Route::get('/jadwal', [JadwalController::class, 'index'])
         ->name('jadwal');
     Route::get('/kelas', [KelasController::class, 'index'])

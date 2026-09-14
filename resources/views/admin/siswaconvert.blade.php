@@ -210,6 +210,39 @@
         display: none;
     }
 
+    .package-type-toggle {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+    margin-bottom: 20px; /* jarak ke field/section berikutnya */
+    }
+
+    .radio-pill {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border: 1px solid #d0d0d0;
+        border-radius: 999px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: border-color 0.15s, background-color 0.15s;
+    }
+
+    .radio-pill:has(input:checked) {
+        border-color: #c9a227; /* sesuaikan warna gold sesuai design system Haoyou */
+        background-color: rgba(201, 162, 39, 0.08);
+    }
+
+    .radio-pill input[type="radio"] {
+        margin: 0;
+        accent-color: #c9a227;
+    }
+
+    .radio-pill span {
+        white-space: nowrap;
+    }
+
     /* =====================================================
        INFO CALON SISWA (read-only, bukan input disabled lagi)
     ===================================================== */
@@ -312,6 +345,23 @@
         cursor: not-allowed;
     }
 
+    .recommendation-banner {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        background-color: rgba(201, 162, 39, 0.1);
+        border: 1px solid #c9a227;
+        border-radius: 8px;
+        font-size: 13px;
+        color: #6b5410;
+        margin-bottom: 4px;
+    }
+
+    .recommendation-banner i {
+        color: #c9a227;
+    }
+
     /* =====================================================
        FOOTER FORM
     ===================================================== */
@@ -383,15 +433,50 @@
 
                 <div class="form-section">
                     <div class="form-section-title"><i class="fa-solid fa-box"></i> Paket Program</div>
-                    <div class="form-grid">
+
+                    {{-- Toggle tipe paket --}}
+                    <div class="form-field full">
+                        <label>Tipe Paket *</label>
+                        <div class="package-type-toggle">
+                            <label class="radio-pill">
+                                <input type="radio" name="package_type" value="program"
+                                       checked onchange="togglePackageType()">
+                                <span>Program Reguler</span>
+                            </label>
+                            <label class="radio-pill">
+                                <input type="radio" name="package_type" value="private"
+                                       onchange="togglePackageType()">
+                                <span>Private</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    {{-- Blok Program Reguler --}}
+                    <div class="form-grid" id="program-package-block">
+
+                        @if ($recommendedCategory)
+                            <div class="form-field full">
+                                <div class="recommendation-banner">
+                                    <i class="fa-solid fa-star"></i>
+                                    Umur siswa <strong>{{ $candidateAge }} tahun</strong> &mdash;
+                                    rekomendasi kategori: <strong>{{ $recommendedCategory }}</strong>
+                                </div>
+                            </div>
+                        @endif
+
                         <div class="form-field full">
                             <label>Program Package *</label>
-                            <select name="program_package_id" id="program_package_id" required onchange="filterClasses()">
+                            <select name="program_package_id" id="program_package_id" onchange="filterClasses()">
                                 <option value="">Pilih Package</option>
                                 @foreach ($packages as $package)
-                                    <option value="{{ $package->id }}" data-price="{{ $package->price }}">
-                                        {{ $package->package_name }} ({{ $package->course_type }}) &mdash;
-                                        Rp {{ number_format($package->price, 0, ',', '.') }}
+                                    <option value="{{ $package->id }}"
+                                            data-price="{{ $package->price }}"
+                                            {!! $recommendedCategory && $package->category_name === $recommendedCategory ? 'data-recommended="1"' : '' !!}>
+                                        {{ $package->package_name }} &mdash;
+                                        @if ($recommendedCategory && $package->category_name === $recommendedCategory)
+                                            ⭐ Direkomendasikan
+                                        @endif
+                                        &mdash; Rp {{ number_format($package->price, 0, ',', '.') }}
                                     </option>
                                 @endforeach
                             </select>
@@ -410,6 +495,35 @@
                                     </option>
                                 @endforeach
                             </select>
+                            <p class="form-section-note" style="margin-top: 4px;">
+                                <i class="fa-solid fa-circle-info"></i>
+                                Jika tidak dipilih, siswa akan berstatus "Menunggu Kelas" dan bisa di-assign kelasnya nanti dari halaman Siswa.
+                            </p>
+                        </div>
+                    </div>
+
+                    {{-- Blok Private --}}
+                    <div class="form-grid" id="private-package-block" style="display: none;">
+                        <div class="form-field full">
+                            <label>Private Package *</label>
+                            <select name="private_package_id" id="private_package_id">
+                                <option value="">Pilih Package</option>
+                                @foreach ($privatePackages as $privatePackage)
+                                    <option value="{{ $privatePackage->id }}" data-price="{{ $privatePackage->price }}">
+                                        {{ $privatePackage->package_name }} &mdash;
+                                        Rp {{ number_format($privatePackage->price, 0, ',', '.') }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @if ($privatePackages->isEmpty())
+                                <small>Belum ada private package aktif.</small>
+                            @endif
+                        </div>
+                        <div class="form-field full">
+                            <p class="form-section-note">
+                                <i class="fa-solid fa-circle-info"></i>
+                                Kelas untuk paket Private ditentukan menyusul saat penjadwalan, tidak dipilih di sini.
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -515,6 +629,30 @@
 
 @push('scripts')
 <script>
+    function togglePackageType() {
+        const type = document.querySelector('input[name="package_type"]:checked').value;
+        const programBlock = document.getElementById('program-package-block');
+        const privateBlock = document.getElementById('private-package-block');
+        const programSelect = document.getElementById('program_package_id');
+        const privateSelect = document.getElementById('private_package_id');
+        const classSelect = document.getElementById('class_id');
+
+        if (type === 'private') {
+            programBlock.style.display = 'none';
+            privateBlock.style.display = 'grid';
+            programSelect.removeAttribute('required');
+            programSelect.value = '';
+            classSelect.value = ''; // <-- tambahan
+            privateSelect.setAttribute('required', 'required');
+        } else {
+            programBlock.style.display = 'grid';
+            privateBlock.style.display = 'none';
+            privateSelect.removeAttribute('required');
+            privateSelect.value = '';
+            programSelect.setAttribute('required', 'required');
+        }
+    }
+
     function filterClasses() {
         const packageId = document.getElementById('program_package_id').value;
         const classSelect = document.getElementById('class_id');
@@ -526,5 +664,16 @@
 
         classSelect.value = '';
     }
+
+    // set required state saat pertama load (default: program)
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('program_package_id').setAttribute('required', 'required');
+
+        const recommendedOption = document.querySelector('#program_package_id option[data-recommended="1"]');
+        if (recommendedOption) {
+            recommendedOption.selected = true;
+            filterClasses();
+        }
+    });    
 </script>
 @endpush

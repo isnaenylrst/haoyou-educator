@@ -10,17 +10,29 @@ use Illuminate\Database\Seeder;
 class ClassEnrollmentSeeder extends Seeder
 {
     /**
-     * DUMMY DATA - tiap siswa didaftarkan ke 1 kelas acak.
+     * DUMMY DATA - tiap siswa yang BELUM punya enrollment didaftarkan ke 1 kelas acak.
      */
     public function run(): void
     {
-        $studentIds = Student::pluck('id');
-        $classIds = ClassModel::pluck('id')->toArray();
+        $classes = ClassModel::all();
+
+        if ($classes->isEmpty()) {
+            $this->command->error('Belum ada data classes. Jalankan seeder kelas dulu.');
+            return;
+        }
+
+        $studentIds = Student::doesntHave('enrollments')->pluck('id');
 
         foreach ($studentIds as $studentId) {
-            ClassEnrollment::factory()->create([
+            $class = $classes->random();
+
+            ClassEnrollment::create([
                 'student_id' => $studentId,
-                'class_id' => fake()->randomElement($classIds),
+                'class_id' => $class->id,
+                'program_package_id' => $class->program_package_id,
+                'private_package_id' => null,
+                'enrollment_date' => now(),
+                'status' => 'Active',
             ]);
         }
     }

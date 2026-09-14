@@ -19,7 +19,7 @@ class DatabaseSeeder extends Seeder
             PrivatePackageSeeder::class,           
             CandidateStudentSeeder::class,
             CandidateStudentAvailableScheduleSeeder::class,
-            StudentSeeder::class,
+            // StudentSeeder::class,
             FollowUpTemplateSeeder::class,
             FollowUpSeeder::class,
             ClassSeeder::class,
