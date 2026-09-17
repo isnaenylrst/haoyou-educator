@@ -14,6 +14,7 @@ class TeacherLeave extends Model
     protected $fillable = [
         'teacher_id',
         'class_schedule_id',
+        'leave_date',
         'leave_type',
         'reason',
         'supporting_document',
@@ -24,6 +25,7 @@ class TeacherLeave extends Model
     ];
 
     protected $casts = [
+        'leave_date' => 'date',
         'approved_at' => 'datetime',
     ];
 
@@ -45,5 +47,12 @@ class TeacherLeave extends Model
     public function approver()
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    // Baru: satu leave bisa dipakai di banyak sesi jurnal (jaga-jaga kalau
+    // ada kasus tidak umum), tapi normalnya 1:1 dengan teaching_journals.leave_date
+    public function teachingJournals()
+    {
+        return $this->hasMany(TeachingJournal::class, 'teacher_leave_id');
     }
 }

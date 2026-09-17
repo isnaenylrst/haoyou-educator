@@ -12,9 +12,7 @@ return new class extends Migration
 
             $table->id();
 
-            $table->foreignId('candidate_student_id')
-                ->constrained('candidate_students')
-                ->cascadeOnDelete();
+            $table->morphs('followupable'); // followupable_id, followupable_type
 
             $table->foreignId('follow_up_template_id')
                 ->constrained('follow_up_templates')
@@ -32,6 +30,8 @@ return new class extends Migration
                 'Pending',
                 'Done'
             ])->default('Pending');
+
+            $table->timestamps();
         });
     }
 

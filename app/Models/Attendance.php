@@ -11,29 +11,41 @@ class Attendance extends Model
 
     protected $table = 'attendances';
 
-    public $timestamps = false;
-
     protected $fillable = [
-        'teaching_jurnal_id',
+        'teaching_journal_id',
         'student_id',
+        'session_date',
         'status',
         'note',
-        'attendance_date',
-        'created_at',
     ];
 
+    // Catatan: cast sebelumnya salah nama ('attendance_date', kolomnya tidak
+    // ada) — sudah dibetulkan ke 'session_date' sesuai migration terbaru.
     protected $casts = [
-        'attendance_date' => 'date',
-        'created_at' => 'datetime',
+        'session_date' => 'date',
     ];
 
     public function teachingJournal()
     {
-        return $this->belongsTo(TeachingJournal::class, 'teaching_jurnal_id');
+        return $this->belongsTo(TeachingJournal::class, 'teaching_journal_id');
     }
 
     public function student()
     {
         return $this->belongsTo(Student::class);
+    }
+
+    protected static function booted()
+    {
+        // session_date di sini adalah CACHE dari teaching_journals.session_date
+        // (bukan sumber kebenaran). Auto-isi supaya guru/admin tidak perlu
+        // input manual dan tidak ada celah tanggal berbeda dari jurnalnya.
+        static::creating(function (Attendance $attendance) {
+            if (!$attendance->session_date && $attendance->teaching_journal_id) {
+                $attendance->session_date = optional(
+                    TeachingJournal::find($attendance->teaching_journal_id)
+                )->session_date;
+            }
+        });
     }
 }

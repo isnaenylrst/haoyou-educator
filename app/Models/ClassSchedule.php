@@ -11,8 +11,6 @@ class ClassSchedule extends Model
 
     protected $table = 'class_schedules';
 
-    public $timestamps = false;
-
     protected $fillable = [
         'class_id',
         'day',

@@ -15,13 +15,13 @@ class FollowUpSeeder extends Seeder
     public function run(): void
     {
         $templateIds = FollowUpTemplate::pluck('id')->toArray();
-        $candidateIds = CandidateStudent::pluck('id');
+        $candidateStudents = CandidateStudent::all();
 
-        foreach ($candidateIds as $candidateId) {
+        foreach ($candidateStudents as $candidateStudent) {
             FollowUp::factory()
                 ->count(fake()->numberBetween(1, 3))
+                ->for($candidateStudent, 'followupable')
                 ->create([
-                    'candidate_student_id' => $candidateId,
                     'follow_up_template_id' => fake()->randomElement($templateIds),
                 ]);
         }

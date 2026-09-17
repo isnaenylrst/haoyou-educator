@@ -23,6 +23,11 @@ return new class extends Migration
                 ->nullable()
                 ->constrained('document_templates')
                 ->nullOnDelete(); 
+
+            $table->foreignId('program_level_id')
+                ->nullable()
+                ->constrained('program_levels')
+                ->nullOnDelete();
             
             $table->string('title');
 
@@ -30,6 +35,7 @@ return new class extends Migration
                 'CV',
                 'Photo',
                 'Teacher Certificate',
+                'Certificate',
                 'Agreement',
                 'SOP',
                 'Teacher Leave Letter',

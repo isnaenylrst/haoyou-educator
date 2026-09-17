@@ -27,6 +27,8 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->restrictOnDelete();
 
+            $table->date('session_date');
+
             // Status kehadiran
             $table->enum('status', [
                 'Present',

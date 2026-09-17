@@ -21,7 +21,6 @@ return new class extends Migration
             $table->string('name');
             $table->string('phone');
             $table->text('address')->nullable();
-            $table->string('specialist')->nullable();
             $table->date('join_date')->nullable();
 
             $table->enum('training_status',[
