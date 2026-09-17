@@ -6,3 +6,6 @@ use Illuminate\Support\Facades\Artisan;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+// Expire fee pendaftaran calon siswa yang lewat 30 hari
+Schedule::job(new ExpireRegistrationFees())->dailyAt('01:00');
