@@ -4,17 +4,18 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ClassEnrollment extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $table = 'class_enrollments';
 
     protected $fillable = [
         'student_id',
         'class_id',
-        'program_package_id',   // <-- ditambahkan
+        'program_package_id',
         'private_package_id',
         'enrollment_date',
         'status',
@@ -27,21 +28,23 @@ class ClassEnrollment extends Model
     protected static function booted()
     {
         static::saving(function (ClassEnrollment $enrollment) {
-            // Tidak boleh reguler DAN private sekaligus
-            if ($enrollment->class_id && $enrollment->private_package_id) {
-                throw new \InvalidArgumentException(
-                    'Enrollment tidak boleh punya class_id dan private_package_id sekaligus.'
-                );
-            }
-
-            // Harus tetap ada satu "identitas paket": program_package_id (reguler, kelas boleh menyusul)
-            // ATAU private_package_id (private, class_id memang selalu kosong)
+            // Yang tidak boleh bersamaan itu DUA IDENTITAS PAKET (reguler vs
+            // private), BUKAN class_id vs private_package_id — sebuah kelas
+            // privat justru SEHARUSNYA punya class_id + private_package_id
+            // terisi bersamaan begitu siswa ditempatkan ke kelasnya (classes
+            // table sudah bisa menampung private_package_id sendiri).
             $hasProgramTrack = $enrollment->program_package_id !== null;
             $hasPrivateTrack = $enrollment->private_package_id !== null;
 
+            if ($hasProgramTrack && $hasPrivateTrack) {
+                throw new \InvalidArgumentException(
+                    'Enrollment tidak boleh mengisi program_package_id dan private_package_id sekaligus.'
+                );
+            }
+
             if (!$hasProgramTrack && !$hasPrivateTrack) {
                 throw new \InvalidArgumentException(
-                    'Enrollment harus punya program_package_id (paket reguler) atau private_package_id (paket private).'
+                    'Enrollment harus mengisi salah satu: program_package_id (paket reguler) atau private_package_id (paket private).'
                 );
             }
         });

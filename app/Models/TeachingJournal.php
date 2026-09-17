@@ -17,6 +17,7 @@ class TeachingJournal extends Model
         'material_id',
         'is_substitute',
         'substitute_teacher_id',
+        'teacher_leave_id',
         'class_status',
         'learning_activities',
         'problems',
@@ -53,6 +54,12 @@ class TeachingJournal extends Model
     public function substituteTeacher()
     {
         return $this->belongsTo(Teacher::class, 'substitute_teacher_id');
+    }
+
+    // Baru: menyatukan pencatatan guru pengganti dengan pengajuan cuti terkait
+    public function teacherLeave()
+    {
+        return $this->belongsTo(TeacherLeave::class, 'teacher_leave_id');
     }
 
     public function attendances()

@@ -90,7 +90,6 @@ class TeacherSeeder extends Seeder
                     'name'            => $data['name'],
                     'phone'           => $data['phone'],
                     'address'         => $data['address'],
-                    'specialist'      => null, // tidak tersedia di employees.sql
                     'join_date'       => $data['join_date'],
                     'training_status' => null, // tidak tersedia di employees.sql
                     'status'          => 'Active',

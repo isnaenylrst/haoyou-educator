@@ -41,6 +41,7 @@ return new class extends Migration
             ])->default('Pending');
 
             $table->timestamps();
+            $table->softDeletes();
 
         });
     }

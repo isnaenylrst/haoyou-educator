@@ -13,6 +13,7 @@ class ClassModel extends Model
 
     protected $fillable = [
         'program_package_id',
+        'private_package_id',
         'level_id',
         'teacher_id',
         'class_name',
@@ -31,6 +32,12 @@ class ClassModel extends Model
     public function programPackage()
     {
         return $this->belongsTo(ProgramPackage::class);
+    }
+
+    // Baru: kelas privat mengisi ini, kelas reguler mengisi programPackage()
+    public function privatePackage()
+    {
+        return $this->belongsTo(PrivatePackage::class);
     }
 
     public function level()

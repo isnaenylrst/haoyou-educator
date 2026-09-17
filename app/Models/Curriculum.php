@@ -16,7 +16,6 @@ class Curriculum extends Model
         'name',
         'phone',
         'address',
-        'specialist',
         'join_date',
         'status',
     ];

@@ -17,26 +17,6 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
-/**
- * Seeder siswa DUMMY (bukan dari CSV) untuk keperluan development/testing.
- *
- * Membuat sejumlah siswa acak yang tersebar di:
- *  - Program Reguler Daily Activity (dengan kelas ATAU tanpa kelas -> status "Waiting Class")
- *  - Program Reguler HSK
- *  - Private
- *
- * Setiap siswa dapat:
- *  - 1 akun User (level "Student")
- *  - 1 baris Student (current_level_id diisi kalau relevan, null untuk Private)
- *  - 1 ClassEnrollment (program_package_id ATAU private_package_id, class_id kalau ada kelas)
- *  - 1 Payment tahap DP (Paid atau Partial secara acak)
- *
- * WAJIB DIJALANKAN SETELAH:
- *   LevelSeeder -> ProgramSeeder -> ProgramCategoryLevelSeeder
- *   -> ProgramPackageSeeder -> PrivatePackageSeeder
- * (dan idealnya setelah ada beberapa baris `classes` berstatus Open/Running,
- * supaya sebagian siswa reguler bisa langsung dapat kelas).
- */
 class StudentSeeder extends Seeder
 {
     /** Jumlah siswa dummy yang mau dibuat */
@@ -72,8 +52,13 @@ class StudentSeeder extends Seeder
             return;
         }
 
-        // Cache kelas Open/Running per program_package_id, supaya query tidak berulang
+        // Cache kelas Open/Running per program_package_id, LENGKAP DENGAN
+        // jumlah enrollment aktifnya — supaya kita bisa hormati classes.capacity
+        // dan tidak assign siswa ke kelas yang sudah penuh.
         $classesByPackage = ClassModel::whereIn('status', ['Open', 'Running'])
+            ->withCount([
+                'enrollments as active_enrollments_count' => fn ($q) => $q->whereIn('status', ['Active', 'Completed']),
+            ])
             ->get()
             ->groupBy('program_package_id');
 
@@ -137,11 +122,21 @@ class StudentSeeder extends Seeder
 
         $currentLevelId = $this->resolveCurrentLevelId($package);
 
-        $availableClasses = $classesByPackage->get($package->id, collect());
+        // Hanya kelas yang MASIH ADA SLOT KOSONG (active_enrollments_count < capacity)
+        $availableClasses = $classesByPackage->get($package->id, collect())
+            ->filter(fn ($class) => $class->active_enrollments_count < $class->capacity);
+
         $getsClassDirectly = $availableClasses->isNotEmpty()
             && random_int(1, 100) <= $this->directClassChancePercent;
 
-        $classId = $getsClassDirectly ? $availableClasses->random()->id : null;
+        $classId = null;
+        if ($getsClassDirectly) {
+            $chosenClass = $availableClasses->random();
+            $classId = $chosenClass->id;
+            // Update counter di collection supaya siswa berikutnya di loop ini
+            // tidak ikut mengisi kelas yang baru saja penuh.
+            $chosenClass->active_enrollments_count++;
+        }
         $isWaitingClass = !$getsClassDirectly;
 
         $student = Student::create([
@@ -195,19 +190,18 @@ class StudentSeeder extends Seeder
         return $username;
     }
 
-    /**
-     * Tentukan current_level_id siswa berdasarkan paket yang diambil:
-     *  - HSK: paket sudah punya level_id sendiri -> pakai langsung
-     *  - Daily Activity: paket tidak terikat level, jadi pilih kategori+level acak
-     *    dari kategori-kategori di bawah program Daily Activity
-     */
     private function resolveCurrentLevelId(ProgramPackage $package): ?int
     {
         if ($package->level_id) {
             return $package->level_id;
         }
 
-        $categories = ProgramCategory::where('program_id', $package->program_id)->pluck('id');
+        $isAnak = str_contains($package->package_name, 'Anak');
+        $categoryNames = $isAnak ? ['Maochong', 'Jianer'] : ['Hudie', 'Feixiang'];
+
+        $categories = ProgramCategory::where('program_id', $package->program_id)
+            ->whereIn('category_name', $categoryNames)
+            ->pluck('id');
 
         if ($categories->isEmpty()) {
             return null;
@@ -228,7 +222,7 @@ class StudentSeeder extends Seeder
             'enrollment_id' => $enrollment->id,
             'invoice_number' => 'INV-' . now()->format('Ymd') . '-' . strtoupper(Str::random(6)),
             'invoice_file_path' => null,
-            'payment_stage' => 'DP',
+            'payment_stage' => $isFullyPaid ? 'Pelunasan' : 'DP',
             'total_bill' => $totalBill,
             'amount_paid' => $amountPaid,
             'remaining_bill' => $remaining,

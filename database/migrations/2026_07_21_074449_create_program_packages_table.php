@@ -16,8 +16,6 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->cascadeOnDelete();
 
-            // nullable: diisi hanya untuk program yang harganya bergantung
-            // kategori/level spesifik (HSK) — null untuk Daily Activity
             $table->foreignId('category_id')
                 ->nullable()
                 ->constrained('program_categories')

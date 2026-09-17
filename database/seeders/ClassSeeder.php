@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\ClassModel;
+use App\Models\PrivatePackage;
 use App\Models\Teacher;
 use App\Models\Program;
 use App\Models\ProgramCategory;
@@ -90,6 +91,7 @@ class ClassSeeder extends Seeder
         }
 
         $this->seedHskClasses($teacherIds);
+        $this->seedPrivateClasses($teacherIds);
     }
 
     private function seedHskClasses(array $teacherIds): void
@@ -135,6 +137,28 @@ class ClassSeeder extends Seeder
                 'level_id'           => $level->id,
                 'teacher_id'         => fake()->randomElement($teacherIds),
             ]);
+        }
+    }
+    private function seedPrivateClasses(array $teacherIds): void
+    {
+        $privatePackages = PrivatePackage::where('is_active', true)->get();
+
+        if ($privatePackages->isEmpty()) {
+            $this->command?->warn('Belum ada PrivatePackage aktif, kelas privat dilewati.');
+            return;
+        }
+
+        // 2 kontrak privat per varian paket, biar tiap varian ada contohnya
+        foreach ($privatePackages as $package) {
+            foreach (range(1, 2) as $sequence) {
+                ClassModel::factory()
+                    ->private()
+                    ->create([
+                        'class_name'         => "{$package->package_name} #{$sequence}",
+                        'private_package_id' => $package->id,
+                        'teacher_id'         => fake()->randomElement($teacherIds),
+                    ]);
+            }
         }
     }
 }

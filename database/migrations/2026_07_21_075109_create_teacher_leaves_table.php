@@ -20,6 +20,8 @@ return new class extends Migration
                 ->constrained()
                 ->cascadeOnDelete();
 
+            $table->date('leave_date');
+
             $table->enum('leave_type',[
                 'Sick',
                 'Permission'
@@ -48,6 +50,9 @@ return new class extends Migration
             $table->timestamp('approved_at')->nullable();
 
             $table->timestamps();
+
+            // Cegah guru mengajukan cuti dobel untuk slot & tanggal yang sama
+            $table->unique(['class_schedule_id', 'leave_date']);
 
         });
     }

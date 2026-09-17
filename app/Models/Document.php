@@ -14,6 +14,7 @@ class Document extends Model
     protected $fillable = [
         'user_id',
         'document_template_id',
+        'program_level_id',
         'title',
         'document_type',
         'description',
@@ -40,5 +41,11 @@ class Document extends Model
     public function uploader()
     {
         return $this->belongsTo(User::class, 'uploaded_by');
+    }
+
+    // Baru: dipakai saat dokumen ini sertifikat kelulusan level tertentu
+    public function programLevel()
+    {
+        return $this->belongsTo(ProgramLevel::class);
     }
 }

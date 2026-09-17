@@ -35,6 +35,7 @@ return new class extends Migration
 
             // Materi yang diajarkan (guru pilih sendiri dari daftar materi levelnya)
             $table->foreignId('material_id')
+                ->nullable()
                 ->constrained()
                 ->cascadeOnUpdate()
                 ->restrictOnDelete();
@@ -48,6 +49,11 @@ return new class extends Migration
                 ->nullable()
                 ->constrained('teachers')
                 ->cascadeOnUpdate()
+                ->nullOnDelete();
+
+            $table->foreignId('teacher_leave_id')
+                ->nullable()
+                ->constrained('teacher_leaves')
                 ->nullOnDelete();
 
             // Apakah kelas berjalan?

@@ -35,8 +35,21 @@ class CandidateStudentSeeder extends Seeder
             'lead_status' => 'Warm',
         ]);
 
+        // Contoh PASTI ada (bukan cuma andalkan random) buat nge-test
+        // alur calon siswa privat dan job ExpireRegistrationFees nanti.
         CandidateStudent::factory()
-            ->count(39)
+            ->interestedInPrivate()
+            ->count(3)
+            ->create();
+
+        CandidateStudent::factory()
+            ->registrationFeeExpired()
+            ->count(3)
+            ->create();
+
+        // Sisanya data acak biasa
+        CandidateStudent::factory()
+            ->count(33)
             ->create();
     }
 }
