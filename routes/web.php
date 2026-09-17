@@ -11,6 +11,9 @@ use App\Http\Controllers\Kurikulum\SopController;
 use App\Http\Controllers\Kurikulum\DocumentTemplateController;
 use App\Http\Controllers\Kurikulum\MaterialController;
 use App\Http\Controllers\Kurikulum\LetterController;
+use App\Http\Controllers\Kurikulum\MonitoringController;
+use App\Http\Controllers\Kurikulum\JadwalKonsultasiController;
+use App\Http\Controllers\Kurikulum\ReviewPengajuanController;
 
 /*
 |--------------------------------------------------------------------------
@@ -72,7 +75,7 @@ Route::get('/daftar/sukses', [PendaftaranController::class, 'sukses'])
 |--------------------------------------------------------------------------
 */
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'role:Student'])->group(function () {
 
     Route::get('/dashboard', [SiswaDashboardController::class, 'dashboard'])
         ->name('dashboard');
@@ -105,7 +108,7 @@ Route::middleware('auth')->group(function () {
 |--------------------------------------------------------------------------
 */
 
-Route::middleware('auth')
+Route::middleware(['auth', 'role:Curriculum'])
     ->prefix('kurikulum')
     ->name('kurikulum.')
     ->group(function () {
@@ -138,7 +141,7 @@ Route::middleware('auth')
             ->name('sop.show');
 
         // Upload Ulang SOP
-        Route::patch('/sop/{document}', [SopController::class, 'update'])
+        Route::put('/sop/{document}', [SopController::class, 'update'])
             ->name('sop.update');
 
         // Download SOP
@@ -207,21 +210,55 @@ Route::delete('/materi/{material}', [MaterialController::class, 'destroy'])
 
     Route::delete('/surat/{document}', [LetterController::class, 'destroy'])
     ->name('surat.destroy');
-/*
-|--------------------------------------------------------------------------
-| HALAMAN KURIKULUM LAINNYA
-|--------------------------------------------------------------------------
-*/
 
+    //Monitoring Guru
+    Route::get('/monitoring', [MonitoringController::class, 'index'])
+    ->name('monitoring');
 
-    Route::view('/jadwal-konsultasi', 'kurikulum.jadwal-konsultasi')
+// JADWAL KONSULTASI
+Route::get('/jadwal-konsultasi', [JadwalKonsultasiController::class, 'index'])
     ->name('jadwal-konsultasi');
 
-    Route::view('/review-pengajuan', 'kurikulum.review-pengajuan')
+Route::post('/jadwal-konsultasi', [JadwalKonsultasiController::class, 'store'])
+    ->name('jadwal-konsultasi.store');
+
+Route::patch('/jadwal-konsultasi/{consultation}', [JadwalKonsultasiController::class, 'update'])
+    ->name('jadwal-konsultasi.update');
+
+Route::patch('/jadwal-konsultasi/{consultation}/complete', [JadwalKonsultasiController::class, 'complete'])
+    ->name('jadwal-konsultasi.complete');
+
+Route::patch('/jadwal-konsultasi/{consultation}/cancel', [JadwalKonsultasiController::class, 'cancel'])
+    ->name('jadwal-konsultasi.cancel');
+
+Route::delete('/jadwal-konsultasi/{consultation}', [JadwalKonsultasiController::class, 'destroy'])
+    ->name('jadwal-konsultasi.destroy');
+
+//REVIEW PENGAJUAN
+/*
+| REVIEW PENGAJUAN
+*/
+
+Route::get('/review-pengajuan', [ReviewPengajuanController::class, 'index'])
     ->name('review-pengajuan');
 
-    Route::view('/monitoring', 'kurikulum.monitoring')
-    ->name('monitoring');
+Route::patch('/review-pengajuan/sesi/{teachingJournal}/ack', [ReviewPengajuanController::class, 'ackSession'])
+    ->name('review-pengajuan.ack-session');
+
+Route::post('/review-pengajuan/sesi/{classSchedule}/reminder', [ReviewPengajuanController::class, 'sendReminder'])
+    ->name('review-pengajuan.reminder');
+
+Route::patch('/review-pengajuan/material/{teacherMaterial}', [ReviewPengajuanController::class, 'reviewMaterial'])
+    ->name('review-pengajuan.material');
+
+Route::patch('/review-pengajuan/jurnal/{teachingJournal}', [ReviewPengajuanController::class, 'reviewJournal'])
+    ->name('review-pengajuan.journal');
+
+Route::patch('/review-pengajuan/progress-report/{progressReport}', [ReviewPengajuanController::class, 'reviewReport'])
+    ->name('review-pengajuan.report');
+
+Route::patch('/review-pengajuan/cuti/{teacherLeave}', [ReviewPengajuanController::class, 'reviewLeave'])
+    ->name('review-pengajuan.leave');
 
     
 });
@@ -232,25 +269,41 @@ Route::delete('/materi/{material}', [MaterialController::class, 'destroy'])
 |--------------------------------------------------------------------------
 */
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'role:Teacher'])
+    ->prefix('guru')
+    ->name('teacher.')
+    ->group(function () {
 
-    Route::view('/guru/dashboard', 'guru.dashboard');
+        // NOTE: sementara masih Route::view (data dummy di Blade).
+        // Akan diganti ke Controller + data asli dari DB pada tahap berikutnya.
 
-    Route::view('/guru/notifikasi', 'guru.notifikasi');
+        Route::view('/dashboard', 'guru.dashboard')
+            ->name('dashboard');
 
-    Route::view('/guru/sop', 'guru.sop');
+        Route::view('/notifikasi', 'guru.notifikasi')
+            ->name('notifikasi');
 
-    Route::view('/guru/materi', 'guru.materi');
+        Route::view('/sop', 'guru.sop')
+            ->name('sop');
 
-    Route::view('/guru/kelas', 'guru.kelas');
+        Route::view('/materi', 'guru.materi')
+            ->name('materi');
 
-    Route::view('/guru/attendance', 'guru.attendance');
+        Route::view('/kelas', 'guru.kelas')
+            ->name('kelas');
 
-    Route::view('/guru/progress-report', 'guru.progress-report');
+        Route::view('/attendance', 'guru.attendance')
+            ->name('attendance');
 
-    Route::view('/guru/schedule', 'guru.schedule');
+        Route::view('/progress-report', 'guru.progress-report')
+            ->name('progress-report');
 
-    Route::view('/guru/teaching-log', 'guru.teaching-log');
+        Route::view('/schedule', 'guru.schedule')
+            ->name('schedule');
 
-    Route::view('/guru/cuti', 'guru.cuti');
-});
+        Route::view('/teaching-log', 'guru.teaching-log')
+            ->name('teaching-log');
+
+        Route::view('/cuti', 'guru.cuti')
+            ->name('cuti');
+    });

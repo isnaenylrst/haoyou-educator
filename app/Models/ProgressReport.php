@@ -23,10 +23,13 @@ class ProgressReport extends Model
         'status',
         'uploaded_by',
         'uploaded_at',
+        'reviewed_by',
+        'reviewed_at',
     ];
 
     protected $casts = [
         'uploaded_at' => 'datetime',
+        'reviewed_at' => 'datetime',
     ];
 
     public function student()

@@ -25,10 +25,12 @@ class TeachingJournal extends Model
         'results',
         'notes',
         'status',
+        'session_score',
     ];
 
     protected $casts = [
         'is_substitute' => 'boolean',
+        'session_score' => 'integer',
     ];
 
     public function teacher()
@@ -38,26 +40,41 @@ class TeachingJournal extends Model
 
     public function substituteTeacher()
     {
-        return $this->belongsTo(Teacher::class, 'substitute_teacher_id');
+        return $this->belongsTo(
+            Teacher::class,
+            'substitute_teacher_id'
+        );
     }
 
     public function class()
     {
-        return $this->belongsTo(ClassModel::class, 'class_id');
+        return $this->belongsTo(
+            ClassModel::class,
+            'class_id'
+        );
     }
 
     public function classSchedule()
     {
-        return $this->belongsTo(ClassSchedule::class, 'class_schedule_id');
+        return $this->belongsTo(
+            ClassSchedule::class,
+            'class_schedule_id'
+        );
     }
 
     public function material()
     {
-        return $this->belongsTo(Material::class);
+        return $this->belongsTo(
+            Material::class,
+            'material_id'
+        );
     }
 
     public function attendances()
     {
-        return $this->hasMany(Attendance::class, 'teaching_jurnal_id');
+        return $this->hasMany(
+            Attendance::class,
+            'teaching_journal_id'
+        );
     }
 }

@@ -23,23 +23,35 @@ class User extends Authenticatable
         'password',
     ];
 
-public function level()
-{
-    return $this->belongsTo(
-        Level::class,
-        'level_id', // foreign key di tabel users
-        'id_level'  // primary key di tabel levels
-    );
-}
-
-    public function teacher()
+    public function level()
     {
-        return $this->hasOne(Wali::class, 'siswa_id');
+        return $this->belongsTo(
+            Level::class,
+            'level_id', // foreign key di tabel users
+            'id_level'  // primary key di tabel levels
+        );
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | FIX: sebelumnya salah arah (nunjuk ke model Wali & kolom siswa_id).
+    | Sekarang benar: 1 User -> 1 baris di tabel teachers (lewat user_id).
+    |--------------------------------------------------------------------------
+    */
+    public function teacher()
+    {
+        return $this->hasOne(Teacher::class, 'user_id');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | FIX: sebelumnya cuma return boolean (bukan relasi Eloquent beneran),
+    | jadi tidak bisa dipakai ->student->nama dsb.
+    |--------------------------------------------------------------------------
+    */
     public function student()
     {
-        return $this->status_akun === 'alumni';
+        return $this->hasOne(Student::class, 'user_id');
     }
 
     public function curriculum()
@@ -80,5 +92,23 @@ public function level()
     public function approvedTeacherLeaves()
     {
         return $this->hasMany(TeacherLeave::class, 'approved_by');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | BARU: satu sumber kebenaran untuk "user ini seharusnya diarahkan
+    | ke route mana setelah login". Dipakai di AuthController DAN di
+    | override guest-middleware (AppServiceProvider), supaya logic-nya
+    | tidak ditulis dua kali di dua tempat berbeda.
+    |--------------------------------------------------------------------------
+    */
+    public function homeRouteName(): ?string
+    {
+        return match ($this->level->nama_level ?? null) {
+            'Curriculum' => 'kurikulum.dashboard',
+            'Teacher'    => 'teacher.dashboard',
+            'Student'    => 'dashboard',
+            default      => null, // Owner/Admin/tidak dikenali -> belum ada modul
+        };
     }
 }

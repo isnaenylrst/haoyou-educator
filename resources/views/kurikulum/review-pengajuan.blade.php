@@ -2,564 +2,330 @@
 
 @section('title','Review Pengajuan')
 
+@push('styles')
+<style>
+.status-pill{border:none;border-radius:20px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:600;background:#f1f1f1;color:#555;}
+.status-pill.active{background:#111;color:#fff;}
+.doc-pill{border:none;border-radius:20px;padding:6px 16px;cursor:pointer;font-size:13px;font-weight:600;background:#f1f1f1;color:#555;}
+.doc-pill.active{background:#111;color:#fff;}
+.session-card{border:1px solid #eee;border-radius:14px;padding:18px;margin-bottom:14px;}
+.badge-soft-warning{background:#FFF3CD;color:#8A6D00;}
+.badge-soft-danger{background:#FDE2E2;color:#B12727;}
+.chip-present{background:#E5F6EA;color:#1E7B3C;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;}
+.chip-absent{background:#FDE2E2;color:#B12727;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;}
+.note-box{background:#FBF7EE;border-radius:10px;padding:10px 14px;font-size:13.5px;color:#555;margin:10px 0;}
+</style>
+@endpush
+
 @section('content')
 
 <div class="container-fluid">
 
-    {{-- Header --}}
     <div class="mb-4">
-        <h2 class="fw-bold mb-1">Review Pengajuan</h2>
+        <h3 class="fw-bold mb-1">Review Pengajuan</h3>
         <small class="text-muted">
-            Card sesi jurnal & absensi dari semua guru, dan tab dokumen LP/PPT/Jurnal/Progress/Cuti untuk direview satu per satu.
+            Card sesi jurnal & absensi dari semua guru, dan tab dokumen LP&PPT/Jurnal/Progress/Cuti untuk direview satu per satu.
         </small>
     </div>
 
-    {{-- Summary --}}
-    <div class="row mb-4">
+    @if (session('success'))
+        <div class="alert alert-success">{{ session('success') }}</div>
+    @endif
 
-        <div class="col-lg-4">
+    @if (session('error'))
+        <div class="alert alert-danger">{{ session('error') }}</div>
+    @endif
 
-            <div class="card shadow-sm border-0">
+    @if ($errors->any())
+        <div class="alert alert-danger">
+            <ul class="mb-0">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
 
-                <div class="card-body">
+    {{-- ================= STAT CARDS ================= --}}
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm p-3">
+                <small class="text-muted text-uppercase">Sesi Hari Ini (Semua Guru)</small>
+                <h3 class="fw-bold mb-0">{{ $totalSessionToday }}</h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm p-3">
+                <small class="text-muted text-uppercase">Sudah Diisi</small>
+                <h3 class="fw-bold mb-0 text-success">{{ $filledToday }}</h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm p-3">
+                <small class="text-muted text-uppercase">Belum Diisi</small>
+                <h3 class="fw-bold mb-0 text-danger">{{ $unfilledToday }}</h3>
+            </div>
+        </div>
+    </div>
 
-                    <small class="text-muted fw-bold text-uppercase">
-                        Sesi Hari Ini (Semua Guru)
-                    </small>
+    {{-- ================= CARD SESI - JURNAL & ABSENSI ================= --}}
+    <h5 class="fw-bold mb-3">Card Sesi — Jurnal & Absensi</h5>
 
-                    <h2 class="fw-bold mt-2 mb-0">
-                        14
-                    </h2>
+    <div class="mb-3 d-flex flex-wrap gap-2" id="teacherFilterTabs">
+        <button class="status-pill active" data-teacher="all" onclick="filterByTeacher('all', this)">Semua Guru</button>
+        @foreach ($teacherNamesToday as $name)
+            <button class="status-pill" data-teacher="{{ $name }}" onclick="filterByTeacher('{{ $name }}', this)">{{ $name }}</button>
+        @endforeach
+    </div>
+
+    <div id="sessionCardsWrapper">
+
+        @forelse ($todaySchedules as $schedule)
+
+            @php
+                $journal = $schedule->teachingJournals->first();
+                $teacherName = $schedule->class->teacher->name ?? '-';
+                $isLate = !$journal && \Illuminate\Support\Carbon::parse($schedule->end_time)->addHours(2)->lt(now());
+            @endphp
+
+            <div class="session-card" data-teacher="{{ $teacherName }}">
+
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+
+                    <div>
+                        <div class="fw-bold">
+                            {{ $schedule->class->class_name ?? '-' }} —
+                            {{ $journal->material->title ?? ($schedule->class->programPackage->program->name ?? 'Sesi') }}
+                        </div>
+                        <small class="text-muted">
+                            Guru: {{ $teacherName }} &nbsp;
+                            {{ \Illuminate\Support\Carbon::parse($schedule->start_time)->format('H:i') }}–{{ \Illuminate\Support\Carbon::parse($schedule->end_time)->format('H:i') }} &nbsp;
+                            @if ($schedule->room) {{ $schedule->room }} &nbsp; @endif
+                            {{ $schedule->class->delivery_mode ?? '' }}
+                        </small>
+                    </div>
+
+                    <div>
+                        @if ($journal && $journal->status === 'Pending')
+                            <span class="badge badge-soft-warning">Sudah Diisi • Belum ACC</span>
+                        @elseif ($journal && $journal->status === 'Reviewed')
+                            <span class="badge bg-success">Sudah ACC</span>
+                        @elseif ($journal && $journal->status === 'Revision')
+                            <span class="badge badge-soft-danger">Perlu Revisi</span>
+                        @elseif (!$journal)
+                            <span class="badge badge-soft-danger">Belum Diisi</span>
+                        @endif
+                    </div>
 
                 </div>
 
+                @if ($journal)
+
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                        @foreach ($journal->attendances as $att)
+                            @if ($att->status === 'Present')
+                                <span class="chip-present">✓ {{ $att->student->name ?? '-' }}</span>
+                            @else
+                                <span class="chip-absent">✗ {{ $att->student->name ?? '-' }}</span>
+                            @endif
+                        @endforeach
+                    </div>
+
+                    <div class="note-box">
+                        Poin sesi: <strong>{{ $journal->session_score ?? '-' }}</strong>
+                        • Materi: {{ $journal->material->title ?? '-' }}
+                        • Aktivitas: {{ $journal->learning_activities ?? '-' }}
+                    </div>
+
+                    @if ($journal->status === 'Pending')
+                        <form action="{{ route('kurikulum.review-pengajuan.ack-session', $journal) }}" method="POST">
+                            @csrf @method('PATCH')
+                            <button class="btn btn-success btn-sm">Tandai ACC</button>
+                        </form>
+                    @endif
+
+                @else
+
+                    @if ($isLate)
+                        <div class="text-danger fw-semibold mt-2">
+                            Sesi sudah lewat 2 jam, guru belum mengisi jurnal & absensi.
+                        </div>
+                    @endif
+
+                    <form action="{{ route('kurikulum.review-pengajuan.reminder', $schedule) }}" method="POST" class="mt-2">
+                        @csrf
+                        <button class="btn btn-outline-secondary btn-sm">Kirim Reminder</button>
+                    </form>
+
+                @endif
+
             </div>
 
-        </div>
-
-        <div class="col-lg-4">
-
-            <div class="card shadow-sm border-0">
-
-                <div class="card-body">
-
-                    <small class="text-muted fw-bold text-uppercase">
-                        Sudah Diisi
-                    </small>
-
-                    <h2 class="fw-bold text-success mt-2 mb-0">
-                        9
-                    </h2>
-
-                </div>
-
+        @empty
+            <div class="text-center text-muted py-4">
+                Tidak ada jadwal kelas hari ini.
             </div>
-
-        </div>
-
-        <div class="col-lg-4">
-
-            <div class="card shadow-sm border-0">
-
-                <div class="card-body">
-
-                    <small class="text-muted fw-bold text-uppercase">
-                        Belum Diisi
-                    </small>
-
-                    <h2 class="fw-bold text-danger mt-2 mb-0">
-                        5
-                    </h2>
-
-                </div>
-
-            </div>
-
-        </div>
+        @endforelse
 
     </div>
 
+    {{-- ================= REVIEW DOKUMEN PER KATEGORI ================= --}}
+    <h5 class="fw-bold mt-5 mb-3">Review Dokumen per Kategori</h5>
 
-
-    {{-- Judul --}}
-    <h5 class="fw-bold mb-3">
-        Card Sesi — Jurnal & Absensi
-    </h5>
-
-
-    {{-- Filter Guru --}}
-    <div class="mb-3">
-
-        <span class="badge rounded-pill bg-dark px-3 py-2">
-            Semua Guru
-        </span>
-
-        <span class="badge rounded-pill bg-light text-dark border px-3 py-2">
-            Ratna
-        </span>
-
-        <span class="badge rounded-pill bg-light text-dark border px-3 py-2">
-            Ahmad Fauzi
-        </span>
-
-        <span class="badge rounded-pill bg-light text-dark border px-3 py-2">
-            Rina Wulandari
-        </span>
-
+    <div class="mb-3 d-flex flex-wrap gap-2">
+        <button class="doc-pill active" onclick="showDocTab('material', this)">LP & PPT ({{ $materials->count() }})</button>
+        <button class="doc-pill" onclick="showDocTab('jurnal', this)">Jurnal Online ({{ $journals->count() }})</button>
+        <button class="doc-pill" onclick="showDocTab('report', this)">Progress Report ({{ $reports->count() }})</button>
+        <button class="doc-pill" onclick="showDocTab('cuti', this)">Cuti / Pengajuan Kelas ({{ $leaves->count() }})</button>
     </div>
 
-
-
-    {{-- ====================== CARD 1 ========================= --}}
-
-    <div class="card shadow-sm border-0 mb-3">
-
-        <div class="card-body">
-
-            <div class="d-flex justify-content-between">
-
-                <div>
-
-                    <h5 class="fw-bold">
-                        Maochong A — Daily Activity
-                    </h5>
-
-                    <small class="badge bg-light text-dark">
-                        Guru : Ratna
-                    </small>
-
-                    <small class="badge bg-light text-dark">
-                        08:00–09:30
-                    </small>
-
-                    <small class="badge bg-light text-dark">
-                        Maochong
-                    </small>
-
-                    <small class="badge bg-light text-dark">
-                        Offline
-                    </small>
-
-                </div>
-
-                <div>
-
-                    <span class="badge rounded-pill bg-warning text-dark">
-                        Sudah Diisi • Belum ACC
-                    </span>
-
-                </div>
-
-            </div>
-
-
-            <div class="mt-3">
-
-                <span class="badge bg-success">
-                    ✓ Zahra Putri
-                </span>
-
-                <span class="badge bg-success">
-                    ✓ Budi Santoso
-                </span>
-
-                <span class="badge bg-danger">
-                    ✕ Anisa Rahmawati
-                </span>
-
-            </div>
-
-            <div class="alert alert-light border mt-3 mb-3">
-
-                Poin sesi:
-                <b>90</b>
-
-                • Materi:
-                Kosakata warna dalam Mandarin
-
-                • Aktivitas:
-                Flashcard, bernyanyi bersama, tanya jawab
-
-            </div>
-
-            <button class="btn btn-success btn-sm">
-                Tandai ACC
-            </button>
-
-        </div>
-
-    </div>
-
-
-
-
-    {{-- ====================== CARD 2 ========================= --}}
-
-    <div class="card shadow-sm border-0 mb-3">
-
-        <div class="card-body">
-
-            <div class="d-flex justify-content-between">
-
-                <div>
-
-                    <h5 class="fw-bold">
-                        HSK 3 (9A) — HSK Preparation
-                    </h5>
-
-                    <small class="badge bg-light text-dark">
-                        Guru : Ahmad Fauzi
-                    </small>
-
-                    <small class="badge bg-light text-dark">
-                        09:00–10:00
-                    </small>
-
-                    <small class="badge bg-light text-dark">
-                        HSK
-                    </small>
-
-                    <small class="badge bg-light text-dark">
-                        Online
-                    </small>
-
-                </div>
-
-                <div>
-
-                    <span class="badge rounded-pill bg-warning text-dark">
-                        Sudah Diisi • Belum ACC
-                    </span>
-
-                </div>
-
-            </div>
-
-            <div class="mt-3">
-
-                <span class="badge bg-success">
-                    ✓ Dinda K.
-                </span>
-
-                <span class="badge bg-success">
-                    ✓ Sari Dewi
-                </span>
-
-                <span class="badge bg-success">
-                    ✓ Reza P.
-                </span>
-
-            </div>
-
-            <div class="alert alert-light border mt-3 mb-3">
-
-                Poin sesi:
-                <b>85</b>
-
-                • Materi:
-                Latihan pola kalimat 是...的
-
-                • Aktivitas:
-                Latihan lisan, role play singkat
-
-            </div>
-
-            <button class="btn btn-success btn-sm">
-                Tandai ACC
-            </button>
-
-        </div>
-
-    </div>
-
-
-
-
-    {{-- ====================== CARD 3 ========================= --}}
-
-    <div class="card shadow-sm border-0 mb-4">
-
-        <div class="card-body">
-
-            <div class="d-flex justify-content-between">
-
-                <div>
-
-                    <h5 class="fw-bold">
-                        Jianer 2B (7B) — Daily Activity
-                    </h5>
-
-                    <small class="badge bg-light text-dark">
-                        Guru : Rina Wulandari
-                    </small>
-
-                    <small class="badge bg-light text-dark">
-                        15:00–16:00
-                    </small>
-
-                    <small class="badge bg-light text-dark">
-                        Jianer
-                    </small>
-
-                    <small class="badge bg-light text-dark">
-                        Offline
-                    </small>
-
-                </div>
-
-                <div>
-
-                    <span class="badge rounded-pill bg-danger">
-                        Belum Diisi
-                    </span>
-
-                </div>
-
-            </div>
-
-
-            <h5 class="text-danger mt-3">
-
-                Sesi sudah lewat 2 jam,
-                guru belum mengisi jurnal & absensi.
-
-            </h5>
-
-
-            <button class="btn btn-outline-secondary btn-sm">
-
-                Kirim Reminder
-
-            </button>
-
-        </div>
-
-    </div>
-
-        {{-- =========================================
-        REVIEW DOKUMEN PER KATEGORI
-    ========================================== --}}
-
-    <h5 class="fw-bold mb-3">
-        Review Dokumen per Kategori
-    </h5>
-
-    {{-- Tab --}}
-    <div class="mb-3">
-
-        <span class="badge rounded-pill bg-dark px-3 py-2">
-            LP
-        </span>
-
-        <span class="badge rounded-pill bg-light text-dark border px-3 py-2">
-            PPT
-        </span>
-
-        <span class="badge rounded-pill bg-light text-dark border px-3 py-2">
-            Jurnal Online
-        </span>
-
-        <span class="badge rounded-pill bg-light text-dark border px-3 py-2">
-            Progress Report
-        </span>
-
-        <span class="badge rounded-pill bg-light text-dark border px-3 py-2">
-            Cuti / Pengajuan Kelas
-        </span>
-
-    </div>
-
-
-
-
-    <div class="card shadow-sm border-0">
-
+    <div class="card border-0 shadow-sm">
         <div class="list-group list-group-flush">
 
-            {{-- ================= ITEM 1 ================= --}}
-
-            <div class="list-group-item">
-
-                <div class="d-flex justify-content-between align-items-center">
-
+            {{-- ===== TAB LP & PPT ===== --}}
+            <div class="doc-tab" data-tab="material">
+                @forelse ($materials as $item)
+                <div class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <div>
-
-                        <h6 class="mb-1">
-                            Rina Wulandari — LP kelas 7B (Jianer 2B)
-                        </h6>
-
-                        <small class="text-muted">
-                            Diajukan hari ini
-                        </small>
-
+                        <div class="fw-semibold">
+                            {{ $item->teacher->name ?? '-' }} — {{ $item->ppt_title }} ({{ $item->material->classroom->class_name ?? '-' }})
+                        </div>
+                        <small class="text-muted">Diajukan {{ $item->created_at->diffForHumans() }}</small>
                     </div>
-
-                    <div>
-
-                        <button class="btn btn-outline-secondary btn-sm">
-                            Lihat Dokumen
-                        </button>
-
-                        <button class="btn btn-outline-secondary btn-sm">
-                            Download
-                        </button>
-
-                        <button class="btn btn-primary btn-sm">
-                            ACC
-                        </button>
-
-                        <button class="btn btn-outline-danger btn-sm">
-                            Kembalikan
-                        </button>
-
+                    <div class="d-flex gap-2">
+                        <a href="{{ asset('storage/'.$item->ppt_file_path) }}" target="_blank" class="btn btn-outline-secondary btn-sm">Lihat Dokumen</a>
+                        <form action="{{ route('kurikulum.review-pengajuan.material', $item) }}" method="POST">
+                            @csrf @method('PATCH')
+                            <input type="hidden" name="decision" value="Approved">
+                            <button class="btn btn-primary btn-sm">ACC</button>
+                        </form>
+                        <form action="{{ route('kurikulum.review-pengajuan.material', $item) }}" method="POST">
+                            @csrf @method('PATCH')
+                            <input type="hidden" name="decision" value="Rejected">
+                            <button class="btn btn-outline-danger btn-sm">Kembalikan</button>
+                        </form>
                     </div>
-
                 </div>
-
+                @empty
+                <div class="list-group-item text-center text-muted py-4">Tidak ada LP & PPT yang perlu direview.</div>
+                @endforelse
             </div>
 
-
-
-            {{-- ================= ITEM 2 ================= --}}
-
-            <div class="list-group-item">
-
-                <div class="d-flex justify-content-between align-items-center">
-
+            {{-- ===== TAB JURNAL ONLINE ===== --}}
+            <div class="doc-tab d-none" data-tab="jurnal">
+                @forelse ($journals as $item)
+                <div class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <div>
-
-                        <h6 class="mb-1">
-                            Ahmad Fauzi — LP kelas 9A (HSK 3)
-                        </h6>
-
-                        <small class="text-muted">
-                            Diajukan kemarin
-                        </small>
-
+                        <div class="fw-semibold">
+                            {{ $item->teacher->name ?? '-' }} — Jurnal kelas {{ $item->class->class_name ?? '-' }}
+                        </div>
+                        <small class="text-muted">Diajukan {{ $item->created_at->diffForHumans() }}</small>
                     </div>
-
-                    <div>
-
-                        <button class="btn btn-outline-secondary btn-sm">
-                            Lihat Dokumen
-                        </button>
-
-                        <button class="btn btn-outline-secondary btn-sm">
-                            Download
-                        </button>
-
-                        <button class="btn btn-primary btn-sm">
-                            ACC
-                        </button>
-
-                        <button class="btn btn-outline-danger btn-sm">
-                            Kembalikan
-                        </button>
-
+                    <div class="d-flex gap-2">
+                        <form action="{{ route('kurikulum.review-pengajuan.journal', $item) }}" method="POST">
+                            @csrf @method('PATCH')
+                            <input type="hidden" name="decision" value="Reviewed">
+                            <button class="btn btn-primary btn-sm">ACC</button>
+                        </form>
+                        <form action="{{ route('kurikulum.review-pengajuan.journal', $item) }}" method="POST">
+                            @csrf @method('PATCH')
+                            <input type="hidden" name="decision" value="Revision">
+                            <button class="btn btn-outline-danger btn-sm">Kembalikan</button>
+                        </form>
                     </div>
-
                 </div>
-
+                @empty
+                <div class="list-group-item text-center text-muted py-4">Tidak ada jurnal yang perlu direview.</div>
+                @endforelse
             </div>
 
-
-
-            {{-- ================= ITEM 3 ================= --}}
-
-            <div class="list-group-item">
-
-                <div class="d-flex justify-content-between align-items-center">
-
+            {{-- ===== TAB PROGRESS REPORT ===== --}}
+            <div class="doc-tab d-none" data-tab="report">
+                @forelse ($reports as $item)
+                <div class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <div>
-
-                        <h6 class="mb-1">
-                            Budi Santoso — LP kelas 8C (Feixiang 1C)
-                        </h6>
-
-                        <small class="text-muted">
-                            Sudah dikembalikan — guru belum upload ulang
-                        </small>
-
+                        <div class="fw-semibold">
+                            {{ $item->teacher->name ?? '-' }} — Progress Report {{ $item->student->name ?? '-' }}
+                        </div>
+                        <small class="text-muted">{{ $item->report_period }}</small>
                     </div>
-
-                    <div>
-
-                        <span class="badge rounded-pill bg-warning text-dark">
-                            Menunggu Guru
-                        </span>
-
+                    <div class="d-flex gap-2">
+                        <a href="{{ asset('storage/'.$item->file_path) }}" target="_blank" class="btn btn-outline-secondary btn-sm">Download</a>
+                        <form action="{{ route('kurikulum.review-pengajuan.report', $item) }}" method="POST">
+                            @csrf @method('PATCH')
+                            <input type="hidden" name="decision" value="Approved">
+                            <button class="btn btn-primary btn-sm">ACC</button>
+                        </form>
+                        <form action="{{ route('kurikulum.review-pengajuan.report', $item) }}" method="POST">
+                            @csrf @method('PATCH')
+                            <input type="hidden" name="decision" value="Rejected">
+                            <button class="btn btn-outline-danger btn-sm">Kembalikan</button>
+                        </form>
                     </div>
-
                 </div>
+                @empty
+                <div class="list-group-item text-center text-muted py-4">Tidak ada progress report yang perlu direview.</div>
+                @endforelse
+            </div>
 
+            {{-- ===== TAB CUTI ===== --}}
+            <div class="doc-tab d-none" data-tab="cuti">
+                @forelse ($leaves as $item)
+                <div class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <div class="fw-semibold">
+                            {{ $item->teacher->name ?? '-' }} — {{ $item->leave_type }} ({{ $item->classSchedule->class->class_name ?? '-' }})
+                        </div>
+                        <small class="text-muted">{{ $item->reason }}</small>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <form action="{{ route('kurikulum.review-pengajuan.leave', $item) }}" method="POST">
+                            @csrf @method('PATCH')
+                            <input type="hidden" name="decision" value="Approved">
+                            <button class="btn btn-primary btn-sm">Setujui</button>
+                        </form>
+                        <form action="{{ route('kurikulum.review-pengajuan.leave', $item) }}" method="POST">
+                            @csrf @method('PATCH')
+                            <input type="hidden" name="decision" value="Rejected">
+                            <button class="btn btn-outline-danger btn-sm">Tolak</button>
+                        </form>
+                    </div>
+                </div>
+                @empty
+                <div class="list-group-item text-center text-muted py-4">Tidak ada pengajuan cuti/ganti kelas.</div>
+                @endforelse
             </div>
 
         </div>
-
     </div>
 
-
-    <small class="text-muted mt-3 d-block">
-
-        Kalau ditekan
-        <b>"Kembalikan"</b>,
-        status berubah menjadi perlu revisi dan otomatis muncul tombol
-        <b>"Upload Ulang"</b>
-        di sisi Guru pada menu Kelas.
-
+    <small class="text-muted d-block mt-3">
+        Kalau ditekan "Kembalikan", status berubah menjadi perlu revisi dan otomatis muncul tombol
+        "Upload Ulang" di sisi Guru pada menu Kelas.
     </small>
 
-    </div>
-
-<style>
-
-.card{
-    border-radius:12px;
-}
-
-.list-group-item{
-    padding:18px 20px;
-}
-
-.btn{
-    border-radius:8px;
-}
-
-.badge{
-    font-weight:500;
-}
-
-.alert-light{
-    background:#faf8f1;
-    border:none;
-}
-
-.btn-success{
-    background:#2d7f76;
-    border-color:#2d7f76;
-}
-
-.btn-success:hover{
-    background:#256b63;
-}
-
-.btn-primary{
-    background:#3b82f6;
-    border-color:#3b82f6;
-}
-
-.btn-outline-danger{
-    color:#dc3545;
-}
-
-.btn-outline-danger:hover{
-    color:white;
-}
-
-h2,h5,h6{
-    font-weight:700;
-}
-
-</style>
+</div>
 
 @endsection
+
+@push('scripts')
+<script>
+function filterByTeacher(name, btn) {
+    document.querySelectorAll('#teacherFilterTabs .status-pill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    document.querySelectorAll('#sessionCardsWrapper .session-card').forEach(card => {
+        card.style.display = (name === 'all' || card.dataset.teacher === name) ? '' : 'none';
+    });
+}
+
+function showDocTab(tab, btn) {
+    document.querySelectorAll('.doc-pill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    document.querySelectorAll('.doc-tab').forEach(el => {
+        el.classList.toggle('d-none', el.dataset.tab !== tab);
+    });
+}
+</script>
+@endpush

@@ -22,35 +22,26 @@ class AuthController extends Controller
         // Hanya user yang statusnya Active yang boleh login
         $credentials['status'] = 'Active';
 
-        if (Auth::attempt($credentials, $request->filled('remember'))) {
+        if (Auth::attempt($credentials, $request->boolean('remember'))) {
 
             $request->session()->regenerate();
 
             $user = Auth::user();
 
-            switch ($user->level->nama_level) {
-                case 'Owner':
-                    return redirect()->route('owner.dashboard');
+            $routeName = $user->homeRouteName();
 
-                case 'Admin':
-                    return redirect()->route('admin.dashboard');
-
-                case 'Curriculum':
-                    return redirect()->route('kurikulum.dashboard');
-
-                case 'Teacher':
-                    return redirect()->route('teacher.dashboard');
-
-                case 'Student':
-                    return redirect()->route('student.dashboard');
-
-                default:
-                    Auth::logout();
-
-                    return redirect()
-                        ->route('login')
-                        ->with('error', 'Level tidak dikenali.');
+            if ($routeName) {
+                return redirect()->route($routeName);
             }
+
+            // Owner/Admin/level tidak dikenali -> modul belum ada
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()
+                ->route('login')
+                ->with('error', 'Modul untuk level akun ini belum tersedia.');
         }
 
         return back()

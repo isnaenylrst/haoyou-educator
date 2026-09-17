@@ -1,53 +1,48 @@
 @extends('layouts.kurikulum')
 
-@section('title','Monitoring Guru & Kelas')
+@section('title', 'Monitoring Guru & Kelas')
 
 @section('content')
 
 <div class="container-fluid">
 
-    <!-- =========================
-            HEADER
-    ========================== -->
+    {{-- =========================================================
+        HEADER
+    ========================================================== --}}
 
     <div class="d-flex justify-content-between align-items-center mb-4">
 
         <div>
-
             <h2 class="fw-bold mb-1">
                 Monitoring Guru & Kelas
             </h2>
 
             <p class="text-muted mb-0">
-                Kalender jadwal seluruh guru, plus ringkasan jam & sesi mengajar
+                Monitoring jadwal, sesi mengajar, kehadiran, dan jurnal guru
             </p>
-
         </div>
 
         <div>
-
-            <button class="btn btn-primary">
+            <button type="button"
+                    class="btn btn-primary"
+                    onclick="window.print()">
 
                 <i class="fas fa-download me-2"></i>
-
                 Export Laporan
 
             </button>
-
         </div>
 
     </div>
 
 
-
-    <!-- =========================
-            STATISTIK
-    ========================== -->
+    {{-- =========================================================
+        STATISTIK UTAMA
+    ========================================================== --}}
 
     <div class="row mb-4">
 
-        <!-- Total Guru -->
-
+        {{-- TOTAL GURU --}}
         <div class="col-lg-3 col-md-6 mb-3">
 
             <div class="card shadow-sm border-0 h-100">
@@ -55,16 +50,16 @@
                 <div class="card-body">
 
                     <small class="text-uppercase text-muted fw-bold">
-
-                        TOTAL GURU
-
+                        Total Guru
                     </small>
 
-                    <h2 class="fw-bold mt-2">
-
-                        18
-
+                    <h2 class="fw-bold mt-2 mb-0">
+                        {{ $totalTeacher }}
                     </h2>
+
+                    <small class="text-muted">
+                        Guru terdaftar
+                    </small>
 
                 </div>
 
@@ -73,8 +68,7 @@
         </div>
 
 
-        <!-- Total Jam -->
-
+        {{-- TOTAL JAM --}}
         <div class="col-lg-3 col-md-6 mb-3">
 
             <div class="card shadow-sm border-0 h-100">
@@ -82,16 +76,16 @@
                 <div class="card-body">
 
                     <small class="text-uppercase text-muted fw-bold">
-
-                        TOTAL JAM MENGAJAR
-
+                        Total Jam Mengajar
                     </small>
 
-                    <h2 class="fw-bold mt-2">
-
-                        312 Jam
-
+                    <h2 class="fw-bold mt-2 mb-0">
+                        {{ number_format($totalHour, 1, ',', '.') }} Jam
                     </h2>
+
+                    <small class="text-muted">
+                        Berdasarkan jadwal kelas
+                    </small>
 
                 </div>
 
@@ -100,8 +94,7 @@
         </div>
 
 
-        <!-- Total Sesi -->
-
+        {{-- TOTAL SESI --}}
         <div class="col-lg-3 col-md-6 mb-3">
 
             <div class="card shadow-sm border-0 h-100">
@@ -109,16 +102,16 @@
                 <div class="card-body">
 
                     <small class="text-uppercase text-muted fw-bold">
-
-                        TOTAL SESI BULAN INI
-
+                        Total Sesi Mengajar
                     </small>
 
-                    <h2 class="fw-bold mt-2">
-
-                        164 Sesi
-
+                    <h2 class="fw-bold mt-2 mb-0">
+                        {{ $totalSession }}
                     </h2>
+
+                    <small class="text-muted">
+                        Berdasarkan jurnal mengajar
+                    </small>
 
                 </div>
 
@@ -127,8 +120,7 @@
         </div>
 
 
-        <!-- Rata-rata -->
-
+        {{-- RATA-RATA --}}
         <div class="col-lg-3 col-md-6 mb-3">
 
             <div class="card shadow-sm border-0 h-100">
@@ -136,16 +128,16 @@
                 <div class="card-body">
 
                     <small class="text-uppercase text-muted fw-bold">
-
-                        RATA-RATA JAM / GURU
-
+                        Rata-rata Jam / Guru
                     </small>
 
-                    <h2 class="fw-bold mt-2 text-warning">
-
-                        17,3 Jam
-
+                    <h2 class="fw-bold mt-2 mb-0 text-warning">
+                        {{ number_format($averageHour, 1, ',', '.') }} Jam
                     </h2>
+
+                    <small class="text-muted">
+                        Rata-rata dari seluruh guru
+                    </small>
 
                 </div>
 
@@ -156,1589 +148,1420 @@
     </div>
 
 
+    {{-- =========================================================
+        JADWAL MENGAJAR MINGGUAN
+    ========================================================== --}}
 
-    <!-- =========================
-            JADWAL MINGGUAN
-            (PART 2)
-    ========================== -->
     <div class="card shadow-sm border-0 mb-5">
 
-    <div class="card-header bg-white">
+        <div class="card-header bg-white">
 
-        <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex justify-content-between align-items-center">
 
-            <div>
+                <div>
 
-                <h5 class="mb-0 fw-bold">
+                    <h5 class="mb-0 fw-bold">
+                        Jadwal Mengajar Mingguan
+                    </h5>
 
-                    Jadwal Mengajar Mingguan
-
-                </h5>
-
-                <small class="text-muted">
-
-                    Monitoring jadwal seluruh guru selama 1 minggu
-
-                </small>
-
-            </div>
-
-            <div>
-
-                <button class="btn btn-outline-secondary btn-sm">
-
-                    <i class="fas fa-chevron-left"></i>
-
-                </button>
-
-                <button class="btn btn-outline-secondary btn-sm">
-
-                    Minggu Ini
-
-                </button>
-
-                <button class="btn btn-outline-secondary btn-sm">
-
-                    <i class="fas fa-chevron-right"></i>
-
-                </button>
-
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <div class="table-responsive">
-
-        <table class="table table-bordered align-middle text-center mb-0">
-
-            <thead class="table-light">
-
-            <tr>
-
-                <th width="90">
-
-                    Jam
-
-                </th>
-
-                <th>
-
-                    Senin
-
-                </th>
-
-                <th>
-
-                    Selasa
-
-                </th>
-
-                <th>
-
-                    Rabu
-
-                </th>
-
-                <th>
-
-                    Kamis
-
-                </th>
-
-                <th>
-
-                    Jumat
-
-                </th>
-
-            </tr>
-
-            </thead>
-
-            <tbody>
-
-            <!-- 13.00 -->
-
-            <tr style="height:95px;">
-
-                <td class="fw-bold">
-
-                    13.00
-
-                </td>
-
-                <td>
-
-                    <div class="rounded p-2 text-start bg-warning-subtle border-start border-4 border-warning">
-
-                        <strong>
-
-                            Daily Activity
-
-                        </strong>
-
-                        <br>
-
-                        Maochong
-
-                        <br>
-
-                        <small>
-
-                            Rina Wulandari
-
-                        </small>
-
-                    </div>
-
-                </td>
-
-                <td></td>
-
-                <td>
-
-                    <div class="rounded p-2 text-start bg-primary-subtle border-start border-4 border-primary">
-
-                        <strong>
-
-                            HSK Prep
-
-                        </strong>
-
-                        <br>
-
-                        Hudie
-
-                        <br>
-
-                        <small>
-
-                            Ahmad Fauzi
-
-                        </small>
-
-                    </div>
-
-                </td>
-
-                <td></td>
-
-                <td>
-
-                    <div class="rounded p-2 text-start bg-info-subtle border-start border-4 border-info">
-
-                        <strong>
-
-                            Daily Activity
-
-                        </strong>
-
-                        <br>
-
-                        Jianer
-
-                        <br>
-
-                        <small>
-
-                            Budi Santoso
-
-                        </small>
-
-                    </div>
-
-                </td>
-
-            </tr>
-
-
-
-            <!-- 15.00 -->
-
-            <tr style="height:95px;">
-
-                <td class="fw-bold">
-
-                    15.00
-
-                </td>
-
-                <td>
-
-                    <div class="rounded p-2 text-start bg-danger-subtle border-start border-4 border-danger">
-
-                        <strong>
-
-                            Business Chinese
-
-                        </strong>
-
-                        <br>
-
-                        Feixiang
-
-                        <br>
-
-                        <small>
-
-                            Ahmad Fauzi
-
-                        </small>
-
-                    </div>
-
-                </td>
-
-                <td>
-
-                    <div class="rounded p-2 text-start bg-warning-subtle border-start border-4 border-warning">
-
-                        <strong>
-
-                            Daily Activity
-
-                        </strong>
-
-                        <br>
-
-                        Maochong
-
-                        <br>
-
-                        <small>
-
-                            Rina Wulandari
-
-                        </small>
-
-                    </div>
-
-                </td>
-
-                <td>
-
-                    <div class="rounded p-2 text-start"
-
-                        style="background:#ede9fe;border-left:5px solid #7c3aed;">
-
-                        <strong>
-
-                            Traveling Chinese
-
-                        </strong>
-
-                        <br>
-
-                        Feixiang
-
-                        <br>
-
-                        <small>
-
-                            Siti Nurhaliza
-
-                        </small>
-
-                    </div>
-
-                </td>
-
-                <td>
-
-                    <div class="rounded p-2 text-start bg-primary-subtle border-start border-4 border-primary">
-
-                        <strong>
-
-                            Private Class
-
-                        </strong>
-
-                        <br>
-
-                        Jianer
-
-                        <br>
-
-                        <small>
-
-                            Budi Santoso
-
-                        </small>
-
-                    </div>
-
-                </td>
-
-                <td>
-
-                    <div class="rounded p-2 text-start"
-
-                        style="background:#ede9fe;border-left:5px solid #7c3aed;">
-
-                        <strong>
-
-                            HSK Prep
-
-                        </strong>
-
-                        <br>
-
-                        Hudie
-
-                        <br>
-
-                        <small>
-
-                            Rina Wulandari
-
-                        </small>
-
-                    </div>
-
-                </td>
-
-            </tr>
-
-
-
-            <!-- 16.30 -->
-
-            <tr style="height:95px;">
-
-                <td class="fw-bold">
-
-                    16.30
-
-                </td>
-
-                <td></td>
-
-                <td>
-
-                    <div class="rounded p-2 text-start"
-
-                        style="background:#ede9fe;border-left:5px solid #7c3aed;">
-
-                        <strong>
-
-                            HSK Prep
-
-                        </strong>
-
-                        <br>
-
-                        Jianer B
-
-                        <br>
-
-                        <small>
-
-                            Ahmad Fauzi
-
-                        </small>
-
-                    </div>
-
-                </td>
-
-                <td>
-
-                    <div class="rounded p-2 text-start bg-warning-subtle border-start border-4 border-warning">
-
-                        <strong>
-
-                            Daily Activity
-
-                        </strong>
-
-                        <br>
-
-                        Jianer
-
-                        <br>
-
-                        <small>
-
-                            Budi Santoso
-
-                        </small>
-
-                    </div>
-
-                </td>
-
-                <td>
-
-                    <div class="rounded p-2 text-start bg-primary-subtle border-start border-4 border-primary">
-
-                        <strong>
-
-                            Native Speaker
-
-                        </strong>
-
-                        <br>
-
-                        Hudie
-
-                        <br>
-
-                        <small>
-
-                            Siti Nurhaliza
-
-                        </small>
-
-                    </div>
-
-                </td>
-
-                <td>
-
-                    <div class="rounded p-2 text-start bg-danger-subtle border-start border-4 border-danger">
-
-                        <strong>
-
-                            Business Chinese
-
-                        </strong>
-
-                        <br>
-
-                        Feixiang
-
-                        <br>
-
-                        <small>
-
-                            Ahmad Fauzi
-
-                        </small>
-
-                    </div>
-
-                </td>
-
-            </tr>
-
-            </tbody>
-
-        </table>
-
-    </div>
-
-</div>
-
-<!-- =========================
-        RINGKASAN GURU
-        (PART 3)
-========================== -->
-<!-- =========================
-        RINGKASAN GURU
-========================== -->
-
-<div class="row mb-5">
-
-    <!-- Guru 1 -->
-
-    <div class="col-lg-4 mb-3">
-
-        <div class="card shadow-sm border-0 h-100">
-
-            <div class="card-body">
-
-                <div class="d-flex justify-content-between">
-
-                    <div>
-
-                        <h5 class="fw-bold mb-1">
-
-                            Rina Wulandari
-
-                        </h5>
-
-                        <small class="text-muted">
-
-                            Program Jianer
-
-                        </small>
-
-                    </div>
-
-                    <span class="badge bg-success">
-
-                        Aktif
-
-                    </span>
+                    <small class="text-muted">
+                        Jadwal berdasarkan data class schedules
+                    </small>
 
                 </div>
 
-                <hr>
-
-                <div class="row text-center">
-
-                    <div class="col-4">
-
-                        <h4 class="fw-bold text-primary">
-
-                            24
-
-                        </h4>
-
-                        <small>Jam</small>
-
-                    </div>
-
-                    <div class="col-4">
-
-                        <h4 class="fw-bold text-success">
-
-                            12
-
-                        </h4>
-
-                        <small>Sesi</small>
-
-                    </div>
-
-                    <div class="col-4">
-
-                        <h4 class="fw-bold text-warning">
-
-                            96%
-
-                        </h4>
-
-                        <small>Hadir</small>
-
-                    </div>
-
-                </div>
-
-                <hr>
-
-                <p class="mb-2">
-
-                    LP & PPT
-
-                </p>
-
-                <div class="progress mb-3">
-
-                    <div class="progress-bar bg-success"
-
-                         style="width:100%">
-
-                    </div>
-
-                </div>
-
-                <span class="badge bg-success">
-
-                    Semua Lengkap
-
-                </span>
-
-            </div>
-
-        </div>
-
-    </div>
-
-
-
-    <!-- Guru 2 -->
-
-    <div class="col-lg-4 mb-3">
-
-        <div class="card shadow-sm border-0 h-100">
-
-            <div class="card-body">
-
-                <div class="d-flex justify-content-between">
-
-                    <div>
-
-                        <h5 class="fw-bold mb-1">
-
-                            Budi Santoso
-
-                        </h5>
-
-                        <small class="text-muted">
-
-                            Program Maochong
-
-                        </small>
-
-                    </div>
+                <div>
 
                     <span class="badge bg-primary">
-
-                        Aktif
-
+                        {{ $weeklySchedules->count() }} Jadwal
                     </span>
 
                 </div>
 
-                <hr>
-
-                <div class="row text-center">
-
-                    <div class="col-4">
-
-                        <h4 class="fw-bold text-primary">
-
-                            20
-
-                        </h4>
-
-                        <small>Jam</small>
-
-                    </div>
-
-                    <div class="col-4">
-
-                        <h4 class="fw-bold text-success">
-
-                            10
-
-                        </h4>
-
-                        <small>Sesi</small>
-
-                    </div>
-
-                    <div class="col-4">
-
-                        <h4 class="fw-bold text-warning">
-
-                            90%
-
-                        </h4>
-
-                        <small>Hadir</small>
-
-                    </div>
-
-                </div>
-
-                <hr>
-
-                <p class="mb-2">
-
-                    LP & PPT
-
-                </p>
-
-                <div class="progress mb-3">
-
-                    <div class="progress-bar bg-warning"
-
-                         style="width:70%">
-
-                    </div>
-
-                </div>
-
-                <span class="badge bg-warning text-dark">
-
-                    Menunggu Upload
-
-                </span>
-
             </div>
+
+        </div>
+
+
+        <div class="table-responsive">
+
+            <table class="table table-bordered align-middle mb-0 weekly-table">
+
+                <thead class="table-light">
+
+                <tr>
+
+                    <th width="110">
+                        Senin
+                    </th>
+
+                    <th width="110">
+                        Selasa
+                    </th>
+
+                    <th width="110">
+                        Rabu
+                    </th>
+
+                    <th width="110">
+                        Kamis
+                    </th>
+
+                    <th width="110">
+                        Jumat
+                    </th>
+
+                </tr>
+
+                </thead>
+
+                <tbody>
+
+                <tr>
+
+                    @php
+                        $days = [
+                            'Senin' => ['Senin', 'Monday', 'monday'],
+                            'Selasa' => ['Selasa', 'Tuesday', 'tuesday'],
+                            'Rabu' => ['Rabu', 'Wednesday', 'wednesday'],
+                            'Kamis' => ['Kamis', 'Thursday', 'thursday'],
+                            'Jumat' => ['Jumat', 'Friday', 'friday'],
+                        ];
+                    @endphp
+
+
+                    @foreach($days as $dayName => $dayValues)
+
+                        <td class="schedule-column">
+
+                            @php
+                                $daySchedules = $weeklySchedules->filter(function ($schedule) use ($dayValues) {
+
+                                    return in_array(
+                                        $schedule->day,
+                                        $dayValues
+                                    );
+
+                                });
+                            @endphp
+
+
+                            @forelse($daySchedules as $schedule)
+
+                                @php
+
+                                    $teacherName = optional(
+                                        optional($schedule->class)->teacher
+                                    )->name ?? '-';
+
+                                    $programName = optional(
+                                        optional($schedule->class)->programPackage
+                                    )->name ?? 'Program';
+
+                                    $className =
+                                        optional($schedule->class)->name
+                                        ?? optional($schedule->class)->class_name
+                                        ?? 'Kelas';
+
+                                @endphp
+
+
+                                <div class="schedule-item mb-2">
+
+                                    <div class="schedule-time">
+
+                                        {{ $schedule->start_time
+                                            ? \Carbon\Carbon::parse($schedule->start_time)->format('H:i')
+                                            : '-' }}
+
+                                        -
+
+                                        {{ $schedule->end_time
+                                            ? \Carbon\Carbon::parse($schedule->end_time)->format('H:i')
+                                            : '-' }}
+
+                                    </div>
+
+
+                                    <strong>
+                                        {{ $programName }}
+                                    </strong>
+
+
+                                    <div class="small">
+                                        {{ $className }}
+                                    </div>
+
+
+                                    <div class="small text-muted mt-1">
+                                        <i class="fas fa-user me-1"></i>
+                                        {{ $teacherName }}
+                                    </div>
+
+
+                                    @if($schedule->room)
+
+                                        <div class="small text-muted">
+                                            <i class="fas fa-door-open me-1"></i>
+                                            {{ $schedule->room }}
+                                        </div>
+
+                                    @endif
+
+                                </div>
+
+                            @empty
+
+                                <div class="text-muted small text-center py-3">
+                                    Tidak ada jadwal
+                                </div>
+
+                            @endforelse
+
+                        </td>
+
+                    @endforeach
+
+                </tr>
+
+                </tbody>
+
+            </table>
 
         </div>
 
     </div>
 
 
+    {{-- =========================================================
+        RINGKASAN GURU
+    ========================================================== --}}
 
-    <!-- Guru 3 -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
 
-    <div class="col-lg-4 mb-3">
+        <div>
 
-        <div class="card shadow-sm border-0 h-100">
-
-            <div class="card-body">
-
-                <div class="d-flex justify-content-between">
-
-                    <div>
-
-                        <h5 class="fw-bold mb-1">
-
-                            Ahmad Fauzi
-
-                        </h5>
-
-                        <small class="text-muted">
-
-                            Program Feixiang
-
-                        </small>
-
-                    </div>
-
-                    <span class="badge bg-danger">
-
-                        Perlu Perhatian
-
-                    </span>
-
-                </div>
-
-                <hr>
-
-                <div class="row text-center">
-
-                    <div class="col-4">
-
-                        <h4 class="fw-bold text-primary">
-
-                            18
-
-                        </h4>
-
-                        <small>Jam</small>
-
-                    </div>
-
-                    <div class="col-4">
-
-                        <h4 class="fw-bold text-success">
-
-                            8
-
-                        </h4>
-
-                        <small>Sesi</small>
-
-                    </div>
-
-                    <div class="col-4">
-
-                        <h4 class="fw-bold text-danger">
-
-                            78%
-
-                        </h4>
-
-                        <small>Hadir</small>
-
-                    </div>
-
-                </div>
-
-                <hr>
-
-                <p class="mb-2">
-
-                    LP & PPT
-
-                </p>
-
-                <div class="progress mb-3">
-
-                    <div class="progress-bar bg-danger"
-
-                         style="width:40%">
-
-                    </div>
-
-                </div>
-
-                <span class="badge bg-danger">
-
-                    Belum Upload
-
-                </span>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</div>
-
-
-
-<!-- =========================
-        FILTER DATA
-        (PART 4)
-========================== -->
-<!-- =========================
-        FILTER
-========================== -->
-
-<div class="card shadow-sm border-0 mb-4">
-
-    <div class="card-header bg-white">
-
-        <h5 class="mb-0 fw-bold">
-
-            Filter Monitoring Guru
-
-        </h5>
-
-    </div>
-
-    <div class="card-body">
-
-        <div class="row g-3">
-
-            <!-- Cari Guru -->
-
-            <div class="col-lg-3">
-
-                <label class="form-label">
-
-                    Nama Guru
-
-                </label>
-
-                <input type="text"
-                       class="form-control"
-                       placeholder="Cari nama guru...">
-
-            </div>
-
-
-            <!-- Program -->
-
-            <div class="col-lg-2">
-
-                <label class="form-label">
-
-                    Program
-
-                </label>
-
-                <select class="form-select">
-
-                    <option>Semua Program</option>
-                    <option>Maochong</option>
-                    <option>Jianer</option>
-                    <option>Hudie</option>
-                    <option>Feixiang</option>
-
-                </select>
-
-            </div>
-
-
-            <!-- Status -->
-
-            <div class="col-lg-2">
-
-                <label class="form-label">
-
-                    Status Guru
-
-                </label>
-
-                <select class="form-select">
-
-                    <option>Semua Status</option>
-                    <option>Aktif</option>
-                    <option>Cuti</option>
-                    <option>Pengganti</option>
-
-                </select>
-
-            </div>
-
-
-            <!-- Hari -->
-
-            <div class="col-lg-2">
-
-                <label class="form-label">
-
-                    Hari
-
-                </label>
-
-                <select class="form-select">
-
-                    <option>Semua Hari</option>
-                    <option>Senin</option>
-                    <option>Selasa</option>
-                    <option>Rabu</option>
-                    <option>Kamis</option>
-                    <option>Jumat</option>
-
-                </select>
-
-            </div>
-
-
-            <!-- Tanggal -->
-
-            <div class="col-lg-2">
-
-                <label class="form-label">
-
-                    Tanggal
-
-                </label>
-
-                <input type="date"
-                       class="form-control">
-
-            </div>
-
-
-            <!-- Tombol -->
-
-            <div class="col-lg-1 d-flex align-items-end">
-
-                <button class="btn btn-primary w-100">
-
-                    Filter
-
-                </button>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</div>
-
-
-
-<!-- =========================
-        QUICK SUMMARY
-========================== -->
-
-<div class="row mb-4">
-
-    <div class="col-lg-3 mb-3">
-
-        <div class="card border-0 shadow-sm">
-
-            <div class="card-body">
-
-                <small class="text-muted">
-
-                    Guru Hadir Hari Ini
-
-                </small>
-
-                <h2 class="fw-bold text-success mt-2">
-
-                    16
-
-                </h2>
-
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <div class="col-lg-3 mb-3">
-
-        <div class="card border-0 shadow-sm">
-
-            <div class="card-body">
-
-                <small class="text-muted">
-
-                    Tidak Hadir
-
-                </small>
-
-                <h2 class="fw-bold text-danger mt-2">
-
-                    2
-
-                </h2>
-
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <div class="col-lg-3 mb-3">
-
-        <div class="card border-0 shadow-sm">
-
-            <div class="card-body">
-
-                <small class="text-muted">
-
-                    LP Belum Upload
-
-                </small>
-
-                <h2 class="fw-bold text-warning mt-2">
-
-                    5
-
-                </h2>
-
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <div class="col-lg-3 mb-3">
-
-        <div class="card border-0 shadow-sm">
-
-            <div class="card-body">
-
-                <small class="text-muted">
-
-                    Progress Report Pending
-
-                </small>
-
-                <h2 class="fw-bold text-primary mt-2">
-
-                    3
-
-                </h2>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</div>
-
-
-
-<!-- =========================
-        TABEL MONITORING
-        (PART 5)
-========================== -->
-<div class="card shadow-sm border-0">
-
-    <div class="card-header bg-white">
-
-        <div class="d-flex justify-content-between align-items-center">
-
-            <h5 class="mb-0 fw-bold">
-
-                Daftar Monitoring Guru
-
+            <h5 class="fw-bold mb-1">
+                Ringkasan Guru
             </h5>
 
-            <span class="badge bg-primary">
-
-                18 Guru
-
-            </span>
+            <small class="text-muted">
+                Informasi berdasarkan data guru dan jurnal mengajar
+            </small>
 
         </div>
 
     </div>
 
-    <div class="table-responsive">
 
-        <table class="table table-hover align-middle mb-0">
+    <div class="row mb-5">
 
-            <thead class="table-light">
+        @forelse($teachers->take(6) as $teacher)
 
-            <tr>
+            @php
 
-                <th>No</th>
-                <th>Guru</th>
-                <th>Program</th>
-                <th>Kelas</th>
-                <th>Jam</th>
-                <th>Kehadiran</th>
-                <th>LP & PPT</th>
-                <th>Progress Report</th>
-                <th>Status</th>
-                <th width="220">Aksi</th>
+                /*
+                |--------------------------------------------------------------------------
+                | JUMLAH JURNAL GURU
+                |--------------------------------------------------------------------------
+                */
 
-            </tr>
+                $teacherJournals = $teacher->teachingJournals ?? collect();
 
-            </thead>
+                $sessionCount = $teacherJournals->count();
 
-            <tbody>
 
-            <!-- ==================== -->
+                /*
+                |--------------------------------------------------------------------------
+                | TOTAL JAM GURU
+                |--------------------------------------------------------------------------
+                */
 
-            <tr>
+                $teacherHour = 0;
 
-                <td>1</td>
+                $teacherSchedules = collect();
 
-                <td>
+                foreach ($teacher->classes ?? collect() as $class) {
 
-                    <strong>Rina Wulandari</strong>
+                    foreach ($class->schedules ?? collect() as $schedule) {
 
-                    <br>
+                        $teacherSchedules->push($schedule);
 
-                    <small class="text-muted">
+                        if (
+                            $schedule->start_time &&
+                            $schedule->end_time
+                        ) {
 
-                        Guru Tetap
+                            $start = strtotime($schedule->start_time);
+                            $end = strtotime($schedule->end_time);
 
-                    </small>
+                            if ($end > $start) {
 
-                </td>
+                                $teacherHour +=
+                                    ($end - $start) / 3600;
 
-                <td>Jianer</td>
+                            }
 
-                <td>2B</td>
+                        }
 
-                <td>
+                    }
 
-                    <span class="badge bg-info">
+                }
 
-                        24 Jam
+                $teacherHour = round($teacherHour, 1);
 
-                    </span>
 
-                </td>
+                /*
+                |--------------------------------------------------------------------------
+                | KEHADIRAN
+                |--------------------------------------------------------------------------
+                */
 
-                <td>
+                $attendances = collect();
 
-                    <span class="badge bg-success">
+                foreach ($teacherJournals as $journal) {
 
-                        Hadir
+                    foreach ($journal->attendances ?? collect() as $attendance) {
 
-                    </span>
+                        $attendances->push($attendance);
 
-                </td>
+                    }
 
-                <td>
+                }
 
-                    <span class="badge bg-success">
 
-                        Lengkap
+                $attendanceTotal = $attendances->count();
 
-                    </span>
+                $attendancePresent = $attendances
+                    ->where('status', 'Present')
+                    ->count();
 
-                </td>
+                $attendancePercentage =
+                    $attendanceTotal > 0
+                        ? round(
+                            ($attendancePresent / $attendanceTotal) * 100
+                        )
+                        : 0;
 
-                <td>
 
-                    <span class="badge bg-success">
+                /*
+                |--------------------------------------------------------------------------
+                | STATUS GURU
+                |--------------------------------------------------------------------------
+                */
 
-                        Sudah
+                $teacherStatus = strtolower(
+                    $teacher->status ?? 'active'
+                );
 
-                    </span>
 
-                </td>
+                if (
+                    in_array(
+                        $teacherStatus,
+                        ['active', 'aktif']
+                    )
+                ) {
 
-                <td>
+                    $statusLabel = 'Aktif';
+                    $statusClass = 'success';
 
-                    <span class="badge bg-primary">
+                } elseif (
+                    in_array(
+                        $teacherStatus,
+                        ['leave', 'cuti']
+                    )
+                ) {
 
-                        Aktif
+                    $statusLabel = 'Cuti';
+                    $statusClass = 'secondary';
 
-                    </span>
+                } else {
 
-                </td>
+                    $statusLabel = $teacher->status ?? 'Tidak diketahui';
+                    $statusClass = 'warning';
 
-                <td>
+                }
 
-                    <button class="btn btn-info btn-sm">
 
-                        Detail
+                /*
+                |--------------------------------------------------------------------------
+                | PROGRAM GURU
+                |--------------------------------------------------------------------------
+                */
 
-                    </button>
+                $programNames = collect();
 
-                    <button class="btn btn-warning btn-sm">
+                foreach ($teacher->classes ?? collect() as $class) {
 
-                        Edit
+                    $program = optional(
+                        $class->programPackage
+                    )->name;
 
-                    </button>
+                    if ($program) {
+                        $programNames->push($program);
+                    }
 
-                    <button class="btn btn-success btn-sm">
+                }
 
-                        Jadwal
+                $programNames = $programNames
+                    ->unique()
+                    ->values();
 
-                    </button>
+            @endphp
 
-                </td>
 
-            </tr>
+            <div class="col-lg-4 col-md-6 mb-3">
 
-            <!-- ==================== -->
+                <div class="card shadow-sm border-0 h-100">
 
-            <tr>
+                    <div class="card-body">
 
-                <td>2</td>
+                        <div class="d-flex justify-content-between">
 
-                <td>
+                            <div>
 
-                    <strong>Budi Santoso</strong>
+                                <h5 class="fw-bold mb-1">
 
-                    <br>
+                                    {{ $teacher->name }}
 
-                    <small class="text-muted">
+                                </h5>
 
-                        Guru Tetap
 
-                    </small>
+                                <small class="text-muted">
 
-                </td>
+                                    @if($programNames->count())
 
-                <td>Maochong</td>
+                                        {{ $programNames->join(', ') }}
 
-                <td>3A</td>
+                                    @else
 
-                <td>
+                                        Belum ada program
 
-                    <span class="badge bg-info">
+                                    @endif
 
-                        20 Jam
+                                </small>
 
-                    </span>
+                            </div>
 
-                </td>
 
-                <td>
+                            <span class="badge bg-{{ $statusClass }}">
 
-                    <span class="badge bg-success">
+                                {{ $statusLabel }}
 
-                        Hadir
+                            </span>
 
-                    </span>
+                        </div>
 
-                </td>
 
-                <td>
+                        <hr>
 
-                    <span class="badge bg-warning text-dark">
 
-                        Pending
+                        <div class="row text-center">
 
-                    </span>
+                            <div class="col-4">
 
-                </td>
+                                <h4 class="fw-bold text-primary">
 
-                <td>
+                                    {{ number_format($teacherHour, 1, ',', '.') }}
 
-                    <span class="badge bg-warning text-dark">
+                                </h4>
 
-                        Pending
+                                <small>
+                                    Jam
+                                </small>
 
-                    </span>
+                            </div>
 
-                </td>
 
-                <td>
+                            <div class="col-4">
 
-                    <span class="badge bg-primary">
+                                <h4 class="fw-bold text-success">
 
-                        Aktif
+                                    {{ $sessionCount }}
 
-                    </span>
+                                </h4>
 
-                </td>
+                                <small>
+                                    Sesi
+                                </small>
 
-                <td>
+                            </div>
 
-                    <button class="btn btn-info btn-sm">
 
-                        Detail
+                            <div class="col-4">
 
-                    </button>
+                                <h4 class="fw-bold
+                                    @if($attendancePercentage >= 90)
+                                        text-success
+                                    @elseif($attendancePercentage >= 75)
+                                        text-warning
+                                    @else
+                                        text-danger
+                                    @endif
+                                ">
 
-                    <button class="btn btn-warning btn-sm">
+                                    {{ $attendancePercentage }}%
 
-                        Edit
+                                </h4>
 
-                    </button>
+                                <small>
+                                    Hadir
+                                </small>
 
-                    <button class="btn btn-success btn-sm">
+                            </div>
 
-                        Jadwal
+                        </div>
 
-                    </button>
 
-                </td>
+                        <hr>
 
-            </tr>
 
-            <!-- ==================== -->
+                        <p class="mb-2">
+                            Jurnal Mengajar
+                        </p>
 
-            <tr>
 
-                <td>3</td>
+                        @php
 
-                <td>
+                            $journalCompleted =
+                                $teacherJournals
+                                    ->whereIn(
+                                        'status',
+                                        ['Reviewed', 'reviewed']
+                                    )
+                                    ->count();
 
-                    <strong>Siti Nurhaliza</strong>
+                            $journalPercentage =
+                                $sessionCount > 0
+                                    ? round(
+                                        ($journalCompleted / $sessionCount) * 100
+                                    )
+                                    : 0;
 
-                    <br>
+                        @endphp
 
-                    <small class="text-muted">
 
-                        Guru Pengganti
+                        <div class="progress mb-2">
 
-                    </small>
+                            <div
+                                class="progress-bar
+                                @if($journalPercentage >= 80)
+                                    bg-success
+                                @elseif($journalPercentage >= 50)
+                                    bg-warning
+                                @else
+                                    bg-danger
+                                @endif"
+                                style="width: {{ $journalPercentage }}%"
+                            >
+                            </div>
 
-                </td>
+                        </div>
 
-                <td>Hudie</td>
 
-                <td>1A</td>
+                        @if($journalPercentage >= 80)
 
-                <td>
+                            <span class="badge bg-success">
+                                Jurnal Lengkap
+                            </span>
 
-                    <span class="badge bg-info">
+                        @elseif($journalPercentage >= 50)
 
-                        18 Jam
+                            <span class="badge bg-warning text-dark">
+                                Sebagian Direview
+                            </span>
 
-                    </span>
+                        @else
 
-                </td>
+                            <span class="badge bg-danger">
+                                Perlu Review
+                            </span>
 
-                <td>
+                        @endif
 
-                    <span class="badge bg-danger">
+                    </div>
 
-                        Tidak Hadir
+                </div>
 
-                    </span>
+            </div>
 
-                </td>
 
-                <td>
+        @empty
 
-                    <span class="badge bg-success">
+            <div class="col-12">
 
-                        Lengkap
+                <div class="alert alert-info">
 
-                    </span>
+                    Belum terdapat data guru.
 
-                </td>
+                </div>
 
-                <td>
+            </div>
 
-                    <span class="badge bg-success">
-
-                        Sudah
-
-                    </span>
-
-                </td>
-
-                <td>
-
-                    <span class="badge bg-secondary">
-
-                        Cuti
-
-                    </span>
-
-                </td>
-
-                <td>
-
-                    <button class="btn btn-info btn-sm">
-
-                        Detail
-
-                    </button>
-
-                    <button class="btn btn-warning btn-sm">
-
-                        Edit
-
-                    </button>
-
-                    <button class="btn btn-success btn-sm">
-
-                        Jadwal
-
-                    </button>
-
-                </td>
-
-            </tr>
-
-            <!-- ==================== -->
-
-            <tr>
-
-                <td>4</td>
-
-                <td>
-
-                    <strong>Ahmad Fauzi</strong>
-
-                    <br>
-
-                    <small class="text-muted">
-
-                        Guru Tetap
-
-                    </small>
-
-                </td>
-
-                <td>Feixiang</td>
-
-                <td>1C</td>
-
-                <td>
-
-                    <span class="badge bg-info">
-
-                        18 Jam
-
-                    </span>
-
-                </td>
-
-                <td>
-
-                    <span class="badge bg-success">
-
-                        Hadir
-
-                    </span>
-
-                </td>
-
-                <td>
-
-                    <span class="badge bg-danger">
-
-                        Belum Upload
-
-                    </span>
-
-                </td>
-
-                <td>
-
-                    <span class="badge bg-danger">
-
-                        Belum Upload
-
-                    </span>
-
-                </td>
-
-                <td>
-
-                    <span class="badge bg-primary">
-
-                        Aktif
-
-                    </span>
-
-                </td>
-
-                <td>
-
-                    <button class="btn btn-info btn-sm">
-
-                        Detail
-
-                    </button>
-
-                    <button class="btn btn-warning btn-sm">
-
-                        Edit
-
-                    </button>
-
-                    <button class="btn btn-success btn-sm">
-
-                        Jadwal
-
-                    </button>
-
-                </td>
-
-            </tr>
-
-            </tbody>
-
-        </table>
+        @endforelse
 
     </div>
 
-    <div class="card-footer bg-white">
 
-        <div class="d-flex justify-content-between align-items-center">
+    {{-- =========================================================
+        FILTER
+    ========================================================== --}}
 
-            <small class="text-muted">
+    <div class="card shadow-sm border-0 mb-4">
 
-                Menampilkan 1 - 4 dari 18 data guru
+        <div class="card-header bg-white">
 
-            </small>
+            <h5 class="mb-0 fw-bold">
+                Filter Monitoring Guru
+            </h5>
 
-            <nav>
+        </div>
 
-                <ul class="pagination pagination-sm mb-0">
 
-                    <li class="page-item disabled">
+        <div class="card-body">
 
-                        <a class="page-link">
+            <form method="GET"
+                  action="{{ route('kurikulum.monitoring') }}">
 
-                            Previous
+                <div class="row g-3">
+
+
+                    {{-- NAMA GURU --}}
+
+                    <div class="col-lg-3">
+
+                        <label class="form-label">
+                            Nama Guru
+                        </label>
+
+                        <select
+                            name="teacher_id"
+                            class="form-select"
+                        >
+
+                            <option value="">
+                                Semua Guru
+                            </option>
+
+
+                            @foreach(
+                                \App\Models\Teacher::orderBy('name')->get()
+                                as $teacherOption
+                            )
+
+                                <option
+                                    value="{{ $teacherOption->id }}"
+                                    {{ request('teacher_id') == $teacherOption->id ? 'selected' : '' }}
+                                >
+
+                                    {{ $teacherOption->name }}
+
+                                </option>
+
+                            @endforeach
+
+                        </select>
+
+                    </div>
+
+
+                    {{-- STATUS --}}
+
+                    <div class="col-lg-2">
+
+                        <label class="form-label">
+                            Status Guru
+                        </label>
+
+                        <select
+                            name="status"
+                            class="form-select"
+                        >
+
+                            <option value="">
+                                Semua Status
+                            </option>
+
+
+                            @php
+
+                                $statuses =
+                                    \App\Models\Teacher::query()
+                                        ->whereNotNull('status')
+                                        ->distinct()
+                                        ->pluck('status');
+
+                            @endphp
+
+
+                            @foreach($statuses as $teacherStatusOption)
+
+                                <option
+                                    value="{{ $teacherStatusOption }}"
+                                    {{ request('status') == $teacherStatusOption ? 'selected' : '' }}
+                                >
+
+                                    {{ $teacherStatusOption }}
+
+                                </option>
+
+                            @endforeach
+
+                        </select>
+
+                    </div>
+
+
+                    {{-- TANGGAL --}}
+
+                    <div class="col-lg-2">
+
+                        <label class="form-label">
+                            Tanggal Monitoring
+                        </label>
+
+                        <input
+                            type="date"
+                            name="date"
+                            class="form-control"
+                            value="{{ $date }}"
+                        >
+
+                    </div>
+
+
+                    {{-- BUTTON --}}
+
+                    <div class="col-lg-2 d-flex align-items-end">
+
+                        <button
+                            type="submit"
+                            class="btn btn-primary w-100"
+                        >
+
+                            <i class="fas fa-filter me-1"></i>
+
+                            Filter
+
+                        </button>
+
+                    </div>
+
+
+                    {{-- RESET --}}
+
+                    <div class="col-lg-2 d-flex align-items-end">
+
+                        <a
+                            href="{{ route('kurikulum.monitoring') }}"
+                            class="btn btn-outline-secondary w-100"
+                        >
+
+                            <i class="fas fa-sync-alt me-1"></i>
+
+                            Reset
 
                         </a>
 
-                    </li>
+                    </div>
 
-                    <li class="page-item active">
+                </div>
 
-                        <a class="page-link">
+            </form>
 
-                            1
+        </div>
 
-                        </a>
+    </div>
 
-                    </li>
 
-                    <li class="page-item">
+    {{-- =========================================================
+        QUICK SUMMARY
+    ========================================================== --}}
 
-                        <a class="page-link">
+    <div class="row mb-4">
 
-                            2
+        {{-- GURU HADIR --}}
 
-                        </a>
+        <div class="col-lg-3 mb-3">
 
-                    </li>
+            <div class="card border-0 shadow-sm">
 
-                    <li class="page-item">
+                <div class="card-body">
 
-                        <a class="page-link">
+                    <small class="text-muted">
+                        Guru Hadir
+                    </small>
 
-                            3
+                    <h2 class="fw-bold text-success mt-2 mb-0">
 
-                        </a>
+                        {{ $guruHadirHariIni }}
 
-                    </li>
+                    </h2>
 
-                    <li class="page-item">
+                    <small class="text-muted">
+                        {{ $date }}
+                    </small>
 
-                        <a class="page-link">
+                </div>
 
-                            Next
+            </div>
 
-                        </a>
+        </div>
 
-                    </li>
 
-                </ul>
+        {{-- TIDAK HADIR --}}
 
-            </nav>
+        <div class="col-lg-3 mb-3">
+
+            <div class="card border-0 shadow-sm">
+
+                <div class="card-body">
+
+                    <small class="text-muted">
+                        Tidak Hadir
+                    </small>
+
+                    <h2 class="fw-bold text-danger mt-2 mb-0">
+
+                        {{ $totalTidakHadirHariIni }}
+
+                    </h2>
+
+                    <small class="text-muted">
+                        Absent, Sick, Permission
+                    </small>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        {{-- TOTAL ABSENSI --}}
+
+        <div class="col-lg-3 mb-3">
+
+            <div class="card border-0 shadow-sm">
+
+                <div class="card-body">
+
+                    <small class="text-muted">
+                        Total Absensi
+                    </small>
+
+                    <h2 class="fw-bold text-primary mt-2 mb-0">
+
+                        {{ $totalAttendanceToday }}
+
+                    </h2>
+
+                    <small class="text-muted">
+                        Data absensi hari ini
+                    </small>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        {{-- PROGRESS REPORT --}}
+
+        <div class="col-lg-3 mb-3">
+
+            <div class="card border-0 shadow-sm">
+
+                <div class="card-body">
+
+                    <small class="text-muted">
+                        Progress Report Pending
+                    </small>
+
+                    <h2 class="fw-bold text-warning mt-2 mb-0">
+
+                        {{ $progressReportPending }}
+
+                    </h2>
+
+                    <small class="text-muted">
+                        Perlu ditindaklanjuti
+                    </small>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    {{-- =========================================================
+        TABEL MONITORING
+    ========================================================== --}}
+
+    <div class="card shadow-sm border-0">
+
+        <div class="card-header bg-white">
+
+            <div class="d-flex justify-content-between align-items-center">
+
+                <div>
+
+                    <h5 class="mb-0 fw-bold">
+                        Daftar Monitoring Guru
+                    </h5>
+
+                    <small class="text-muted">
+                        Data guru dari database
+                    </small>
+
+                </div>
+
+
+                <span class="badge bg-primary">
+
+                    {{ $teachers->count() }} Guru
+
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="table-responsive">
+
+            <table class="table table-hover align-middle mb-0">
+
+                <thead class="table-light">
+
+                <tr>
+
+                    <th>No</th>
+
+                    <th>Guru</th>
+
+                    <th>Program</th>
+
+                    <th>Kelas</th>
+
+                    <th>Jam</th>
+
+                    <th>Kehadiran</th>
+
+                    <th>Jurnal</th>
+
+                    <th>Progress Report</th>
+
+                    <th>Status</th>
+
+                    <th width="170">
+                        Aksi
+                    </th>
+
+                </tr>
+
+                </thead>
+
+
+                <tbody>
+
+
+                @forelse($teachers as $index => $teacher)
+
+                    @php
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | JAM GURU
+                        |--------------------------------------------------------------------------
+                        */
+
+                        $teacherHour = 0;
+
+                        foreach ($teacher->classes ?? collect() as $class) {
+
+                            foreach ($class->schedules ?? collect() as $schedule) {
+
+                                if (
+                                    $schedule->start_time &&
+                                    $schedule->end_time
+                                ) {
+
+                                    $start = strtotime($schedule->start_time);
+                                    $end = strtotime($schedule->end_time);
+
+                                    if ($end > $start) {
+
+                                        $teacherHour +=
+                                            ($end - $start) / 3600;
+
+                                    }
+
+                                }
+
+                            }
+
+                        }
+
+                        $teacherHour = round($teacherHour, 1);
+
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | JOURNAL
+                        |--------------------------------------------------------------------------
+                        */
+
+                        $journals =
+                            $teacher->teachingJournals
+                            ?? collect();
+
+                        $journalCount =
+                            $journals->count();
+
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | ATTENDANCE
+                        |--------------------------------------------------------------------------
+                        */
+
+                        $attendanceRecords = collect();
+
+                        foreach ($journals as $journal) {
+
+                            foreach (
+                                $journal->attendances ?? collect()
+                                as $attendance
+                            ) {
+
+                                $attendanceRecords->push(
+                                    $attendance
+                                );
+
+                            }
+
+                        }
+
+
+                        $attendanceTotal =
+                            $attendanceRecords->count();
+
+                        $attendancePresent =
+                            $attendanceRecords
+                                ->where(
+                                    'status',
+                                    'Present'
+                                )
+                                ->count();
+
+
+                        $attendancePercentage =
+                            $attendanceTotal > 0
+                                ? round(
+                                    (
+                                        $attendancePresent /
+                                        $attendanceTotal
+                                    ) * 100
+                                )
+                                : 0;
+
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | PROGRESS REPORT
+                        |--------------------------------------------------------------------------
+                        */
+
+                        $reports =
+                            $teacher->progressReports
+                            ?? collect();
+
+                        $pendingReports =
+                            $reports->whereIn(
+                                'status',
+                                [
+                                    'pending',
+                                    'Pending',
+                                    'draft',
+                                    'Draft'
+                                ]
+                            )->count();
+
+
+                        $approvedReports =
+                            $reports->whereIn(
+                                'status',
+                                [
+                                    'approved',
+                                    'Approved',
+                                    'completed',
+                                    'Completed'
+                                ]
+                            )->count();
+
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | PROGRAM
+                        |--------------------------------------------------------------------------
+                        */
+
+                        $programs = collect();
+
+                        foreach ($teacher->classes ?? collect() as $class) {
+
+                            $program =
+                                optional(
+                                    $class->programPackage
+                                )->name;
+
+                            if ($program) {
+                                $programs->push($program);
+                            }
+
+                        }
+
+                        $programs =
+                            $programs
+                                ->unique()
+                                ->values();
+
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | KELAS
+                        |--------------------------------------------------------------------------
+                        */
+
+                        $classes = collect();
+
+                        foreach ($teacher->classes ?? collect() as $class) {
+
+                            $className =
+                                $class->name
+                                ?? $class->class_name
+                                ?? null;
+
+                            if ($className) {
+                                $classes->push($className);
+                            }
+
+                        }
+
+                        $classes =
+                            $classes
+                                ->unique()
+                                ->values();
+
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | STATUS
+                        |--------------------------------------------------------------------------
+                        */
+
+                        $teacherStatus =
+                            $teacher->status
+                            ?? 'Aktif';
+
+
+                        $statusLower =
+                            strtolower(
+                                $teacherStatus
+                            );
+
+
+                        if (
+                            in_array(
+                                $statusLower,
+                                [
+                                    'active',
+                                    'aktif'
+                                ]
+                            )
+                        ) {
+
+                            $statusClass = 'primary';
+
+                        } elseif (
+                            in_array(
+                                $statusLower,
+                                [
+                                    'leave',
+                                    'cuti'
+                                ]
+                            )
+                        ) {
+
+                            $statusClass = 'secondary';
+
+                        } else {
+
+                            $statusClass = 'warning';
+
+                        }
+
+                    @endphp
+
+
+                    <tr>
+
+                        {{-- NO --}}
+
+                        <td>
+                            {{ $index + 1 }}
+                        </td>
+
+
+                        {{-- GURU --}}
+
+                        <td>
+
+                            <strong>
+                                {{ $teacher->name }}
+                            </strong>
+
+                            <br>
+
+                            <small class="text-muted">
+                                ID Guru:
+                                {{ $teacher->id }}
+                            </small>
+
+                        </td>
+
+
+                        {{-- PROGRAM --}}
+
+                        <td>
+
+                            @if($programs->count())
+
+                                {{ $programs->join(', ') }}
+
+                            @else
+
+                                <span class="text-muted">
+                                    -
+                                </span>
+
+                            @endif
+
+                        </td>
+
+
+                        {{-- KELAS --}}
+
+                        <td>
+
+                            @if($classes->count())
+
+                                {{ $classes->join(', ') }}
+
+                            @else
+
+                                <span class="text-muted">
+                                    -
+                                </span>
+
+                            @endif
+
+                        </td>
+
+
+                        {{-- JAM --}}
+
+                        <td>
+
+                            <span class="badge bg-info">
+
+                                {{ number_format(
+                                    $teacherHour,
+                                    1,
+                                    ',',
+                                    '.'
+                                ) }}
+                                Jam
+
+                            </span>
+
+                        </td>
+
+
+                        {{-- KEHADIRAN --}}
+
+                        <td>
+
+                            @if($attendancePercentage >= 90)
+
+                                <span class="badge bg-success">
+                                    {{ $attendancePercentage }}%
+                                </span>
+
+                            @elseif($attendancePercentage >= 75)
+
+                                <span class="badge bg-warning text-dark">
+                                    {{ $attendancePercentage }}%
+                                </span>
+
+                            @else
+
+                                <span class="badge bg-danger">
+                                    {{ $attendancePercentage }}%
+                                </span>
+
+                            @endif
+
+                        </td>
+
+
+                        {{-- JURNAL --}}
+
+                        <td>
+
+                            @if($journalCount > 0)
+
+                                <span class="badge bg-success">
+                                    {{ $journalCount }} Sesi
+                                </span>
+
+                            @else
+
+                                <span class="badge bg-danger">
+                                    Belum Ada
+                                </span>
+
+                            @endif
+
+                        </td>
+
+
+                        {{-- PROGRESS REPORT --}}
+
+                        <td>
+
+                            @if($pendingReports > 0)
+
+                                <span class="badge bg-warning text-dark">
+                                    {{ $pendingReports }} Pending
+                                </span>
+
+                            @elseif($approvedReports > 0)
+
+                                <span class="badge bg-success">
+                                    {{ $approvedReports }} Selesai
+                                </span>
+
+                            @else
+
+                                <span class="badge bg-secondary">
+                                    Belum Ada
+                                </span>
+
+                            @endif
+
+                        </td>
+
+
+                        {{-- STATUS --}}
+
+                        <td>
+
+                            <span class="badge bg-{{ $statusClass }}">
+
+                                {{ $teacherStatus }}
+
+                            </span>
+
+                        </td>
+
+
+                        {{-- AKSI --}}
+
+                        <td>
+
+                            <a
+                                href="#"
+                                class="btn btn-info btn-sm"
+                                title="Detail guru"
+                            >
+
+                                <i class="fas fa-eye"></i>
+
+                            </a>
+
+
+                            <a
+                                href="#"
+                                class="btn btn-success btn-sm"
+                                title="Jadwal guru"
+                            >
+
+                                <i class="fas fa-calendar"></i>
+
+                            </a>
+
+                        </td>
+
+                    </tr>
+
+
+                @empty
+
+                    <tr>
+
+                        <td
+                            colspan="10"
+                            class="text-center py-5"
+                        >
+
+                            <i class="fas fa-user-slash fa-2x text-muted mb-3"></i>
+
+                            <br>
+
+                            <strong>
+                                Belum ada data guru
+                            </strong>
+
+                            <br>
+
+                            <small class="text-muted">
+                                Data guru belum ditemukan berdasarkan filter.
+                            </small>
+
+                        </td>
+
+                    </tr>
+
+                @endforelse
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+
+        {{-- FOOTER --}}
+
+        <div class="card-footer bg-white">
+
+            <div class="d-flex justify-content-between align-items-center">
+
+                <small class="text-muted">
+
+                    Menampilkan
+                    {{ $teachers->count() }}
+                    data guru
+
+                </small>
+
+            </div>
 
         </div>
 
@@ -1746,147 +1569,252 @@
 
 </div>
 
-<!-- =========================
-        CSS
-        (PART 6)
-========================== -->
+
+{{-- =========================================================
+    CSS
+========================================================== --}}
+
 @push('styles')
 
 <style>
 
-body{
-    background:#f5f7fb;
+body {
+    background: #f5f7fb;
 }
 
-.card{
-    border:none;
-    border-radius:15px;
-    overflow:hidden;
+
+/* CARD */
+
+.card {
+    border: none;
+    border-radius: 15px;
+    overflow: hidden;
 }
 
-.card-header{
-    background:#fff;
-    font-weight:600;
+
+.card-header {
+    background: #fff;
+    font-weight: 600;
 }
 
-.table thead th{
 
-    background:#f8fafc;
+/* TABLE */
 
-    font-size:14px;
+.table thead th {
 
-    font-weight:600;
+    background: #f8fafc;
 
-    color:#555;
+    font-size: 13px;
 
-    text-align:center;
+    font-weight: 600;
 
-    vertical-align:middle;
+    color: #555;
 
-}
+    text-align: center;
 
-.table tbody td{
-
-    vertical-align:middle;
-
-}
-
-.table-hover tbody tr:hover{
-
-    background:#f7fbff;
+    vertical-align: middle;
 
 }
 
-.badge{
 
-    padding:8px 12px;
+.table tbody td {
 
-    font-size:12px;
-
-    border-radius:20px;
+    vertical-align: middle;
 
 }
 
-.progress{
 
-    height:8px;
+.table-hover tbody tr:hover {
 
-    border-radius:20px;
-
-}
-
-.btn{
-
-    border-radius:8px;
+    background: #f7fbff;
 
 }
 
-.btn-sm{
 
-    padding:5px 12px;
+/* BADGE */
 
-}
+.badge {
 
-.table-responsive{
+    padding: 7px 11px;
 
-    overflow-x:auto;
+    font-size: 11px;
 
-}
-
-.table td{
-
-    white-space:nowrap;
+    border-radius: 20px;
 
 }
 
-.rounded{
 
-    border-radius:12px !important;
+/* BUTTON */
 
-}
+.btn {
 
-.border-start{
-
-    border-left-width:5px !important;
+    border-radius: 8px;
 
 }
 
-.card-body h2{
 
-    font-weight:700;
+.btn-sm {
 
-}
-
-.card-body h4{
-
-    font-weight:700;
+    padding: 5px 10px;
 
 }
 
-.pagination .page-link{
 
-    border-radius:8px;
+/* PROGRESS */
 
-    margin:0 2px;
+.progress {
 
-}
+    height: 8px;
 
-.table tbody tr{
-
-    transition:.2s;
+    border-radius: 20px;
 
 }
 
-.table tbody tr:hover{
 
-    transform:scale(1.002);
+/* SCHEDULE */
+
+.weekly-table {
+
+    min-width: 900px;
+
+}
+
+
+.schedule-column {
+
+    vertical-align: top !important;
+
+    min-width: 180px;
+
+    height: 150px;
+
+    background: #fff;
+
+}
+
+
+.schedule-item {
+
+    padding: 10px;
+
+    border-radius: 10px;
+
+    background: #eef5ff;
+
+    border-left: 4px solid #0d6efd;
+
+    text-align: left;
+
+    transition: .2s;
+
+}
+
+
+.schedule-item:hover {
+
+    transform: translateY(-2px);
+
+    box-shadow: 0 4px 12px rgba(0,0,0,.08);
+
+}
+
+
+.schedule-time {
+
+    font-size: 11px;
+
+    font-weight: 700;
+
+    color: #0d6efd;
+
+    margin-bottom: 4px;
+
+}
+
+
+/* TEXT */
+
+.card-body h2 {
+
+    font-weight: 700;
+
+}
+
+
+.card-body h4 {
+
+    font-weight: 700;
+
+}
+
+
+/* TABLE RESPONSIVE */
+
+.table-responsive {
+
+    overflow-x: auto;
+
+}
+
+
+.table td {
+
+    white-space: nowrap;
+
+}
+
+
+/* FILTER */
+
+.form-control,
+.form-select {
+
+    border-radius: 8px;
+
+}
+
+
+.form-control:focus,
+.form-select:focus {
+
+    box-shadow: 0 0 0 .15rem rgba(13,110,253,.15);
+
+}
+
+
+/* PRINT */
+
+@media print {
+
+    body {
+
+        background: white !important;
+
+    }
+
+
+    .btn,
+    form,
+    .sidebar,
+    nav {
+
+        display: none !important;
+
+    }
+
+
+    .card {
+
+        box-shadow: none !important;
+
+        border: 1px solid #ddd !important;
+
+    }
 
 }
 
 </style>
 
 @endpush
-
-</div>
 
 @endsection
