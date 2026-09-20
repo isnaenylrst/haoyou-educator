@@ -96,7 +96,7 @@
             <div class="nav-group">
                 <div class="nav-group-label">Pengajar</div>
 
-                <a href="#" class="nav-item">
+                <a href="{{ route('admin.guru') }}" class="nav-item {{ request()->routeIs('admin.guru') ? 'active' : '' }}">
                     <i class="fa-solid fa-chalkboard-user nav-icon" title="Guru"></i>
                     <span class="label">Guru</span>
                 </a>

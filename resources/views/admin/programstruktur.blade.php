@@ -32,11 +32,16 @@
         <div class="alert-error">{{ session('error') }}</div>
     @endif
 
-    <div class="program-tree-grid">
+    <div class="program-accordion">
         @foreach ($programs as $program)
-            <div class="card program-tree-card">
-                <div class="program-tree-head">
-                    <div class="program-tree-name">{{ $program->program_name }}</div>
+            <div class="program-section">
+                <div class="program-section-head">
+                    <div>
+                        <div class="program-section-name">{{ $program->program_name }}</div>
+                        @if ($program->description)
+                            <p class="program-tree-desc">{{ $program->description }}</p>
+                        @endif
+                    </div>
                     <div class="row-actions">
                         <span class="badge badge-neutral">{{ $program->categories->count() }} Kategori</span>
                         <button type="button" class="icon-btn" title="Edit Program"
@@ -54,7 +59,6 @@
                         </form>
                     </div>
                 </div>
-                <p class="program-tree-desc">{{ $program->description }}</p>
 
                 <button type="button" class="add-schedule-btn" style="margin-bottom:14px;"
                         onclick="openAddCategoryModal({{ $program->id }})">
@@ -70,40 +74,51 @@
                     </button>
 
                     @if ($program->levels->isNotEmpty())
-                        <div class="program-tree-categories" style="margin-top:12px;">
-                            @foreach ($program->levels as $level)
-                                <div class="program-tree-category">
-                                    <span class="cat-name">{{ $level->level_name }}</span>
-                                    <div class="row-actions" style="margin-left:auto;">
-                                        <button type="button" class="icon-btn" title="Edit Level"
-                                                onclick="openEditLevelModal({{ $level->id }})">
-                                            <i class="fa-regular fa-pen-to-square"></i>
-                                        </button>
-                                        <form action="{{ route('admin.program-level.level.destroy', $level) }}"
-                                              method="POST" style="display:inline;"
-                                              onsubmit="return confirm('Hapus level &quot;{{ $level->level_name }}&quot;?');">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="icon-btn danger" title="Hapus Level">
-                                                <i class="fa-regular fa-trash-can"></i>
-                                            </button>
-                                        </form>
-                                    </div>
+                        <div class="category-grid" style="margin-top:12px;">
+                            <div class="category-card" id="category-card-direct-{{ $program->id }}">
+                                <div class="category-card-head" onclick="toggleCategory('direct-{{ $program->id }}')">
+                                    <span class="cat-name">Level</span>
+                                    <span class="cat-level-count">{{ $program->levels->count() }} level</span>
+                                    <button type="button" class="chevron-btn" tabindex="-1">
+                                        <i class="fa-solid fa-chevron-down"></i>
+                                    </button>
                                 </div>
-                            @endforeach
+                                <div class="category-card-body" id="category-body-direct-{{ $program->id }}">
+                                    @foreach ($program->levels as $level)
+                                        <div class="level-chip">
+                                            <span>{{ $level->level_name }}</span>
+                                            <div class="row-actions">
+                                                <button type="button" class="icon-btn" title="Edit Level"
+                                                        onclick="openEditLevelModal({{ $level->id }})">
+                                                    <i class="fa-regular fa-pen-to-square"></i>
+                                                </button>
+                                                <form action="{{ route('admin.program-level.level.destroy', $level) }}"
+                                                      method="POST" style="display:inline;"
+                                                      onsubmit="return confirm('Hapus level &quot;{{ $level->level_name }}&quot;?');">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="icon-btn danger" title="Hapus Level">
+                                                        <i class="fa-regular fa-trash-can"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
                         </div>
                     @endif
                 @else
-                    <div class="program-tree-categories">
+                    <div class="category-grid">
                         @foreach ($program->categories as $category)
-                            <div class="category-block">
-                                <div class="program-tree-category">
+                            <div class="category-card" id="category-card-{{ $category->id }}">
+                                <div class="category-card-head" onclick="toggleCategory({{ $category->id }})">
                                     <span class="cat-name">{{ $category->category_name }}</span>
                                     @if ($category->min_age)
                                         <span class="cat-age">{{ $category->min_age }}{{ $category->max_age ? '–' . $category->max_age : '+' }} th</span>
                                     @endif
                                     <span class="cat-level-count">{{ $category->levels->count() }} level</span>
-                                    <div class="row-actions">
+                                    <div class="row-actions" onclick="event.stopPropagation();">
                                         <button type="button" class="icon-btn" title="Tambah Level"
                                                 onclick="openAddLevelModal({{ $program->id }}, {{ $category->id }})">
                                             <i class="fa-solid fa-plus"></i>
@@ -122,10 +137,13 @@
                                             </button>
                                         </form>
                                     </div>
+                                    <button type="button" class="chevron-btn" tabindex="-1">
+                                        <i class="fa-solid fa-chevron-down"></i>
+                                    </button>
                                 </div>
 
                                 @if ($category->levels->isNotEmpty())
-                                    <div class="level-list">
+                                    <div class="category-card-body" id="category-body-{{ $category->id }}">
                                         @foreach ($category->levels as $level)
                                             <div class="level-chip">
                                                 <span>{{ $level->level_name }}</span>
@@ -146,6 +164,10 @@
                                                 </div>
                                             </div>
                                         @endforeach
+                                    </div>
+                                @else
+                                    <div class="category-card-body" id="category-body-{{ $category->id }}">
+                                        <div class="program-tree-empty">Belum ada level.</div>
                                     </div>
                                 @endif
                             </div>
@@ -392,6 +414,24 @@
                 if (e.target === this) closeModal(id);
             });
         });
+
+    /* ============================================================
+       ACCORDION — KATEGORI (expand/collapse level list)
+    ============================================================ */
+    function toggleCategory(id) {
+        const card = document.getElementById(`category-card-${id}`);
+        const body = document.getElementById(`category-body-${id}`);
+        if (!card || !body) return;
+
+        const isOpen = card.classList.contains('open');
+        if (isOpen) {
+            card.classList.remove('open');
+            body.style.display = 'none';
+        } else {
+            card.classList.add('open');
+            body.style.display = 'flex';
+        }
+    }
 
     /* ============================================================
        PROGRAM

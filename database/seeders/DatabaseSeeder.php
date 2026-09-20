@@ -3,11 +3,13 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Database\Seeders\Support\DummyFile;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        DummyFile::clean(['documents', 'ppt', 'progress_reports']);
         $this->call([
             LevelSeeder::class,
             UserSeeder::class,
@@ -19,7 +21,7 @@ class DatabaseSeeder extends Seeder
             PrivatePackageSeeder::class,           
             CandidateStudentSeeder::class,
             CandidateStudentAvailableScheduleSeeder::class,
-            // StudentSeeder::class,
+            StudentSeeder::class,
             FollowUpTemplateSeeder::class,
             FollowUpSeeder::class,
             ClassSeeder::class,

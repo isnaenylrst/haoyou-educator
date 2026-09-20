@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\ConvertController;
 use App\Http\Controllers\Admin\JadwalController;
 use App\Http\Controllers\Admin\KelasController;
 use App\Http\Controllers\Admin\ProgramLevelController;
+use App\Http\Controllers\Admin\GuruController;
 
 
 /*
@@ -203,4 +204,16 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
         ->name('program-level.private.update');
     Route::delete('/program-level/private/{privatePackage}', [ProgramLevelController::class, 'destroyPrivate'])
         ->name('program-level.private.destroy');
+
+    // GURU
+    Route::get('/guru', [GuruController::class, 'index'])->name('guru');
+    Route::post('/guru', [GuruController::class, 'store'])->name('guru.store');
+    Route::get('/guru/{teacher}/edit', [GuruController::class, 'edit'])->name('guru.edit');
+    Route::put('/guru/{teacher}', [GuruController::class, 'update'])->name('guru.update');
+    Route::delete('/guru/{teacher}', [GuruController::class, 'destroy'])->name('guru.destroy');
+
+    // DETAIL GURU — dokumen, jurnal mengajar, materi upload
+    Route::get('/guru/{teacher}/detail', [GuruController::class, 'show'])->name('guru.show');
+    Route::post('/guru/{teacher}/documents', [GuruController::class, 'storeDocument'])->name('guru.documents.store');
+    Route::delete('/guru/documents/{document}', [GuruController::class, 'destroyDocument'])->name('guru.documents.destroy');
 });

@@ -152,7 +152,7 @@
                             </div>
                         </td>
 
-                        <td>{{ $candidate->program->program_name ?: '-' }}</td>
+                        <td>{{ $candidate->program?->program_name ?? ($candidate->privatePackage?->package_name . ' (Privat)') ?? '-' }}</td>
                         <td>{{ $candidate->source ?: '-' }}</td>
 
                         <td>
