@@ -9,16 +9,22 @@ class Program extends Model
 {
     use HasFactory;
 
-    protected $table = 'programs';
-
-    public $timestamps = false;
-
     protected $fillable = [
         'program_name',
         'description',
     ];
 
-    public function programPackages()
+    public function categories()
+    {
+        return $this->hasMany(ProgramCategory::class);
+    }
+
+    public function levels()
+    {
+        return $this->hasMany(ProgramLevel::class);
+    }
+
+    public function packages()
     {
         return $this->hasMany(ProgramPackage::class);
     }

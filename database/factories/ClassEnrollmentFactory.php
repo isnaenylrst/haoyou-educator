@@ -13,4 +13,27 @@ class ClassEnrollmentFactory extends Factory
             'status' => fake()->randomElement(['Active', 'Active', 'Completed', 'Cancelled']),
         ];
     }
+
+    /**
+     * State eksplisit untuk skenario testing kelas privat —
+     * kosongkan program_package_id, isi private_package_id.
+     * Tetap butuh class_id/private_package_id diisi manual saat dipanggil
+     * (factory tidak tahu instance private_packages/classes mana yang valid).
+     */
+    public function private(): static
+    {
+        return $this->state(fn () => [
+            'program_package_id' => null,
+        ]);
+    }
+
+    /**
+     * State eksplisit untuk skenario testing kelas reguler.
+     */
+    public function regular(): static
+    {
+        return $this->state(fn () => [
+            'private_package_id' => null,
+        ]);
+    }
 }

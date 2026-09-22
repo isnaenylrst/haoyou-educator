@@ -15,9 +15,8 @@ return new class extends Migration
 
             $table->id();
 
-            // Relasi ke tabel classes
-            $table->foreignId('class_id')
-                ->constrained('classes')
+            $table->foreignId('level_id')
+                ->constrained('program_levels')
                 ->cascadeOnUpdate()
                 ->cascadeOnDelete();
 
@@ -27,7 +26,6 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->restrictOnDelete();
 
-            // Pertemuan
             $table->unsignedTinyInteger('meeting_number');
 
             // Judul materi
@@ -41,11 +39,7 @@ return new class extends Migration
 
             $table->timestamps();
 
-            // Satu kelas tidak boleh memiliki meeting yang sama
-            $table->unique([
-                'class_id',
-                'meeting_number'
-            ]);
+            $table->unique(['level_id', 'meeting_number']);
         });
     }
 

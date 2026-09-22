@@ -96,10 +96,11 @@ class User extends Authenticatable
 
     /*
     |--------------------------------------------------------------------------
-    | BARU: satu sumber kebenaran untuk "user ini seharusnya diarahkan
-    | ke route mana setelah login". Dipakai di AuthController DAN di
-    | override guest-middleware (AppServiceProvider), supaya logic-nya
-    | tidak ditulis dua kali di dua tempat berbeda.
+    | PENTING: JANGAN DIHAPUS meskipun AuthController sekarang pakai versi
+    | main (switch-case manual). Method ini MASIH DIPAKAI oleh
+    | AppServiceProvider (override RedirectIfAuthenticated) untuk menangani
+    | kasus "user sudah login lalu buka /login lagi". Kalau dihapus,
+    | fitur anti-403-loop yang sudah kita bangun akan error.
     |--------------------------------------------------------------------------
     */
     public function homeRouteName(): ?string

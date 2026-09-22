@@ -19,19 +19,48 @@ class AuthController extends Controller
             'password' => ['required'],
         ]);
 
-        // Hanya user yang statusnya Active yang boleh login
+        // Hanya user dengan status Active yang boleh login
         $credentials['status'] = 'Active';
 
-        if (Auth::attempt($credentials, $request->boolean('remember'))) {
+        if (Auth::attempt(
+            $credentials,
+            $request->boolean('remember')
+        )) {
 
             $request->session()->regenerate();
 
             $user = Auth::user();
 
-            $routeName = $user->homeRouteName();
+            // Ambil nama level dari kolom nama_level
+            $levelName = $user->level?->nama_level;
 
-            if ($routeName) {
-                return redirect()->route($routeName);
+            switch ($levelName) {
+
+                case 'Owner':
+                    return redirect()->route('owner.dashboard');
+
+                case 'Admin':
+                    return redirect()->route('admin.dashboard');
+
+                case 'Teacher':
+                    return redirect()->route('teacher.dashboard');
+
+                case 'Student':
+                    return redirect()->route('student.dashboard');
+
+                case 'Curriculum':
+                    return redirect()->route('kurikulum.dashboard');
+
+                default:
+
+                    Auth::logout();
+
+                    return redirect()
+                        ->route('login')
+                        ->with(
+                            'error',
+                            'Level pengguna tidak dikenali.'
+                        );
             }
 
             // Owner/Admin/level tidak dikenali -> modul belum ada
@@ -45,8 +74,13 @@ class AuthController extends Controller
         }
 
         return back()
-            ->withInput()
-            ->with('error', 'Username atau Password salah.');
+            ->withInput(
+                $request->only('username')
+            )
+            ->with(
+                'error',
+                'Username atau Password salah, atau akun tidak aktif.'
+            );
     }
 
     public function logout(Request $request)

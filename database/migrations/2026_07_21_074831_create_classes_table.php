@@ -9,13 +9,28 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('classes', function (Blueprint $table) {
-
             $table->id();
 
+            // Nullable: kelas reguler mengisi ini, kelas/kontrak privat mengisi
+            // private_package_id di bawah (salah satu wajib terisi — divalidasi
+            // di controller/service, bukan di database).
             $table->foreignId('program_package_id')
+                ->nullable()
                 ->constrained()
                 ->cascadeOnUpdate()
-                ->restrictOnDelete();
+                ->nullOnDelete();
+
+            $table->foreignId('private_package_id')
+                ->nullable()
+                ->constrained('private_packages')
+                ->cascadeOnUpdate()
+                ->nullOnDelete();
+
+            $table->foreignId('level_id')
+                ->nullable()
+                ->constrained('program_levels')
+                ->cascadeOnUpdate()
+                ->nullOnDelete();
 
             $table->foreignId('teacher_id')
                 ->nullable()
@@ -25,23 +40,14 @@ return new class extends Migration
 
             $table->string('class_name');
 
-            $table->enum('delivery_mode', [
-                'Offline',
-                'Online'
-            ]);
+            $table->enum('delivery_mode', ['Offline', 'Online']);
 
             $table->date('start_date');
-
             $table->date('end_date')->nullable();
 
             $table->unsignedTinyInteger('capacity');
 
-            $table->enum('status',[
-                'Open',
-                'Running',
-                'Completed',
-                'Closed'
-            ])->default('Open');
+            $table->enum('status', ['Open', 'Running', 'Completed', 'Closed'])->default('Open');
 
             $table->timestamps();
         });

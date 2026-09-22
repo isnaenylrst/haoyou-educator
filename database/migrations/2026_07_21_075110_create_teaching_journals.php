@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('teaching_journals', function (Blueprint $table) {
@@ -27,14 +24,18 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->restrictOnDelete();
 
-            // Jadwal mengajar
+            // Jadwal mengajar (template hari/jam berulang)
             $table->foreignId('class_schedule_id')
                 ->constrained('class_schedules')
                 ->cascadeOnUpdate()
                 ->restrictOnDelete();
 
-            // Materi yang diajarkan (sudah mengetahui meeting ke-)
+            // Tanggal aktual pertemuan iterjadi
+            $table->date('session_date');
+
+            // Materi yang diajarkan (guru pilih sendiri dari daftar materi levelnya)
             $table->foreignId('material_id')
+                ->nullable()
                 ->constrained()
                 ->cascadeOnUpdate()
                 ->restrictOnDelete();
@@ -50,6 +51,11 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->nullOnDelete();
 
+            $table->foreignId('teacher_leave_id')
+                ->nullable()
+                ->constrained('teacher_leaves')
+                ->nullOnDelete();
+
             // Apakah kelas berjalan?
             $table->enum('class_status', [
                 'Conducted',
@@ -61,20 +67,16 @@ return new class extends Migration
             $table->text('learning_activities');
 
             // Kendala
-            $table->text('problems')
-                ->nullable();
+            $table->text('problems')->nullable();
 
             // Solusi
-            $table->text('solutions')
-                ->nullable();
+            $table->text('solutions')->nullable();
 
             // Hasil pembelajaran
-            $table->text('results')
-                ->nullable();
+            $table->text('results')->nullable();
 
             // Catatan tambahan
-            $table->text('notes')
-                ->nullable();
+            $table->text('notes')->nullable();
 
             // Status review jurnal
             $table->enum('status', [
@@ -87,9 +89,6 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('teaching_journals');

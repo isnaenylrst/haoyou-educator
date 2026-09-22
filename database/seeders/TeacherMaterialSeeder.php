@@ -18,8 +18,18 @@ class TeacherMaterialSeeder extends Seeder
     {
         $teacherIds = Teacher::pluck('id')->toArray();
 
+        if (empty($teacherIds)) {
+            $this->command?->warn('Belum ada Teacher, TeacherMaterialSeeder dilewati.');
+            return;
+        }
+
         $curriculumLevelId = Level::where('nama_level', 'Curriculum')->value('id_level');
         $reviewerIds = User::where('level_id', $curriculumLevelId)->pluck('id')->toArray();
+
+        if (empty($reviewerIds)) {
+            $this->command?->warn('Belum ada User dengan level "Curriculum", TeacherMaterialSeeder dilewati.');
+            return;
+        }
 
         $materialIds = Material::pluck('id');
 

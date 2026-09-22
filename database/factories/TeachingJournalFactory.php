@@ -8,23 +8,53 @@ class TeachingJournalFactory extends Factory
 {
     public function definition(): array
     {
+        $classStatus = fake()->randomElement(['Conducted', 'Conducted', 'Conducted', 'Cancelled', 'Rescheduled']);
+
         return [
             'is_substitute' => false,
             'substitute_teacher_id' => null,
-            'class_status' => fake()->randomElement(['Conducted', 'Conducted', 'Conducted', 'Cancelled', 'Rescheduled']),
-            'learning_activities' => fake()->paragraph(),
-            'problems' => fake()->optional()->sentence(),
-            'solutions' => fake()->optional()->sentence(),
-            'results' => fake()->optional()->sentence(),
-            'notes' => fake()->optional()->sentence(),
+            'teacher_leave_id' => null,
+            'class_status' => $classStatus,
+            'learning_activities' => $this->activitiesFor($classStatus),
+            'problems' => $classStatus === 'Conducted' ? fake()->optional()->sentence() : null,
+            'solutions' => $classStatus === 'Conducted' ? fake()->optional()->sentence() : null,
+            'results' => $classStatus === 'Conducted' ? fake()->optional()->sentence() : null,
+            'notes' => $this->notesFor($classStatus),
         ];
     }
-
-    public function substitute(int $substituteTeacherId): static
+    public function substitute(int $substituteTeacherId, ?int $teacherLeaveId = null): static
     {
         return $this->state([
             'is_substitute' => true,
             'substitute_teacher_id' => $substituteTeacherId,
+            'teacher_leave_id' => $teacherLeaveId,
+            'class_status' => 'Conducted', // guru pengganti hadir, kelas tetap jalan
         ]);
+    }
+
+    private function activitiesFor(string $status): string
+    {
+        return match ($status) {
+            'Conducted' => fake()->paragraph(),
+            'Cancelled' => 'Kelas dibatalkan, tidak ada aktivitas pembelajaran.',
+            'Rescheduled' => 'Kelas dijadwal ulang, sesi ini belum terlaksana.',
+            default => fake()->paragraph(),
+        };
+    }
+
+    private function notesFor(string $status): ?string
+    {
+        return match ($status) {
+            'Cancelled' => fake()->randomElement([
+                'Guru berhalangan hadir dan tidak ada pengganti',
+                'Seluruh siswa berhalangan hadir',
+                'Force majeure (cuaca/listrik padam)',
+            ]),
+            'Rescheduled' => fake()->randomElement([
+                'Dipindah atas kesepakatan siswa',
+                'Dipindah karena bentrok jadwal ruangan',
+            ]),
+            default => fake()->optional()->sentence(),
+        };
     }
 }

@@ -11,8 +11,6 @@ class DocumentTemplate extends Model
 
     protected $table = 'document_templates';
 
-    public $timestamps = true;
-
     protected $fillable = [
         'name',
         'document_type',

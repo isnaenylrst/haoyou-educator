@@ -22,17 +22,19 @@ return new class extends Migration
                 ->constrained()
                 ->cascadeOnDelete();
 
+            $table->foreignId('current_level_id')
+                ->nullable()
+                ->constrained('program_levels')
+                ->cascadeOnUpdate()
+                ->nullOnDelete();
+
             $table->string('name');
 
             $table->integer('points')->default(0);
 
             $table->date('join_date');
 
-            $table->enum('status',[
-                'Active',
-                'Inactive',
-                'Graduated'
-            ])->default('Active');
+            $table->enum('status', ['Active', 'Inactive', 'Graduated'])->default('Active');
 
             $table->timestamps();
         });

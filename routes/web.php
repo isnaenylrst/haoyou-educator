@@ -6,6 +6,8 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\CalonSiswa\PendaftaranController;
 use App\Http\Controllers\Siswa\SiswaDashboardController;
+
+// ===== KURIKULUM (punya Anda) =====
 use App\Http\Controllers\Kurikulum\DashboardController;
 use App\Http\Controllers\Kurikulum\SopController;
 use App\Http\Controllers\Kurikulum\DocumentTemplateController;
@@ -14,6 +16,17 @@ use App\Http\Controllers\Kurikulum\LetterController;
 use App\Http\Controllers\Kurikulum\MonitoringController;
 use App\Http\Controllers\Kurikulum\JadwalKonsultasiController;
 use App\Http\Controllers\Kurikulum\ReviewPengajuanController;
+
+// ===== ADMIN (punya teman) =====
+// PENTING: dikasih alias "Admin..." di depan supaya TIDAK BENTROK
+// dengan DashboardController milik Kurikulum di atas.
+use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\CalonSiswaController;
+use App\Http\Controllers\Admin\SiswaController;
+use App\Http\Controllers\Admin\ConvertController;
+use App\Http\Controllers\Admin\JadwalController;
+use App\Http\Controllers\Admin\KelasController as AdminKelasController;
+use App\Http\Controllers\Admin\ProgramLevelController;
 
 /*
 |--------------------------------------------------------------------------
@@ -139,7 +152,6 @@ Route::middleware(['auth', 'role:Curriculum'])
         // Lihat SOP di Browser
         Route::get('/sop/{document}', [SopController::class, 'show'])
             ->name('sop.show');
-
         // Upload Ulang SOP
         Route::put('/sop/{document}', [SopController::class, 'update'])
             ->name('sop.update');
@@ -151,117 +163,110 @@ Route::middleware(['auth', 'role:Curriculum'])
         // Hapus SOP
         Route::delete('/sop/{document}', [SopController::class, 'destroy'])
             ->name('sop.destroy');
-    
+
         /*
         |--------------------------------------------------------------------------
         | TEMPLATE PROGRESS REPORT
         |--------------------------------------------------------------------------
         */
 
-        // Upload Template Progress Report
         Route::post(
             '/template/upload',
             [DocumentTemplateController::class, 'store']
             )->name('template.upload');
 
-        // Update Template
         Route::put(
             '/template/{documentTemplate}',
             [DocumentTemplateController::class, 'update']
             )->name('template.update');
 
-        // Download Template
         Route::get(
             '/template/{documentTemplate}/download',
             [DocumentTemplateController::class, 'download']
             )->name('template.download');
 
-        // Hapus Template
         Route::delete(
             '/template/{documentTemplate}',
             [DocumentTemplateController::class, 'destroy']
         )->name('template.destroy');
-    
-/*
-|--------------------------------------------------------------------------
-| MATERIAL
-|--------------------------------------------------------------------------
-*/
 
-Route::get('/materi', [MaterialController::class, 'index'])
-    ->name('materi');
+        /*
+        |--------------------------------------------------------------------------
+        | MATERIAL
+        |--------------------------------------------------------------------------
+        */
 
-Route::post('/materi', [MaterialController::class, 'store'])
-    ->name('materi.store');
+        Route::get('/materi', [MaterialController::class, 'index'])
+            ->name('materi');
 
-Route::put('/materi/{material}', [MaterialController::class, 'update'])
-    ->name('materi.update');
+        Route::post('/materi', [MaterialController::class, 'store'])
+            ->name('materi.store');
 
-Route::delete('/materi/{material}', [MaterialController::class, 'destroy'])
-    ->name('materi.destroy');
+        Route::put('/materi/{material}', [MaterialController::class, 'update'])
+            ->name('materi.update');
 
+        Route::delete('/materi/{material}', [MaterialController::class, 'destroy'])
+            ->name('materi.destroy');
 
-    //Pemberitahuan Surat
-    Route::get('/surat', [LetterController::class, 'index'])
-    ->name('surat');
+        //Pemberitahuan Surat
+        Route::get('/surat', [LetterController::class, 'index'])
+            ->name('surat');
 
-    Route::post('/surat', [LetterController::class, 'store'])
-    ->name('surat.store');
+        Route::post('/surat', [LetterController::class, 'store'])
+            ->name('surat.store');
 
-    Route::delete('/surat/{document}', [LetterController::class, 'destroy'])
-    ->name('surat.destroy');
+        Route::delete('/surat/{document}', [LetterController::class, 'destroy'])
+            ->name('surat.destroy');
 
-    //Monitoring Guru
-    Route::get('/monitoring', [MonitoringController::class, 'index'])
-    ->name('monitoring');
+        //Monitoring Guru
+        Route::get('/monitoring', [MonitoringController::class, 'index'])
+            ->name('monitoring');
 
-// JADWAL KONSULTASI
-Route::get('/jadwal-konsultasi', [JadwalKonsultasiController::class, 'index'])
-    ->name('jadwal-konsultasi');
+        // JADWAL KONSULTASI
+        Route::get('/jadwal-konsultasi', [JadwalKonsultasiController::class, 'index'])
+            ->name('jadwal-konsultasi');
 
-Route::post('/jadwal-konsultasi', [JadwalKonsultasiController::class, 'store'])
-    ->name('jadwal-konsultasi.store');
+        Route::post('/jadwal-konsultasi', [JadwalKonsultasiController::class, 'store'])
+            ->name('jadwal-konsultasi.store');
 
-Route::patch('/jadwal-konsultasi/{consultation}', [JadwalKonsultasiController::class, 'update'])
-    ->name('jadwal-konsultasi.update');
+        Route::patch('/jadwal-konsultasi/{consultation}', [JadwalKonsultasiController::class, 'update'])
+            ->name('jadwal-konsultasi.update');
 
-Route::patch('/jadwal-konsultasi/{consultation}/complete', [JadwalKonsultasiController::class, 'complete'])
-    ->name('jadwal-konsultasi.complete');
+        Route::patch('/jadwal-konsultasi/{consultation}/complete', [JadwalKonsultasiController::class, 'complete'])
+            ->name('jadwal-konsultasi.complete');
 
-Route::patch('/jadwal-konsultasi/{consultation}/cancel', [JadwalKonsultasiController::class, 'cancel'])
-    ->name('jadwal-konsultasi.cancel');
+        Route::patch('/jadwal-konsultasi/{consultation}/cancel', [JadwalKonsultasiController::class, 'cancel'])
+            ->name('jadwal-konsultasi.cancel');
 
-Route::delete('/jadwal-konsultasi/{consultation}', [JadwalKonsultasiController::class, 'destroy'])
-    ->name('jadwal-konsultasi.destroy');
+        Route::delete('/jadwal-konsultasi/{consultation}', [JadwalKonsultasiController::class, 'destroy'])
+            ->name('jadwal-konsultasi.destroy');
 
-//REVIEW PENGAJUAN
-/*
-| REVIEW PENGAJUAN
-*/
+        /*
+        | REVIEW PENGAJUAN
+        */
 
-Route::get('/review-pengajuan', [ReviewPengajuanController::class, 'index'])
-    ->name('review-pengajuan');
+        Route::get('/review-pengajuan', [ReviewPengajuanController::class, 'index'])
+            ->name('review-pengajuan');
 
-Route::patch('/review-pengajuan/sesi/{teachingJournal}/ack', [ReviewPengajuanController::class, 'ackSession'])
-    ->name('review-pengajuan.ack-session');
+        Route::patch('/review-pengajuan/sesi/{teachingJournal}/ack', [ReviewPengajuanController::class, 'ackSession'])
+            ->name('review-pengajuan.ack-session');
 
-Route::post('/review-pengajuan/sesi/{classSchedule}/reminder', [ReviewPengajuanController::class, 'sendReminder'])
-    ->name('review-pengajuan.reminder');
+        Route::post('/review-pengajuan/sesi/{classSchedule}/reminder', [ReviewPengajuanController::class, 'sendReminder'])
+            ->name('review-pengajuan.reminder');
 
-Route::patch('/review-pengajuan/material/{teacherMaterial}', [ReviewPengajuanController::class, 'reviewMaterial'])
-    ->name('review-pengajuan.material');
+        Route::patch('/review-pengajuan/material/{teacherMaterial}', [ReviewPengajuanController::class, 'reviewMaterial'])
+            ->name('review-pengajuan.material');
 
-Route::patch('/review-pengajuan/jurnal/{teachingJournal}', [ReviewPengajuanController::class, 'reviewJournal'])
-    ->name('review-pengajuan.journal');
+        Route::patch('/review-pengajuan/jurnal/{teachingJournal}', [ReviewPengajuanController::class, 'reviewJournal'])
+            ->name('review-pengajuan.journal');
 
-Route::patch('/review-pengajuan/progress-report/{progressReport}', [ReviewPengajuanController::class, 'reviewReport'])
-    ->name('review-pengajuan.report');
+        Route::patch('/review-pengajuan/progress-report/{progressReport}', [ReviewPengajuanController::class, 'reviewReport'])
+            ->name('review-pengajuan.report');
 
-Route::patch('/review-pengajuan/cuti/{teacherLeave}', [ReviewPengajuanController::class, 'reviewLeave'])
-    ->name('review-pengajuan.leave');
+        Route::patch('/review-pengajuan/cuti/{teacherLeave}', [ReviewPengajuanController::class, 'reviewLeave'])
+            ->name('review-pengajuan.leave');
 
-    
-});
+    });
 
 /*
 |--------------------------------------------------------------------------
@@ -273,9 +278,6 @@ Route::middleware(['auth', 'role:Teacher'])
     ->prefix('guru')
     ->name('teacher.')
     ->group(function () {
-
-        // NOTE: sementara masih Route::view (data dummy di Blade).
-        // Akan diganti ke Controller + data asli dari DB pada tahap berikutnya.
 
         Route::view('/dashboard', 'guru.dashboard')
             ->name('dashboard');
@@ -307,3 +309,109 @@ Route::middleware(['auth', 'role:Teacher'])
         Route::view('/cuti', 'guru.cuti')
             ->name('cuti');
     });
+
+/*
+|--------------------------------------------------------------------------
+| ADMIN (punya teman)
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
+
+    // DASHBOARD -- pakai alias AdminDashboardController!
+    Route::get('/dashboard', [AdminDashboardController::class, 'index'])
+        ->name('dashboard');
+
+    //CALON SISWA
+    Route::get('/calon-siswa', [CalonSiswaController::class, 'index'])
+        ->name('calon-siswa');
+    Route::post('/calon-siswa', [CalonSiswaController::class, 'store'])
+        ->name('calon-siswa.store');
+    Route::get('/calon-siswa/{candidateStudent}/edit', [CalonSiswaController::class, 'edit'])
+        ->name('calon-siswa.edit');
+    Route::put('/calon-siswa/{candidateStudent}', [CalonSiswaController::class, 'update'])
+        ->name('calon-siswa.update');
+    Route::delete('/calon-siswa/{candidateStudent}', [CalonSiswaController::class, 'destroy'])
+        ->name('calon-siswa.destroy');
+
+    //SISWA
+    Route::get('/siswa', [SiswaController::class, 'index'])->name('siswa');
+    Route::get('/siswa/{siswa}/edit', [SiswaController::class, 'edit'])->name('siswa.edit');
+    Route::put('/siswa/{siswa}', [SiswaController::class, 'update'])->name('siswa.update');
+    Route::get('/siswa/{siswa}', [SiswaController::class, 'show'])->name('siswa.show');
+    Route::get('/siswa/{siswa}/continue', [SiswaController::class, 'continueProgramForm'])->name('siswa.continue.form');
+    Route::post('/siswa/{siswa}/continue', [SiswaController::class, 'continueProgram'])->name('siswa.continue');
+
+    //CONVERT CALON SISWA MENJADI SISWA
+    Route::get('calon-siswa/{candidateStudent}/convert', [ConvertController::class, 'create'])
+        ->name('calon-siswa.convert');
+    Route::post('calon-siswa/{candidateStudent}/convert', [ConvertController::class, 'store'])
+        ->name('calon-siswa.convert.store');
+
+    Route::patch('enrollments/{enrollment}/assign-class', [ConvertController::class, 'assignClass'])
+        ->name('enrollments.assign-class');
+
+    Route::get('enrollments/{enrollment}/waiting-class-options', [SiswaController::class, 'waitingClassOptions'])
+        ->name('enrollments.waiting-class-options');
+
+    Route::get('/jadwal', [JadwalController::class, 'index'])
+        ->name('jadwal');
+
+    // pakai alias AdminKelasController!
+    Route::get('/kelas', [AdminKelasController::class, 'index'])
+        ->name('kelas');
+
+    //PROGRAM & LEVEL
+    Route::get('/program-level', [ProgramLevelController::class, 'index'])
+        ->name('program-level');
+
+    Route::get('/program-level/struktur', [ProgramLevelController::class, 'struktur'])
+        ->name('program-level.struktur');
+
+    Route::post('/program-level/program', [ProgramLevelController::class, 'storeProgram'])
+        ->name('program-level.program.store');
+    Route::get('/program-level/program/{program}/edit', [ProgramLevelController::class, 'editProgram'])
+        ->name('program-level.program.edit');
+    Route::put('/program-level/program/{program}', [ProgramLevelController::class, 'updateProgram'])
+        ->name('program-level.program.update');
+    Route::delete('/program-level/program/{program}', [ProgramLevelController::class, 'destroyProgram'])
+        ->name('program-level.program.destroy');
+
+    Route::post('/program-level/category', [ProgramLevelController::class, 'storeCategory'])
+        ->name('program-level.category.store');
+    Route::get('/program-level/category/{category}/edit', [ProgramLevelController::class, 'editCategory'])
+        ->name('program-level.category.edit');
+    Route::put('/program-level/category/{category}', [ProgramLevelController::class, 'updateCategory'])
+        ->name('program-level.category.update');
+    Route::delete('/program-level/category/{category}', [ProgramLevelController::class, 'destroyCategory'])
+        ->name('program-level.category.destroy');
+
+    Route::post('/program-level/level', [ProgramLevelController::class, 'storeLevel'])
+        ->name('program-level.level.store');
+    Route::get('/program-level/level/{level}/edit', [ProgramLevelController::class, 'editLevel'])
+        ->name('program-level.level.edit');
+    Route::put('/program-level/level/{level}', [ProgramLevelController::class, 'updateLevel'])
+        ->name('program-level.level.update');
+    Route::delete('/program-level/level/{level}', [ProgramLevelController::class, 'destroyLevel'])
+        ->name('program-level.level.destroy');
+
+    //PAKET REGULER
+    Route::post('/program-level/paket', [ProgramLevelController::class, 'storePackage'])
+        ->name('program-level.paket.store');
+    Route::get('/program-level/paket/{package}/edit', [ProgramLevelController::class, 'editPackage'])
+        ->name('program-level.paket.edit');
+    Route::put('/program-level/paket/{package}', [ProgramLevelController::class, 'updatePackage'])
+        ->name('program-level.paket.update');
+    Route::delete('/program-level/paket/{package}', [ProgramLevelController::class, 'destroyPackage'])
+        ->name('program-level.paket.destroy');
+
+    //PAKET PRIVATE
+    Route::post('/program-level/private', [ProgramLevelController::class, 'storePrivate'])
+        ->name('program-level.private.store');
+    Route::get('/program-level/private/{privatePackage}/edit', [ProgramLevelController::class, 'editPrivate'])
+        ->name('program-level.private.edit');
+    Route::put('/program-level/private/{privatePackage}', [ProgramLevelController::class, 'updatePrivate'])
+        ->name('program-level.private.update');
+    Route::delete('/program-level/private/{privatePackage}', [ProgramLevelController::class, 'destroyPrivate'])
+        ->name('program-level.private.destroy');
+});

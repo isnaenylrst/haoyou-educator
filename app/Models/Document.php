@@ -16,6 +16,7 @@ class Document extends Model
     protected $fillable = [
         'user_id',
         'document_template_id',
+        'program_level_id',
         'title',
         'document_type',
         'description',
@@ -91,111 +92,9 @@ class Document extends Model
         );
     }
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | SCOPE
-    |--------------------------------------------------------------------------
-    */
-
-    public function scopeSop($query)
+    // Baru: dipakai saat dokumen ini sertifikat kelulusan level tertentu
+    public function programLevel()
     {
-        return $query->where(
-            'document_type',
-            'SOP'
-        );
+        return $this->belongsTo(ProgramLevel::class);
     }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | ACCESSOR FILE URL
-    |--------------------------------------------------------------------------
-    */
-
-    public function getFileUrlAttribute()
-    {
-        if (!$this->file_path) {
-            return null;
-        }
-
-        return Storage::url(
-            $this->file_path
-        );
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | ACCESSOR EXTENSION
-    |--------------------------------------------------------------------------
-    */
-
-    public function getExtensionAttribute()
-    {
-        if (!$this->file_path) {
-            return null;
-        }
-
-        return strtoupper(
-            pathinfo(
-                $this->file_path,
-                PATHINFO_EXTENSION
-            )
-        );
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | ACCESSOR NAMA JENIS SURAT
-    |--------------------------------------------------------------------------
-    */
-
-    public function getLetterTypeNameAttribute()
-    {
-        return match ($this->document_type) {
-
-            'SURAT_LIBUR' =>
-                'Surat Libur',
-
-            'SURAT_DINAS' =>
-                'Surat Dinas',
-
-            'LOA' =>
-                'LoA',
-
-            'SURAT' =>
-                'Surat',
-
-            default =>
-                $this->document_type,
-
-        };
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | ACCESSOR NAMA PENERIMA
-    |--------------------------------------------------------------------------
-    */
-
-    public function getRecipientNameAttribute()
-    {
-        if ($this->visibility === 'Teacher') {
-
-            return 'Semua Guru';
-
-        }
-
-        if (
-            $this->visibility === 'Private'&& $this->user) {
-
-            return $this->user->name;
-
-        }
-
-        return '-';
-    }
-}  
+}
