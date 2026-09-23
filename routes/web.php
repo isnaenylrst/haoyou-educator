@@ -69,6 +69,8 @@ Route::get('/daftar/sukses', [PendaftaranController::class, 'sukses'])
 |--------------------------------------------------------------------------
 */
 
+Route::middleware('auth')->group(function () {
+
 Route::get('/dashboard', [SiswaDashboardController::class, 'dashboard'])
     ->name('student.dashboard');
 
@@ -90,5 +92,6 @@ Route::get('/notifikasi', [SiswaDashboardController::class, 'notifikasi'])
 Route::get('/sertifikat', [SiswaDashboardController::class, 'sertifikat'])
     ->name('sertifikat.index');
 
-Route::get('/progress-report', [SiswaDashboardController::class, 'progresReport'])
-    ->name('progresreport.index');
+Route::get('/progress-report', [SiswaDashboardController::class, 'progressReport'])
+    ->name('progress-report.index');
+});

@@ -25,67 +25,111 @@
 
 @section('content')
 <div class="flex min-h-screen bg-[#f7f8fa]">
+{{-- ===================== SIDEBAR ===================== --}}
+<aside class="w-[230px] bg-white text-ink p-5 border-r border-line hidden md:flex flex-col min-h-screen">
 
-  {{-- ===================== SIDEBAR ===================== --}}
-  <aside class="w-[230px] bg-white text-ink p-5 flex-shrink-0 hidden md:block border-r border-line">
+    {{-- Logo --}}
     <div class="flex flex-col items-center justify-center mb-8">
-    <img
-        src="{{ asset('assets/img/logo.png') }}"
-        alt="Haoyou"
-        class="w-16 h-16 object-contain"
-    >
-    <h2 class="mt-2 text-[#FFDD05] font-bold text-lg tracking-wide">
-        HAOYOU
-    </h2>
+        <img
+            src="{{ asset('assets/img/logo.png') }}"
+            alt="Haoyou"
+            class="w-16 h-16 object-contain">
+
+        <h2 class="mt-2 text-[#FFDD05] font-bold text-lg tracking-wide">
+            HAOYOU
+        </h2>
     </div>
+
     <div class="border-b border-line mb-6"></div>
 
-    <a href="{{ route('student.dashboard') }}" class="side-link alumni-restricted {{ request()->routeIs('student.dashboard') ? 'is-active' : '' }}">
-    <span>🏠</span> Dashboard
-    </a>
+    {{-- Menu --}}
+    <div>
 
-    <a href="{{ route('notifikasi.index') }}" class="side-link alumni-restricted {{ request()->routeIs('notifikasi.*') ? 'is-active' : '' }}">
-        <span>🔔</span> Notifikasi
-    </a>
+        <a href="{{ route('student.dashboard') }}"
+            class="side-link alumni-restricted {{ request()->routeIs('student.dashboard') ? 'is-active' : '' }}">
+            <span>🏠</span> Dashboard
+        </a>
 
-    <a href="{{ route('program.index') }}" class="side-link alumni-restricted {{ request()->routeIs('program.*') ? 'is-active' : '' }}">
-        <span>📘</span> Program Belajar
-    </a>
+        <a href="{{ route('notifikasi.index') }}"
+            class="side-link alumni-restricted {{ request()->routeIs('notifikasi.*') ? 'is-active' : '' }}">
+            <span>🔔</span> Notifikasi
+        </a>
 
-    <a href="{{ route('kelassaya.index') }}" class="side-link alumni-restricted {{ request()->routeIs('kelassaya.*') ? 'is-active' : '' }}">
-        <span>🎓</span> Kelas Saya
-    </a>
+        <a href="{{ route('program.index') }}"
+            class="side-link alumni-restricted {{ request()->routeIs('program.*') ? 'is-active' : '' }}">
+            <span>📘</span> Program Belajar
+        </a>
 
-    <a href="{{ route('booking.index') }}" class="side-link alumni-restricted {{ request()->routeIs('booking.*') ? 'is-active' : '' }}">
-        <span>🗓️</span> Booking Kelas
-    </a>
+        <a href="{{ route('kelassaya.index') }}"
+            class="side-link alumni-restricted {{ request()->routeIs('kelassaya.*') ? 'is-active' : '' }}">
+            <span>🎓</span> Kelas Saya
+        </a>
 
-    <a href="{{ route('progresreport.index') }}" class="side-link {{ request()->routeIs('progresreport.*') ? 'is-active' : '' }}">
-        <span>📊</span> Progress Report
-    </a>
+        <a href="{{ route('booking.index') }}"
+            class="side-link alumni-restricted {{ request()->routeIs('booking.*') ? 'is-active' : '' }}">
+            <span>🗓️</span> Booking Kelas
+        </a>
 
-    <a href="{{ route('sertifikat.index') }}" class="side-link {{ request()->routeIs('sertifikat.*') ? 'is-active' : '' }}">
-        <span>🏅</span> Sertifikat
-    </a>
+        <a href="{{ route('progress-report.index') }}"
+            class="side-link {{ request()->routeIs('progress-report.*') ? 'is-active' : '' }}">
+            <span>📊</span> Progress Report
+        </a>
 
-    <a href="{{ route('profil.index') }}" class="side-link alumni-restricted {{ request()->routeIs('profil.*') ? 'is-active' : '' }}">
-        <span>👤</span> Profil
-    </a>
+        <a href="{{ route('sertifikat.index') }}"
+            class="side-link {{ request()->routeIs('sertifikat.*') ? 'is-active' : '' }}">
+            <span>🏅</span> Sertifikat
+        </a>
 
-    <div class="mt-8 pt-4 border-t border-line text-[11px] text-gray-500">
-      Siswa: {{ auth()->user()->nama_lengkap ?? 'Dina Anggraini' }}<br>
-      HSK 2 · Hybrid
+        <a href="{{ route('profil.index') }}"
+            class="side-link alumni-restricted {{ request()->routeIs('profil.*') ? 'is-active' : '' }}">
+            <span>👤</span> Profil
+        </a>
+
     </div>
 
-    {{-- Demo toggle: karena database/otentikasi status alumni belum final,
-         tombol ini HANYA untuk demo tampilan — nanti diganti logika
-         `auth()->user()->isAlumni()` yang sesungguhnya. --}}
+    {{-- Bagian bawah sidebar --}}
+    <div class="mt-auto">
 
-    <button id="alumniToggle" onclick="toggleAlumniMode()"
+        <div class="pt-4 border-t border-line text-[11px] text-gray-500">
+            Siswa: {{ auth()->user()->nama_lengkap ?? 'Dina Anggraini' }}<br>
+            HSK 2 · Hybrid
+        </div>
+
+        <button
+            id="alumniToggle"
+            onclick="toggleAlumniMode()"
             class="alumni-toggle-btn mt-4 w-full text-[11px] rounded-full py-2 transition">
-      🎓 Mode: Siswa Aktif (demo)
+
+            🎓 Mode: Siswa Aktif (demo)
+
+        </button>
+
+        {{-- Logout --}}
+       <form action="{{ route('logout') }}" method="POST" class="mt-3">
+    @csrf
+
+    <button
+        type="submit"
+        class="w-full flex items-center justify-start gap-3 bg-[#FFDD05] hover:bg-yellow-400 rounded-full px-6 py-3 text-black font-semibold transition">
+
+        <svg xmlns="http://www.w3.org/2000/svg"
+             class="w-5 h-5"
+             fill="none"
+             viewBox="0 0 24 24"
+             stroke="currentColor"
+             stroke-width="2">
+            <path stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M17 16l4-4m0 0l-4-4m4 4H9m4 8H7a2 2 0 01-2-2V6a2 2 0 012-2h6"/>
+        </svg>
+
+        <span>Logout</span>
+
     </button>
-  </aside>
+</form>
+    </div>
+
+</aside>
 
   {{-- ===================== MAIN ===================== --}}
   <main class="flex-1 p-6 md:p-10">

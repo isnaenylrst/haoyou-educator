@@ -21,8 +21,17 @@ class User extends Authenticatable
 
     protected $hidden = [
         'password',
+        'remember_token',
     ];
+    protected $casts = [
+            'password' => 'hashed',
+        ];
 
+ /*
+    |--------------------------------------------------------------------------
+    | RELASI LEVEL
+    |--------------------------------------------------------------------------
+    */
 public function level()
 {
     return $this->belongsTo(
@@ -32,53 +41,82 @@ public function level()
     );
 }
 
-    public function teacher()
-    {
-        return $this->hasOne(Wali::class, 'siswa_id');
-    }
+ /*
+    |--------------------------------------------------------------------------
+    | RELASI SISWA
+    |--------------------------------------------------------------------------
+    */
 
     public function student()
     {
-        return $this->status_akun === 'alumni';
+        return $this->hasOne(
+            Student::class,
+            'user_id',
+            'id'
+        );
     }
+
+/*
+    |--------------------------------------------------------------------------
+    | RELASI GURU
+    |--------------------------------------------------------------------------
+    */
+    public function teacher()
+    {
+       return $this->hasOne(
+            Teacher::class,
+            'user_id',
+            'id'
+        );
+    }
+/*
+    |--------------------------------------------------------------------------
+    | RELASI CURRICULUM
+    |--------------------------------------------------------------------------
+    */
 
     public function curriculum()
     {
-        return $this->hasOne(Curriculum::class);
-    }
-
-    public function uploadedMaterials()
-    {
-        return $this->hasMany(Material::class, 'uploaded_by');
-    }
-
-    public function uploadedProgressReports()
-    {
-        return $this->hasMany(ProgressReport::class, 'uploaded_by');
-    }
-
-    public function uploadedTemplates()
-    {
-        return $this->hasMany(DocumentTemplate::class, 'uploaded_by');
-    }
-
-    public function uploadedDocuments()
-    {
-        return $this->hasMany(Document::class, 'uploaded_by');
-    }
-
-    public function documents()
-    {
-        return $this->hasMany(Document::class);
-    }
-
-    public function approvedTeacherMaterials()
-    {
-        return $this->hasMany(TeacherMaterial::class, 'approved_by');
-    }
-
-    public function approvedTeacherLeaves()
-    {
-        return $this->hasMany(TeacherLeave::class, 'approved_by');
+        return $this->hasOne(
+            Curriculum::class,
+            'user_id',
+            'id'
+        );
     }
 }
+
+//     public function uploadedMaterials()
+//     {
+//         return $this->hasMany(Material::class, 'uploaded_by');
+//     }
+
+//     public function uploadedProgressReports()
+//     {
+//         return $this->hasMany(ProgressReport::class, 'uploaded_by');
+//     }
+
+//     public function uploadedTemplates()
+//     {
+//         return $this->hasMany(DocumentTemplate::class, 'uploaded_by');
+//     }
+
+//     public function uploadedDocuments()
+//     {
+//         return $this->hasMany(Document::class, 'uploaded_by');
+//     }
+
+//     public function documents()
+//     {
+//         return $this->hasMany(Document::class);
+//     }
+
+//     public function approvedTeacherMaterials()
+//     {
+//         return $this->hasMany(TeacherMaterial::class, 'approved_by');
+//     }
+
+//     public function approvedTeacherLeaves()
+//     {
+//         return $this->hasMany(TeacherLeave::class, 'approved_by');
+//     }
+// }
