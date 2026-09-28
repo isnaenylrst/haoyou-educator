@@ -132,12 +132,18 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('/siswa/{siswa}', [SiswaController::class, 'show'])->name('siswa.show');
     Route::get('/siswa/{siswa}/continue', [SiswaController::class, 'continueProgramForm'])->name('siswa.continue.form');
     Route::post('/siswa/{siswa}/continue', [SiswaController::class, 'continueProgram'])->name('siswa.continue');
+    Route::get('siswa/{siswa}/formulir', [\App\Http\Controllers\Admin\RegistrationFormController::class, 'download'])
+        ->name('siswa.formulir');
+    Route::get('dokumen/syarat-ketentuan', [\App\Http\Controllers\Admin\RegistrationFormController::class, 'terms'])
+        ->name('dokumen.syarat-ketentuan');
 
     //CONVERT CALON SISWA MENJADI SISWA
     Route::get('calon-siswa/{candidateStudent}/convert', [ConvertController::class, 'create'])
-    ->name('calon-siswa.convert');
+        ->name('calon-siswa.convert');
     Route::post('calon-siswa/{candidateStudent}/convert', [ConvertController::class, 'store'])
-    ->name('calon-siswa.convert.store');
+        ->name('calon-siswa.convert.store');
+    Route::get('calon-siswa/{candidateStudent}/convert/selesai', [ConvertController::class, 'success'])
+        ->name('calon-siswa.convert.success');
 
     //ASSIGN KELAS UNTUK ENROLLMENT YANG MASIH WAITING CLASS
     Route::patch('enrollments/{enrollment}/assign-class', [ConvertController::class, 'assignClass'])
@@ -148,8 +154,14 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
         ->name('enrollments.waiting-class-options');        
     Route::get('/jadwal', [JadwalController::class, 'index'])
         ->name('jadwal');
-    Route::get('/kelas', [KelasController::class, 'index'])
-        ->name('kelas');
+
+    // KELAS 
+    Route::get('/kelas', [KelasController::class, 'index'])->name('kelas');
+    Route::post('/kelas', [KelasController::class, 'store'])->name('kelas.store');
+    Route::put('/kelas/{id}', [KelasController::class, 'update'])->name('kelas.update');
+    Route::get('kelas/{id}/siswa', [KelasController::class, 'students'])->name('admin.kelas.students');
+    Route::get('kelas/{id}/siswa/cari', [KelasController::class, 'searchStudents'])->name('admin.kelas.students.search');
+    Route::post('kelas/{id}/siswa', [KelasController::class, 'enrollStudent'])->name('admin.kelas.students.store');
 
     //PROGRAM & LEVEL (index + paket reguler program_packages + paket private private_packages)
     Route::get('/program-level', [ProgramLevelController::class, 'index'])

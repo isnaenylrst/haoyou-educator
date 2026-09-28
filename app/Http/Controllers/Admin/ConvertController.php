@@ -9,11 +9,13 @@ use App\Models\ClassModel;
 use App\Models\Level;
 use App\Models\Payment;
 use App\Models\PrivatePackage;
+use App\Models\ProgramLevel;
 use App\Models\ProgramPackage;
 use App\Models\Student;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
@@ -23,24 +25,42 @@ class ConvertController extends Controller
     {
         abort_if($candidateStudent->student()->exists(), 404, 'Calon siswa ini sudah menjadi siswa.');
 
-        $candidateStudent->load('program');
+        $candidateStudent->load(['program', 'privatePackage', 'availableSchedules']);
 
-        $packages = ProgramPackage::where('program_packages.program_id', $candidateStudent->program_id)
-            ->leftJoin('program_categories', 'program_categories.id', '=', 'program_packages.category_id')
-            ->leftJoin('program_levels', 'program_levels.id', '=', 'program_packages.level_id')
-            ->select(
-                'program_packages.*',
-                'program_categories.category_name',
-                'program_levels.level_name'
-            )
-            ->get();
+        // Kandidat yang minatnya Private tidak punya program_id (nullable sejak
+        // gap-analysis kemarin), jadi query paket/level/kelas reguler di bawah
+        // cuma dijalankan kalau memang ada program_id — kalau tidak, biarkan
+        // koleksi kosong daripada whereRaw(..., null) yang salah kaprah.
+        $packages = collect();
+        $levels = collect();
+        $classes = collect();
 
-        $packages = $this->sortPackagesByCategoryAndLevel($packages);
+        if ($candidateStudent->program_id) {
+            $packages = ProgramPackage::where('program_packages.program_id', $candidateStudent->program_id)
+                ->leftJoin('program_categories', 'program_categories.id', '=', 'program_packages.category_id')
+                ->leftJoin('program_levels', 'program_levels.id', '=', 'program_packages.level_id')
+                ->select(
+                    'program_packages.*',
+                    'program_categories.category_name',
+                    'program_levels.level_name'
+                )
+                ->get();
 
-        $classes = ClassModel::whereIn('program_package_id', $packages->pluck('id'))
-            ->whereIn('status', ['Open', 'Running'])
-            ->orderBy('class_name')
-            ->get(['id', 'class_name', 'program_package_id', 'delivery_mode', 'status']);
+            $packages = $this->sortPackagesByCategoryAndLevel($packages);
+
+            $levels = ProgramLevel::where('program_levels.program_id', $candidateStudent->program_id)
+                ->leftJoin('program_categories', 'program_categories.id', '=', 'program_levels.category_id')
+                ->select('program_levels.*', 'program_categories.category_name')
+                ->orderBy('program_levels.category_id')
+                ->orderBy('program_levels.sort_order')
+                ->get();
+
+            $classes = ClassModel::with('schedules')
+                ->whereIn('program_package_id', $packages->pluck('id'))
+                ->whereIn('status', ['Open', 'Running'])
+                ->orderBy('class_name')
+                ->get();
+        }
 
         $privatePackages = PrivatePackage::where('is_active', true)
             ->orderBy('package_name')
@@ -58,13 +78,20 @@ class ConvertController extends Controller
             }
         }
 
+        // Toggle tipe paket di form dibuka sesuai minat aslinya, bukan selalu
+        // default ke Program Reguler — supaya kandidat yang mendaftar minat
+        // Private tidak perlu klik toggle manual dulu tiap kali dibuka.
+        $defaultPackageType = $candidateStudent->private_package_id ? 'private' : 'program';
+
         return view('admin.siswaconvert', compact(
             'candidateStudent',
             'packages',
+            'levels',
             'classes',
             'privatePackages',
             'candidateAge',
-            'recommendedCategory'
+            'recommendedCategory',
+            'defaultPackageType'
         ));
     }
 
@@ -103,7 +130,7 @@ class ConvertController extends Controller
             $age >= 15 => 'Feixiang',
             default => null,
         };
-    }  
+    }
 
     public function store(Request $request, CandidateStudent $candidateStudent)
     {
@@ -113,10 +140,13 @@ class ConvertController extends Controller
             'package_type'        => 'required|in:program,private',
             'program_package_id'  => 'required_if:package_type,program|nullable|exists:program_packages,id',
             'private_package_id'  => 'required_if:package_type,private|nullable|exists:private_packages,id',
-            'class_id'            => 'nullable|exists:classes,id', // <-- required_if dihapus
+            'level_id'            => 'required_if:package_type,program|nullable|exists:program_levels,id',
+            'class_id'            => 'nullable|exists:classes,id',
             'amount_paid'         => 'required|numeric|min:1',
             'payment_method'      => 'required|string|max:100',
             'payment_date'        => 'required|date',
+        ], [
+            'level_id.required_if' => 'Level wajib dipilih.',
         ]);
 
         DB::transaction(function () use ($validated, $candidateStudent) {
@@ -126,6 +156,33 @@ class ConvertController extends Controller
             $package = $isPrivate
                 ? PrivatePackage::findOrFail($validated['private_package_id'])
                 : ProgramPackage::findOrFail($validated['program_package_id']);
+
+            // ---- Tentukan level siswa (hanya untuk paket Reguler) ----
+            $levelId = null;
+
+            if (! $isPrivate) {
+                $level = ProgramLevel::findOrFail($validated['level_id']);
+
+                abort_unless(
+                    (int) $level->program_id === (int) $candidateStudent->program_id,
+                    422,
+                    'Level tidak sesuai dengan program calon siswa ini.'
+                );
+
+                // Paket yang levelnya sudah tetap (mis. HSK) selalu memakai level
+                // dari paket, mengabaikan apa pun yang terkirim dari form.
+                $levelId = $package->level_id ?: $level->id;
+            }
+
+            // ---- Kelas yang dipilih harus sesuai paket & level ----
+            if (! $isPrivate && ! empty($validated['class_id'])) {
+                $classMatches = ClassModel::where('id', $validated['class_id'])
+                    ->where('program_package_id', $validated['program_package_id'])
+                    ->where('level_id', $levelId)
+                    ->exists();
+
+                abort_unless($classMatches, 422, 'Kelas yang dipilih tidak sesuai dengan paket/level yang dipilih.');
+            }
 
             $studentLevel = Level::where('nama_level', 'Student')->firstOrFail();
 
@@ -141,6 +198,7 @@ class ConvertController extends Controller
             $student = Student::create([
                 'candidate_student_id' => $candidateStudent->id,
                 'user_id' => $user->id,
+                'current_level_id' => $levelId,
                 'name' => $candidateStudent->name,
                 'points' => 0,
                 'join_date' => now(),
@@ -186,7 +244,7 @@ class ConvertController extends Controller
         });
 
         return redirect()
-            ->route('admin.calon-siswa')
+            ->route('admin.calon-siswa.convert.success', $candidateStudent->id)
             ->with('success', 'Calon siswa berhasil dikonversi menjadi siswa aktif.');
     }
 
@@ -198,9 +256,10 @@ class ConvertController extends Controller
             'class_id' => 'required|exists:classes,id',
         ]);
 
-        // pastikan kelas yang dipilih sesuai program_package enrollment ini
+        // pastikan kelas yang dipilih sesuai program_package & level enrollment ini
         $classBelongsToPackage = ClassModel::where('id', $validated['class_id'])
             ->where('program_package_id', $enrollment->program_package_id)
+            ->when($enrollment->student?->current_level_id, fn ($q, $levelId) => $q->where('level_id', $levelId))
             ->exists();
 
         abort_unless($classBelongsToPackage, 422, 'Kelas tidak sesuai dengan paket program siswa ini.');
@@ -233,4 +292,18 @@ class ConvertController extends Controller
     {
         return 'INV-' . now()->format('Ymd') . '-' . str_pad((Payment::max('id') + 1), 4, '0', STR_PAD_LEFT);
     }
+
+    public function success(CandidateStudent $candidateStudent)
+{
+    $student = $candidateStudent->student()
+        ->with([
+            'currentLevel.category',
+            'activeEnrollment.class.schedules',
+            'activeEnrollment.programPackage.program',
+            'activeEnrollment.privatePackage',
+        ])
+        ->firstOrFail();
+
+    return view('admin.siswaconvert-success', compact('candidateStudent', 'student'));
+}
 }

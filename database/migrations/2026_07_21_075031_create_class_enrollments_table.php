@@ -19,7 +19,7 @@ return new class extends Migration
             $table->foreignId('class_id')
                 ->nullable()
                 ->constrained()
-                ->cascadeOnDelete();
+                ->nullOnDelete();
 
             $table->foreignId('program_package_id')
                 ->nullable()

@@ -75,4 +75,9 @@ class Student extends Model
         $birthDate = $this->candidateStudent?->birth_date;
         return $birthDate ? \Carbon\Carbon::parse($birthDate)->age : null;
     }
+
+    public function currentLevel()
+    {
+        return $this->belongsTo(ProgramLevel::class, 'current_level_id');
+    }
 }

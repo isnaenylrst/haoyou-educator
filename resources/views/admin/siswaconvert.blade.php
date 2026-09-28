@@ -206,7 +206,8 @@
         color: #dc2626;
     }
 
-    #class_id option[hidden] {
+    #class_id option[hidden],
+    #level_id option[hidden] {
         display: none;
     }
 
@@ -266,6 +267,26 @@
         font-size: 14px;
         color: #111827;
         font-weight: 600;
+    }
+
+    .info-item-value .badge-private-inline {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 8px;
+        border-radius: 999px;
+        background: rgba(201, 162, 39, 0.12);
+        color: #b8860b;
+        font-size: 10.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        vertical-align: middle;
+    }
+
+    .schedule-list-item {
+        font-size: 13px;
+        font-weight: 600;
+        color: #111827;
     }
 
     /* =====================================================
@@ -377,6 +398,76 @@
     }
 
     /* =====================================================
+       SEARCH-SELECT (combobox: bisa diketik, bisa juga klik daftar)
+       Native <select> tetap ada (untuk validasi & submit form),
+       hanya disamarkan (opacity 0) dan ditumpuk dengan input teks.
+    ===================================================== */
+
+    .search-select {
+        position: relative;
+    }
+
+    .search-select-native {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .search-select-input {
+        position: relative;
+        z-index: 1;
+        cursor: text;
+        background: #fff;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .search-select-list {
+        display: none;
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        z-index: 30;
+        max-height: 230px;
+        overflow-y: auto;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 9px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, .1);
+    }
+
+    .search-select-list.open {
+        display: block;
+    }
+
+    .search-select-item {
+        padding: 8px 12px;
+        font-size: 12.5px;
+        color: #111827;
+        cursor: pointer;
+        line-height: 1.4;
+    }
+
+    .search-select-item:hover,
+    .search-select-item.is-highlighted {
+        background: #FFF8D6;
+    }
+
+    .search-select-item.is-selected {
+        font-weight: 700;
+    }
+
+    .search-select-empty {
+        padding: 8px 12px;
+        font-size: 12px;
+        color: #9ca3af;
+    }
+
+    /* =====================================================
        RESPONSIVE
     ===================================================== */
 
@@ -434,25 +525,27 @@
                 <div class="form-section">
                     <div class="form-section-title"><i class="fa-solid fa-box"></i> Paket Program</div>
 
-                    {{-- Toggle tipe paket --}}
+                    {{-- Toggle tipe paket — dibuka sesuai minat asli kandidat (interest_type
+                         dari halaman Calon Siswa), bukan selalu default ke Reguler. --}}
                     <div class="form-field full">
                         <label>Tipe Paket *</label>
                         <div class="package-type-toggle">
                             <label class="radio-pill">
                                 <input type="radio" name="package_type" value="program"
-                                       checked onchange="togglePackageType()">
+                                       {{ $defaultPackageType === 'program' ? 'checked' : '' }} onchange="togglePackageType()">
                                 <span>Program Reguler</span>
                             </label>
                             <label class="radio-pill">
                                 <input type="radio" name="package_type" value="private"
-                                       onchange="togglePackageType()">
+                                       {{ $defaultPackageType === 'private' ? 'checked' : '' }} onchange="togglePackageType()">
                                 <span>Private</span>
                             </label>
                         </div>
                     </div>
 
                     {{-- Blok Program Reguler --}}
-                    <div class="form-grid" id="program-package-block">
+                    <div class="form-grid" id="program-package-block"
+                         style="display: {{ $defaultPackageType === 'program' ? 'grid' : 'none' }};">
 
                         @if ($recommendedCategory)
                             <div class="form-field full">
@@ -466,11 +559,13 @@
 
                         <div class="form-field full">
                             <label>Program Package *</label>
-                            <select name="program_package_id" id="program_package_id" onchange="filterClasses()">
+                            <select name="program_package_id" id="program_package_id" onchange="onProgramPackageChange()">
                                 <option value="">Pilih Package</option>
                                 @foreach ($packages as $package)
                                     <option value="{{ $package->id }}"
                                             data-price="{{ $package->price }}"
+                                            data-category-id="{{ $package->category_id }}"
+                                            data-level-id="{{ $package->level_id }}"
                                             {!! $recommendedCategory && $package->category_name === $recommendedCategory ? 'data-recommended="1"' : '' !!}>
                                         {{ $package->package_name }} &mdash;
                                         @if ($recommendedCategory && $package->category_name === $recommendedCategory)
@@ -485,31 +580,56 @@
                             @endif
                         </div>
 
-                        <div class="form-field full">
+                        <div class="form-field">
+                            <label>Level *</label>
+                            <select name="level_id" id="level_id" onchange="filterClasses()">
+                                <option value="">Pilih Level</option>
+                                @foreach ($levels as $level)
+                                    <option value="{{ $level->id }}" data-category-id="{{ $level->category_id }}">
+                                        {{ $level->category_name ? $level->category_name . ' — ' : '' }}{{ $level->level_name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            <span class="form-section-note" style="margin-top:0;">
+                                <i class="fa-solid fa-circle-info"></i>
+                                Level otomatis terisi untuk paket HSK
+                            </span>
+                        </div>
+
+                        <div class="form-field">
                             <label>Kelas (opsional, bisa ditentukan belakangan)</label>
                             <select name="class_id" id="class_id">
                                 <option value="">Belum ditentukan</option>
                                 @foreach ($classes as $class)
-                                    <option value="{{ $class->id }}" data-package="{{ $class->program_package_id }}">
-                                        {{ $class->class_name }} ({{ $class->delivery_mode }}, {{ $class->status }})
+                                    @php
+                                        $scheduleText = $class->schedules
+                                            ->map(fn ($s) => substr($s->day, 0, 3) . ' ' . substr($s->start_time, 0, 5) . '–' . substr($s->end_time, 0, 5))
+                                            ->implode(', ');
+                                    @endphp
+                                    <option value="{{ $class->id }}"
+                                            data-package="{{ $class->program_package_id }}"
+                                            data-level="{{ $class->level_id }}">
+                                        {{ $class->class_name }} ({{ $class->delivery_mode }}, {{ $class->status }})@if ($scheduleText) — {{ $scheduleText }} @endif
                                     </option>
                                 @endforeach
                             </select>
                             <p class="form-section-note" style="margin-top: 4px;">
                                 <i class="fa-solid fa-circle-info"></i>
-                                Jika tidak dipilih, siswa akan berstatus "Menunggu Kelas" dan bisa di-assign kelasnya nanti dari halaman Siswa.
+                                Jika tidak dipilih, siswa berstatus "Menunggu Kelas"
                             </p>
                         </div>
                     </div>
 
                     {{-- Blok Private --}}
-                    <div class="form-grid" id="private-package-block" style="display: none;">
+                    <div class="form-grid" id="private-package-block"
+                         style="display: {{ $defaultPackageType === 'private' ? 'grid' : 'none' }};">
                         <div class="form-field full">
                             <label>Private Package *</label>
                             <select name="private_package_id" id="private_package_id">
                                 <option value="">Pilih Package</option>
                                 @foreach ($privatePackages as $privatePackage)
-                                    <option value="{{ $privatePackage->id }}" data-price="{{ $privatePackage->price }}">
+                                    <option value="{{ $privatePackage->id }}" data-price="{{ $privatePackage->price }}"
+                                            {{ $candidateStudent->private_package_id === $privatePackage->id ? 'selected' : '' }}>
                                         {{ $privatePackage->package_name }} &mdash;
                                         Rp {{ number_format($privatePackage->price, 0, ',', '.') }}
                                     </option>
@@ -581,7 +701,31 @@
                         </div>
                         <div>
                             <div class="info-item-label">Program Diminati</div>
-                            <div class="info-item-value">{{ $candidateStudent->program->program_name ?? '-' }}</div>
+                            <div class="info-item-value">
+                                {{-- Sebelumnya cuma baca $candidateStudent->program->program_name,
+                                     jadi selalu "-" untuk kandidat yang minatnya Private. --}}
+                                @if ($candidateStudent->program)
+                                    {{ $candidateStudent->program->program_name }}
+                                @elseif ($candidateStudent->privatePackage)
+                                    {{ $candidateStudent->privatePackage->package_name }}
+                                    <span class="badge-private-inline">Private</span>
+                                @else
+                                    -
+                                @endif
+                            </div>
+                        </div>
+                        <div>
+                            <div class="info-item-label">Jadwal Tersedia</div>
+                            <div class="info-item-value">
+                                @forelse ($candidateStudent->availableSchedules as $schedule)
+                                    <div class="schedule-list-item">
+                                        {{ $schedule->day }},
+                                        {{ \Illuminate\Support\Str::substr($schedule->start_time, 0, 5) }}–{{ \Illuminate\Support\Str::substr($schedule->end_time, 0, 5) }}
+                                    </div>
+                                @empty
+                                    -
+                                @endforelse
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -599,7 +743,7 @@
                                 <div class="doc-note">Untuk ditandatangani calon siswa</div>
                             </div>
                         </div>
-                        <a href="{{ asset('documents/syarat-ketentuan-pendaftaran.pdf') }}"
+                        <a href="{{ route('admin.dokumen.syarat-ketentuan') }}"
                            target="_blank"
                            class="doc-download-btn"
                            title="Unduh Syarat & Ketentuan">
@@ -629,12 +773,164 @@
 
 @push('scripts')
 <script>
+    /* ============================================================
+       SEARCH-SELECT (generik): bungkus <select> jadi input+dropdown
+       yang bisa diketik. Select asli TETAP ada di DOM (opacity 0)
+       supaya name, required, .value, .dataset, onchange semuanya
+       tetap berfungsi persis seperti select biasa.
+    ============================================================ */
+    function initSearchSelect(selectId, placeholder) {
+        const select = document.getElementById(selectId);
+        if (! select || select.dataset.searchInit) return;
+        select.dataset.searchInit = '1';
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'search-select';
+        select.parentNode.insertBefore(wrapper, select);
+        wrapper.appendChild(select);
+        select.classList.add('search-select-native');
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'search-select-input';
+        input.placeholder = placeholder || 'Ketik untuk mencari...';
+        input.autocomplete = 'off';
+        wrapper.appendChild(input);
+
+        const list = document.createElement('div');
+        list.className = 'search-select-list';
+        wrapper.appendChild(list);
+
+        let highlighted = -1;
+
+        function visibleOptions() {
+            return Array.from(select.options).filter(o => o.value && ! o.hidden && ! o.disabled);
+        }
+
+        function buildList(filterText) {
+            const ft = (filterText || '').trim().toLowerCase();
+            list.innerHTML = '';
+            highlighted = -1;
+
+            const matches = visibleOptions().filter(o => ! ft || o.textContent.toLowerCase().includes(ft));
+
+            if (! matches.length) {
+                const empty = document.createElement('div');
+                empty.className = 'search-select-empty';
+                empty.textContent = 'Tidak ada hasil';
+                list.appendChild(empty);
+                return;
+            }
+
+            matches.forEach((opt, idx) => {
+                const item = document.createElement('div');
+                item.className = 'search-select-item' + (opt.value === select.value ? ' is-selected' : '');
+                item.textContent = opt.textContent.trim();
+                item.dataset.value = opt.value;
+
+                item.addEventListener('mousedown', function (e) {
+                    e.preventDefault(); // supaya input tidak blur duluan sebelum klik terdaftar
+                    select.value = opt.value;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                    syncInputFromSelect();
+                    closeList();
+                });
+
+                item.addEventListener('mouseenter', function () {
+                    highlighted = idx;
+                    highlightItem();
+                });
+
+                list.appendChild(item);
+            });
+        }
+
+        function highlightItem() {
+            Array.from(list.children).forEach((el, idx) => {
+                el.classList.toggle('is-highlighted', idx === highlighted);
+            });
+            const active = list.children[highlighted];
+            if (active) active.scrollIntoView({ block: 'nearest' });
+        }
+
+        function syncInputFromSelect() {
+            const opt = select.selectedOptions[0];
+            input.value = (opt && opt.value) ? opt.textContent.trim() : '';
+        }
+
+        function openList() {
+            buildList(input.value === currentSelectedText() ? '' : input.value);
+            list.classList.add('open');
+        }
+
+        function currentSelectedText() {
+            const opt = select.selectedOptions[0];
+            return (opt && opt.value) ? opt.textContent.trim() : '';
+        }
+
+        function closeList() {
+            list.classList.remove('open');
+            syncInputFromSelect();
+        }
+
+        input.addEventListener('focus', function () {
+            input.select();
+            openList();
+        });
+
+        input.addEventListener('click', openList);
+
+        input.addEventListener('input', function () {
+            buildList(input.value);
+            list.classList.add('open');
+        });
+
+        input.addEventListener('keydown', function (e) {
+            const items = Array.from(list.children).filter(el => el.dataset.value !== undefined);
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (! list.classList.contains('open')) { openList(); return; }
+                highlighted = Math.min(highlighted + 1, items.length - 1);
+                highlightItem();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                highlighted = Math.max(highlighted - 1, 0);
+                highlightItem();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (highlighted >= 0 && items[highlighted]) {
+                    items[highlighted].dispatchEvent(new Event('mousedown'));
+                }
+            } else if (e.key === 'Escape') {
+                closeList();
+                input.blur();
+            }
+        });
+
+        document.addEventListener('click', function (e) {
+            if (! wrapper.contains(e.target)) closeList();
+        });
+
+        select.__syncSearchInput = syncInputFromSelect;
+        syncInputFromSelect();
+    }
+
+    function refreshSearchSelect(selectId) {
+        const el = document.getElementById(selectId);
+        if (el && el.__syncSearchInput) el.__syncSearchInput();
+    }
+
+    /* ============================================================
+       LOGIKA HALAMAN: toggle tipe paket, sinkron level, filter kelas
+    ============================================================ */
     function togglePackageType() {
         const type = document.querySelector('input[name="package_type"]:checked').value;
         const programBlock = document.getElementById('program-package-block');
         const privateBlock = document.getElementById('private-package-block');
         const programSelect = document.getElementById('program_package_id');
         const privateSelect = document.getElementById('private_package_id');
+        const levelSelect = document.getElementById('level_id');
         const classSelect = document.getElementById('class_id');
 
         if (type === 'private') {
@@ -642,7 +938,9 @@
             privateBlock.style.display = 'grid';
             programSelect.removeAttribute('required');
             programSelect.value = '';
-            classSelect.value = ''; // <-- tambahan
+            levelSelect.removeAttribute('required');
+            levelSelect.value = '';
+            classSelect.value = '';
             privateSelect.setAttribute('required', 'required');
         } else {
             programBlock.style.display = 'grid';
@@ -650,30 +948,89 @@
             privateSelect.removeAttribute('required');
             privateSelect.value = '';
             programSelect.setAttribute('required', 'required');
+            levelSelect.setAttribute('required', 'required');
         }
+
+        refreshSearchSelect('program_package_id');
+        refreshSearchSelect('level_id');
+        refreshSearchSelect('private_package_id');
     }
 
+    // Dipanggil saat Program Package berubah: sinkronkan pilihan Level, lalu filter Kelas
+    function onProgramPackageChange() {
+        syncLevelOptions();
+        filterClasses();
+    }
+
+    // Batasi opsi Level ke kategori paket yang dipilih, dan kunci otomatis untuk paket ber-level tetap (HSK)
+    function syncLevelOptions() {
+        const pkgSelect = document.getElementById('program_package_id');
+        const opt = pkgSelect.selectedOptions[0];
+        const levelSelect = document.getElementById('level_id');
+
+        const hasPackage = !!(opt && opt.value);
+        const categoryId = hasPackage ? opt.dataset.categoryId : '';
+        const fixedLevelId = hasPackage ? opt.dataset.levelId : '';
+
+        Array.from(levelSelect.options).forEach(o => {
+            if (! o.value) return;
+            // Paket tanpa kategori tetap (mis. "Regular Class Anak") tidak membatasi
+            // pilihan level — tampilkan semua level program ini.
+            const match = ! categoryId || o.dataset.categoryId === categoryId;
+            o.hidden = ! match;
+            o.disabled = ! match;
+        });
+
+        if (fixedLevelId) {
+            levelSelect.value = fixedLevelId;
+        } else {
+            const stillValid = Array.from(levelSelect.options)
+                .some(o => o.value === levelSelect.value && ! o.hidden);
+            if (! stillValid) levelSelect.value = '';
+        }
+
+        refreshSearchSelect('level_id');
+    }
+
+    // Filter Kelas berdasarkan Program Package DAN Level yang dipilih
     function filterClasses() {
         const packageId = document.getElementById('program_package_id').value;
+        const levelId = document.getElementById('level_id').value;
         const classSelect = document.getElementById('class_id');
 
         [...classSelect.options].forEach(opt => {
-            if (!opt.dataset.package) return;
-            opt.hidden = packageId && opt.dataset.package !== packageId;
+            if (! opt.dataset.package) return;
+
+            const packageMatch = ! packageId || opt.dataset.package === packageId;
+            const levelMatch = ! levelId || ! opt.dataset.level || opt.dataset.level === levelId;
+
+            opt.hidden = ! (packageMatch && levelMatch);
         });
 
         classSelect.value = '';
     }
 
-    // set required state saat pertama load (default: program)
+    // set required state saat pertama load — sinkron dengan toggle yang sudah
+    // dibuka server-side (togglePackageType), BUKAN dipaksa 'program' selalu,
+    // supaya kandidat minat Private tidak salah required saat halaman dibuka.
     document.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('program_package_id').setAttribute('required', 'required');
+        initSearchSelect('program_package_id', 'Ketik nama paket program...');
+        initSearchSelect('level_id', 'Ketik nama level...');
+        initSearchSelect('private_package_id', 'Ketik nama paket private...');
+
+        togglePackageType();
 
         const recommendedOption = document.querySelector('#program_package_id option[data-recommended="1"]');
         if (recommendedOption) {
             recommendedOption.selected = true;
-            filterClasses();
         }
-    });    
+
+        syncLevelOptions();
+        filterClasses();
+
+        refreshSearchSelect('program_package_id');
+        refreshSearchSelect('level_id');
+        refreshSearchSelect('private_package_id');
+    });
 </script>
 @endpush
