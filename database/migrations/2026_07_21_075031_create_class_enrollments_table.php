@@ -17,19 +17,27 @@ return new class extends Migration
                 ->cascadeOnDelete();
 
             $table->foreignId('class_id')
+                ->nullable()
                 ->constrained()
                 ->cascadeOnDelete();
 
+            $table->foreignId('program_package_id')
+                ->nullable()
+                ->constrained('program_packages')
+                ->nullOnDelete();
+
+            $table->foreignId('private_package_id')
+                ->nullable()
+                ->constrained('private_packages')
+                ->cascadeOnUpdate()
+                ->nullOnDelete();
+
             $table->date('enrollment_date');
 
-            $table->enum('status',[
-                'Active',
-                'Completed',
-                'Cancelled'
-            ])->default('Active');
+            $table->enum('status', ['Waiting Class', 'Active', 'Completed', 'Cancelled'])->default('Active');
 
             $table->timestamps();
-
+            $table->softDeletes();
         });
     }
 

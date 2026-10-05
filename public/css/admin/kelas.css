@@ -1,0 +1,44 @@
+/* =====================================================
+   KELAS — tambahan di atas calonsiswa.css
+===================================================== */
+
+.badge-reguler {
+    background: #eff6ff;
+    color: #2563eb;
+}
+
+.badge-private {
+    background: #f5f3ff;
+    color: #7c3aed;
+}
+
+.schedule-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.schedule-chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: #f3f4f6;
+    color: #4b5563;
+    white-space: nowrap;
+}
+
+.capacity-ok {
+    font-weight: 600;
+    color: #16a34a;
+}
+
+.capacity-full {
+    font-weight: 600;
+    color: #dc2626;
+}
+
+.modal-foot-left {
+    display: flex;
+    align-items: center;
+}

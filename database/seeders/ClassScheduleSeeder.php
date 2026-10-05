@@ -8,17 +8,28 @@ use Illuminate\Database\Seeder;
 
 class ClassScheduleSeeder extends Seeder
 {
-    /**
-     * DUMMY DATA - tiap kelas punya 1-2 jadwal per minggu.
-     */
     public function run(): void
     {
-        $classIds = ClassModel::pluck('id');
+        $classes = ClassModel::with(['programPackage:id,duration_minutes', 'privatePackage:id,duration_minutes'])
+            ->get();
 
-        foreach ($classIds as $classId) {
-            ClassSchedule::factory()
-                ->count(fake()->numberBetween(1, 2))
-                ->create(['class_id' => $classId]);
+        foreach ($classes as $class) {
+            $durationMinutes = $class->programPackage->duration_minutes
+                ?? $class->privatePackage->duration_minutes
+                ?? 90;
+
+            $days = collect(['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'])
+                ->shuffle()
+                ->take(fake()->numberBetween(1, 2));
+
+            foreach ($days as $day) {
+                ClassSchedule::factory()
+                    ->forClass($durationMinutes, $class->delivery_mode)
+                    ->create([
+                        'class_id' => $class->id,
+                        'day' => $day,
+                    ]);
+            }
         }
     }
 }

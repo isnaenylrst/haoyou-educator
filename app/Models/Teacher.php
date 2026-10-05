@@ -16,7 +16,6 @@ class Teacher extends Model
         'name',
         'phone',
         'address',
-        'specialist',
         'join_date',
         'training_status',
         'status',

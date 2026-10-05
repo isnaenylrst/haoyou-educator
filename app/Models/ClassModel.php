@@ -11,10 +11,10 @@ class ClassModel extends Model
 
     protected $table = 'classes';
 
-    public $timestamps = false;
-
     protected $fillable = [
         'program_package_id',
+        'private_package_id',
+        'level_id',
         'teacher_id',
         'class_name',
         'delivery_mode',
@@ -24,9 +24,25 @@ class ClassModel extends Model
         'status',
     ];
 
+    protected $casts = [
+        'start_date' => 'date',
+        'end_date' => 'date',
+    ];
+
     public function programPackage()
     {
         return $this->belongsTo(ProgramPackage::class);
+    }
+
+    // Baru: kelas privat mengisi ini, kelas reguler mengisi programPackage()
+    public function privatePackage()
+    {
+        return $this->belongsTo(PrivatePackage::class);
+    }
+
+    public function level()
+    {
+        return $this->belongsTo(ProgramLevel::class, 'level_id');
     }
 
     public function teacher()
@@ -34,18 +50,13 @@ class ClassModel extends Model
         return $this->belongsTo(Teacher::class);
     }
 
-    public function schedules()
-    {
-        return $this->hasMany(ClassSchedule::class, 'class_id');
-    }
-
     public function enrollments()
     {
         return $this->hasMany(ClassEnrollment::class, 'class_id');
     }
 
-    public function teachingJournals()
+    public function schedules()
     {
-        return $this->hasMany(TeachingJournal::class, 'class_id');
+        return $this->hasMany(ClassSchedule::class, 'class_id');
     }
 }

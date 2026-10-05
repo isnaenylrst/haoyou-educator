@@ -41,7 +41,7 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->nullOnDelete();
 
-            $table->timestamp('uploaded_at')->nullable();
+            $table->timestamps();
 
         });
     }

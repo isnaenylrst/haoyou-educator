@@ -9,15 +9,15 @@ class TeachingJournal extends Model
 {
     use HasFactory;
 
-    protected $table = 'teaching_journals';
-
     protected $fillable = [
         'teacher_id',
         'class_id',
         'class_schedule_id',
+        'session_date',
         'material_id',
         'is_substitute',
         'substitute_teacher_id',
+        'teacher_leave_id',
         'class_status',
         'learning_activities',
         'problems',
@@ -27,17 +27,13 @@ class TeachingJournal extends Model
     ];
 
     protected $casts = [
+        'session_date' => 'date',
         'is_substitute' => 'boolean',
     ];
 
     public function teacher()
     {
         return $this->belongsTo(Teacher::class);
-    }
-
-    public function substituteTeacher()
-    {
-        return $this->belongsTo(Teacher::class, 'substitute_teacher_id');
     }
 
     public function class()
@@ -47,7 +43,7 @@ class TeachingJournal extends Model
 
     public function classSchedule()
     {
-        return $this->belongsTo(ClassSchedule::class, 'class_schedule_id');
+        return $this->belongsTo(ClassSchedule::class);
     }
 
     public function material()
@@ -55,8 +51,19 @@ class TeachingJournal extends Model
         return $this->belongsTo(Material::class);
     }
 
+    public function substituteTeacher()
+    {
+        return $this->belongsTo(Teacher::class, 'substitute_teacher_id');
+    }
+
+    // Baru: menyatukan pencatatan guru pengganti dengan pengajuan cuti terkait
+    public function teacherLeave()
+    {
+        return $this->belongsTo(TeacherLeave::class, 'teacher_leave_id');
+    }
+
     public function attendances()
     {
-        return $this->hasMany(Attendance::class, 'teaching_jurnal_id');
+        return $this->hasMany(Attendance::class);
     }
 }

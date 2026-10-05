@@ -2,69 +2,101 @@
 
 namespace Database\Seeders;
 
+use App\Models\Program;
+use App\Models\ProgramCategory;
+use App\Models\ProgramLevel;
+use App\Models\ProgramPackage;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 
 class ProgramPackageSeeder extends Seeder
 {
-    /**
-     * DATA PASTI - harga & paket sesuai brosur Haoyou Educator.
-     */
     public function run(): void
     {
-        $now = now();
+        $dailyActivity = Program::where('program_name', 'Daily Activity')->firstOrFail();
+        $hsk = Program::where('program_name', 'HSK')->firstOrFail();
 
-        $dailyActivityId = DB::table('programs')->where('program_name', 'Daily Activity')->value('id');
-        $hskId = DB::table('programs')->where('program_name', 'HSK')->value('id');
-
+        // ── Daily Activity: harga tidak bergantung kategori/level (category_id & level_id null) ──
         $regularPackages = [
-            ['name' => 'Regular Class - 1x/Minggu (1 Bulan / 4 Pertemuan)', 'meetings' => 4, 'price' => 550000],
-            ['name' => 'Regular Class - 2x/Minggu (1 Bulan / 8 Pertemuan)', 'meetings' => 8, 'price' => 950000],
-            ['name' => 'Regular Class - 1x/Minggu (3 Bulan / 12 Pertemuan)', 'meetings' => 12, 'price' => 1500000],
-            ['name' => 'Regular Class - 2x/Minggu (3 Bulan / 24 Pertemuan)', 'meetings' => 24, 'price' => 2500000],
+            ['Regular Class Anak - 1x/Minggu (1 Bulan / 4 Pertemuan)', 60, 4, 550000],
+            ['Regular Class Anak - 2x/Minggu (1 Bulan / 8 Pertemuan)', 60, 8, 950000],
+            ['Regular Class Anak - 1x/Minggu (3 Bulan / 12 Pertemuan)', 60, 12, 1500000],
+            ['Regular Class Anak - 2x/Minggu (3 Bulan / 24 Pertemuan)', 60, 24, 2500000],
+            ['Regular Class Dewasa - 1x/Minggu (1 Bulan / 4 Pertemuan)', 90, 4, 550000],
+            ['Regular Class Dewasa - 2x/Minggu (1 Bulan / 8 Pertemuan)', 90, 8, 950000],
+            ['Regular Class Dewasa - 1x/Minggu (3 Bulan / 12 Pertemuan)', 90, 12, 1500000],
+            ['Regular Class Dewasa - 2x/Minggu (3 Bulan / 24 Pertemuan)', 90, 24, 2500000],
         ];
-        foreach ($regularPackages as $pkg) {
-            $this->insertPackage($dailyActivityId, 'Regular', $pkg['name'], 90, $pkg['meetings'], 4, 8, $pkg['price'], $now);
+        foreach ($regularPackages as [$name, $duration, $meetings, $price]) {
+            ProgramPackage::create([
+                'program_id' => $dailyActivity->id,
+                'category_id' => null,
+                'level_id' => null,
+                'package_name' => $name,
+                'duration_minutes' => $duration,
+                'total_meetings' => $meetings,
+                'min_students' => 4,
+                'max_students' => 8,
+                'price' => $price,
+            ]);
         }
 
-        $this->insertPackage($dailyActivityId, 'Private', 'Private VIP (1 Orang) - 4 Pertemuan (1 Bulan)', 90, 4, 1, 1, 1200000, $now);
-        $this->insertPackage($dailyActivityId, 'Private', 'Private VIP (1 Orang) - 8 Pertemuan (1 Bulan)', 90, 8, 1, 1, 2000000, $now);
+        // ── HSK Class (kurikulum penuh) ──
+        $hskClassCategory = ProgramCategory::where('program_id', $hsk->id)
+            ->where('category_name', 'HSK Class')->firstOrFail();
 
-        $this->insertPackage($dailyActivityId, 'Private', 'Private Exclusive (2-4 Orang) - 4 Pertemuan (1 Bulan)', 90, 4, 2, 4, 800000, $now);
-        $this->insertPackage($dailyActivityId, 'Private', 'Private Exclusive (2-4 Orang) - 8 Pertemuan (1 Bulan)', 90, 8, 2, 4, 1400000, $now);
-
-        $this->insertPackage($dailyActivityId, 'Private', 'Private Native VIP (1 on 1) - 4 Pertemuan (60 Menit)', 60, 4, 1, 1, 1600000, $now);
-        $this->insertPackage($dailyActivityId, 'Private', 'Private Native VIP (1 on 1) - 8 Pertemuan (60 Menit)', 60, 8, 1, 1, 2800000, $now);
-
-        $this->insertPackage($dailyActivityId, 'Private', 'Private Native Exclusive (2-4 Orang) - 4 Pertemuan (60 Menit)', 60, 4, 2, 4, 1200000, $now);
-        $this->insertPackage($dailyActivityId, 'Private', 'Private Native Exclusive (2-4 Orang) - 8 Pertemuan (60 Menit)', 60, 8, 2, 4, 2000000, $now);
-
-        $hskPackages = [
-            ['name' => 'HSK 1 (60 Menit / 2 Bulan)', 'minutes' => 60, 'meetings' => 16, 'min' => 2, 'max' => 6, 'price' => 1500000],
-            ['name' => 'HSK 2 (60 Menit / 3 Bulan)', 'minutes' => 60, 'meetings' => 24, 'min' => 2, 'max' => 6, 'price' => 2500000],
-            ['name' => 'HSK 3 (90 Menit / 6 Bulan)', 'minutes' => 90, 'meetings' => 24, 'min' => 2, 'max' => 6, 'price' => 3500000],
-            ['name' => 'HSK 4 (90 Menit / 12 Bulan)', 'minutes' => 90, 'meetings' => 24, 'min' => 2, 'max' => 4, 'price' => 3750000],
-            ['name' => 'HSK 5 (90 Menit / 24 Bulan)', 'minutes' => 90, 'meetings' => 24, 'min' => 2, 'max' => 4, 'price' => 4500000],
-            ['name' => 'HSK 6 (90 Menit / 30 Bulan)', 'minutes' => 90, 'meetings' => 24, 'min' => 2, 'max' => 4, 'price' => 5000000],
+        // [level, total_meetings dibeli, price, duration_minutes, catatan_bulan]
+        $hskClassData = [
+            [1, 16, 1500000, 60, '2 Bulan'],
+            [2, 24, 2500000, 60, '3 Bulan'],
+            [3, 24, 3500000, 90, '6 Bulan (dari total 48 pertemuan)'],
+            [4, 24, 3750000, 90, '12 Bulan (dari total 96 pertemuan)'],
+            [5, 24, 4500000, 90, '24 Bulan (dari total 192 pertemuan)'],
+            [6, 24, 5000000, 90, '30 Bulan (dari total 240 pertemuan)'],
         ];
-        foreach ($hskPackages as $pkg) {
-            $this->insertPackage($hskId, 'Regular', $pkg['name'], $pkg['minutes'], $pkg['meetings'], $pkg['min'], $pkg['max'], $pkg['price'], $now);
-        }
-    }
+        foreach ($hskClassData as [$level, $meetings, $price, $duration, $note]) {
+            $levelModel = ProgramLevel::where('category_id', $hskClassCategory->id)
+                ->where('level_name', 'HSK ' . $level)->firstOrFail();
 
-    private function insertPackage($programId, $courseType, $name, $duration, $meetings, $min, $max, $price, $now): void
-    {
-        DB::table('program_packages')->insert([
-            'program_id' => $programId,
-            'course_type' => $courseType,
-            'package_name' => $name,
-            'duration_minutes' => $duration,
-            'total_meetings' => $meetings,
-            'min_students' => $min,
-            'max_students' => $max,
-            'price' => $price,
-            'created_at' => $now,
-            'updated_at' => $now,
-        ]);
+            ProgramPackage::create([
+                'program_id' => $hsk->id,
+                'category_id' => $hskClassCategory->id,
+                'level_id' => $levelModel->id,
+                'package_name' => "HSK Class - Level {$level} ({$note})",
+                'duration_minutes' => $duration,
+                'total_meetings' => $meetings,
+                'min_students' => 2,
+                'max_students' => $level <= 3 ? 6 : 4,
+                'price' => $price,
+            ]);
+        }
+
+        // ── HSK Preparation (kilat) ──
+        $hskPrepCategory = ProgramCategory::where('program_id', $hsk->id)
+            ->where('category_name', 'HSK Preparation')->firstOrFail();
+
+        $hskPrepData = [
+            [1, 8, 750000, 60, '1 Bulan'],
+            [2, 8, 850000, 60, '1 Bulan'],
+            [3, 8, 950000, 60, '1 Bulan'],
+            [4, 12, 1500000, 90, '1 Bulan'],
+            [5, 24, 3000000, 90, '2 Bulan'],
+            [6, 36, 4500000, 90, '3 Bulan'],
+        ];
+        foreach ($hskPrepData as [$level, $meetings, $price, $duration, $note]) {
+            $levelModel = ProgramLevel::where('category_id', $hskPrepCategory->id)
+                ->where('level_name', 'HSK ' . $level)->firstOrFail();
+
+            ProgramPackage::create([
+                'program_id' => $hsk->id,
+                'category_id' => $hskPrepCategory->id,
+                'level_id' => $levelModel->id,
+                'package_name' => "HSK Preparation - Level {$level} ({$note})",
+                'duration_minutes' => $duration,
+                'total_meetings' => $meetings,
+                'min_students' => 2,
+                'max_students' => $level <= 3 ? 6 : 4,
+                'price' => $price,
+            ]);
+        }
     }
 }

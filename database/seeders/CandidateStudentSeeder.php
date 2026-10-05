@@ -3,13 +3,21 @@
 namespace Database\Seeders;
 
 use App\Models\CandidateStudent;
+use App\Models\Program;
 use Illuminate\Database\Seeder;
 
 class CandidateStudentSeeder extends Seeder
 {
     public function run(): void
     {
-        // Candidate Student tetap
+        $defaultProgram = Program::where('program_name', 'like', '%HSK%')->first()
+            ?? Program::first();
+
+        if (!$defaultProgram) {
+            $this->command->warn('Belum ada data programs. Jalankan ProgramSeeder dulu sebelum CandidateStudentSeeder.');
+            return;
+        }
+
         CandidateStudent::create([
             'name' => 'Isnaeny Larassati',
             'gender' => 'Female',
@@ -21,15 +29,27 @@ class CandidateStudentSeeder extends Seeder
             'school' => 'Politeknik Negeri Malang',
             'source' => 'Instagram',
             'allergy' => null,
-            'interested_program' => 'HSK 1',
+            'program_id' => $defaultProgram->id,
             'trial_date' => now()->toDateString(),
             'trial_status' => 'Pending',
             'lead_status' => 'Warm',
         ]);
 
-        // Dummy data
+        // Contoh PASTI ada (bukan cuma andalkan random) buat nge-test
+        // alur calon siswa privat dan job ExpireRegistrationFees nanti.
         CandidateStudent::factory()
-            ->count(39)
+            ->interestedInPrivate()
+            ->count(3)
+            ->create();
+
+        CandidateStudent::factory()
+            ->registrationFeeExpired()
+            ->count(3)
+            ->create();
+
+        // Sisanya data acak biasa
+        CandidateStudent::factory()
+            ->count(33)
             ->create();
     }
 }

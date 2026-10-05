@@ -11,11 +11,10 @@ class FollowUp extends Model
 
     protected $table = 'follow_ups';
 
-    public $timestamps = false;
-
     protected $fillable = [
         'follow_up_template_id',
-        'candidate_student_id',
+        'followupable_id',
+        'followupable_type',
         'followup_date',
         'followup_method',
         'note',
@@ -28,8 +27,8 @@ class FollowUp extends Model
         return $this->belongsTo(FollowUpTemplate::class, 'follow_up_template_id');
     }
 
-    public function candidateStudent()
+    public function followupable()
     {
-        return $this->belongsTo(CandidateStudent::class);
+        return $this->morphTo();
     }
 }

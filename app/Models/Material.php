@@ -9,10 +9,8 @@ class Material extends Model
 {
     use HasFactory;
 
-    protected $table = 'materials';
-
     protected $fillable = [
-        'program_package_id',
+        'level_id',
         'uploaded_by',
         'meeting_number',
         'title',
@@ -20,28 +18,13 @@ class Material extends Model
         'material_file_path',
     ];
 
-    public function programPackage()
+    public function level()
     {
-        return $this->belongsTo(ProgramPackage::class);
+        return $this->belongsTo(ProgramLevel::class, 'level_id');
     }
 
     public function uploader()
     {
         return $this->belongsTo(User::class, 'uploaded_by');
-    }
-
-    public function vocabularies()
-    {
-        return $this->hasMany(MaterialVocab::class, 'material_id');
-    }
-
-    public function teacherMaterials()
-    {
-        return $this->hasMany(TeacherMaterial::class, 'material_id');
-    }
-
-    public function teachingJournals()
-    {
-        return $this->hasMany(TeachingJournal::class, 'material_id');
     }
 }
