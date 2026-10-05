@@ -11,8 +11,6 @@ class ProgressReport extends Model
 
     protected $table = 'progress_reports';
 
-    public $timestamps = false;
-
     protected $fillable = [
         'student_id',
         'teacher_id',
@@ -22,11 +20,11 @@ class ProgressReport extends Model
         'file_path',
         'status',
         'uploaded_by',
-        'uploaded_at',
     ];
 
     protected $casts = [
-        'uploaded_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     public function student()

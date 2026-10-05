@@ -227,7 +227,7 @@ class SiswaDashboardController extends Controller
             'enrollment.class'
         ])
         ->where('student_id', $student->id)
-        ->latest('uploaded_at')
+        ->latest('created_at')
         ->get();
 
 
@@ -357,7 +357,7 @@ class SiswaDashboardController extends Controller
         'enrollment.class.programPackage.program'
     ])
     ->where('student_id', $student->id)
-    ->orderByDesc('uploaded_at')
+    ->orderByDesc('created_at')
     ->get();
 
     return view('Siswa.progress-report', compact(
