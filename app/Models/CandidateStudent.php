@@ -23,6 +23,7 @@ class CandidateStudent extends Model
         'school',
         'source',
         'allergy',
+        'interested_program',
         'program_id',
         'private_package_id',
         'trial_status',

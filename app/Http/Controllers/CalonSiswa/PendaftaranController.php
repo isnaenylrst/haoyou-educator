@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\CalonSiswa;
 
+use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
 use App\Models\CandidateStudent;
 use Illuminate\Http\Request;
@@ -19,95 +20,63 @@ class PendaftaranController extends Controller
     /**
      * Menyimpan pendaftaran calon siswa
      */
-    public function store(Request $request)
+   public function store(Request $request)
 {
     $validated = $request->validate([
-        'name' => ['required', 'string', 'max:255'],
+        'name'         => ['required', 'string', 'max:255'],
+        'gender'       => ['required', 'in:Male,Female'],
+        'birth_date'   => ['required', 'date'],
+        'phone'        => ['required', 'string', 'max:255'],
+        'parent_name'  => ['nullable', 'string', 'max:255'],
+        'parent_phone' => ['nullable', 'string', 'max:255'],
+        'address'      => ['nullable', 'string'],
+        'school'       => ['nullable', 'string', 'max:255'],
+        'source'       => ['nullable', 'string', 'max:255'],
+        'allergy'      => ['nullable', 'string'],
+        'interested_program' => ['required', 'string', 'max:255'],
 
-        'gender' => [
-            'required',
-            'in:Male,Female'
-        ],
-
-        'birth_date' => [
-            'nullable',
-            'date'
-        ],
-
-        'phone' => [
-            'required',
-            'string',
-            'max:255'
-        ],
-
-        'parent_name' => [
-            'nullable',
-            'string',
-            'max:255'
-        ],
-
-        'parent_phone' => [
-            'nullable',
-            'string',
-            'max:255'
-        ],
-
-        'address' => [
-            'nullable',
-            'string'
-        ],
-
-        'school' => [
-            'nullable',
-            'string',
-            'max:255'
-        ],
-
-        'source' => [
-            'nullable',
-            'string',
-            'max:255'
-        ],
-
-        'allergy' => [
-            'nullable',
-            'string'
-        ],
-
-        'interested_program' => [
-            'required',
-            'string',
-            'max:255'
-        ],
-
-        'available_schedule' => [
-            'nullable',
-            'string',
-            'max:500'
-        ],
+        'schedule_day'     => ['nullable', 'array'],
+        'schedule_day.*'   => ['nullable', 'in:Senin,Selasa,Rabu,Kamis,Jumat,Sabtu'],
+        'schedule_start'   => ['nullable', 'array'],
+        'schedule_start.*' => ['nullable', 'date_format:H:i'],
+        'schedule_end'     => ['nullable', 'array'],
+        'schedule_end.*'   => ['nullable', 'date_format:H:i'],
     ]);
 
-    $candidate = CandidateStudent::create([
-        'name' => $validated['name'],
-        'gender' => $validated['gender'],
-        'birth_date' => $validated['birth_date'] ?? null,
-        'phone' => $validated['phone'],
+    $candidate = DB::transaction(function () use ($validated) {
 
-        'parent_name' => $validated['parent_name'] ?? null,
-        'parent_phone' => $validated['parent_phone'] ?? null,
+        $candidate = CandidateStudent::create([
+            'name'         => $validated['name'],
+            'gender'       => $validated['gender'],
+            'birth_date'   => $validated['birth_date'],
+            'phone'        => $validated['phone'],
+            'parent_name'  => $validated['parent_name'] ?? null,
+            'parent_phone' => $validated['parent_phone'] ?? null,
+            'address'      => $validated['address'] ?? null,
+            'school'       => $validated['school'] ?? null,
+            'source'       => $validated['source'] ?? 'Website',
+            'allergy'      => $validated['allergy'] ?? null,
+            'interested_program' => $validated['interested_program'],
+            'trial_status' => 'Pending',
+            'lead_status'  => 'Warm',
+        ]);
 
-        'address' => $validated['address'] ?? null,
-        'school' => $validated['school'] ?? null,
+        // Simpan jadwal, lewati baris yang belum lengkap
+        foreach ($validated['schedule_day'] ?? [] as $i => $day) {
+            $start = $validated['schedule_start'][$i] ?? null;
+            $end   = $validated['schedule_end'][$i] ?? null;
 
-        'source' => $validated['source'] ?? 'Website',
+            if ($day && $start && $end) {
+                $candidate->availableSchedules()->create([
+                    'day'        => $day,
+                    'start_time' => $start,
+                    'end_time'   => $end,
+                ]);
+            }
+        }
 
-        'allergy' => $validated['allergy'] ?? null,
-
-        'interested_program' => $validated['interested_program'],
-
-        'trial_status' => 'Pending',
-        'lead_status' => 'Warm',
-    ]);
+        return $candidate;
+    });
 
     return redirect()
         ->route('pendaftaran.sukses')
