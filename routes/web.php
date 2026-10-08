@@ -6,6 +6,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\CalonSiswa\PendaftaranController;
 use App\Http\Controllers\Siswa\SiswaDashboardController;
+use App\Http\Controllers\ProfilController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\CalonSiswaController;
 use App\Http\Controllers\Admin\SiswaController;
@@ -81,6 +82,7 @@ Route::post('/logout', [AuthController::class, 'logout'])
 |--------------------------------------------------------------------------
 */
 
+
 Route::get('/dashboard', [SiswaDashboardController::class, 'dashboard'])
     ->name('student.dashboard');
 
@@ -93,8 +95,8 @@ Route::get('/booking', [SiswaDashboardController::class, 'booking'])
 Route::get('/kelas-saya', [SiswaDashboardController::class, 'kelasSaya'])
     ->name('kelassaya.index');
 
-Route::get('/profil', [SiswaDashboardController::class, 'profil'])
-    ->name('profil.index');
+// Route::get('/profil', [SiswaDashboardController::class, 'profil'])
+//     ->name('profil.index');
 
 Route::get('/notifikasi', [SiswaDashboardController::class, 'notifikasi'])
     ->name('notifikasi.index');
@@ -105,8 +107,23 @@ Route::get('/sertifikat', [SiswaDashboardController::class, 'sertifikat'])
 Route::get('/progress-report', [SiswaDashboardController::class, 'progresReport'])
     ->name('progresreport.index');
 
-// ADMIN
-Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
+    // PROFIL
+    Route::middleware(['auth'])->group(function () {
+    Route::get('/profil', [ProfilController::class, 'index'])
+        ->name('profil.index');
+
+    Route::put('/profil', [ProfilController::class, 'update'])
+        ->name('profil.update');
+
+    Route::put('/profil/password', [ProfilController::class, 'updatePassword'])
+        ->name('profil.password');
+
+    Route::delete('/profil/foto', [ProfilController::class, 'destroyFoto'])
+        ->name('profil.foto.destroy');
+});
+
+    // ADMIN
+    Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
     // DASHBOARD
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->name('dashboard');

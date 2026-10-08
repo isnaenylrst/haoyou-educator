@@ -28,6 +28,13 @@ class User extends Authenticatable
         'password' => 'hashed',
     ];
 
+    public function getDisplayNameAttribute(): string
+    {
+        return $this->student->name
+        ?? $this->teacher->name
+        ?? $this->username
+        ?? 'Siswa';
+    }
     /*
     |--------------------------------------------------------------------------
     | RELASI LEVEL
