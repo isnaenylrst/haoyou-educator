@@ -27,4 +27,14 @@ class Material extends Model
     {
         return $this->belongsTo(User::class, 'uploaded_by');
     }
+
+    public function vocabs()
+    {
+        return $this->hasMany(MaterialVocab::class, 'material_id')->orderBy('order_number');
+    }
+
+    public function teacherMaterials()
+    {
+        return $this->hasMany(TeacherMaterial::class, 'material_id');
+    }
 }

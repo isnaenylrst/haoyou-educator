@@ -3,250 +3,100 @@
 namespace App\Http\Controllers\Siswa;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Support\Facades\Auth;
-use App\Models\Student;
-use App\Models\Material;
+use App\Http\Controllers\Siswa\Concerns\HandlesStudent;
 use App\Models\ClassEnrollment;
-use App\Models\Program;
 use App\Models\Document;
+use App\Models\Material;
+use App\Models\PrivateBooking;
 use App\Models\ProgressReport;
+use App\Models\Student;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 
 class SiswaDashboardController extends Controller
 {
-    /**
-     * Dashboard Siswa
-     */
+    use HandlesStudent;
+
+    /*
+    |--------------------------------------------------------------------------
+    | DASHBOARD
+    |--------------------------------------------------------------------------
+    */
+
     public function dashboard()
     {
-        // User yang sedang login
-        $user = Auth::user();
+        $student = $this->student();
 
-        // Cari data student berdasarkan user_id
-        $student = Student::with('user')
-            ->where('user_id', $user->id)
-            ->firstOrFail();
-
-        /*
-        |--------------------------------------------------------------------------
-        | TOTAL POIN
-        |--------------------------------------------------------------------------
-        */
-
+        // Poin & peringkat (students.points, hanya siswa Active)
         $totalPoin = $student->points ?? 0;
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | PERINGKAT LEADERBOARD
-        |--------------------------------------------------------------------------
-        */
 
         $peringkat = Student::where('status', 'Active')
             ->where('points', '>', $totalPoin)
             ->count() + 1;
 
-
-        /*
-        |--------------------------------------------------------------------------
-        | ENROLLMENT / KELAS SISWA
-        |--------------------------------------------------------------------------
-        */
-
+        // Kelas reguler yang sudah punya kelas (bukan Waiting Class)
         $enrollments = ClassEnrollment::with([
             'class.teacher',
             'class.schedules',
-            'class.programPackage.program'
+            'class.programPackage.program',
         ])
-        ->where('student_id', $student->id)
-        ->where('status', 'Active')
-        ->get();
+            ->where('student_id', $student->id)
+            ->where('status', 'Active')
+            ->whereNotNull('class_id')
+            ->get();
 
-
-        /*
-        |--------------------------------------------------------------------------
-        | KELAS MINGGU INI
-        |--------------------------------------------------------------------------
-        |
-        | Kita hitung berdasarkan jadwal kelas.
-        |
-        */
-
-        $hariSekarang = Carbon::now();
-
-        $awalMinggu = $hariSekarang->copy()->startOfWeek();
-        $akhirMinggu = $hariSekarang->copy()->endOfWeek();
-
-        $hariIndonesia = [
-            'Sunday' => 'Minggu',
-            'Monday' => 'Senin',
-            'Tuesday' => 'Selasa',
-            'Wednesday' => 'Rabu',
-            'Thursday' => 'Kamis',
-            'Friday' => 'Jumat',
-            'Saturday' => 'Sabtu',
-        ];
-
-        $hariMingguIni = [];
-
-        for (
-            $tanggal = $awalMinggu->copy();
-            $tanggal <= $akhirMinggu;
-            $tanggal->addDay()
-        ) {
-            $hariMingguIni[] = $hariIndonesia[$tanggal->format('l')];
-        }
-
-        $kelasMingguIni = 0;
-
-        foreach ($enrollments as $enrollment) {
-
-            if (!$enrollment->class) {
-                continue;
-            }
-
-            foreach ($enrollment->class->schedules as $schedule) {
-
-                if (in_array($schedule->day, $hariMingguIni)) {
-                    $kelasMingguIni++;
-                }
-
-            }
-        }
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | STATISTIK
-        |--------------------------------------------------------------------------
-        */
+        // Kelas minggu ini = semua sesi (reguler + privat) Senin–Minggu minggu ini
+        $sesiMingguIni = $this->sessionsBetween(
+            $student,
+            $enrollments,
+            now()->startOfWeek(),
+            now()->endOfWeek()
+        );
 
         $stats = [
-            'total_poin' => $totalPoin,
-            'peringkat' => $peringkat,
-            'kelas_minggu_ini' => $kelasMingguIni,
+            'total_poin'       => $totalPoin,
+            'peringkat'        => $peringkat,
+            'kelas_minggu_ini' => $sesiMingguIni->count(),
         ];
 
-
-        /*
-        |--------------------------------------------------------------------------
-        | JADWAL TERDEKAT
-        |--------------------------------------------------------------------------
-        */
-
-        $jadwalTerdekat = [];
-
-        foreach ($enrollments as $enrollment) {
-
-            if (!$enrollment->class) {
-                continue;
-            }
-
-            $class = $enrollment->class;
-
-            foreach ($class->schedules as $schedule) {
-
-                $judul = $class->class_name ?? 'Kelas';
-
-                if ($class->teacher) {
-                    $judul .= ' — bersama ' . $class->teacher->name;
-                }
-
-                $waktu = $schedule->day;
-
-                if ($schedule->start_time) {
-                    $waktu .= ', ' .
-                        Carbon::parse($schedule->start_time)->format('H:i');
-                }
-
-                if ($schedule->room) {
-                    $waktu .= ' · ' . $schedule->room;
-                }
-
-                /*
-                | delivery_mode biasanya:
-                | Online / Offline
-                */
-
-                $platform = strtolower(
-                    $class->delivery_mode ?? 'offline'
-                );
-
-                $jadwalTerdekat[] = [
-                    'judul' => $judul,
-                    'waktu' => $waktu,
-                    'platform' => $platform,
-                ];
-            }
-        }
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | BATASI 3 JADWAL
-        |--------------------------------------------------------------------------
-        */
-
-        $jadwalTerdekat = collect($jadwalTerdekat)
+        // Jadwal terdekat = 3 sesi berikutnya (urut waktu) dalam 14 hari ke depan
+        $jadwalTerdekat = $this->sessionsBetween(
+            $student,
+            $enrollments,
+            now(),
+            now()->addDays(14)->endOfDay()
+        )
+            ->filter(fn ($s) => $s['at']->gte(now()))
+            ->sortBy('at')
             ->take(3)
+            ->map(fn ($s) => [
+                'judul'    => $s['judul'],
+                'waktu'    => $this->tanggalId($s['at']) . ' · ' . $s['at']->format('H:i')
+                              . ($s['room'] ? ' · ' . $s['room'] : ''),
+                'platform' => $s['platform'],
+            ])
             ->values()
             ->all();
 
-
-        /*
-        |--------------------------------------------------------------------------
-        | LEADERBOARD
-        |--------------------------------------------------------------------------
-        */
-
-        $leaderboardData = Student::where('status', 'Active')
+        // Leaderboard top 10
+        $leaderboard = Student::where('status', 'Active')
             ->orderByDesc('points')
             ->take(10)
-            ->get();
-
-        $leaderboard = [];
-
-        foreach ($leaderboardData as $index => $item) {
-
-            $leaderboard[] = [
-                'rank' => $index + 1,
+            ->get()
+            ->map(fn ($item, $i) => [
+                'rank' => $i + 1,
                 'nama' => $item->name,
                 'poin' => $item->points ?? 0,
-            ];
-        }
+            ])
+            ->all();
 
-
-        /*
-        |--------------------------------------------------------------------------
-        | PROGRESS REPORT
-        |--------------------------------------------------------------------------
-        */
-
-        $progressReports = ProgressReport::with([
-            'teacher',
-            'enrollment.class'
-        ])
-        ->where('student_id', $student->id)
-        ->latest('created_at')
-        ->get();
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | DOKUMEN / SERTIFIKAT
-        |--------------------------------------------------------------------------
-        */
-
-        $documents = Document::where('user_id', $user->id)
-            ->latest('uploaded_at')
+        $progressReports = ProgressReport::with(['teacher', 'enrollment.class'])
+            ->where('student_id', $student->id)
+            ->where('status', 'Submitted')
+            ->latest('created_at')
             ->get();
 
-
-        /*
-        |--------------------------------------------------------------------------
-        | KIRIM KE VIEW
-        |--------------------------------------------------------------------------
-        */
+        $documents = $this->sertifikatQuery()->get();
 
         return view('Siswa.dashboard', compact(
             'student',
@@ -259,51 +109,111 @@ class SiswaDashboardController extends Controller
         ));
     }
 
+    /**
+     * Semua sesi (kelas reguler berulang + booking privat) di rentang tanggal.
+     * Jadwal reguler (class_schedules) hanya berisi hari & jam mingguan,
+     * jadi tanggalnya dihitung di sini.
+     */
+    private function sessionsBetween(Student $student, $enrollments, Carbon $from, Carbon $to)
+    {
+        $sessions = collect();
+
+        foreach ($enrollments as $enrollment) {
+            $class = $enrollment->class;
+
+            if (! $class || ! in_array($class->status, ['Open', 'Running'])) {
+                continue;
+            }
+
+            for ($d = $from->copy()->startOfDay(); $d->lte($to); $d->addDay()) {
+                // hormati start_date / end_date kelas
+                if ($class->start_date && $d->lt($class->start_date->copy()->startOfDay())) {
+                    continue;
+                }
+                if ($class->end_date && $d->gt($class->end_date->copy()->endOfDay())) {
+                    continue;
+                }
+
+                foreach ($class->schedules as $schedule) {
+                    if ($schedule->day !== $this->hariId($d)) {
+                        continue;
+                    }
+
+                    $at = Carbon::parse($d->format('Y-m-d') . ' ' . $schedule->start_time);
+
+                    $judul = $class->class_name ?? 'Kelas';
+                    if ($class->teacher) {
+                        $judul .= ' — bersama ' . $class->teacher->name;
+                    }
+
+                    $sessions->push([
+                        'at'       => $at,
+                        'judul'    => $judul,
+                        'room'     => $schedule->room,
+                        'platform' => strtolower($class->delivery_mode ?? 'offline'),
+                    ]);
+                }
+            }
+        }
+
+        $bookings = PrivateBooking::with('teacher')
+            ->where('student_id', $student->id)
+            ->where('status', 'Scheduled')
+            ->whereBetween('session_date', [$from->toDateString(), $to->toDateString()])
+            ->get();
+
+        foreach ($bookings as $b) {
+            $sessions->push([
+                'at'       => $b->startsAt(),
+                'judul'    => 'Kelas Privat' . ($b->teacher ? ' — bersama ' . $b->teacher->name : ''),
+                'room'     => null,
+                'platform' => strtolower($b->delivery_mode),
+            ]);
+        }
+
+        return $sessions;
+    }
 
     /*
     |--------------------------------------------------------------------------
-    | PROGRAM
+    | PROGRAM BELAJAR
     |--------------------------------------------------------------------------
+    | Materi diunggah Kurikulum per LEVEL (materials.level_id -> program_levels).
+    | Level siswa diambil dari kelas / paket yang dia ikuti + current_level_id.
     */
 
-   public function program()
-{
-   $user = Auth::user();
+    public function program()
+    {
+        $student = $this->student();
 
+        $enrollments = ClassEnrollment::with([
+            'class.level',
+            'class.programPackage.program',
+            'class.programPackage.level',
+        ])
+            ->where('student_id', $student->id)
+            ->whereIn('status', ['Active', 'Completed', 'Waiting Class'])
+            ->get();
 
-    $student = $user->student;
+        $levelIds = $enrollments
+            ->flatMap(fn ($e) => [
+                $e->class?->level_id,
+                $e->class?->programPackage?->level_id,
+                $e->programPackage?->level_id,
+            ])
+            ->push($student->current_level_id)
+            ->filter()
+            ->unique()
+            ->values();
 
-    if (!$student) {
-        abort(403, 'Data siswa tidak ditemukan.');
+        $materials = Material::with(['level.program', 'vocabs'])
+            ->whereIn('level_id', $levelIds)
+            ->orderBy('level_id')
+            ->orderBy('meeting_number')
+            ->get();
+
+        return view('Siswa.program', compact('student', 'enrollments', 'materials'));
     }
-
-    // Ambil enrollment siswa
-    $enrollments = ClassEnrollment::with([
-        'class.programPackage.program'
-    ])
-    ->where('student_id', $student->id)
-    ->get();
-
-    // Ambil ID package yang diikuti siswa
-    $packageIds = $enrollments
-        ->pluck('class.program_package_id')
-        ->filter()
-        ->unique();
-
-    // Ambil materi sesuai package siswa
-    $materials = Material::with([
-        'programPackage.program'
-    ])
-    ->whereIn('program_package_id', $packageIds)
-    ->orderBy('meeting_number')
-    ->get();
-
-    return view('Siswa.program', compact(
-        'student',
-        'enrollments',
-        'materials'
-    ));
-}
 
     /*
     |--------------------------------------------------------------------------
@@ -312,164 +222,106 @@ class SiswaDashboardController extends Controller
     */
 
     public function kelasSaya()
-{
-    $user = Auth::user();
+    {
+        $student = $this->student();
 
-    $student = $user->student;
+        $enrollments = ClassEnrollment::with([
+            'class.programPackage.program',
+            'class.schedules',
+            'class.teacher',
+            'privatePackage',
+        ])
+            ->where('student_id', $student->id)
+            ->get();
 
-    if (!$student) {
-        abort(404, 'Data siswa tidak ditemukan.');
+        $privateBookings = PrivateBooking::with('teacher')
+            ->where('student_id', $student->id)
+            ->where('status', 'Scheduled')
+            ->whereDate('session_date', '>=', today())
+            ->orderBy('session_date')
+            ->orderBy('start_time')
+            ->get();
+
+        return view('Siswa.kelas-saya', compact('student', 'enrollments', 'privateBookings'));
     }
-
-    $enrollments = ClassEnrollment::with([
-        'class.programPackage.program',
-        'class.schedules',
-        'class.teacher',
-    ])
-    ->where('student_id', $student->id)
-    ->get();
-
-    return view('Siswa.kelas-saya', compact(
-        'student',
-        'enrollments'
-    ));
-}
 
     /*
     |--------------------------------------------------------------------------
     | PROGRESS REPORT
     |--------------------------------------------------------------------------
+    | Siswa hanya melihat yang sudah Submitted (Draft = belum diterbitkan).
     */
 
     public function progressReport()
     {
-    $user = Auth::user();
+        $student = $this->student();
 
-    $student = $user->student;
+        $laporan = ProgressReport::with([
+            'teacher',
+            'enrollment.class.programPackage.program',
+        ])
+            ->where('student_id', $student->id)
+            ->where('status', 'Submitted')
+            ->orderByDesc('created_at')
+            ->get();
 
-    if (!$student) {
-        abort(403, 'Data siswa tidak ditemukan.');
+        return view('Siswa.progress-report', compact('student', 'laporan'));
     }
-
-    // Ambil laporan perkembangan siswa
-    $laporan = ProgressReport::with([
-        'teacher',
-        'enrollment.class.programPackage.program'
-    ])
-    ->where('student_id', $student->id)
-    ->orderByDesc('created_at')
-    ->get();
-
-    return view('Siswa.progress-report', compact(
-        'student',
-        'laporan'
-    ));
-}
 
     /*
     |--------------------------------------------------------------------------
     | SERTIFIKAT
     |--------------------------------------------------------------------------
+    | documents.document_type = 'Certificate', milik user ini,
+    | dan visibility Student / Public.
     */
 
     public function sertifikat()
     {
-        $user = Auth::user();
+        $student = $this->student();
 
-        $documents = Document::where('user_id', $user->id)
-            ->latest('uploaded_at')
+        $documents = $this->sertifikatQuery()
+            ->with('programLevel.program')
             ->get();
 
-        return view('siswa.sertifikat', compact(
-            'documents'
-        ));
+        return view('Siswa.sertifikat', compact('student', 'documents'));
     }
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | PROFIL
-    |--------------------------------------------------------------------------
-    */
-
-    public function profil()
-{
-    $user = Auth::user();
-    $student = $user->student;
-
-    if (!$student) {
-        abort(404, 'Data siswa tidak ditemukan.');
+    private function sertifikatQuery()
+    {
+        return Document::where('user_id', Auth::id())
+            ->where('document_type', 'Certificate')
+            ->whereIn('visibility', ['Student', 'Public'])
+            ->latest('uploaded_at');
     }
 
-    // Karena belum ada tabel khusus riwayat poin,
-    // sementara ambil total poin dari tabel students.
-    $riwayatPoin = collect([
-        [
-            'judul' => 'Total Poin Siswa',
-            'poin' => $student->points ?? 0,
-            'tanggal' => $student->join_date ?? '-',
-        ]
-    ]);
-
-    return view('Siswa.profil', compact(
-        'student',
-        'riwayatPoin'
-    ));
-}
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | BOOKING
-    |--------------------------------------------------------------------------
-    */
-
-   
-
- public function booking()
-{
-    $slotPrivat = [];
-    $kelasReguler = [];
-
-    return view('Siswa.booking', compact(
-        'slotPrivat',
-        'kelasReguler'
-    ));
-}
     /*
     |--------------------------------------------------------------------------
     | NOTIFIKASI
     |--------------------------------------------------------------------------
     */
 
-   public function notifikasi()
-{
-    $belumDibaca = collect([
-        [
-            'judul' => 'Jadwal Kelas Hari Ini',
-            'ket'   => 'HSK 2 Reguler bersama Ms. Dinda pukul 19.00',
-        ],
-        [
-            'judul' => 'Materi Baru',
-            'ket'   => 'Materi Meeting 3 sudah tersedia.',
-        ],
-    ]);
+    public function notifikasi()
+    {
+        $user = Auth::user();
 
-    $sudahDibaca = collect([
-        [
-            'judul' => 'Progress Report',
-            'ket'   => 'Progress Report bulan lalu telah diterbitkan.',
-        ],
-        [
-            'judul' => 'Pembayaran Berhasil',
-            'ket'   => 'Pembayaran paket belajar berhasil diverifikasi.',
-        ],
-    ]);
+        $map = fn ($n) => [
+            'judul' => $n->data['title'] ?? 'Notifikasi',
+            'ket'   => $n->data['message'] ?? '',
+            'waktu' => $n->created_at?->diffForHumans(),
+            'url'   => $n->data['url'] ?? null,
+        ];
 
-    return view('Siswa.notifikasi', compact(
-        'belumDibaca',
-        'sudahDibaca'
-    ));
-}
+        $belumDibaca = $user->unreadNotifications()->latest()->take(50)->get()->map($map);
+        $sudahDibaca = $user->readNotifications()->latest()->take(30)->get()->map($map);
+
+        return view('Siswa.notifikasi', compact('belumDibaca', 'sudahDibaca'));
     }
 
+    public function notifikasiTandaiDibaca()
+    {
+        Auth::user()->unreadNotifications->markAsRead();
+
+        return redirect()->route('notifikasi.index');
+    }
+}

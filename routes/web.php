@@ -6,6 +6,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\CalonSiswa\PendaftaranController;
 use App\Http\Controllers\Siswa\SiswaDashboardController;
+use App\Http\Controllers\Siswa\BookingController;
 use App\Http\Controllers\ProfilController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\CalonSiswaController;
@@ -76,36 +77,54 @@ Route::post('/logout', [AuthController::class, 'logout'])
 
 /*
 |--------------------------------------------------------------------------
-| DASHBOARD SISWA
+| AREA SISWA
 |--------------------------------------------------------------------------
-| TANPA LOGIN SEMENTARA UNTUK PENGEMBANGAN
+| Wajib login + level "Student" (middleware alias: student).
 |--------------------------------------------------------------------------
 */
 
+Route::middleware(['auth', 'student'])->group(function () {
 
-Route::get('/dashboard', [SiswaDashboardController::class, 'dashboard'])
-    ->name('student.dashboard');
+    Route::get('/dashboard', [SiswaDashboardController::class, 'dashboard'])
+        ->name('student.dashboard');
 
-Route::get('/program', [SiswaDashboardController::class, 'program'])
-    ->name('program.index');
+    Route::get('/program', [SiswaDashboardController::class, 'program'])
+        ->name('program.index');
 
-Route::get('/booking', [SiswaDashboardController::class, 'booking'])
-    ->name('booking.index');
+    Route::get('/kelas-saya', [SiswaDashboardController::class, 'kelasSaya'])
+        ->name('kelassaya.index');
 
-Route::get('/kelas-saya', [SiswaDashboardController::class, 'kelasSaya'])
-    ->name('kelassaya.index');
+    Route::get('/progress-report', [SiswaDashboardController::class, 'progressReport'])
+        ->name('progresreport.index');
 
-// Route::get('/profil', [SiswaDashboardController::class, 'profil'])
-//     ->name('profil.index');
+    Route::get('/sertifikat', [SiswaDashboardController::class, 'sertifikat'])
+        ->name('sertifikat.index');
 
-Route::get('/notifikasi', [SiswaDashboardController::class, 'notifikasi'])
-    ->name('notifikasi.index');
+    Route::get('/notifikasi', [SiswaDashboardController::class, 'notifikasi'])
+        ->name('notifikasi.index');
 
-Route::get('/sertifikat', [SiswaDashboardController::class, 'sertifikat'])
-    ->name('sertifikat.index');
+    Route::post('/notifikasi/tandai-dibaca', [SiswaDashboardController::class, 'notifikasiTandaiDibaca'])
+        ->name('notifikasi.read-all');
 
-Route::get('/progress-report', [SiswaDashboardController::class, 'progresReport'])
-    ->name('progresreport.index');
+    // BOOKING KELAS
+    Route::get('/booking', [BookingController::class, 'index'])
+        ->name('booking.index');
+
+    Route::post('/booking/privat', [BookingController::class, 'storePrivate'])
+        ->name('booking.privat.store');
+
+    Route::patch('/booking/privat/{booking}/reschedule', [BookingController::class, 'reschedulePrivate'])
+        ->name('booking.privat.reschedule');
+
+    Route::post('/booking/reguler/{class}', [BookingController::class, 'daftarReguler'])
+        ->name('booking.reguler.daftar');
+
+    Route::post('/booking/request-privat', [BookingController::class, 'requestPrivate'])
+        ->name('booking.request.privat');
+
+    Route::post('/booking/request-reguler', [BookingController::class, 'requestReguler'])
+        ->name('booking.request.reguler');
+});
 
     // PROFIL
     Route::middleware(['auth'])->group(function () {

@@ -54,8 +54,13 @@
                             Pertemuan
                             {{ $material->meeting_number ?? '-' }}
 
-                            @if ($material->programPackage)
-                                · {{ $material->programPackage->package_name }}
+                            @if ($material->level)
+                                · {{ $material->level->program?->program_name }}
+                                {{ $material->level->level_name }}
+                            @endif
+
+                            @if ($material->vocabs->isNotEmpty())
+                                · {{ $material->vocabs->count() }} kosakata
                             @endif
 
                         </div>

@@ -26,11 +26,17 @@
 
                 <div>
                     <div class="text-sm font-semibold text-black">
-                        {{ $item['judul'] ?? 'Progress Report' }}
+                        {{ $item->report_type ?: 'Progress Report' }}
+                        @if ($item->enrollment?->class)
+                            — {{ $item->enrollment->class->class_name }}
+                        @endif
                     </div>
 
                     <div class="text-xs text-gray-500 mt-1">
-                        {{ $item['periode'] ?? 'Periode laporan belum tersedia' }}
+                        {{ $item->report_period ?: 'Periode laporan belum tersedia' }}
+                        @if ($item->teacher)
+                            · {{ $item->teacher->name }}
+                        @endif
                     </div>
 
                 </div>
@@ -39,12 +45,12 @@
 
 
             {{-- Tombol --}}
-            <button
-                type="button"
-                class="text-xs font-semibold border border-black rounded-full px-5 py-2
-                       hover:bg-black hover:text-white transition whitespace-nowrap">
+            <a href="{{ asset('storage/' . $item->file_path) }}"
+               target="_blank"
+               class="text-xs font-semibold border border-black rounded-full px-5 py-2
+                      hover:bg-black hover:text-white transition whitespace-nowrap">
                 Lihat Laporan
-            </button>
+            </a>
 
         </div>
 
@@ -95,7 +101,7 @@
                 </div>
 
                 <div class="text-xs text-gray-500 mt-1">
-                    Reguler: terbit Apr 2026 · HSK: terbit Mar 2026
+                    Diterbitkan otomatis sesuai periode kelas kamu
                 </div>
             </div>
 
