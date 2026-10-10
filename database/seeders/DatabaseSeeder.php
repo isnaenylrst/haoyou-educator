@@ -37,6 +37,7 @@ class DatabaseSeeder extends Seeder
             ProgressReportSeeder::class,
             DocumentTemplateSeeder::class,
             DocumentSeeder::class,
+            SettingSeeder::class,
         ]);
     }
 }

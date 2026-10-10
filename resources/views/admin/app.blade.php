@@ -51,7 +51,7 @@
             <div class="nav-group">
                 <div class="nav-group-label">CRM</div>
 
-                <a href="{{ route('admin.calon-siswa') }}"class="nav-item {{ request()->routeIs('admin.calon-siswa') ? 'active' : '' }}">
+                <a href="{{ route('admin.calon-siswa.index') }}"class="nav-item {{ request()->routeIs('admin.calon-siswa.index') ? 'active' : '' }}">
                     <i class="fa-solid fa-user-plus nav-icon" title="Calon Siswa"></i>
                     <span class="label">Calon Siswa</span>
                 </a>
@@ -81,7 +81,7 @@
                     <span class="label">Jadwal</span>
                 </a>
 
-                <a href="#" class="nav-item">
+                <a href="{{ route('admin.jurnal-mengajar') }}"class="nav-item {{ request()->routeIs('admin.jurnal-mengajar*') ? 'active' : '' }}">
                     <i class="fa-solid fa-book-open nav-icon" title="Jurnal Mengajar"></i>
                     <span class="label">Jurnal Mengajar</span>
                 </a>
@@ -106,10 +106,10 @@
             <div class="nav-group">
                 <div class="nav-group-label">Keuangan</div>
 
-                <a href="#" class="nav-item">
+                <a href="{{ route('admin.pembayaran') }}"
+                class="nav-item {{ request()->routeIs('admin.pembayaran*') ? 'active' : '' }}">
                     <i class="fa-solid fa-wallet nav-icon" title="Pembayaran"></i>
                     <span class="label">Pembayaran</span>
-                    <span class="nav-badge">7</span>
                 </a>
             </div>
 
@@ -138,7 +138,13 @@
                     <span class="label">Program & Level</span>
                 </a>
 
-                <a href="#" class="nav-item">
+                {{-- <a href="{{ route('admin.tamplate-dokumen') }}"class="nav-item {{ request()->routeIs('admin.tamplate-dokumen*') ? 'active' : '' }}">
+                    <i class="fa-solid fa-print nav-icon" title="Print Dokumen"></i>
+                    <span class="label">Print Dokumen</span>
+                </a>                 --}}
+
+                <a href="{{ route('admin.pengaturan.index') }}"
+                class="nav-item {{ request()->routeIs('admin.pengaturan.*', 'admin.template-dokumen.*') ? 'active' : '' }}">
                     <i class="fa-solid fa-gear nav-icon" title="Pengaturan"></i>
                     <span class="label">Pengaturan</span>
                 </a>

@@ -33,6 +33,7 @@ return new class extends Migration
                 ->nullOnDelete();
 
             $table->date('enrollment_date');
+            $table->decimal('registration_fee', 12, 2)->default(0);
 
             $table->enum('status', ['Waiting Class', 'Active', 'Completed', 'Cancelled'])->default('Active');
 

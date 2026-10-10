@@ -71,7 +71,7 @@
     </div>
 
     {{-- ========================= FILTER ========================= --}}
-    <form method="GET" action="{{ route('admin.calon-siswa') }}" id="filterForm">
+    <form method="GET" action="{{ route('admin.calon-siswa.index') }}" id="filterForm">
         <div class="toolbar">
             <div class="toolbar-search">
                 <i class="fa-solid fa-magnifying-glass"></i>

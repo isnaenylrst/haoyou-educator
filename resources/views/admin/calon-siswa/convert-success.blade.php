@@ -226,7 +226,7 @@
             <p>Siswa sudah aktif di sistem. Unduh dokumen yang diperlukan di bawah ini.</p>
         </div>
         <div class="dashboard-header-actions">
-            <a href="{{ route('admin.calon-siswa') }}" class="btn btn-secondary">
+            <a href="{{ route('admin.calon-siswa.index') }}" class="btn btn-secondary">
                 <i class="fa-solid fa-arrow-left"></i> Daftar Calon Siswa
             </a>
         </div>

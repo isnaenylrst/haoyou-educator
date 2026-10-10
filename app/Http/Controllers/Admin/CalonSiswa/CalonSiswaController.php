@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Admin;
+namespace App\Http\Controllers\Admin\CalonSiswa;
 
 use App\Http\Controllers\Controller;
 use App\Models\CandidateStudent;
@@ -49,9 +49,6 @@ class CalonSiswaController extends Controller
             });
         }
 
-        // Filter Program Diminati — nilainya bisa id Program (reguler) atau
-        // literal 'private', karena minatnya sekarang boleh salah satu dari dua
-        // tabel berbeda (programs vs private_packages), bukan cuma program_id.
         if ($request->filled('program_id')) {
             if ($request->program_id === 'private') {
                 $query->whereNotNull('private_package_id');
@@ -136,7 +133,7 @@ class CalonSiswaController extends Controller
             ->orderBy('package_name')
             ->get(['id', 'package_name']);
 
-        return view('admin.calonsiswa', compact(
+        return view('admin.calon-siswa.index', compact(
             'candidateStudents',
             'totalLead',
             'trialScheduled',
@@ -212,7 +209,7 @@ class CalonSiswaController extends Controller
         });
 
         return redirect()
-            ->route('admin.calon-siswa')
+            ->route('admin.calon-siswa.index')
             ->with('success', 'Lead berhasil ditambahkan.');
     }
 
@@ -284,7 +281,7 @@ class CalonSiswaController extends Controller
         });
 
         return redirect()
-            ->route('admin.calon-siswa')
+            ->route('admin.calon-siswa.index')
             ->with('success', 'Data calon siswa berhasil diperbarui.');
     }
 
@@ -295,7 +292,7 @@ class CalonSiswaController extends Controller
     {
         if ($candidateStudent->student()->exists()) {
             return redirect()
-                ->route('admin.calon-siswa')
+                ->route('admin.calon-siswa.index')
                 ->with('error', 'Lead ini sudah menjadi siswa aktif dan tidak bisa dihapus.');
         }
 
@@ -304,17 +301,10 @@ class CalonSiswaController extends Controller
         });
 
         return redirect()
-            ->route('admin.calon-siswa')
+            ->route('admin.calon-siswa.index')
             ->with('success', 'Data calon siswa berhasil dihapus.');
     }
 
-    /**
-     * Validasi bersama store() & update(). "Program Diminati" sekarang bisa
-     * mengarah ke Program (reguler) ATAU PrivatePackage — persis salah satu,
-     * tidak boleh dua-duanya, tidak boleh kosong dua-duanya — ditentukan lewat
-     * field interest_type ('Reguler'/'Private'), sama seperti pola Reguler/
-     * Private yang sudah dipakai di halaman Kelas.
-     */
     private function validated(Request $request, ?CandidateStudent $candidateStudent = null): array
     {
         $isPrivate = $request->input('interest_type') === 'Private';
@@ -344,8 +334,6 @@ class CalonSiswaController extends Controller
             'end_time.*' => 'nullable',
         ];
 
-        // trial_status & lead_status cuma diisi manual lewat form Edit — saat
-        // create, keduanya selalu dipaksa 'Pending'/'Warm' (lihat store()).
         if ($candidateStudent) {
             $rules['trial_status'] = 'required|in:Pending,Completed,Cancelled';
             $rules['lead_status'] = 'required|in:Cold,Warm,Hot';
@@ -356,18 +344,12 @@ class CalonSiswaController extends Controller
             'private_package_id.required_if' => 'Pilih paket private yang diminati.',
         ]);
 
-        // Pastikan hanya salah satu yang tersimpan — form yang lengah/rusak
-        // tidak boleh sampai mengisi program_id DAN private_package_id sekaligus.
         $data['program_id'] = $isPrivate ? null : $data['program_id'];
         $data['private_package_id'] = $isPrivate ? $data['private_package_id'] : null;
 
         return $data;
     }
 
-    /**
-     * Hapus jadwal tersedia lama lalu simpan ulang sesuai input form.
-     * Dipakai bersama oleh store() dan update() supaya tidak duplikasi logika.
-     */
     private function syncSchedules(CandidateStudent $candidate, Request $request): void
     {
         $candidate->availableSchedules()->delete();
