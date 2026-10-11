@@ -9,9 +9,12 @@ use App\Models\Document;
 use App\Models\Material;
 use App\Models\PrivateBooking;
 use App\Models\ProgressReport;
+use App\Models\ProgramLevel;   
+use App\Models\ProgramVideo;
 use App\Models\Student;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class SiswaDashboardController extends Controller
 {
@@ -211,9 +214,90 @@ class SiswaDashboardController extends Controller
             ->orderBy('level_id')
             ->orderBy('meeting_number')
             ->get();
+        
+        // ---------- VIDEO PEMBELAJARAN ----------
+        $currentLevel = $this->currentLevel($student, $levelIds);
+        $audience     = $currentLevel?->program?->audience ?? 'hsk';
 
-        return view('Siswa.program', compact('student', 'enrollments', 'materials'));
-    }
+        // 1 video budaya: HSK (semua level) atau anak (animasi)
+        $cultureVideo = ProgramVideo::where('type', 'culture')
+            ->where('audience', $audience)
+            ->where('is_published', true)
+            ->first();
+
+        // Replay sesuai level siswa saat ini
+        $replayVideo = $currentLevel
+            ? ProgramVideo::where('type', 'replay')
+                ->where('level_id', $currentLevel->id)
+                ->where('is_published', true)
+                ->first()
+            : null;
+
+        return view('Siswa.program', [
+        'title'        => 'Program Belajar',
+        'student'      => $student,
+        'enrollments'  => $enrollments,
+        'materials'    => $materials,
+        'cultureVideo' => $cultureVideo,
+        'replayVideo'  => $replayVideo,
+        'audience'     => $audience,
+    ]);
+}
+    /** Kumpulan level_id milik siswa (logika sama seperti sebelumnya). */
+private function resolveLevelIds(Student $student, $enrollments)
+{
+    return $enrollments
+        ->flatMap(fn ($e) => [
+            $e->class?->level_id,
+            $e->class?->programPackage?->level_id,
+            $e->programPackage?->level_id,
+        ])
+        ->push($student->current_level_id)
+        ->filter()
+        ->unique()
+        ->values();
+}
+
+/** Level aktif siswa: current_level_id, fallback ke level pertama yang ditemukan. */
+private function currentLevel(Student $student, $levelIds): ?ProgramLevel
+{
+    return ProgramLevel::with('program')
+        ->find($student->current_level_id ?? $levelIds->first());
+}
+
+/**
+ * Streaming video (hanya bisa ditonton, file tidak ada di folder publik).
+ * Hanya siswa yang berhak yang bisa membukanya.
+ */
+public function streamVideo(ProgramVideo $video)
+{
+    $student = $this->student();
+
+    abort_unless($video->is_published, 404);
+
+    $enrollments = ClassEnrollment::with('class.programPackage')
+        ->where('student_id', $student->id)
+        ->whereIn('status', ['Active', 'Completed', 'Waiting Class'])
+        ->get();
+
+    $levelIds = $this->resolveLevelIds($student, $enrollments);
+    $audience = $this->currentLevel($student, $levelIds)?->program?->audience ?? 'hsk';
+
+    $allowed = $video->type === 'culture'
+        ? $video->audience === $audience
+        : $levelIds->contains($video->level_id);
+
+    abort_unless($allowed, 403);
+
+    $path = Storage::disk('local')->path($video->video_path);
+    abort_unless(file_exists($path), 404);
+
+    // response()->file() mendukung Range request, jadi video bisa di-seek
+    return response()->file($path, [
+        'Content-Type'        => 'video/mp4',
+        'Content-Disposition' => 'inline',
+    ]);
+}
 
     /*
     |--------------------------------------------------------------------------

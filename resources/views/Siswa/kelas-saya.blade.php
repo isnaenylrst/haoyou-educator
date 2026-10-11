@@ -2,7 +2,7 @@
 
 @section('dashboard-content')
 
-<div class="bg-[#f7f8fa] min-h-screen">
+<div>
 
     <div class="bg-white border border-line rounded-2xl p-5 mb-5">
 

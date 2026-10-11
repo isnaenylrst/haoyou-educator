@@ -90,7 +90,10 @@ Route::middleware(['auth', 'student'])->group(function () {
 
     Route::get('/program', [SiswaDashboardController::class, 'program'])
         ->name('program.index');
-
+    
+     Route::get('/program/video/{video}/stream', [SiswaDashboardController::class, 'streamVideo'])
+    ->name('program.video.stream');
+    
     Route::get('/kelas-saya', [SiswaDashboardController::class, 'kelasSaya'])
         ->name('kelassaya.index');
 
@@ -238,4 +241,5 @@ Route::middleware(['auth', 'student'])->group(function () {
         ->name('program-level.private.update');
     Route::delete('/program-level/private/{privatePackage}', [ProgramLevelController::class, 'destroyPrivate'])
         ->name('program-level.private.destroy');
+
 });
