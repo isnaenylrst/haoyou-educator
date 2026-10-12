@@ -18,6 +18,8 @@ class ClassEnrollment extends Model
         'program_package_id',
         'private_package_id',
         'enrollment_date',
+        'registration_fee',
+        'discount',
         'status',
     ];
 
@@ -28,11 +30,6 @@ class ClassEnrollment extends Model
     protected static function booted()
     {
         static::saving(function (ClassEnrollment $enrollment) {
-            // Yang tidak boleh bersamaan itu DUA IDENTITAS PAKET (reguler vs
-            // private), BUKAN class_id vs private_package_id — sebuah kelas
-            // privat justru SEHARUSNYA punya class_id + private_package_id
-            // terisi bersamaan begitu siswa ditempatkan ke kelasnya (classes
-            // table sudah bisa menampung private_package_id sendiri).
             $hasProgramTrack = $enrollment->program_package_id !== null;
             $hasPrivateTrack = $enrollment->private_package_id !== null;
 

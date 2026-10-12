@@ -153,7 +153,13 @@
                                 <div>
                                     <div class="cand-name">{{ $student->name }}</div>
                                     <div class="cand-sub">
-                                        {{ $student->user->phone ?? $student->candidateStudent->phone ?? '-' }}
+                                        @if ($isPrivate)
+                                            Private
+                                        @elseif ($student->currentLevel)
+                                                    {{ $student->currentLevel->category?->category_name ? $student->currentLevel->category->category_name . ' - ' : '' }}{{ $student->currentLevel->level_name }}
+                                        @else
+                                            -
+                                        @endif
                                     </div>
                                 </div>
                             </div>
@@ -618,6 +624,13 @@
                 </div>
 
                 <div class="modal-body">
+                    <div class="form-section">
+                        <div class="form-field full">
+                            <label>Jadwal Siswa</label>
+                            <div id="assign_student_schedule" style="font-size:13px;color:#374151;">-</div>
+                        </div>
+                    </div>
+
                     <div class="form-section" style="margin-bottom: 0;">
                         <div class="form-field full">
                             <label>Kelas *</label>
@@ -988,10 +1001,12 @@
             const form = document.getElementById('assignClassForm');
             const select = document.getElementById('assign_class_id');
             const emptyNote = document.getElementById('assign_class_empty_note');
+            const scheduleBox = document.getElementById('assign_student_schedule');
 
             form.action = `/admin/enrollments/${enrollmentId}/assign-class`;
             select.innerHTML = '<option value="">- Pilih Kelas -</option>';
             emptyNote.style.display = 'none';
+            scheduleBox.textContent = '-';
             overlay.classList.add('open');
 
             fetch(`/admin/enrollments/${enrollmentId}/waiting-class-options`, {
@@ -1002,6 +1017,11 @@
                 return response.json();
             })
             .then(data => {
+                const schedules = data.student_schedules ?? [];
+                scheduleBox.textContent = schedules.length
+                    ? schedules.map(s => `${s.day} ${s.start_time}–${s.end_time}`).join(', ')
+                    : 'Belum ada jadwal tersimpan';
+
                 const options = data.class_options ?? [];
 
                 if (options.length === 0) {
@@ -1012,7 +1032,8 @@
                 options.forEach(opt => {
                     const option = document.createElement('option');
                     option.value = opt.id;
-                    option.textContent = `${opt.class_name} (${opt.delivery_mode}, ${opt.status})`;
+                    const scheduleText = opt.schedule_text ? ` — ${opt.schedule_text}` : '';
+                    option.textContent = `${opt.class_name} (${opt.delivery_mode}, ${opt.status})${scheduleText}`;
                     select.appendChild(option);
                 });
             })

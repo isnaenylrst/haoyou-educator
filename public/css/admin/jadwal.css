@@ -1,34 +1,32 @@
 /* =====================================================
-   JADWAL — kalender mingguan
+   JADWAL — tampilan Hari (timeline per ruang)
 ===================================================== */
-
-.view-toggle {
-    display: flex;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-.view-toggle-btn {
-    border: none;
-    background: #fff;
-    padding: 8px 16px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #6b7280;
-    cursor: pointer;
-}
-
-.view-toggle-btn.active {
-    background: #ffd400;
-    color: #111;
-}
 
 .week-label {
     font-size: 13px;
     font-weight: 600;
     color: #374151;
     white-space: nowrap;
+}
+
+/* Tombol navigasi minggu (link <a>, bukan <button>) */
+.jadwal-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.jadwal-nav-btn:hover {
+    background: #f9fafb;
 }
 
 .legend {
@@ -53,9 +51,11 @@
     display: inline-block;
 }
 
-.dot-reguler { background: #3b82f6; }
-.dot-private { background: #7c3aed; }
-.dot-trial   { background: #9ca3af; }
+/* Warna kelas: Daily Activity = kuning, HSK = biru, Private = hijau */
+.dot-daily   { background: #eab308; }
+.dot-hsk     { background: #3b82f6; }
+.dot-private { background: #22c55e; }
+.dot-trial   { background: #9333ea; }
 
 .conflict-banner {
     display: flex;
@@ -77,130 +77,255 @@
     text-decoration: underline;
 }
 
-/* ==========================================================
-   GRID KALENDER
-========================================================== */
-
 .calendar-card {
     padding: 18px;
-    overflow-x: auto;
 }
 
-.calendar-grid {
-    display: grid;
-    min-width: 900px;
-}
+/* ==========================================================
+   WARNA PER TIPE KELAS (dipakai blok timeline)
+========================================================== */
 
-.cal-corner {
-    border-bottom: 1px solid #edeef1;
-}
+.kind-daily   { background: #fffbeb; border-left-color: #eab308; }
+.kind-hsk     { background: #eff6ff; border-left-color: #3b82f6; }
+.kind-private { background: #f0fdf4; border-left-color: #22c55e; }
 
-.cal-day-header {
-    text-align: center;
-    padding: 10px 6px;
-    border-bottom: 1px solid #edeef1;
-    border-left: 1px solid #f4f5f7;
-}
-
-.cal-day-header.is-today {
-    background: #fffdf0;
-}
-
-.cal-day-name {
-    font-size: 12.5px;
-    font-weight: 700;
-    color: #111827;
-}
-
-.cal-day-date {
-    font-size: 11px;
-    color: #9ca3af;
-    margin-top: 2px;
-}
-
-.cal-hours {
-    position: relative;
-    border-right: 1px solid #f4f5f7;
-}
-
-.cal-hour-mark {
-    height: 56px;
-    font-size: 10.5px;
-    color: #9ca3af;
-    text-align: right;
-    padding-right: 8px;
-    transform: translateY(-6px);
-}
-
-.cal-day-col {
-    position: relative;
-    border-left: 1px solid #f4f5f7;
-}
-
-.cal-day-col.is-today {
-    background: #fffdf5;
-}
-
-.cal-hour-line {
-    height: 56px;
-    border-bottom: 1px dashed #f4f5f7;
-}
-
-.cal-block {
-    position: absolute;
-    left: 4px;
-    right: 4px;
-    border-radius: 8px;
-    padding: 5px 8px;
-    overflow: hidden;
-    cursor: pointer;
-    border-left: 3px solid transparent;
-    box-shadow: 0 1px 3px rgba(0,0,0,.06);
-    transition: transform .12s ease, box-shadow .12s ease;
-}
-
-.cal-block:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 10px rgba(0,0,0,.12);
-    z-index: 5;
-}
-
-.cal-block.has-conflict {
+.has-conflict {
     outline: 2px solid #dc2626;
     outline-offset: -2px;
 }
 
-.block-reguler {
-    background: #eff6ff;
-    border-left-color: #3b82f6;
+.is-cancelled {
+    opacity: .55;
 }
 
-.block-private {
-    background: #f5f3ff;
-    border-left-color: #7c3aed;
+.session-done {
+    color: #16a34a;
+    font-size: 10px;
 }
 
-.block-trial {
+.pulse {
+    animation: pulse-conflict 1s ease-in-out 2;
+}
+
+@keyframes pulse-conflict {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    50%      { box-shadow: 0 0 0 6px rgba(220, 38, 38, .25); }
+}
+
+.week-empty {
+    text-align: center;
+    font-size: 12px;
+    color: #9ca3af;
+    padding: 20px 0;
+}
+
+/* Chip trial calon siswa (hanya tanggal, tanpa jam) */
+.trial-chip {
+    font-size: 11px;
+    color: #374151;
     background: #f3f4f6;
-    border-left-color: #9ca3af;
-    border-left-style: dashed;
+    border-left: 3px dashed #9ca3af;
+    border-radius: 6px;
+    padding: 5px 8px;
+    cursor: pointer;
+    word-break: break-word;
 }
 
-.cal-block-title {
+.trial-chip:hover {
+    background: #e5e7eb;
+}
+
+.trial-chip.is-cancelled {
+    text-decoration: line-through;
+}
+
+.tag-conflict {
+    margin-left: auto;
+    font-size: 9.5px;
+    font-weight: 700;
+    color: #dc2626;
+    background: #fee2e2;
+    border-radius: 999px;
+    padding: 1px 7px;
+}
+
+/* ==========================================================
+   TAMPILAN HARI — tab hari + timeline per ruang
+========================================================== */
+
+.day-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    overflow-x: auto;
+}
+
+.day-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    min-width: 110px;
+    padding: 8px 14px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    font-size: 12px;
+    color: #6b7280;
+    cursor: pointer;
+}
+
+.day-tab strong {
+    font-size: 13px;
+    color: #111827;
+}
+
+.day-tab.active {
+    background: #ffd400;
+    border-color: #ffd400;
+}
+
+.day-tab.active span {
+    color: #374151;
+}
+
+.day-trials {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.day-trials-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.timeline-scroll {
+    overflow-x: auto;
+    border: 1px solid #edeef1;
+    border-radius: 12px;
+}
+
+.timeline {
+    --hour-width: 120px;
+    --label-width: 170px;
+    min-width: calc(var(--label-width) + var(--hours) * var(--hour-width));
+}
+
+.tl-row {
+    display: grid;
+    grid-template-columns: var(--label-width) calc(var(--hours) * var(--hour-width));
+    border-bottom: 1px solid #f0f1f3;
+}
+
+.tl-row:last-child {
+    border-bottom: 0;
+}
+
+.tl-label {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 8px 12px;
+    background: #fff;
+    border-right: 1px solid #edeef1;
+}
+
+.tl-head .tl-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    background: #fafafa;
+}
+
+.tl-teacher {
+    font-size: 13px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.tl-teacher-sub {
+    font-size: 11px;
+    color: #6b7280;
+}
+
+.tl-teacher-sub.is-free {
+    color: #16a34a;
+}
+
+.tl-track-head {
+    display: grid;
+    grid-template-columns: repeat(var(--hours), var(--hour-width));
+    background: #fafafa;
+}
+
+.tl-hour {
+    padding: 8px 0 8px 6px;
+    font-size: 11px;
+    color: #9ca3af;
+    border-left: 1px solid #edeef1;
+}
+
+.tl-track {
+    position: relative;
+    background-image: repeating-linear-gradient(
+        to right,
+        #f0f1f3 0,
+        #f0f1f3 1px,
+        transparent 1px,
+        transparent var(--hour-width)
+    );
+}
+
+.tl-block {
+    position: absolute;
+    box-sizing: border-box;
+    padding: 4px 7px;
+    border-left: 3px solid transparent;
+    border-radius: 7px;
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
+    transition: box-shadow .12s ease;
+}
+
+.tl-block:hover {
+    box-shadow: 0 4px 10px rgba(0, 0, 0, .14);
+    z-index: 2;
+}
+
+.tl-block-title {
     font-size: 11.5px;
     font-weight: 700;
     color: #111827;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
 }
 
-.cal-block-sub {
+.tl-block-sub {
+    margin-top: 1px;
     font-size: 10.5px;
     color: #6b7280;
     white-space: nowrap;
-    text-overflow: ellipsis;
     overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.is-cancelled .tl-block-title {
+    text-decoration: line-through;
 }
 
 /* ==========================================================
@@ -215,6 +340,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 16px;
     padding: 9px 0;
     border-bottom: 1px solid #f4f5f7;
     font-size: 13px;
@@ -227,6 +353,7 @@
 .detail-row strong {
     color: #111827;
     font-weight: 600;
+    text-align: right;
 }
 
 .modal-foot-right {

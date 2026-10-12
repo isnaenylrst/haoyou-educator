@@ -938,3 +938,9 @@ a.icon-btn {
         padding: 18px;
     }
 }
+
+.modal-foot-right {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}

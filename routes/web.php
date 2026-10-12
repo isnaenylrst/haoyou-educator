@@ -7,13 +7,17 @@ use App\Http\Controllers\LandingController;
 use App\Http\Controllers\CalonSiswa\PendaftaranController;
 use App\Http\Controllers\Siswa\SiswaDashboardController;
 use App\Http\Controllers\Admin\DashboardController;
-use App\Http\Controllers\Admin\CalonSiswaController;
+use App\Http\Controllers\Admin\CalonSiswa\CalonSiswaController;
+use App\Http\Controllers\Admin\CalonSiswa\ConvertController;
 use App\Http\Controllers\Admin\SiswaController;
-use App\Http\Controllers\Admin\ConvertController;
-use App\Http\Controllers\Admin\JadwalController;
 use App\Http\Controllers\Admin\KelasController;
+use App\Http\Controllers\Admin\JadwalController;
+use App\Http\Controllers\Admin\JurnalMengajarController;
+use App\Http\Controllers\Admin\GuruController;
+use App\Http\Controllers\Admin\PembayaranController;
 use App\Http\Controllers\Admin\ProgramLevelController;
-
+use App\Http\Controllers\Admin\Pengaturan\PengaturanController;
+use App\Http\Controllers\Admin\Pengaturan\TemplatePrintController;
 
 /*
 |--------------------------------------------------------------------------
@@ -112,17 +116,27 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->name('dashboard');
 
-    //CALON SISWA
-    Route::get('/calon-siswa', [CalonSiswaController::class, 'index'])
-        ->name('calon-siswa');
-    Route::post('/calon-siswa', [CalonSiswaController::class, 'store'])
-        ->name('calon-siswa.store');
-    Route::get('/calon-siswa/{candidateStudent}/edit', [CalonSiswaController::class, 'edit'])
-        ->name('calon-siswa.edit');
-    Route::put('/calon-siswa/{candidateStudent}', [CalonSiswaController::class, 'update'])
-        ->name('calon-siswa.update');
-    Route::delete('/calon-siswa/{candidateStudent}', [CalonSiswaController::class, 'destroy'])
-        ->name('calon-siswa.destroy');
+    // CALON SISWA
+    Route::prefix('calon-siswa')->name('calon-siswa.')->group(function () {
+        // CRUD
+        Route::get('/', [CalonSiswaController::class, 'index'])->name('index');
+        Route::post('/', [CalonSiswaController::class, 'store'])->name('store');
+        Route::get('/{candidateStudent}/edit', [CalonSiswaController::class, 'edit'])->name('edit');
+        Route::put('/{candidateStudent}', [CalonSiswaController::class, 'update'])->name('update');
+        Route::delete('/{candidateStudent}', [CalonSiswaController::class, 'destroy'])->name('destroy');
+
+        // KONVERSI CALON SISWA (wizard 3 step)
+        Route::get('/{candidateStudent}/convert', [ConvertController::class, 'create'])
+            ->name('convert');                      // step 1 (tampilan)
+        Route::post('/{candidateStudent}/convert/step-1', [ConvertController::class, 'storeStep1'])
+            ->name('convert.step1.store');          // step 1 (submit)
+        Route::get('/{candidateStudent}/convert/pembayaran', [ConvertController::class, 'step2'])
+            ->name('convert.step2');                // step 2 (tampilan)
+        Route::post('/{candidateStudent}/convert/pembayaran', [ConvertController::class, 'store'])
+            ->name('convert.store');                // step 2 (submit)
+        Route::get('/enrollment/{enrollment}/dokumen', [ConvertController::class, 'step3'])
+            ->name('convert.step3');                // step 3
+    });
 
     //SISWA 
     Route::get('/siswa', [SiswaController::class, 'index'])->name('siswa');
@@ -131,24 +145,32 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('/siswa/{siswa}', [SiswaController::class, 'show'])->name('siswa.show');
     Route::get('/siswa/{siswa}/continue', [SiswaController::class, 'continueProgramForm'])->name('siswa.continue.form');
     Route::post('/siswa/{siswa}/continue', [SiswaController::class, 'continueProgram'])->name('siswa.continue');
-
-    //CONVERT CALON SISWA MENJADI SISWA
-    Route::get('calon-siswa/{candidateStudent}/convert', [ConvertController::class, 'create'])
-    ->name('calon-siswa.convert');
-    Route::post('calon-siswa/{candidateStudent}/convert', [ConvertController::class, 'store'])
-    ->name('calon-siswa.convert.store');
-
-    //ASSIGN KELAS UNTUK ENROLLMENT YANG MASIH WAITING CLASS
-    Route::patch('enrollments/{enrollment}/assign-class', [ConvertController::class, 'assignClass'])
-        ->name('enrollments.assign-class');
+    Route::get('siswa/{siswa}/formulir/{enrollment?}', [\App\Http\Controllers\Admin\CalonSiswa\RegistrationFormController::class, 'download'])
+        ->name('siswa.formulir');
         
     //SISWA — ASSIGN KELAS UNTUK ENROLLMENT WAITING CLASS
     Route::get('enrollments/{enrollment}/waiting-class-options', [SiswaController::class, 'waitingClassOptions'])
         ->name('enrollments.waiting-class-options');        
     Route::get('/jadwal', [JadwalController::class, 'index'])
-        ->name('jadwal');
-    Route::get('/kelas', [KelasController::class, 'index'])
-        ->name('kelas');
+        ->name('jadwal'); 
+    
+    Route::get('/pengaturan', [PengaturanController::class, 'index'])->name('pengaturan.index');
+    // PENGATURAN — TEMPLATE PRINT DOKUMEN (FORM & INVOICE)
+    Route::prefix('print-dokumen')->name('template-dokumen.')->group(function () {
+        Route::get('/', [TemplatePrintController::class, 'index'])->name('index');
+        Route::get('/{template}/edit', [TemplatePrintController::class, 'edit'])->name('edit');
+        Route::put('/{template}', [TemplatePrintController::class, 'update'])->name('update');
+        Route::post('/{template}/reset', [TemplatePrintController::class, 'reset'])->name('reset');
+        Route::post('/{template}/preview', [TemplatePrintController::class, 'preview'])->name('preview');
+    });
+
+    // KELAS 
+    Route::get('/kelas', [KelasController::class, 'index'])->name('kelas');
+    Route::post('/kelas', [KelasController::class, 'store'])->name('kelas.store');
+    Route::put('/kelas/{id}', [KelasController::class, 'update'])->name('kelas.update');
+    Route::get('kelas/{id}/siswa', [KelasController::class, 'students'])->name('kelas.students');
+    Route::get('kelas/{id}/siswa/cari', [KelasController::class, 'searchStudents'])->name('kelas.students.search');
+    Route::post('kelas/{id}/siswa', [KelasController::class, 'enrollStudent'])->name('kelas.students.store');
 
     //PROGRAM & LEVEL (index + paket reguler program_packages + paket private private_packages)
     Route::get('/program-level', [ProgramLevelController::class, 'index'])
@@ -203,4 +225,33 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
         ->name('program-level.private.update');
     Route::delete('/program-level/private/{privatePackage}', [ProgramLevelController::class, 'destroyPrivate'])
         ->name('program-level.private.destroy');
+
+    // GURU
+    Route::get('/guru', [GuruController::class, 'index'])->name('guru');
+    Route::post('/guru', [GuruController::class, 'store'])->name('guru.store');
+    Route::get('/guru/{teacher}/edit', [GuruController::class, 'edit'])->name('guru.edit');
+    Route::put('/guru/{teacher}', [GuruController::class, 'update'])->name('guru.update');
+    Route::delete('/guru/{teacher}', [GuruController::class, 'destroy'])->name('guru.destroy');
+
+    // DETAIL GURU — dokumen, jurnal mengajar, materi upload
+    Route::get('/guru/{teacher}/detail', [GuruController::class, 'show'])->name('guru.show');
+    Route::post('/guru/{teacher}/documents', [GuruController::class, 'storeDocument'])->name('guru.documents.store');
+    Route::delete('/guru/documents/{document}', [GuruController::class, 'destroyDocument'])->name('guru.documents.destroy');
+
+    Route::get('/pembayaran', [PembayaranController::class, 'index'])
+        ->name('pembayaran');
+    Route::get('/pembayaran/{enrollment}', [PembayaranController::class, 'show'])
+        ->name('pembayaran.show');
+    Route::post('/pembayaran/{enrollment}', [PembayaranController::class, 'store'])
+        ->name('pembayaran.store');
+
+    // JURNAL MENGAJAR  
+    Route::get('/jurnal-mengajar', [JurnalMengajarController::class, 'index'])
+        ->name('jurnal-mengajar');
+    Route::post('/jurnal-mengajar', [JurnalMengajarController::class, 'store'])
+        ->name('jurnal-mengajar.store');
+    Route::get('/jurnal-mengajar/{journal}/edit', [JurnalMengajarController::class, 'edit'])
+        ->name('jurnal-mengajar.edit');
+    Route::put('/jurnal-mengajar/{journal}', [JurnalMengajarController::class, 'update'])
+        ->name('jurnal-mengajar.update');
 });

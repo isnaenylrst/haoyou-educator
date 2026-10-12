@@ -53,7 +53,13 @@ class PaymentInstallmentService
         if ($remaining < 0) {
             $sisaSaatIni = number_format($totalBill - $alreadyPaid, 0, ',', '.');
             throw ValidationException::withMessages([
-                'amount' => "Jumlah bayar melebihi sisa tagihan (Rp{$sisaSaatIni}).",
+                'amount_paid' => "Jumlah bayar melebihi sisa tagihan (Rp{$sisaSaatIni}).",
+            ]);
+        }
+
+        if ($remaining > 0 && ! $this->enrollmentAllowsInstallment($enrollment)) {
+            throw ValidationException::withMessages([
+                'amount_paid' => 'Program/paket ini wajib dibayar lunas, tidak bisa dicicil.',
             ]);
         }
 
@@ -77,7 +83,36 @@ class PaymentInstallmentService
             ?? $enrollment->privatePackage->price
             ?? null;
 
-        return $price !== null ? (float) $price : null;
+        if ($price === null) {
+            return null;
+        }
+
+        $total = (float) $price
+            + (float) $enrollment->registration_fee
+            + (float) $enrollment->activity_fee
+            - (float) $enrollment->discount;
+
+        return max($total, 0);
+    }
+
+    public function allowsInstallment(bool $isPrivate, ?string $programName, ?string $levelName): bool
+    {
+        if ($isPrivate) return false;
+        if ($programName === 'Daily Activity') return true;
+        if (! str_starts_with((string) $levelName, 'HSK ')) return false;
+
+        $level = (int) trim(substr($levelName, 4));
+
+        return $level >= 1 && $level <= 3;
+    }
+
+    public function enrollmentAllowsInstallment(ClassEnrollment $e): bool
+    {
+        return $this->allowsInstallment(
+            (bool) $e->private_package_id,
+            $e->programPackage?->program?->program_name,
+            $e->student?->currentLevel?->level_name,
+        );
     }
 
     public function totalPaid(ClassEnrollment $enrollment): float

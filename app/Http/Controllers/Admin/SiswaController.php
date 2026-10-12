@@ -20,6 +20,7 @@ class SiswaController extends Controller
             ->with([
                 'user',
                 'candidateStudent',
+                'currentLevel.category',
                 'enrollments.class',
                 'activeEnrollment.class.programPackage.program',
                 'activeEnrollment.programPackage.program',
@@ -475,13 +476,33 @@ class SiswaController extends Controller
     {
         abort_if($enrollment->status !== 'Waiting Class', 404, 'Enrollment ini tidak sedang menunggu kelas.');
 
-        $classOptions = ClassModel::where('program_package_id', $enrollment->program_package_id)
+        $enrollment->load('student.candidateStudent.availableSchedules');
+
+        $classOptions = ClassModel::with('schedules')
+            ->where('program_package_id', $enrollment->program_package_id)
             ->whereIn('status', ['Open', 'Running'])
             ->orderBy('class_name')
-            ->get(['id', 'class_name', 'delivery_mode', 'status']);
+            ->get()
+            ->map(fn ($class) => [
+                'id' => $class->id,
+                'class_name' => $class->class_name,
+                'delivery_mode' => $class->delivery_mode,
+                'status' => $class->status,
+                'schedule_text' => $class->schedules
+                    ->map(fn ($s) => substr($s->day, 0, 3) . ' ' . substr($s->start_time, 0, 5) . '–' . substr($s->end_time, 0, 5))
+                    ->implode(', '),
+            ]);
+
+        $studentSchedules = $enrollment->student?->candidateStudent?->availableSchedules
+            ?->map(fn ($s) => [
+                'day' => $s->day,
+                'start_time' => substr($s->start_time, 0, 5),
+                'end_time' => substr($s->end_time, 0, 5),
+            ]) ?? collect();
 
         return response()->json([
             'class_options' => $classOptions,
+            'student_schedules' => $studentSchedules,
         ]);
     }
 }

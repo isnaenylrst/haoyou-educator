@@ -1,15 +1,17 @@
 <?php
 
-namespace App\Http\Controllers\Admin;
+namespace App\Http\Controllers\Admin\CalonSiswa;
 
 use App\Http\Controllers\Controller;
 use App\Models\CandidateStudent;
 use App\Models\FollowUp;
 use App\Models\FollowUpTemplate;
 use App\Models\CandidateStudentAvailableSchedule;
+use App\Models\PrivatePackage;
 use App\Models\Program;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class CalonSiswaController extends Controller
 {
@@ -35,7 +37,7 @@ class CalonSiswaController extends Controller
         | Query Data Calon Siswa
         |--------------------------------------------------------------------------
         */
-        $query = CandidateStudent::with('latestFollowUp')
+        $query = CandidateStudent::with(['latestFollowUp', 'program', 'privatePackage'])
             ->whereDoesntHave('student');
 
         // Search
@@ -47,9 +49,12 @@ class CalonSiswaController extends Controller
             });
         }
 
-        // Filter Program
         if ($request->filled('program_id')) {
-            $query->where('program_id', $request->program_id);
+            if ($request->program_id === 'private') {
+                $query->whereNotNull('private_package_id');
+            } else {
+                $query->where('program_id', $request->program_id);
+            }
         }
 
         // Filter Status Lead
@@ -120,46 +125,30 @@ class CalonSiswaController extends Controller
 
         /*
         |--------------------------------------------------------------------------
-        | Daftar Program untuk dropdown "Program Diminati"
+        | Daftar Program & Private Package untuk dropdown "Program Diminati"
         |--------------------------------------------------------------------------
         */
         $programs = Program::orderBy('program_name')->get(['id', 'program_name']);
+        $privatePackages = PrivatePackage::where('is_active', true)
+            ->orderBy('package_name')
+            ->get(['id', 'package_name']);
 
-        return view('admin.calonsiswa', compact(
+        return view('admin.calon-siswa.index', compact(
             'candidateStudents',
             'totalLead',
             'trialScheduled',
             'followUpOverdue',
             'conversionRate',
-            'programs'
+            'programs',
+            'privatePackages'
         ));
     }
 
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'gender' => 'required|in:Male,Female',
-            'birth_date' => 'required|date',
-            'phone' => 'required|string|max:20',
+        $data = $this->validated($request);
 
-            'parent_name' => 'nullable|string|max:255',
-            'parent_phone' => 'nullable|string|max:20',
-
-            'address' => 'nullable|string',
-            'school' => 'nullable|string|max:255',
-            'source' => 'required|string|max:100',
-            'allergy' => 'nullable|string',
-
-            'program_id' => 'required|exists:programs,id',
-            'trial_date' => 'nullable|date',
-
-            'day.*' => 'nullable|string',
-            'start_time.*' => 'nullable',
-            'end_time.*' => 'nullable',
-        ]);
-
-        DB::transaction(function () use ($request) {
+        DB::transaction(function () use ($data) {
 
             /*
             |--------------------------------------------------------------------------
@@ -169,18 +158,19 @@ class CalonSiswaController extends Controller
 
             $candidate = CandidateStudent::create([
 
-                'name' => $request->name,
-                'gender' => $request->gender,
-                'birth_date' => $request->birth_date,
-                'phone' => $request->phone,
-                'parent_name' => $request->parent_name,
-                'parent_phone' => $request->parent_phone,
-                'address' => $request->address,
-                'school' => $request->school,
-                'source' => $request->source,
-                'allergy' => $request->allergy,
-                'program_id' => $request->program_id,
-                'trial_date' => $request->trial_date,
+                'name' => $data['name'],
+                'gender' => $data['gender'],
+                'birth_date' => $data['birth_date'],
+                'phone' => $data['phone'],
+                'parent_name' => $data['parent_name'] ?? null,
+                'parent_phone' => $data['parent_phone'] ?? null,
+                'address' => $data['address'] ?? null,
+                'school' => $data['school'] ?? null,
+                'source' => $data['source'],
+                'allergy' => $data['allergy'] ?? null,
+                'program_id' => $data['program_id'],
+                'private_package_id' => $data['private_package_id'],
+                'trial_date' => $data['trial_date'] ?? null,
                 'trial_status' => 'Pending',
                 'lead_status' => 'Warm',
 
@@ -192,26 +182,7 @@ class CalonSiswaController extends Controller
             |--------------------------------------------------------------------------
             */
 
-            if ($request->has('day')) {
-
-                foreach ($request->day as $index => $day) {
-
-                    if (
-                        empty($day) ||
-                        empty($request->start_time[$index]) ||
-                        empty($request->end_time[$index])
-                    ) {
-                        continue;
-                    }
-
-                    CandidateStudentAvailableSchedule::create([
-                        'candidate_student_id' => $candidate->id,
-                        'day' => $day,
-                        'start_time' => $request->start_time[$index],
-                        'end_time' => $request->end_time[$index],
-                    ]);
-                }
-            }
+            $this->syncSchedules($candidate, request());
 
             /*
             |--------------------------------------------------------------------------
@@ -238,13 +209,13 @@ class CalonSiswaController extends Controller
         });
 
         return redirect()
-            ->route('admin.calon-siswa')
+            ->route('admin.calon-siswa.index')
             ->with('success', 'Lead berhasil ditambahkan.');
     }
 
     public function edit(CandidateStudent $candidateStudent)
     {
-        $candidateStudent->load(['availableSchedules', 'program']);
+        $candidateStudent->load(['availableSchedules', 'program', 'privatePackage']);
 
         return response()->json([
             'id' => $candidateStudent->id,
@@ -258,9 +229,14 @@ class CalonSiswaController extends Controller
             'school' => $candidateStudent->school,
             'source' => $candidateStudent->source,
             'allergy' => $candidateStudent->allergy,
+            'interest_type' => $candidateStudent->private_package_id ? 'Private' : 'Reguler',
             'program_id' => $candidateStudent->program_id,
             'program_detail' => $candidateStudent->program ? [
                 'program_name' => $candidateStudent->program->program_name,
+            ] : null,
+            'private_package_id' => $candidateStudent->private_package_id,
+            'private_package_detail' => $candidateStudent->privatePackage ? [
+                'package_name' => $candidateStudent->privatePackage->package_name,
             ] : null,
             'trial_date' => optional($candidateStudent->trial_date)->format('Y-m-d'),
             'trial_status' => $candidateStudent->trial_status,
@@ -280,7 +256,61 @@ class CalonSiswaController extends Controller
      */
     public function update(Request $request, CandidateStudent $candidateStudent)
     {
-        $request->validate([
+        $data = $this->validated($request, $candidateStudent);
+
+        DB::transaction(function () use ($data, $candidateStudent, $request) {
+            $candidateStudent->update([
+                'name' => $data['name'],
+                'gender' => $data['gender'],
+                'birth_date' => $data['birth_date'],
+                'phone' => $data['phone'],
+                'parent_name' => $data['parent_name'] ?? null,
+                'parent_phone' => $data['parent_phone'] ?? null,
+                'address' => $data['address'] ?? null,
+                'school' => $data['school'] ?? null,
+                'source' => $data['source'],
+                'allergy' => $data['allergy'] ?? null,
+                'program_id' => $data['program_id'],
+                'private_package_id' => $data['private_package_id'],
+                'trial_date' => $data['trial_date'] ?? null,
+                'trial_status' => $data['trial_status'],
+                'lead_status' => $data['lead_status'],
+            ]);
+
+            $this->syncSchedules($candidateStudent, $request);
+        });
+
+        return redirect()
+            ->route('admin.calon-siswa.index')
+            ->with('success', 'Data calon siswa berhasil diperbarui.');
+    }
+
+    /**
+     * Menghapus data calon siswa beserta relasi terkait.
+     */
+    public function destroy(CandidateStudent $candidateStudent)
+    {
+        if ($candidateStudent->student()->exists()) {
+            return redirect()
+                ->route('admin.calon-siswa.index')
+                ->with('error', 'Lead ini sudah menjadi siswa aktif dan tidak bisa dihapus.');
+        }
+
+        DB::transaction(function () use ($candidateStudent) {
+            $candidateStudent->delete();
+        });
+
+        return redirect()
+            ->route('admin.calon-siswa.index')
+            ->with('success', 'Data calon siswa berhasil dihapus.');
+    }
+
+    private function validated(Request $request, ?CandidateStudent $candidateStudent = null): array
+    {
+        $isPrivate = $request->input('interest_type') === 'Private';
+
+        $rules = [
+            'interest_type' => ['required', Rule::in(['Reguler', 'Private'])],
             'name' => 'required|string|max:255',
             'gender' => 'required|in:Male,Female',
             'birth_date' => 'required|date',
@@ -294,66 +324,32 @@ class CalonSiswaController extends Controller
             'source' => 'required|string|max:100',
             'allergy' => 'nullable|string',
 
-            'program_id' => 'required|exists:programs,id',
+            'program_id' => [Rule::requiredIf(! $isPrivate), 'nullable', 'exists:programs,id'],
+            'private_package_id' => [Rule::requiredIf($isPrivate), 'nullable', 'exists:private_packages,id'],
+
             'trial_date' => 'nullable|date',
-            'trial_status' => 'required|in:Pending,Completed,Cancelled',
-            'lead_status' => 'required|in:Cold,Warm,Hot',
 
             'day.*' => 'nullable|string',
             'start_time.*' => 'nullable',
             'end_time.*' => 'nullable',
-        ]);
+        ];
 
-        DB::transaction(function () use ($request, $candidateStudent) {
-            $candidateStudent->update([
-                'name' => $request->name,
-                'gender' => $request->gender,
-                'birth_date' => $request->birth_date,
-                'phone' => $request->phone,
-                'parent_name' => $request->parent_name,
-                'parent_phone' => $request->parent_phone,
-                'address' => $request->address,
-                'school' => $request->school,
-                'source' => $request->source,
-                'allergy' => $request->allergy,
-                'program_id' => $request->program_id,
-                'trial_date' => $request->trial_date,
-                'trial_status' => $request->trial_status,
-                'lead_status' => $request->lead_status,
-            ]);
-
-            $this->syncSchedules($candidateStudent, $request);
-        });
-
-        return redirect()
-            ->route('admin.calon-siswa')
-            ->with('success', 'Data calon siswa berhasil diperbarui.');
-    }
-
-    /**
-     * Menghapus data calon siswa beserta relasi terkait.
-     */
-    public function destroy(CandidateStudent $candidateStudent)
-    {
-        if ($candidateStudent->student()->exists()) {
-            return redirect()
-                ->route('admin.calon-siswa')
-                ->with('error', 'Lead ini sudah menjadi siswa aktif dan tidak bisa dihapus.');
+        if ($candidateStudent) {
+            $rules['trial_status'] = 'required|in:Pending,Completed,Cancelled';
+            $rules['lead_status'] = 'required|in:Cold,Warm,Hot';
         }
 
-        DB::transaction(function () use ($candidateStudent) {
-            $candidateStudent->delete();
-        });
+        $data = $request->validate($rules, [
+            'program_id.required_if' => 'Pilih program yang diminati.',
+            'private_package_id.required_if' => 'Pilih paket private yang diminati.',
+        ]);
 
-        return redirect()
-            ->route('admin.calon-siswa')
-            ->with('success', 'Data calon siswa berhasil dihapus.');
+        $data['program_id'] = $isPrivate ? null : $data['program_id'];
+        $data['private_package_id'] = $isPrivate ? $data['private_package_id'] : null;
+
+        return $data;
     }
 
-    /**
-     * Hapus jadwal tersedia lama lalu simpan ulang sesuai input form.
-     * Dipakai bersama oleh store() dan update() supaya tidak duplikasi logika.
-     */
     private function syncSchedules(CandidateStudent $candidate, Request $request): void
     {
         $candidate->availableSchedules()->delete();
