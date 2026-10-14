@@ -77,22 +77,62 @@ class PaymentInstallmentService
         ]);
     }
 
+    /**
+     * Total tagihan enrollment = harga paket (sudah total, bukan per bulan)
+     * + biaya pendaftaran + biaya aktivitas - diskon.
+     */
     public function totalBillFor(ClassEnrollment $enrollment): ?float
     {
-        $price = $enrollment->programPackage->price
-            ?? $enrollment->privatePackage->price
-            ?? null;
+        $packageTotal = $this->packageTotal($enrollment);
 
-        if ($price === null) {
+        if ($packageTotal === null) {
             return null;
         }
 
-        $total = (float) $price
+        $total = $packageTotal
             + (float) $enrollment->registration_fee
             + (float) $enrollment->activity_fee
             - (float) $enrollment->discount;
 
         return max($total, 0);
+    }
+
+    /** Lama kelas (bulan), hanya informasi. Tidak dipakai untuk mengalikan harga. */
+    public function monthsFor(ClassEnrollment $e): int
+    {
+        $package = $e->programPackage ?? $e->privatePackage;
+
+        return $this->monthsForPackage($package, ! $e->programPackage);
+    }
+
+    /** Total biaya les dari enrollment = harga paket apa adanya. */
+    public function packageTotal(ClassEnrollment $e): ?float
+    {
+        $isPrivate = ! $e->programPackage;
+
+        return $this->packageTotalFor($e->programPackage ?? $e->privatePackage, $isPrivate);
+    }
+
+    /**
+     * Lama kelas (bulan) dari paketnya langsung. Dipakai juga saat konversi calon siswa,
+     * ketika enrollment belum dibuat. Membaca kolom duration_months; fallback 3 (program) / 1 (private).
+     */
+    public function monthsForPackage(mixed $package, bool $isPrivate): int
+    {
+        return (int) ($package?->duration_months ?: ($isPrivate ? 1 : 3));
+    }
+
+    /**
+     * Total biaya les dari paketnya langsung = harga paket apa adanya (tidak dikali bulan).
+     * Parameter $isPrivate dipertahankan supaya pemanggil lama tidak error.
+     */
+    public function packageTotalFor(mixed $package, bool $isPrivate): ?float
+    {
+        if (! $package || $package->price === null) {
+            return null;
+        }
+
+        return (float) $package->price;
     }
 
     public function allowsInstallment(bool $isPrivate, ?string $programName, ?string $levelName): bool

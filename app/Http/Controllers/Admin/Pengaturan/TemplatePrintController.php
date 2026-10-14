@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin\Pengaturan;
 
 use App\Http\Controllers\Controller;
 use App\Models\PrintTemplate;
+use App\Services\InvoiceService;
 use App\Services\RegistrationFormService;
 use Illuminate\Http\Request;
 
@@ -20,7 +21,9 @@ class TemplatePrintController extends Controller
     {
         return view('admin.pengaturan.template-dokumen.edit', [
             'template'     => $template,
-            'placeholders' => RegistrationFormService::PLACEHOLDERS,
+            'placeholders' => $this->isInvoice($template)
+                ? InvoiceService::PLACEHOLDERS
+                : RegistrationFormService::PLACEHOLDERS,
         ]);
     }
 
@@ -41,14 +44,27 @@ class TemplatePrintController extends Controller
             ->with('success', 'Template dikembalikan ke versi awal.');
     }
 
-    public function preview(Request $request, PrintTemplate $template, RegistrationFormService $service)
-    {
+    public function preview(
+        Request $request,
+        PrintTemplate $template,
+        RegistrationFormService $formService,
+        InvoiceService $invoiceService,
+    ) {
         $content = $this->sanitize((string) $request->input('content', $template->content));
 
-        return response($service->preview($content), 200, [
+        $pdf = $this->isInvoice($template)
+            ? $invoiceService->preview($content)
+            : $formService->preview($content);
+
+        return response($pdf, 200, [
             'Content-Type'        => 'application/pdf',
             'Content-Disposition' => 'inline; filename="Pratinjau-' . $template->key . '.pdf"',
         ]);
+    }
+
+    private function isInvoice(PrintTemplate $template): bool
+    {
+        return $template->key === InvoiceService::TEMPLATE_KEY;
     }
 
     /** Buang tag berbahaya; template hanya untuk teks, tabel, dan gambar. */

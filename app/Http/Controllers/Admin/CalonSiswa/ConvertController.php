@@ -154,7 +154,9 @@ class ConvertController extends Controller
         // tagihan sebelum diskon = harga paket + biaya pendaftaran + biaya aktivitas
         $registrationFee = (float) Setting::get('registration_fee', 0);
         $activityFee     = (float) Setting::get('activity_fee', 0);
-        $totalBill       = (float) $package->price + $registrationFee + $activityFee;
+        $months          = $this->payments->monthsForPackage($package, $isPrivate);
+        $lesTotal        = (float) $this->payments->packageTotalFor($package, $isPrivate);
+        $totalBill       = $lesTotal + $registrationFee + $activityFee;
 
         return view('admin.calon-siswa.convert', compact(
             'candidateStudent',
@@ -163,6 +165,8 @@ class ConvertController extends Controller
             'canInstallment',
             'registrationFee',
             'activityFee',
+            'months',
+            'lesTotal',
             'totalBill'
         ))->with('step', 2);
     }
@@ -198,7 +202,8 @@ class ConvertController extends Controller
         $registrationFee = (float) Setting::get('registration_fee', 0);
         $activityFee     = (float) Setting::get('activity_fee', 0);
         $discount        = round((float) ($validated['discount'] ?? 0), 2);
-        $baseTotal       = (float) $package->price + $registrationFee + $activityFee;
+        $lesTotal        = (float) $this->payments->packageTotalFor($package, $isPrivate);
+        $baseTotal       = $lesTotal + $registrationFee + $activityFee;
 
         if ($discount >= $baseTotal) {
             throw ValidationException::withMessages([

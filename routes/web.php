@@ -18,6 +18,7 @@ use App\Http\Controllers\Admin\PembayaranController;
 use App\Http\Controllers\Admin\ProgramLevelController;
 use App\Http\Controllers\Admin\Pengaturan\PengaturanController;
 use App\Http\Controllers\Admin\Pengaturan\TemplatePrintController;
+use App\Http\Controllers\Admin\PaymentInvoiceController;
 
 /*
 |--------------------------------------------------------------------------
@@ -244,6 +245,9 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
         ->name('pembayaran.show');
     Route::post('/pembayaran/{enrollment}', [PembayaranController::class, 'store'])
         ->name('pembayaran.store');
+
+    Route::get('/payments/{payment}/invoice', [PaymentInvoiceController::class, 'show'])
+        ->name('pembayaran.invoice');
 
     // JURNAL MENGAJAR  
     Route::get('/jurnal-mengajar', [JurnalMengajarController::class, 'index'])

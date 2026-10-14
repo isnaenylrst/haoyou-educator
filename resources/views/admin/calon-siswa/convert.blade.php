@@ -720,8 +720,8 @@
                                         @php
                                             $isRecommended = $recommendedCategory && $package->category_name === $recommendedCategory;
                                             $label = $package->package_name
-                                                . ($isRecommended ? ' — ⭐ Direkomendasikan' : '')
-                                                . ' — Rp ' . number_format($package->price, 0, ',', '.');
+                                                . ($isRecommended ? ' - ⭐ Direkomendasikan' : '')
+                                                . ' - Rp ' . number_format($package->price, 0, ',', '.');
                                         @endphp
                                         <option value="{{ $package->id }}"
                                                 data-price="{{ $package->price }}"
@@ -741,7 +741,7 @@
                                     <option value="">Pilih Level</option>
                                     @foreach ($levels as $level)
                                         <option value="{{ $level->id }}" data-category-id="{{ $level->category_id }}">
-                                            {{ $level->category_name ? $level->category_name . ' — ' : '' }}{{ $level->level_name }}
+                                            {{ $level->category_name ? $level->category_name . ' - ' : '' }}{{ $level->level_name }}
                                         </option>
                                     @endforeach
                                 </select>
@@ -764,7 +764,7 @@
                                         <option value="{{ $class->id }}"
                                                 data-package="{{ $class->program_package_id }}"
                                                 data-level="{{ $class->level_id }}">
-                                            {{ $class->class_name }} ({{ $class->delivery_mode }}, {{ $class->status }})@if ($scheduleText) — {{ $scheduleText }} @endif
+                                            {{ $class->class_name }} ({{ $class->delivery_mode }}, {{ $class->status }})@if ($scheduleText) - {{ $scheduleText }} @endif
                                         </option>
                                     @endforeach
                                 </select>
@@ -956,8 +956,11 @@
 
                     <div>
                         <div class="bill-row">
-                            <span>Harga paket</span>
-                            <span>Rp {{ number_format($package->price, 0, ',', '.') }}</span>
+                            <span>
+                                Harga paket
+                                <br><small style="color:#9ca3af;">{{ $package->total_meetings }} pertemuan · {{ $months }} bulan</small>
+                            </span>
+                            <span>Rp {{ number_format($lesTotal, 0, ',', '.') }}</span>
                         </div>
                         <div class="bill-row">
                             <span>Biaya pendaftaran</span>
@@ -1044,17 +1047,25 @@
                     </a>
                 </div>
 
+                @php $latestPayment = $enrollment->payments()->latest('id')->first(); @endphp
                 <div class="doc-download-item">
                     <div class="doc-info">
                         <div class="doc-icon"><i class="fa-solid fa-file-invoice-dollar"></i></div>
                         <div>
                             <div class="doc-name">Invoice</div>
-                            <div class="doc-note">Belum tersedia</div>
+                            <div class="doc-note">Bukti pembayaran {{ $latestPayment?->payment_stage ?? '' }}</div>
                         </div>
                     </div>
-                    <span class="doc-download-btn disabled" title="Belum tersedia">
-                        <i class="fa-solid fa-download"></i>
-                    </span>
+                    @if ($latestPayment)
+                        <a href="{{ route('admin.pembayaran.invoice', $latestPayment) }}" target="_blank"
+                        class="doc-download-btn" title="Unduh Invoice">
+                            <i class="fa-solid fa-download"></i>
+                        </a>
+                    @else
+                        <span class="doc-download-btn disabled" title="Belum ada pembayaran">
+                            <i class="fa-solid fa-download"></i>
+                        </span>
+                    @endif
                 </div>
             </div>
 

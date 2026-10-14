@@ -16,6 +16,7 @@ class ProgramPackage extends Model
         'level_id',
         'package_name',
         'duration_minutes',
+        'duration_months',
         'total_meetings',
         'min_students',
         'max_students',
