@@ -86,10 +86,10 @@
                     <span class="label">Jurnal Mengajar</span>
                 </a>
 
-                <a href="#" class="nav-item">
-                    <i class="fa-solid fa-book nav-icon" title="Kurikulu & Materi"></i>
-                    <span class="label">Kurikulum & Materi</span>
-                </a>
+               <a href="{{ route('admin.kurikulum-materi') }}" class="nav-item {{ request()->routeIs('admin.kurikulum-materi*') ? 'active' : '' }}">
+               <i class="fa-solid fa-book nav-icon" title="Kurikulum & Materi"></i>
+               <span class="label">Kurikulum & Materi</span>
+            </a>
             </div>
 
             {{-- PENGAJAR --}}
@@ -117,14 +117,14 @@
             <div class="nav-group">
                 <div class="nav-group-label">Laporan</div>
 
-                <a href="#" class="nav-item">
-                    <i class="fa-solid fa-chart-line nav-icon" title="Progres Report"></i>
-                    <span class="label">Progress Report</span>
-                </a>
+            <a href="{{ route('admin.progress-report') }}" class="nav-item {{ request()->routeIs('admin.progress-report*') ? 'active' : '' }}">
+                <i class="fa-solid fa-chart-line nav-icon" title="Progress Report"></i>
+                <span class="label">Progress Report</span>
+            </a>
 
-                <a href="#" class="nav-item">
-                    <i class="fa-solid fa-file-lines nav-icon" title="Dokumen"></i>
-                    <span class="label">Dokumen</span>
+                <a href="{{ route('admin.dokumen') }}" class="nav-item {{ request()->routeIs('admin.dokumen*') ? 'active' : '' }}">
+                <i class="fa-solid fa-file-lines nav-icon" title="Dokumen"></i>
+                <span class="label">Dokumen</span>
                 </a>
             </div>
 
