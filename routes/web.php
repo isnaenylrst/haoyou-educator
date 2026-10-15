@@ -139,19 +139,50 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
             ->name('convert.step3');                // step 3
     });
 
-    //SISWA 
-    Route::get('/siswa', [SiswaController::class, 'index'])->name('siswa');
-    Route::get('/siswa/{siswa}/edit', [SiswaController::class, 'edit'])->name('siswa.edit');
-    Route::put('/siswa/{siswa}', [SiswaController::class, 'update'])->name('siswa.update');
-    Route::get('/siswa/{siswa}', [SiswaController::class, 'show'])->name('siswa.show');
-    Route::get('/siswa/{siswa}/continue', [SiswaController::class, 'continueProgramForm'])->name('siswa.continue.form');
-    Route::post('/siswa/{siswa}/continue', [SiswaController::class, 'continueProgram'])->name('siswa.continue');
+    // SISWA
+    Route::get('/siswa', [SiswaController::class, 'index'])
+        ->name('siswa');
+    Route::get('/siswa/{siswa}/edit', [SiswaController::class, 'edit'])
+        ->name('siswa.edit');
+    Route::put('/siswa/{siswa}', [SiswaController::class, 'update'])
+        ->name('siswa.update');
+    Route::get('/siswa/{siswa}', [SiswaController::class, 'show'])
+        ->name('siswa.show');
+
+    // SISWA: LANJUT PROGRAM
+    // Cek status: JSON untuk pop-up, atau pindah ke pelunasan kalau belum lunas
+    Route::get('/siswa/{siswa}/continue', [SiswaController::class, 'continueProgramForm'])
+        ->name('siswa.continue.form');
+
+    // Jalur 1 (belum lunas): pelunasan
+    Route::get('/siswa/{siswa}/pelunasan', [SiswaController::class, 'settlementForm'])
+        ->name('siswa.settle');
+    Route::post('/siswa/{siswa}/pelunasan', [SiswaController::class, 'settlementStore'])
+        ->name('siswa.settle.store');
+    // Jalur 2 (sudah lunas): pilih program
+    Route::get('/siswa/{siswa}/continue/program', [SiswaController::class, 'continueProgramPage'])
+        ->name('siswa.continue.program');
+    Route::post('/siswa/{siswa}/continue', [SiswaController::class, 'continueProgram'])
+        ->name('siswa.continue');
+    Route::get('/siswa/{siswa}/continue/pembayaran', [SiswaController::class, 'continuePayment'])
+        ->name('siswa.continue.payment');
+    Route::post('/siswa/{siswa}/continue/pembayaran', [SiswaController::class, 'continueStore'])
+        ->name('siswa.continue.store');
+
+    // Halaman akhir (invoice & formulir), dipakai kedua jalur
+    Route::get('/siswa/{siswa}/continue/selesai/{enrollment}', [SiswaController::class, 'continueDone'])
+        ->name('siswa.continue.done');
+
+    // Formulir pendaftaran
     Route::get('siswa/{siswa}/formulir/{enrollment?}', [\App\Http\Controllers\Admin\CalonSiswa\RegistrationFormController::class, 'download'])
         ->name('siswa.formulir');
-        
-    //SISWA — ASSIGN KELAS UNTUK ENROLLMENT WAITING CLASS
+
+    // SISWA: ASSIGN KELAS UNTUK ENROLLMENT WAITING CLASS
     Route::get('enrollments/{enrollment}/waiting-class-options', [SiswaController::class, 'waitingClassOptions'])
-        ->name('enrollments.waiting-class-options');        
+        ->name('enrollments.waiting-class-options');
+    Route::patch('enrollments/{enrollment}/assign-class', [SiswaController::class, 'assignClass'])
+        ->name('enrollments.assign-class');
+
     Route::get('/jadwal', [JadwalController::class, 'index'])
         ->name('jadwal'); 
     

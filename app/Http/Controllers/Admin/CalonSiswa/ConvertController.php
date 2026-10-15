@@ -6,19 +6,23 @@ use App\Http\Controllers\Controller;
 use App\Models\CandidateStudent;
 use App\Models\ClassEnrollment;
 use App\Models\ClassModel;
+use App\Models\ClassSchedule;
 use App\Models\Level;
 use App\Models\PrivatePackage;
 use App\Models\ProgramLevel;
 use App\Models\ProgramPackage;
 use App\Models\Setting;
 use App\Models\Student;
+use App\Models\Teacher;
 use App\Models\User;
+use App\Services\ClassScheduleService;
 use App\Services\PaymentInstallmentService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class ConvertController extends Controller
@@ -26,8 +30,10 @@ class ConvertController extends Controller
     /** Kunci session untuk menyimpan pilihan step 1 (ditambah id calon siswa). */
     private const SESSION_KEY = 'convert_draft.';
 
-    public function __construct(private PaymentInstallmentService $payments)
-    {
+    public function __construct(
+        private PaymentInstallmentService $payments,
+        private ClassScheduleService $classes,
+    ) {
     }
 
     /* =====================================================================
@@ -72,6 +78,16 @@ class ConvertController extends Controller
             ->orderBy('package_name')
             ->get();
 
+        // --- Data untuk form kelas private (guru, ruangan) ---
+        $teachers = Teacher::where('status', 'Active')->orderBy('name')->get(['id', 'name']);
+
+        $roomSuggestions = ClassSchedule::whereNotNull('room')
+            ->where('room', '!=', '')
+            ->where('room', '!=', 'Online')
+            ->distinct()
+            ->orderBy('room')
+            ->pluck('room');
+
         // --- Rekomendasi kategori berdasarkan umur (khusus Daily Activity) ---
         $candidateAge = null;
         $recommendedCategory = null;
@@ -95,6 +111,8 @@ class ConvertController extends Controller
             'levels',
             'classes',
             'privatePackages',
+            'teachers',
+            'roomSuggestions',
             'candidateAge',
             'recommendedCategory',
             'defaultPackageType',
@@ -109,18 +127,67 @@ class ConvertController extends Controller
     {
         abort_if($candidateStudent->student()->exists(), 404, 'Calon siswa ini sudah menjadi siswa.');
 
+        $isPrivate = $request->input('package_type') === 'private';
+
         $validated = $request->validate([
             'package_type'       => 'required|in:program,private',
             'program_package_id' => 'required_if:package_type,program|nullable|exists:program_packages,id',
             'private_package_id' => 'required_if:package_type,private|nullable|exists:private_packages,id',
             'level_id'           => 'required_if:package_type,program|nullable|exists:program_levels,id',
             'class_id'           => 'nullable|exists:classes,id',
+
+            // khusus private: kelas langsung dibuat saat convert
+            'teacher_id'             => [Rule::requiredIf($isPrivate), 'nullable', 'exists:teachers,id'],
+            'delivery_mode'          => [Rule::requiredIf($isPrivate), 'nullable', Rule::in(['Offline', 'Online'])],
+            'start_date'             => [Rule::requiredIf($isPrivate), 'nullable', 'date'],
+            'end_date'               => ['nullable', 'date', 'after_or_equal:start_date'],
+            'schedules'              => [Rule::requiredIf($isPrivate), 'nullable', 'array', 'min:1'],
+            'schedules.*.day'        => ['required', Rule::in(ClassScheduleService::DAYS)],
+            'schedules.*.start_time' => ['required', 'date_format:H:i'],
+            'schedules.*.end_time'   => ['required', 'date_format:H:i', 'after:schedules.*.start_time'],
+            'schedules.*.room'       => ['nullable', 'string', 'max:255'],
         ], [
-            'level_id.required_if' => 'Level wajib dipilih.',
+            'level_id.required_if'       => 'Level wajib dipilih.',
+            'teacher_id.required'        => 'Guru wajib dipilih untuk kelas private.',
+            'delivery_mode.required'     => 'Mode kelas wajib dipilih.',
+            'start_date.required'        => 'Tanggal mulai wajib diisi.',
+            'schedules.required'         => 'Tambahkan minimal satu jadwal mingguan.',
+            'schedules.min'              => 'Tambahkan minimal satu jadwal mingguan.',
+            'schedules.*.end_time.after' => 'Jam selesai harus setelah jam mulai.',
+            'end_date.after_or_equal'    => 'Tanggal selesai tidak boleh sebelum tanggal mulai.',
         ]);
 
         // Validasi kecocokan paket / level / kelas
-        $this->resolveSelection($validated, $candidateStudent);
+        [, $package] = $this->resolveSelection($validated, $candidateStudent);
+
+        if ($isPrivate) {
+            // Ruangan mengikuti mode kelas + cek jadwal bertabrakan di form yang sama
+            $validated['schedules'] = $this->classes->normalizeSchedules(
+                $validated['schedules'],
+                $validated['delivery_mode']
+            );
+
+            // Guru tidak boleh bentrok dengan kelas lain
+            $this->classes->assertTeacherFree((int) $validated['teacher_id'], $validated['schedules']);
+
+            // Tanggal selesai otomatis kalau dikosongkan
+            if (empty($validated['end_date'])) {
+                $validated['end_date'] = $this->classes->resolveEndDate(
+                    $package,
+                    $validated['start_date'],
+                    $validated['schedules']
+                );
+            }
+        } else {
+            // Siswa reguler tidak membuat kelas baru; buang field khusus private
+            unset(
+                $validated['teacher_id'],
+                $validated['delivery_mode'],
+                $validated['start_date'],
+                $validated['end_date'],
+                $validated['schedules']
+            );
+        }
 
         session([self::SESSION_KEY . $candidateStudent->id => $validated]);
 
@@ -172,7 +239,8 @@ class ConvertController extends Controller
     }
 
     /* =====================================================================
-     |  STEP 2: submit, buat user, siswa, enrollment, pembayaran + bukti
+     |  STEP 2: submit, buat user, siswa, kelas private (jika private),
+     |          enrollment, pembayaran + bukti
      * ===================================================================== */
     public function store(Request $request, CandidateStudent $candidateStudent)
     {
@@ -249,7 +317,34 @@ class ConvertController extends Controller
                     'status'               => 'Active',
                 ]);
 
-                $classId = $isPrivate ? null : ($draft['class_id'] ?? null);
+                $classId = $draft['class_id'] ?? null;
+
+                // ---- Siswa private: kelas langsung dibuat dengan guru, mode, tanggal & jadwal ----
+                if ($isPrivate) {
+                    // Cek ulang bentrok guru, karena di antara step 1 dan step 2
+                    // bisa saja ada kelas lain yang mengisi jam tersebut.
+                    $this->classes->assertTeacherFree((int) $draft['teacher_id'], $draft['schedules']);
+
+                    $privatePackage = PrivatePackage::findOrFail($draft['private_package_id']);
+
+                    $kelas = new ClassModel();
+                    $kelas->forceFill([
+                        'program_package_id' => null,
+                        'private_package_id' => $privatePackage->id,
+                        'level_id'           => null,
+                        'teacher_id'         => $draft['teacher_id'],
+                        'class_name'         => 'Private - ' . $candidateStudent->name,
+                        'delivery_mode'      => $draft['delivery_mode'],
+                        'start_date'         => $draft['start_date'],
+                        'end_date'           => $draft['end_date'] ?? null,
+                        'capacity'           => $privatePackage->max_students ?? 1,
+                        'status'             => 'Open',
+                    ])->save();
+
+                    $this->classes->createSchedules($kelas, $draft['schedules']);
+
+                    $classId = $kelas->id;
+                }
 
                 $enrollment = ClassEnrollment::create([
                     'student_id'         => $student->id,
@@ -257,6 +352,7 @@ class ConvertController extends Controller
                     'program_package_id' => $isPrivate ? null : $draft['program_package_id'],
                     'private_package_id' => $isPrivate ? $draft['private_package_id'] : null,
                     'enrollment_date'    => Carbon::parse($validated['payment_date'])->toDateString(),
+                    // Private selalu punya kelas → Active. Reguler tanpa kelas → Waiting Class.
                     'status'             => (! $isPrivate && ! $classId) ? 'Waiting Class' : 'Active',
                     // registration_fee dipakai service untuk total tagihan, activity_fee untuk formulir
                     'registration_fee' => $registrationFee,
