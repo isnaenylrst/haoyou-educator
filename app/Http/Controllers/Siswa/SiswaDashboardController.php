@@ -14,7 +14,7 @@ use App\Models\ProgramVideo;
 use App\Models\Student;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
+
 
 class SiswaDashboardController extends Controller
 {
@@ -215,33 +215,34 @@ class SiswaDashboardController extends Controller
             ->orderBy('meeting_number')
             ->get();
         
-        // ---------- VIDEO PEMBELAJARAN ----------
-        $currentLevel = $this->currentLevel($student, $levelIds);
-        $audience     = $currentLevel?->program?->audience ?? 'hsk';
+            // ---------- VIDEO PEMBELAJARAN ----------
+            $currentLevel = $this->currentLevel($student, $levelIds);
 
-        // 1 video budaya: HSK (semua level) atau anak (animasi)
-        $cultureVideo = ProgramVideo::where('type', 'culture')
-            ->where('audience', $audience)
-            ->where('is_published', true)
-            ->first();
+            // Video budaya: semua bab di level siswa, urut bab
+            $cultureVideos = $currentLevel
+                ? ProgramVideo::where('type', 'culture')
+                    ->where('level_id', $currentLevel->id)
+                    ->where('is_published', true)
+                    ->orderBy('chapter_number')
+                    ->get()
+                : collect();
 
-        // Replay sesuai level siswa saat ini
-        $replayVideo = $currentLevel
-            ? ProgramVideo::where('type', 'replay')
-                ->where('level_id', $currentLevel->id)
-                ->where('is_published', true)
-                ->first()
-            : null;
+            // Video replay: 1 per level
+            $replayVideo = $currentLevel
+                ? ProgramVideo::where('type', 'replay')
+                    ->where('level_id', $currentLevel->id)
+                    ->where('is_published', true)
+                    ->first()
+                : null;
 
-        return view('Siswa.program', [
-        'title'        => 'Program Belajar',
-        'student'      => $student,
-        'enrollments'  => $enrollments,
-        'materials'    => $materials,
-        'cultureVideo' => $cultureVideo,
-        'replayVideo'  => $replayVideo,
-        'audience'     => $audience,
-    ]);
+            return view('Siswa.program', [
+                'title'         => 'Program Belajar',
+                'student'       => $student,
+                'enrollments'   => $enrollments,
+                'materials'     => $materials,
+                'cultureVideos' => $cultureVideos,
+                'replayVideo'   => $replayVideo,
+     ]);
 }
     /** Kumpulan level_id milik siswa (logika sama seperti sebelumnya). */
 private function resolveLevelIds(Student $student, $enrollments)

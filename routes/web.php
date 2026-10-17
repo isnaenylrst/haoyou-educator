@@ -88,12 +88,9 @@ Route::middleware(['auth', 'student'])->group(function () {
     Route::get('/dashboard', [SiswaDashboardController::class, 'dashboard'])
         ->name('student.dashboard');
 
-    Route::get('/program', [SiswaDashboardController::class, 'program'])
+    Route::get('/program-belajar', [SiswaDashboardController::class, 'program'])
         ->name('program.index');
-    
-     Route::get('/program/video/{video}/stream', [SiswaDashboardController::class, 'streamVideo'])
-    ->name('program.video.stream');
-    
+        
     Route::get('/kelas-saya', [SiswaDashboardController::class, 'kelasSaya'])
         ->name('kelassaya.index');
 

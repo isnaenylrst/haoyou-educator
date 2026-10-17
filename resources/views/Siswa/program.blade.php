@@ -104,72 +104,107 @@
 </div>
 
 {{-- ===================== VIDEO PEMBELAJARAN ===================== --}}
-@php
-    $isKids = ($audience ?? 'hsk') === 'kids';
+  @php 
+  
+  $firstCulture = $cultureVideos->first(); 
+  
+  @endphp
 
-    $videoSlots = [
-        [
-            'label' => $isKids ? 'Video Budaya China (Animasi)' : 'Video Budaya China',
-            'desc'  => $isKids
-                ? 'Video animasi budaya China yang seru, bertambah seiring kamu belajar.'
-                : 'Video jangka panjang yang bertambah sepanjang periode les kamu.',
-            'icon'  => $isKids ? '🐼' : '🏮',
-            'video' => $cultureVideo ?? null,
-        ],
-        [
-            'label' => 'Video Replay Materi',
-            'desc'  => 'Rangkuman untuk mengingat kembali materi yang sudah diajarkan.',
-            'icon'  => '🔁',
-            'video' => $replayVideo ?? null,
-        ],
-    ];
-@endphp
-
-<div class="bg-white border border-line rounded-2xl p-5 mb-5">
+  <div class="bg-white border border-line rounded-2xl p-5 mb-5">
 
     <h3 class="font-semibold mb-1 text-black">Video Pembelajaran</h3>
-    <p class="text-xs text-gray-500 mb-5">Video hanya bisa ditonton, tidak dapat diunduh.</p>
+    <p class="text-xs text-gray-500 mb-5">Video budaya dan replay materi sesuai level kamu.</p>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
 
-        @foreach ($videoSlots as $slot)
-            @php $video = $slot['video']; @endphp
+        {{-- ===== VIDEO BUDAYA (per bab) ===== --}}
+        <div class="border border-line rounded-2xl p-4">
 
-            <div class="border border-line rounded-2xl p-4">
-
-                @if ($video && $video->video_path)
-                    <video
-                        class="w-full aspect-video rounded-xl bg-black"
-                        controls
-                        preload="metadata"
-                        controlsList="nodownload noremoteplayback"
-                        disablePictureInPicture
-                        oncontextmenu="return false;"
-                    >
-                        <source src="{{ route('program.video.stream', $video->id) }}" type="video/mp4">
-                        Browser kamu tidak mendukung pemutar video.
-                    </video>
-                @else
-                    <div class="w-full aspect-video rounded-xl bg-pale flex flex-col items-center justify-center text-center px-4">
-                        <div class="text-3xl mb-2">{{ $slot['icon'] }}</div>
-                        <p class="text-xs font-medium text-black">Video belum tersedia</p>
-                        <p class="text-[11px] text-gray-500 mt-1">Akan muncul setelah diunggah oleh pengajar.</p>
-                    </div>
-                @endif
-
-                <div class="mt-4">
-                    <div class="text-sm font-semibold text-black">{{ $video->title ?? $slot['label'] }}</div>
-                    <div class="text-xs text-gray-500 mt-1">{{ $slot['desc'] }}</div>
-
-                    @if ($video && $video->duration_minutes)
-                        <div class="text-[11px] text-gray-400 mt-2">{{ $video->duration_minutes }} menit</div>
-                    @endif
+            @if ($firstCulture)
+                <div class="aspect-video rounded-xl overflow-hidden bg-black">
+                    <iframe id="cultureFrame"
+                            class="w-full h-full"
+                            src="{{ $firstCulture->embed_url }}"
+                            title="{{ $firstCulture->title }}"
+                            loading="lazy"
+                            allow="encrypted-media; picture-in-picture; fullscreen"
+                            allowfullscreen
+                            referrerpolicy="strict-origin-when-cross-origin"></iframe>
                 </div>
 
+                <div class="mt-4">
+                    <div class="text-sm font-semibold text-black">Video Budaya China</div>
+                    <div id="cultureTitle" class="text-xs text-gray-500 mt-1">
+                        Bab {{ $firstCulture->chapter_number }} · {{ $firstCulture->title }}
+                    </div>
+                </div>
+
+                <div class="mt-4 flex flex-wrap gap-2">
+                    @foreach ($cultureVideos as $cv)
+                        <button type="button"
+                                class="culture-btn text-xs font-semibold border border-ink rounded-full px-3 py-1.5 transition
+                                       {{ $loop->first ? 'bg-ink text-white' : 'hover:bg-ink hover:text-white' }}"
+                                data-src="{{ $cv->embed_url }}"
+                                data-title="Bab {{ $cv->chapter_number }} · {{ $cv->title }}">
+                            Bab {{ $cv->chapter_number }}
+                        </button>
+                    @endforeach
+                </div>
+            @else
+                <div class="w-full aspect-video rounded-xl bg-pale flex flex-col items-center justify-center text-center px-4">
+                    <div class="text-3xl mb-2">🏮</div>
+                    <p class="text-xs font-medium text-black">Video budaya belum tersedia</p>
+                    <p class="text-[11px] text-gray-500 mt-1">Akan muncul setelah diunggah oleh kurikulum.</p>
+                </div>
+                <div class="mt-4">
+                    <div class="text-sm font-semibold text-black">Video Budaya China</div>
+                    <div class="text-xs text-gray-500 mt-1">Video budaya per bab sesuai level kamu.</div>
+                </div>
+            @endif
+
+        </div>
+
+        {{-- ===== VIDEO REPLAY ===== --}}
+        <div class="border border-line rounded-2xl p-4">
+
+            @if ($replayVideo)
+                <div class="aspect-video rounded-xl overflow-hidden bg-black">
+                    <iframe class="w-full h-full"
+                            src="{{ $replayVideo->embed_url }}"
+                            title="{{ $replayVideo->title }}"
+                            loading="lazy"
+                            allow="encrypted-media; picture-in-picture; fullscreen"
+                            allowfullscreen
+                            referrerpolicy="strict-origin-when-cross-origin"></iframe>
+                </div>
+            @else
+                <div class="w-full aspect-video rounded-xl bg-pale flex flex-col items-center justify-center text-center px-4">
+                    <div class="text-3xl mb-2">🔁</div>
+                    <p class="text-xs font-medium text-black">Video belum tersedia</p>
+                    <p class="text-[11px] text-gray-500 mt-1">Akan muncul setelah diunggah oleh pengajar.</p>
+                </div>
+            @endif
+
+            <div class="mt-4">
+                <div class="text-sm font-semibold text-black">{{ $replayVideo->title ?? 'Video Replay Materi' }}</div>
+                <div class="text-xs text-gray-500 mt-1">Rangkuman untuk mengingat kembali materi yang sudah diajarkan.</div>
             </div>
-        @endforeach
+
+        </div>
 
     </div>
 </div>
 
+<script>
+  document.querySelectorAll('.culture-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.getElementById('cultureFrame').src = btn.dataset.src;
+      document.getElementById('cultureTitle').textContent = btn.dataset.title;
+      document.querySelectorAll('.culture-btn').forEach(function (b) {
+        b.classList.remove('bg-ink', 'text-white');
+      });
+      btn.classList.add('bg-ink', 'text-white');
+    });
+  });
+</script>
 @endsection
