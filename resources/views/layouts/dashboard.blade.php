@@ -76,9 +76,9 @@
       <a href="{{ route('progresreport.index') }}" class="side-link {{ request()->routeIs('progresreport.*') ? 'is-active' : '' }}">
         <span class="ico">📊</span> Progress Report
       </a>
-      <a href="{{ route('sertifikat.index') }}" class="side-link {{ request()->routeIs('sertifikat.*') ? 'is-active' : '' }}">
-        <span class="ico">🏅</span> Sertifikat
-      </a>
+    <a href="{{ route('student.certificates.index') }}" class="side-link {{ request()->routeIs('student.certificates.*') ? 'is-active' : '' }}">
+    <span class="ico">🏅</span> Sertifikat
+  </a>
     </nav>
 
     <div class="px-5 pt-4 pb-6 border-t border-[#EFEBDB]">

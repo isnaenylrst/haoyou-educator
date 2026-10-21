@@ -28,7 +28,7 @@ trait HandlesStudent
             4 => 'Kamis',
             5 => 'Jumat',
             6 => 'Sabtu',
-            // 7 => 'Minggu',
+            7 => 'Minggu',
         ][$date->dayOfWeekIso];
     }
 

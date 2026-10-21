@@ -14,11 +14,11 @@ use App\Http\Controllers\Admin\SiswaController;
 use App\Http\Controllers\Admin\ConvertController;
 use App\Http\Controllers\Admin\JadwalController;
 use App\Http\Controllers\Admin\KelasController;
+use App\Http\Controllers\Siswa\StudentCertificateController;
 use App\Http\Controllers\Admin\ProgramLevelController;
 
 
 /*
-|--------------------------------------------------------------------------
 | LANDING PAGE
 |--------------------------------------------------------------------------
 */
@@ -96,15 +96,23 @@ Route::middleware(['auth', 'student'])->group(function () {
 
     Route::get('/progress-report', [SiswaDashboardController::class, 'progressReport'])
         ->name('progresreport.index');
-
-    Route::get('/sertifikat', [SiswaDashboardController::class, 'sertifikat'])
-        ->name('sertifikat.index');
-
+    
     Route::get('/notifikasi', [SiswaDashboardController::class, 'notifikasi'])
         ->name('notifikasi.index');
 
     Route::post('/notifikasi/tandai-dibaca', [SiswaDashboardController::class, 'notifikasiTandaiDibaca'])
         ->name('notifikasi.read-all');
+
+    // sertifikat
+
+    Route::middleware('auth')->group(function () {
+    Route::get('/sertifikat', [StudentCertificateController::class, 'index'])->name('student.certificates.index');
+    Route::post('/sertifikat', [StudentCertificateController::class, 'store'])->name('student.certificates.store');
+    Route::get('/sertifikat/{certificate}/download', [StudentCertificateController::class, 'download'])->name('student.certificates.download');
+    
+    // Publik (tujuan QR code di sertifikat)
+    Route::get('/verifikasi-sertifikat/{code}', [StudentCertificateController::class, 'verify'])->name('certificates.verify');
+});
 
     // BOOKING KELAS
     Route::get('/booking', [BookingController::class, 'index'])
