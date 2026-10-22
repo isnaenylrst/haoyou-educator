@@ -164,6 +164,10 @@ class PrintTemplateSeeder extends Seeder
         </tr>
         </table>
 
+         <!--JIKA_ADA_CATATAN-->
+        <div style="margin-top:16px;padding:8px 10px;border:1px solid #d9d2ca;font-size:10pt;"><strong>Catatan:</strong><br />{catatan}</div>
+        <!--/JIKA_ADA_CATATAN-->
+
         <!--JIKA_BELUM_LUNAS-->
         <div style="margin-top:22px;font-size:12pt;font-weight:bold;">Pembayaran berikutnya &mdash; jatuh tempo <span style="color:#b3261e;">{jatuh_tempo_berikutnya}</span></div>
         <table style="width:100%;border-collapse:collapse;margin-top:8px;">

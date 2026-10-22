@@ -15,31 +15,29 @@ class ProgramPackageSeeder extends Seeder
         $dailyActivity = Program::where('program_name', 'Daily Activity')->firstOrFail();
         $hsk = Program::where('program_name', 'HSK')->firstOrFail();
 
-        // ── Daily Activity: harga tidak bergantung kategori/level (category_id & level_id null) ──
-        // Harga = total harga paket (bukan per bulan). Contoh: 3 bulan / 12 pertemuan = Rp 1.500.000
-        // [nama, duration_minutes, duration_months, total_meetings, price]
+        // Daily Activity: semua paket berlangsung 3 bulan
+        // price             = total harga jika lunas di awal
+        // installment_price = harga per bulan jika bayar termin (dibayar 3x)
+        // [nama, duration_minutes, total_meetings, price (lunas), installment_price (per bulan)]
         $regularPackages = [
-            ['Regular Class Anak - 1x/Minggu (1 Bulan / 4 Pertemuan)', 60, 1, 4, 550000],
-            ['Regular Class Anak - 2x/Minggu (1 Bulan / 8 Pertemuan)', 60, 1, 8, 950000],
-            ['Regular Class Anak - 1x/Minggu (3 Bulan / 12 Pertemuan)', 60, 3, 12, 1500000],
-            ['Regular Class Anak - 2x/Minggu (3 Bulan / 24 Pertemuan)', 60, 3, 24, 2500000],
-            ['Regular Class Dewasa - 1x/Minggu (1 Bulan / 4 Pertemuan)', 90, 1, 4, 550000],
-            ['Regular Class Dewasa - 2x/Minggu (1 Bulan / 8 Pertemuan)', 90, 1, 8, 950000],
-            ['Regular Class Dewasa - 1x/Minggu (3 Bulan / 12 Pertemuan)', 90, 3, 12, 1500000],
-            ['Regular Class Dewasa - 2x/Minggu (3 Bulan / 24 Pertemuan)', 90, 3, 24, 2500000],
+            ['Regular Class Anak - 1x/Minggu (3 Bulan / 12 Pertemuan)',   60, 12, 1500000, 550000],
+            ['Regular Class Anak - 2x/Minggu (3 Bulan / 24 Pertemuan)',   60, 24, 2500000, 950000],
+            ['Regular Class Dewasa - 1x/Minggu (3 Bulan / 12 Pertemuan)', 90, 12, 1500000, 550000],
+            ['Regular Class Dewasa - 2x/Minggu (3 Bulan / 24 Pertemuan)', 90, 24, 2500000, 950000],
         ];
-        foreach ($regularPackages as [$name, $minutes, $months, $meetings, $price]) {
+        foreach ($regularPackages as [$name, $minutes, $meetings, $price, $installmentPrice]) {
             ProgramPackage::updateOrCreate(
                 ['program_id' => $dailyActivity->id, 'package_name' => $name],
                 [
                     'category_id' => null,
                     'level_id' => null,
                     'duration_minutes' => $minutes,
-                    'duration_months' => $months,
+                    'duration_months' => 3,
                     'total_meetings' => $meetings,
                     'min_students' => 4,
                     'max_students' => 8,
                     'price' => $price,
+                    'installment_price' => $installmentPrice,
                 ]
             );
         }

@@ -43,6 +43,9 @@ class InvoiceService
             'jatuh_tempo_berikutnya' => 'Jatuh tempo (tanggal bayar + 1 bulan)',
             'contoh_keterangan'      => 'Contoh keterangan transfer',
         ],
+        'Lainnya' => [
+            'catatan' => 'Catatan enrollment (mis. masuk di pertengahan kelas / potongan)',
+        ],
     ];
 
     /**
@@ -133,6 +136,7 @@ class InvoiceService
                 . $this->feeRow('Biaya aktivitas', (float) $enrollment->activity_fee)
                 . $this->feeRow('Diskon', (float) $enrollment->discount, true),
             'total_tagihan'    => $this->rupiah((float) $payment->total_bill),
+            'catatan'          => filled($enrollment->notes) ? nl2br(e(trim($enrollment->notes))) : '',
 
             'sudah_dibayar'    => $this->rupiah($previous),
             'jumlah_dibayar'   => $this->rupiah($paid),
@@ -154,6 +158,7 @@ class InvoiceService
         $html = str_replace('<!--RINCIAN_TAMBAHAN-->', $values['rincian_tambahan'] ?? '', $html);
         $html = $this->block($html, 'JIKA_ADA_CICILAN', $hasInstallment);
         $html = $this->block($html, 'JIKA_BELUM_LUNAS', $unpaid);
+        $html = $this->block($html, 'JIKA_ADA_CATATAN', ($values['catatan'] ?? '') !== '');
 
         $map = [];
 

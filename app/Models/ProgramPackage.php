@@ -21,6 +21,7 @@ class ProgramPackage extends Model
         'min_students',
         'max_students',
         'price',
+        'installment_price',
         'is_active',
     ];
 
@@ -47,5 +48,14 @@ class ProgramPackage extends Model
         return DB::table('classes')
             ->where('program_package_id', $this->id)
             ->exists();
+    }
+
+    public function totalFor(string $scheme): float
+    {
+        if ($scheme === 'Termin' && $this->installment_price) {
+            return (float) $this->installment_price * max((int) $this->duration_months, 1);
+        }
+
+        return (float) $this->price;
     }
 }

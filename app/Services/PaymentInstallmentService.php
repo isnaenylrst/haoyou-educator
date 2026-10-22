@@ -105,12 +105,21 @@ class PaymentInstallmentService
         return $this->monthsForPackage($package, ! $e->programPackage);
     }
 
-    /** Total biaya les dari enrollment = harga paket apa adanya. */
+    /**
+     * Total biaya les dari enrollment.
+     * Skema Termin (khusus paket reguler yang punya installment_price) = harga per bulan x lama paket.
+     * Selain itu = harga paket apa adanya (harga lunas).
+     */
     public function packageTotal(ClassEnrollment $e): ?float
     {
         $isPrivate = ! $e->programPackage;
+        $package   = $e->programPackage ?? $e->privatePackage;
 
-        return $this->packageTotalFor($e->programPackage ?? $e->privatePackage, $isPrivate);
+        if (! $isPrivate && $e->payment_scheme === 'Termin' && $package?->installment_price) {
+            return $package->totalFor('Termin');
+        }
+
+        return $this->packageTotalFor($package, $isPrivate);
     }
 
     /**

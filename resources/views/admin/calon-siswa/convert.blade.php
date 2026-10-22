@@ -1057,12 +1057,33 @@
                       method="POST" enctype="multipart/form-data"
                       id="payment-form"
                       data-base="{{ (float) $totalBill }}"
+                      data-base-termin="{{ isset($totalBillTermin) ? (float) $totalBillTermin : '' }}"
+                      data-les-lunas="{{ isset($lesTotal) ? (float) $lesTotal : '' }}"
+                      data-les-termin="{{ isset($lesTotalTermin) ? (float) $lesTotalTermin : '' }}"
                       data-installment="{{ $canInstallment ? 1 : 0 }}">
                     @csrf
 
                     <div class="form-section-title"><i class="fa-solid fa-money-bill-wave"></i> Pembayaran</div>
 
                     <div class="form-grid">
+                        @if (isset($totalBillTermin) && $canInstallment && empty($settlement))
+                            <div class="form-field full">
+                                <label>Skema Pembayaran *</label>
+                                <div class="package-type-toggle" style="margin:0;">
+                                    <label class="radio-pill">
+                                        <input type="radio" name="payment_scheme" value="Lunas"
+                                            {{ old('payment_scheme', 'Lunas') === 'Lunas' ? 'checked' : '' }}>
+                                        <span>Lunas di awal (Rp {{ number_format($lesTotal, 0, ',', '.') }})</span>
+                                    </label>
+                                    <label class="radio-pill">
+                                        <input type="radio" name="payment_scheme" value="Termin"
+                                            {{ old('payment_scheme') === 'Termin' ? 'checked' : '' }}>
+                                        <span>Termin (Rp {{ number_format($lesTotalTermin, 0, ',', '.') }} total)</span>
+                                    </label>
+                                </div>
+                            </div>
+                        @endif
+
                         <div class="form-field">
                             <label>Nominal Dibayar *</label>
                             <input type="number" name="amount_paid" id="amount_paid" min="1" step="0.01" required
@@ -1082,6 +1103,18 @@
                             {{-- pelunasan tidak memakai diskon; input tetap ada karena dibaca JS --}}
                             <input type="hidden" name="discount" id="discount" value="0">
                         @endif
+
+                        @unless ($isContinueFlow)
+                            <div class="form-field full">
+                                <label>Catatan Enrollment</label>
+                                <textarea name="notes" id="notes" rows="3" maxlength="1000"
+                                          placeholder="Contoh: Masuk di pertengahan kelas (mulai pertemuan ke-5), berhak potongan.">{{ old('notes', $candidateStudent->notes) }}</textarea>
+                                <span class="form-section-note" style="margin-top:0;">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                    Catatan ini akan tercetak di invoice.
+                                </span>
+                            </div>
+                        @endunless
 
                         <div class="form-field">
                             <label>Metode Pembayaran *</label>
@@ -1175,7 +1208,7 @@
                                     Harga paket
                                     <br><small style="color:#9ca3af;">{{ $package->total_meetings }} pertemuan · {{ $months }} bulan</small>
                                 </span>
-                                <span>Rp {{ number_format($lesTotal, 0, ',', '.') }}</span>
+                                <span id="bill-package">Rp {{ number_format($lesTotal, 0, ',', '.') }}</span>
                             </div>
 
                             @if ($registrationFee > 0)
@@ -1685,17 +1718,32 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         const form          = document.getElementById('payment-form');
-        const base          = parseFloat(form.dataset.base);
+        const baseLunas     = parseFloat(form.dataset.base);
+        const baseTermin    = parseFloat(form.dataset.baseTermin);
+        const lesLunas      = parseFloat(form.dataset.lesLunas);
+        const lesTermin     = parseFloat(form.dataset.lesTermin);
+        const hasTermin     = ! isNaN(baseTermin);
         const installment   = form.dataset.installment === '1';
         const discountInput = document.getElementById('discount');
         const amountInput   = document.getElementById('amount_paid');
         const rupiah        = n => 'Rp ' + Math.round(n).toLocaleString('id-ID');
-        let total = base;
+        let total = baseLunas;
+
+        function isTermin() {
+            const checked = document.querySelector('input[name="payment_scheme"]:checked');
+            return hasTermin && checked && checked.value === 'Termin';
+        }
 
         function recalc() {
+            const base = isTermin() ? baseTermin : baseLunas;
+            const les  = isTermin() ? lesTermin : lesLunas;
+
             let discount = parseFloat(discountInput.value) || 0;
             discount = Math.min(Math.max(discount, 0), base);
             total = base - discount;
+
+            const pkg = document.getElementById('bill-package');
+            if (pkg && ! isNaN(les)) pkg.textContent = rupiah(les);
 
             document.getElementById('bill-discount').textContent = '- ' + rupiah(discount);
             document.getElementById('bill-total').textContent = rupiah(total);
@@ -1709,6 +1757,7 @@
             amountInput.value = total;
         });
 
+        document.querySelectorAll('input[name="payment_scheme"]').forEach(r => r.addEventListener('change', recalc));
         discountInput.addEventListener('input', recalc);
         recalc();
     });

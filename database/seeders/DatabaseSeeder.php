@@ -38,6 +38,7 @@ class DatabaseSeeder extends Seeder
             DocumentTemplateSeeder::class,
             DocumentSeeder::class,
             SettingSeeder::class,
+            PrintTemplateSeeder::class,
         ]);
     }
 }

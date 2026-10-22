@@ -222,8 +222,18 @@ class ConvertController extends Controller
         $registrationFee = (float) Setting::get('registration_fee', 0);
         $activityFee     = (float) Setting::get('activity_fee', 0);
         $months          = $this->payments->monthsForPackage($package, $isPrivate);
+
+        // Harga lunas (skema "Lunas")
         $lesTotal        = (float) $this->payments->packageTotalFor($package, $isPrivate);
         $totalBill       = $lesTotal + $registrationFee + $activityFee;
+
+        // Harga termin (installment_price x lama paket). null = paket ini tidak punya harga termin khusus
+        $lesTotalTermin  = (! $isPrivate && $package->installment_price)
+            ? $package->totalFor('Termin')
+            : null;
+        $totalBillTermin = $lesTotalTermin !== null
+            ? $lesTotalTermin + $registrationFee + $activityFee
+            : null;
 
         return view('admin.calon-siswa.convert', compact(
             'candidateStudent',
@@ -234,7 +244,9 @@ class ConvertController extends Controller
             'activityFee',
             'months',
             'lesTotal',
-            'totalBill'
+            'lesTotalTermin',
+            'totalBill',
+            'totalBillTermin'
         ))->with('step', 2);
     }
 
@@ -255,22 +267,41 @@ class ConvertController extends Controller
         }
 
         $validated = $request->validate([
+            'payment_scheme' => 'nullable|in:Lunas,Termin',
             'discount'       => 'nullable|numeric|min:0',
+            'notes'          => 'nullable|string|max:1000',
             'amount_paid'    => 'required|numeric|min:1',
             'payment_method' => 'required|string|max:100',
             'payment_date'   => 'required|date|before_or_equal:today',
             'proof'          => 'required|file|mimes:jpg,jpeg,png,pdf|max:4096',
         ], [
-            'proof.required'             => 'Bukti pembayaran wajib diupload.',
+            'proof.required'               => 'Bukti pembayaran wajib diupload.',
             'payment_date.before_or_equal' => 'Tanggal pembayaran tidak boleh di masa depan.',
         ]);
 
         [$isPrivate, $package, $level, $levelId] = $this->resolveSelection($draft, $candidateStudent);
 
+        $canInstallment = $this->payments->allowsInstallment(
+            $isPrivate,
+            $candidateStudent->program?->program_name,
+            $level?->level_name,
+        );
+
+        // Termin hanya berlaku kalau paket boleh dicicil DAN punya harga termin.
+        // Selain itu otomatis Lunas (private, HSK, dll).
+        $scheme = ($canInstallment
+            && ! $isPrivate
+            && $package->installment_price
+            && ($validated['payment_scheme'] ?? 'Lunas') === 'Termin')
+            ? 'Termin'
+            : 'Lunas';
+
         $registrationFee = (float) Setting::get('registration_fee', 0);
         $activityFee     = (float) Setting::get('activity_fee', 0);
         $discount        = round((float) ($validated['discount'] ?? 0), 2);
-        $lesTotal        = (float) $this->payments->packageTotalFor($package, $isPrivate);
+        $lesTotal        = $scheme === 'Termin'
+            ? $package->totalFor('Termin')
+            : (float) $this->payments->packageTotalFor($package, $isPrivate);
         $baseTotal       = $lesTotal + $registrationFee + $activityFee;
 
         if ($discount >= $baseTotal) {
@@ -281,12 +312,6 @@ class ConvertController extends Controller
 
         $totalBill = $baseTotal - $discount;
 
-        $canInstallment = $this->payments->allowsInstallment(
-            $isPrivate,
-            $candidateStudent->program?->program_name,
-            $level?->level_name,
-        );
-
         if (! $canInstallment && round((float) $validated['amount_paid'], 2) < round($totalBill, 2)) {
             throw ValidationException::withMessages([
                 'amount_paid' => 'Paket ini wajib dibayar lunas sebelum program dimulai (Rp' . number_format($totalBill, 0, ',', '.') . '), tidak bisa dicicil/DP.',
@@ -296,7 +321,7 @@ class ConvertController extends Controller
         $proofPath = $request->file('proof')->store('bukti-pembayaran', 'public');
 
         try {
-            $enrollment = DB::transaction(function () use ($validated, $draft, $candidateStudent, $isPrivate, $levelId, $proofPath, $registrationFee, $activityFee, $discount, $totalBill) {
+            $enrollment = DB::transaction(function () use ($validated, $draft, $candidateStudent, $isPrivate, $levelId, $proofPath, $registrationFee, $activityFee, $discount, $totalBill, $scheme) {
 
                 $studentLevel = Level::where('nama_level', 'Student')->firstOrFail();
 
@@ -358,6 +383,9 @@ class ConvertController extends Controller
                     'registration_fee' => $registrationFee,
                     'activity_fee'     => $activityFee,
                     'discount'         => $discount,
+                    'notes'            => filled($validated['notes'] ?? null) ? trim($validated['notes']) : null,
+                    // Skema bayar menentukan total tagihan (Lunas = price, Termin = installment_price x lama paket)
+                    'payment_scheme'   => $scheme,
                 ]);
 
                 $amountPaid = (float) $validated['amount_paid'];

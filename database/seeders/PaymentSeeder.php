@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\ClassEnrollment;
 use App\Models\Payment;
+use App\Services\PaymentInstallmentService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 
@@ -11,27 +12,43 @@ class PaymentSeeder extends Seeder
 {
     public function run(): void
     {
+        $service = app(PaymentInstallmentService::class);
+
+        // Eager load relasi lengkap: service butuh installment_price, program, dan level siswa
         $enrollments = ClassEnrollment::with([
-            'programPackage:id,price',
-            'privatePackage:id,price',
+            'programPackage.program',
+            'privatePackage',
+            'student.currentLevel',
         ])->get();
 
         foreach ($enrollments as $enrollment) {
-            $totalBill = $enrollment->programPackage->price
-                ?? $enrollment->privatePackage->price
-                ?? null;
+            $scenario = fake()->randomElement(['lunas', 'lunas', 'termin', 'termin', 'belum']);
+
+            // Paket yang wajib lunas (private, HSK 4 ke atas) tidak boleh dicicil
+            if ($scenario === 'termin' && ! $service->enrollmentAllowsInstallment($enrollment)) {
+                $scenario = 'lunas';
+            }
+
+            // Skema Termin (harga per bulan x lama paket) hanya untuk paket yang punya installment_price.
+            // forceFill supaya tetap tersimpan walau 'payment_scheme' belum ada di $fillable.
+            $isTerminScheme = $scenario === 'termin' && (bool) $enrollment->programPackage?->installment_price;
+
+            $enrollment->forceFill(['payment_scheme' => $isTerminScheme ? 'Termin' : 'Lunas'])->save();
+
+            // Total tagihan sama persis dengan yang dihitung service
+            // (harga paket sesuai skema + biaya pendaftaran + biaya aktivitas - diskon)
+            $totalBill = $service->totalBillFor($enrollment);
 
             if (! $totalBill) {
                 continue;
             }
 
-            $totalBill = (float) $totalBill;
             $startDate = Carbon::parse($enrollment->enrollment_date);
 
-            match (fake()->randomElement(['lunas', 'lunas', 'termin', 'termin', 'belum'])) {
-                'lunas' => $this->seedLunas($enrollment->id, $totalBill, $startDate),
+            match ($scenario) {
+                'lunas'  => $this->seedLunas($enrollment->id, $totalBill, $startDate),
                 'termin' => $this->seedTermin($enrollment->id, $totalBill, $startDate),
-                'belum' => $this->seedBelumBayar($enrollment->id, $totalBill, $startDate),
+                'belum'  => $this->seedBelumBayar($enrollment->id, $totalBill, $startDate),
             };
         }
     }

@@ -172,7 +172,11 @@ class CalonSiswaController extends Controller
                 'private_package_id' => $data['private_package_id'],
                 'trial_date' => $data['trial_date'] ?? null,
                 'trial_status' => 'Pending',
+                'consultation_date' => $data['consultation_date'] ?? null,
+                'consultation_status' => !empty($data['consultation_date']) ? 'Pending' : null,
+                'consultation_notes' => $data['consultation_notes'] ?? null,
                 'lead_status' => 'Warm',
+                'notes' => $data['notes'] ?? null,
 
             ]);
 
@@ -240,7 +244,11 @@ class CalonSiswaController extends Controller
             ] : null,
             'trial_date' => optional($candidateStudent->trial_date)->format('Y-m-d'),
             'trial_status' => $candidateStudent->trial_status,
+            'consultation_date' => optional($candidateStudent->consultation_date)->format('Y-m-d'),
+            'consultation_status' => $candidateStudent->consultation_status,
+            'consultation_notes' => $candidateStudent->consultation_notes,
             'lead_status' => $candidateStudent->lead_status,
+            'notes' => $candidateStudent->notes,
             'schedules' => $candidateStudent->availableSchedules->map(function ($s) {
                 return [
                     'day' => $s->day,
@@ -274,7 +282,13 @@ class CalonSiswaController extends Controller
                 'private_package_id' => $data['private_package_id'],
                 'trial_date' => $data['trial_date'] ?? null,
                 'trial_status' => $data['trial_status'],
+                'consultation_date' => $data['consultation_date'] ?? null,
+                'consultation_status' => !empty($data['consultation_date'])
+                    ? ($data['consultation_status'] ?? 'Pending')
+                    : null,
+                'consultation_notes' => $data['consultation_notes'] ?? null,
                 'lead_status' => $data['lead_status'],
+                'notes' => $data['notes'] ?? null,
             ]);
 
             $this->syncSchedules($candidateStudent, $request);
@@ -329,6 +343,10 @@ class CalonSiswaController extends Controller
 
             'trial_date' => 'nullable|date',
 
+            'consultation_date' => 'nullable|date',
+            'consultation_notes' => 'nullable|string',
+            'notes' => 'nullable|string',
+
             'day.*' => 'nullable|string',
             'start_time.*' => 'nullable',
             'end_time.*' => 'nullable',
@@ -336,6 +354,7 @@ class CalonSiswaController extends Controller
 
         if ($candidateStudent) {
             $rules['trial_status'] = 'required|in:Pending,Completed,Cancelled';
+            $rules['consultation_status'] = 'nullable|in:Pending,Completed,Cancelled';
             $rules['lead_status'] = 'required|in:Cold,Warm,Hot';
         }
 
