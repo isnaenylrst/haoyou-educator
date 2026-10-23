@@ -17,6 +17,8 @@ class ClassSchedule extends Model
         'start_time',
         'end_time',
         'room',
+        'zoom_link',
+        'zoom_passcode',
     ];
 
     public function class()
