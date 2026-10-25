@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\Document;
+use App\Models\DocumentFolder;
 use App\Models\Teacher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -12,22 +13,11 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
- * "Folder" = nilai kolom documents.document_type, jadi memakai tabel yang
- * sama dengan fitur dokumen di sisi guru/siswa (tanpa tabel baru).
+ * "Folder" = baris di tabel document_folders. Dokumen terhubung lewat
+ * documents.document_type = document_folders.document_type.
  */
 class DokumenController extends Controller
 {
-    public const FOLDERS = [
-        'cv'               => ['type' => 'CV',                   'label' => 'CV Karyawan',    'icon' => 'fa-id-card'],
-        'sertifikat-guru'  => ['type' => 'Teacher Certificate',  'label' => 'Sertifikat Guru', 'icon' => 'fa-certificate'],
-        'perjanjian'       => ['type' => 'Agreement',            'label' => 'Perjanjian',     'icon' => 'fa-file-signature'],
-        'sertifikat-siswa' => ['type' => 'Certificate',          'label' => 'Sertifikat Siswa', 'icon' => 'fa-award'],
-        'sop'              => ['type' => 'SOP',                  'label' => 'SOP',            'icon' => 'fa-list-check'],
-        'surat-cuti'       => ['type' => 'Teacher Leave Letter', 'label' => 'Surat Cuti Guru', 'icon' => 'fa-envelope-open-text'],
-        'foto'             => ['type' => 'Photo',                'label' => 'Foto',           'icon' => 'fa-image'],
-        'lainnya'          => ['type' => 'Other',                'label' => 'Lainnya',        'icon' => 'fa-folder-open'],
-    ];
-
     public const VISIBILITIES = [
         'Private' => 'Hanya admin',
         'Teacher' => 'Guru',
@@ -35,56 +25,104 @@ class DokumenController extends Controller
         'Public'  => 'Publik',
     ];
 
+    public const ICONS = [
+        'fa-folder'        => 'Folder',
+        'fa-file-lines'    => 'Dokumen',
+        'fa-file-signature' => 'Perjanjian',
+        'fa-certificate'   => 'Sertifikat',
+        'fa-envelope-open-text' => 'Surat',
+        'fa-image'         => 'Foto',
+        'fa-chart-line'    => 'Laporan',
+        'fa-book'          => 'Buku / Materi',
+    ];
+
     public function index(Request $request)
     {
-        $folder = $request->query('folder');
-        if ($folder !== null && $folder !== '' && ! isset(self::FOLDERS[$folder])) {
+        $folders = DocumentFolder::orderBy('id')->get()->keyBy('slug');
+
+        $folder = $request->query('folder') ?: null;
+        if ($folder !== null && ! $folders->has($folder)) {
             return redirect()->route('admin.dokumen');
         }
-        $folder = $folder ?: null;
-
-        $search = trim((string) $request->query('search', ''));
-        $ownerId = $request->integer('owner_id') ?: null;
 
         $counts = Document::selectRaw('document_type, COUNT(*) as total')
             ->groupBy('document_type')
             ->pluck('total', 'document_type');
 
-        $stats = [
-            'total'    => (int) $counts->sum(),
-            'folder'   => $counts->filter()->count(),
-            'cv'       => (int) $counts->get('CV', 0),
-            'bulan_ini' => Document::whereYear('created_at', now()->year)
-                ->whereMonth('created_at', now()->month)->count(),
-        ];
+        $current = $folder ? $folders[$folder] : null;
+        $documents = null;
+        $search = trim((string) $request->query('search', ''));
+        $ownerId = $request->integer('owner_id') ?: null;
 
-        $documents = Document::query()
-            ->with(['user.teacher', 'user.curriculum', 'user.student', 'uploader'])
-            ->when($folder, fn ($q) => $q->where('document_type', self::FOLDERS[$folder]['type']))
-            ->when($search !== '', fn ($q) => $q->where(function ($w) use ($search) {
-                $w->where('title', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
-            }))
-            ->when($ownerId, fn ($q) => $q->where('user_id', $ownerId))
-            ->orderByDesc('id')
-            ->paginate(15)
-            ->withQueryString();
+        if ($current) {
+            $documents = Document::query()
+                ->with(['user.teacher', 'user.curriculum', 'user.student', 'uploader'])
+                ->where('document_type', $current->document_type)
+                ->when($search !== '', fn ($q) => $q->where(function ($w) use ($search) {
+                    $w->where('title', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                }))
+                ->when($ownerId, fn ($q) => $q->where('user_id', $ownerId))
+                ->orderByDesc('id')
+                ->paginate(15)
+                ->withQueryString();
+        }
 
         return view('admin.dokumen', [
-            'folders'      => self::FOLDERS,
-            'visibilities' => self::VISIBILITIES,
+            'folders'      => $folders,
+            'current'      => $current,
             'folder'       => $folder,
             'counts'       => $counts,
-            'stats'        => $stats,
             'documents'    => $documents,
+            'visibilities' => self::VISIBILITIES,
+            'icons'        => self::ICONS,
             'owners'       => $this->ownerOptions(),
         ]);
     }
 
+    /* ---------------------------- FOLDER ---------------------------- */
+
+    public function storeFolder(Request $request)
+    {
+        $data = $request->validate([
+            'label' => ['required', 'string', 'max:60', 'unique:document_folders,label'],
+            'icon'  => ['nullable', Rule::in(array_keys(self::ICONS))],
+        ]);
+
+        $base = Str::slug($data['label']) ?: 'folder';
+        $slug = $base;
+        $i = 2;
+        while (DocumentFolder::where('slug', $slug)->orWhere('document_type', $slug)->exists()) {
+            $slug = $base . '-' . $i++;
+        }
+
+        DocumentFolder::create([
+            'slug'          => $slug,
+            'label'         => $data['label'],
+            'icon'          => $data['icon'] ?? 'fa-folder',
+            'document_type' => $slug,
+        ]);
+
+        return redirect()->route('admin.dokumen')->with('success', 'Folder berhasil dibuat.');
+    }
+
+    public function destroyFolder(DocumentFolder $folder)
+    {
+        if (Document::where('document_type', $folder->document_type)->exists()) {
+            return back()->with('error', 'Folder masih berisi dokumen. Kosongkan dulu sebelum dihapus.');
+        }
+
+        $folder->delete();
+
+        return redirect()->route('admin.dokumen')->with('success', 'Folder dihapus.');
+    }
+
+    /* --------------------------- DOKUMEN ---------------------------- */
+
     public function store(Request $request)
     {
         $data = $request->validate([
-            'folder'      => ['required', Rule::in(array_keys(self::FOLDERS))],
+            'folder'      => ['required', 'exists:document_folders,slug'],
             'title'       => ['required', 'string', 'max:255'],
             'user_id'     => ['nullable', 'integer', 'exists:users,id'],
             'visibility'  => ['required', Rule::in(array_keys(self::VISIBILITIES))],
@@ -92,12 +130,13 @@ class DokumenController extends Controller
             'file'        => ['required', 'file', 'max:10240', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png'],
         ]);
 
+        $folder = DocumentFolder::where('slug', $data['folder'])->firstOrFail();
         $path = $request->file('file')->store('documents', 'public');
 
         Document::create([
             'user_id'       => $data['user_id'] ?? null,
             'title'         => $data['title'],
-            'document_type' => self::FOLDERS[$data['folder']]['type'],
+            'document_type' => $folder->document_type,
             'description'   => $data['description'] ?? null,
             'file_path'     => $path,
             'visibility'    => $data['visibility'],
@@ -106,7 +145,7 @@ class DokumenController extends Controller
         ]);
 
         return redirect()
-            ->route('admin.dokumen', ['folder' => $data['folder']])
+            ->route('admin.dokumen', ['folder' => $folder->slug])
             ->with('success', 'Dokumen berhasil diunggah.');
     }
 
@@ -114,17 +153,19 @@ class DokumenController extends Controller
     public function update(Request $request, Document $document)
     {
         $data = $request->validate([
-            'folder'      => ['required', Rule::in(array_keys(self::FOLDERS))],
+            'folder'      => ['required', 'exists:document_folders,slug'],
             'title'       => ['required', 'string', 'max:255'],
             'user_id'     => ['nullable', 'integer', 'exists:users,id'],
             'visibility'  => ['required', Rule::in(array_keys(self::VISIBILITIES))],
             'description' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        $folder = DocumentFolder::where('slug', $data['folder'])->firstOrFail();
+
         $document->update([
             'user_id'       => $data['user_id'] ?? null,
             'title'         => $data['title'],
-            'document_type' => self::FOLDERS[$data['folder']]['type'],
+            'document_type' => $folder->document_type,
             'description'   => $data['description'] ?? null,
             'visibility'    => $data['visibility'],
         ]);
@@ -163,7 +204,6 @@ class DokumenController extends Controller
 
     /* ------------------------------------------------------------------ */
 
-    /** Pemilik dokumen karyawan: guru & tim kurikulum (value = users.id). */
     private function ownerOptions(): array
     {
         return [

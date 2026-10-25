@@ -275,5 +275,6 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::delete('/dokumen/{document}', [DokumenController::class, 'destroy'])->name('dokumen.destroy');
     Route::get('/dokumen/{document}/lihat', [DokumenController::class, 'lihat'])->name('dokumen.lihat');
     Route::get('/dokumen/{document}/unduh', [DokumenController::class, 'unduh'])->name('dokumen.unduh');
-
+    Route::post('dokumen/folder', [DokumenController::class, 'storeFolder'])->name('dokumen.folder.store');
+    Route::delete('dokumen/folder/{folder}', [DokumenController::class, 'destroyFolder'])->name('dokumen.folder.destroy');
 });
