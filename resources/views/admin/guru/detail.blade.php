@@ -4,6 +4,17 @@
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
+    <style>
+        .avail-panel { background: #fafafa; border: 1px solid #eee; border-radius: 12px; padding: 14px 16px; }
+        .avail-empty { font-size: 13px; color: #888; }
+        .avail-row { display: flex; gap: 14px; align-items: flex-start; padding: 5px 0; }
+        .avail-day { width: 64px; flex: none; font-size: 13px; font-weight: 600; padding-top: 3px; }
+        .avail-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+        .avail-chip { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+        .avail-chip.ok   { background: #f0fdf4; border-color: #bbf7d0; color: #16a34a; }
+        .avail-chip.busy { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
+        .avail-legend { display: flex; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e5e5e5; }
+    </style>
 @endpush
 
 @section('content')
@@ -16,7 +27,7 @@
         </div>
 
         <div class="dashboard-header-actions">
-            <a href="{{ route('admin.guru') }}" class="btn btn-secondary">
+            <a href="{{ route('admin.guru.index') }}" class="btn btn-secondary">
                 <i class="fa-solid fa-arrow-left"></i>
                 Kembali
             </a>
@@ -73,6 +84,43 @@
             </div>
         </div>
     </div>
+
+    {{-- ========================= JADWAL TERSEDIA GURU ========================= --}}
+    <div class="card" style="padding:20px;margin-bottom:20px;">
+        <div style="font-weight:700;font-size:14px;color:#111827;margin-bottom:12px;">
+            <i class="fa-solid fa-calendar-week"></i> Jadwal Tersedia Guru
+        </div>
+
+        <div class="avail-panel">
+            @forelse ($scheduleByDay as $day => $d)
+                <div class="avail-row">
+                    <div class="avail-day">{{ $day }}</div>
+                    <div class="avail-chips">
+                        @foreach ($d['slots'] as $slot)
+                            <span class="avail-chip ok" @if ($slot['note']) title="{{ $slot['note'] }}" @endif>
+                                {{ $slot['start'] }}–{{ $slot['end'] }}
+                            </span>
+                        @endforeach
+
+                        @foreach ($d['classes'] as $cls)
+                            <span class="avail-chip busy">
+                                {{ $cls['start'] }}–{{ $cls['end'] }} &middot; {{ $cls['class_name'] }}
+                            </span>
+                        @endforeach
+                    </div>
+                </div>
+            @empty
+                <div class="avail-empty">Guru ini belum mengisi jadwal tersedia.</div>
+            @endforelse
+
+            @if ($scheduleByDay->isNotEmpty())
+                <div class="avail-legend">
+                    <span class="avail-chip ok">tersedia</span>
+                    <span class="avail-chip busy">sudah terpakai kelas lain</span>
+                </div>
+            @endif
+        </div>
+    </div>    
 
     {{-- ========================= DOKUMEN (CV / SERTIFIKAT) ========================= --}}
     <div class="card" style="margin-bottom:20px;">
