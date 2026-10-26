@@ -1,0 +1,125 @@
+/* public/css/admin/jurnalmengajar.css
+   Dipakai bersama calonsiswa.css — hanya berisi elemen yang belum ada di sana. */
+
+/* Teks sekunder */
+.muted { color: #888; }
+.muted.center, td.center { text-align: center; }
+
+/* Pesan flash (sukses / error validasi) */
+.flash {
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+.flash i { margin-right: 6px; }
+.flash-success { background: #e8f6ee; color: #1f6b3f; border: 1px solid #bfe3cd; }
+.flash-error   { background: #fdecec; color: #8f2a2a; border: 1px solid #f3c3c3; }
+.flash-error .flash-title { font-weight: 600; margin-bottom: 4px; }
+.flash-error ul { margin: 0; padding-left: 22px; }
+
+/* Detail pertemuan (modal detail) */
+.detail-list {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 8px 16px;
+    margin: 0;
+    font-size: 14px;
+}
+.detail-list dt { color: #888; font-weight: 500; }
+.detail-list dd { margin: 0; }
+
+.detail-block { margin-bottom: 14px; }
+.detail-block:last-child { margin-bottom: 0; }
+.detail-block h4 { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+.detail-block p  { margin: 0; font-size: 14px; line-height: 1.55; white-space: pre-line; }
+
+/* Tabel kecil di dalam modal (kehadiran) */
+.mini-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.mini-table th,
+.mini-table td { padding: 8px 10px; text-align: left; vertical-align: middle; border-bottom: 1px solid #eee; }
+.mini-table th { font-weight: 600; font-size: 12px; color: #666; }
+.mini-table select,
+.mini-table input[type="text"] { width: 100%; padding: 6px 8px; font-size: 13px; }
+
+.attendance-tools { margin-bottom: 8px; }
+
+/* Petunjuk di bawah field */
+.field-hint { display: block; margin-top: 4px; font-size: 12px; color: #888; }
+
+/* Pesan informasi di dalam modal */
+.notice {
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #f4f4f5;
+    color: #555;
+    font-size: 14px;
+}
+/* public/css/admin/jurnalmengajar.css
+   Dipakai bersama calonsiswa.css — hanya berisi elemen yang belum ada di sana. */
+
+/* Teks sekunder */
+.muted { color: #888; }
+.muted.center, td.center { text-align: center; }
+
+/* Pesan flash (sukses / error validasi) */
+.flash {
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+.flash i { margin-right: 6px; }
+.flash-success { background: #e8f6ee; color: #1f6b3f; border: 1px solid #bfe3cd; }
+.flash-error   { background: #fdecec; color: #8f2a2a; border: 1px solid #f3c3c3; }
+.flash-error .flash-title { font-weight: 600; margin-bottom: 4px; }
+.flash-error ul { margin: 0; padding-left: 22px; }
+
+/* Detail pertemuan (modal detail) */
+.detail-list {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 8px 16px;
+    margin: 0;
+    font-size: 14px;
+}
+.detail-list dt { color: #888; font-weight: 500; }
+.detail-list dd { margin: 0; }
+
+.detail-block { margin-bottom: 14px; }
+.detail-block:last-child { margin-bottom: 0; }
+.detail-block h4 { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+.detail-block p  { margin: 0; font-size: 14px; line-height: 1.55; white-space: pre-line; }
+
+/* Tabel kecil di dalam modal (kehadiran) */
+.mini-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.mini-table th,
+.mini-table td { padding: 8px 10px; text-align: left; vertical-align: middle; border-bottom: 1px solid #eee; }
+.mini-table th { font-weight: 600; font-size: 12px; color: #666; }
+.mini-table select,
+.mini-table input[type="text"] { width: 100%; padding: 6px 8px; font-size: 13px; }
+
+.attendance-tools { margin-bottom: 8px; }
+
+/* Petunjuk di bawah field */
+.field-hint { display: block; margin-top: 4px; font-size: 12px; color: #888; }
+
+/* Pesan informasi di dalam modal */
+.notice {
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #f4f4f5;
+    color: #555;
+    font-size: 14px;
+}
+
+@media (max-width: 640px) {
+    .detail-list { grid-template-columns: 1fr; gap: 2px 0; }
+    .detail-list dd { margin-bottom: 8px; }
+}
+@media (max-width: 640px) {
+    .detail-list { grid-template-columns: 1fr; gap: 2px 0; }
+    .detail-list dd { margin-bottom: 8px; }
+}

@@ -43,6 +43,11 @@
         .modal-lg .modal-body {
             min-height: 320px;
         }
+
+        .meet-label { font-size: 13px; color: #6b7280; }
+        .meet-label strong { color: #111827; font-size: 14px; }
+        .meet-bar { height: 5px; width: 90px; background: #eee; border-radius: 999px; overflow: hidden; margin: 5px 0 4px; }
+        .meet-bar span { display: block; height: 100%; background: #22c55e; border-radius: 999px; }
     </style>
 @endpush
 
@@ -153,9 +158,10 @@
                     <th>Siswa</th>
                     <th>Program</th>
                     <th>Kelas Aktif</th>
+                    <th>Pertemuan</th>
                     <th>Status</th>
                     <th>Poin</th>
-                    <th>Tanggal Bergabung</th>
+                    {{-- <th>Tanggal Bergabung</th> --}}
                     <th width="120" style="text-align: center;">Aksi</th>
                 </tr>
             </thead>
@@ -222,6 +228,36 @@
 
                         <td>
                             @php
+                                $classId = $activeEnrollment?->class_id;
+                                $attended = $classId ? (int) ($attendedMap[$student->id][$classId] ?? 0) : 0;
+                                $held = $classId ? (int) ($heldMap[$classId] ?? 0) : 0;
+                                $totalMeetings = (int) (
+                                    $activeEnrollment?->class?->programPackage?->total_meetings
+                                    ?? $activeEnrollment?->programPackage?->total_meetings
+                                    ?? $activeEnrollment?->privatePackage?->total_meetings
+                                    ?? 0
+                                );
+                                $pct = $totalMeetings > 0 ? min(100, (int) round($attended / $totalMeetings * 100)) : 0;
+                            @endphp
+
+                            @if ($classId)
+                                <div class="meet-label">
+                                    <strong>{{ $attended }}</strong>@if ($totalMeetings > 0)<span>/{{ $totalMeetings }}</span>@endif
+                                    <span>hadir</span>
+                                </div>
+
+                                @if ($totalMeetings > 0)
+                                    <div class="meet-bar"><span style="width: {{ $pct }}%"></span></div>
+                                @endif
+
+                                {{-- <div class="cand-sub">dari {{ $held }} pertemuan berjalan</div> --}}
+                            @else
+                                <span class="cand-sub">-</span>
+                            @endif
+                        </td>                        
+
+                        <td>
+                            @php
                                 $statusClass = match ($student->status) {
                                     'Active' => 'badge-completed',
                                     'Inactive' => 'badge-hot',
@@ -243,9 +279,9 @@
 
                         <td>{{ $student->points }}</td>
 
-                        <td>
+                        {{-- <td>
                             {{ $student->join_date ? \Carbon\Carbon::parse($student->join_date)->format('d M Y') : '-' }}
-                        </td>
+                        </td> --}}
 
                         {{-- Action --}}
                         <td>
@@ -274,7 +310,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" style="text-align:center;padding:50px;color:#888;">
+                        <td colspan="8" style="text-align:center;padding:50px;color:#888;">
                             Belum ada data siswa.
                         </td>
                     </tr>
@@ -473,10 +509,11 @@
                                 <th>Tipe</th>
                                 <th>Status</th>
                                 <th>Tanggal Daftar</th>
+                                <th>Kehadiran</th>
                             </tr>
                         </thead>
                         <tbody id="detail_programs">
-                            <tr><td colspan="5">-</td></tr>
+                            <tr><td colspan="6">-</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -806,12 +843,15 @@
                     <td>${s.end_time ?? '-'}</td>
                 `);
 
-                renderRows('detail_programs', data.programs, 5, p => `
+                renderRows('detail_programs', data.programs, 6, p => `
                     <td>${p.program_name ?? '-'}</td>
                     <td>${p.class_name ?? '-'}</td>
                     <td>${p.course_type ?? '-'}</td>
                     <td>${enrollmentStatusLabel(p.enrollment_status)}</td>
                     <td>${p.enrollment_date ?? '-'}</td>
+                    <td>${p.attended === null || p.attended === undefined
+                        ? '-'
+                        : p.attended + (p.total_meetings ? '/' + p.total_meetings : '') + ' pertemuan'}</td>
                 `);
 
                 renderRows('detail_progress_reports', data.progress_reports, 4, r => `

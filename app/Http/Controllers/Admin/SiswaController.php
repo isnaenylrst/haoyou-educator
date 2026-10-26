@@ -3,16 +3,21 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\CandidateStudent;
 use App\Models\ClassEnrollment;
 use App\Models\ClassModel;
 use App\Models\ClassSchedule;
+use App\Models\ClassSession;
 use App\Models\PrivatePackage;
 use App\Models\ProgramLevel;
 use App\Models\ProgramPackage;
 use App\Models\Setting;
 use App\Models\Student;
 use App\Models\Teacher;
+use App\Models\Attendance;
+use App\Models\TeachingJournal;
 use App\Services\ClassScheduleService;
+use App\Services\ClassSessionService;
 use App\Services\PaymentInstallmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -24,6 +29,7 @@ use Illuminate\Validation\ValidationException;
 class SiswaController extends Controller
 {
     private const CONTINUE_DRAFT = 'continue_draft.';
+    private const ATTENDED_STATUSES = ['Present', 'Late'];
 
     public function index(Request $request)
     {
@@ -67,12 +73,17 @@ class SiswaController extends Controller
         $students = $query->latest('id')
             ->paginate(15)
             ->withQueryString();
+        
+        $attendedMap = $this->attendedByStudentClass($students->pluck('id'));
+        $heldMap     = $this->heldByClass(
+            $students->map(fn ($s) => $s->activeEnrollment?->class_id)->filter()->unique()->values()
+        );
 
         $classes = ClassModel::orderBy('class_name')->get(['id', 'class_name']);
 
         $stats = $this->getStats();
 
-        return view('admin.siswa', compact('students', 'classes', 'stats'));
+        return view('admin.siswa', compact('students', 'classes', 'stats', 'attendedMap', 'heldMap'));
     }
 
     private function getStats(): array
@@ -110,6 +121,35 @@ class SiswaController extends Controller
             'total_private' => $totalPrivate,
         ];
     }
+
+    /**
+     * Jumlah pertemuan yang diikuti tiap siswa per kelas.
+     * Hasil: [student_id => [class_id => jumlah_hadir]]
+     */
+    private function attendedByStudentClass($studentIds)
+    {
+        return Attendance::query()
+            ->join('teaching_journals', 'teaching_journals.id', '=', 'attendances.teaching_journal_id')
+            ->whereIn('attendances.student_id', $studentIds)
+            ->whereIn('attendances.status', self::ATTENDED_STATUSES)
+            ->where('teaching_journals.class_status', 'Conducted')
+            ->selectRaw('attendances.student_id, teaching_journals.class_id, COUNT(DISTINCT attendances.teaching_journal_id) AS attended')
+            ->groupBy('attendances.student_id', 'teaching_journals.class_id')
+            ->get()
+            ->groupBy('student_id')
+            ->map(fn ($rows) => $rows->pluck('attended', 'class_id'));
+    }
+
+    /** Jumlah pertemuan yang sudah berlangsung per kelas: [class_id => jumlah] */
+    private function heldByClass($classIds)
+    {
+        return TeachingJournal::query()
+            ->whereIn('class_id', $classIds)
+            ->where('class_status', 'Conducted')
+            ->selectRaw('class_id, COUNT(DISTINCT COALESCE(class_session_id, id)) AS held')
+            ->groupBy('class_id')
+            ->pluck('held', 'class_id');
+    }    
 
     public function backfillProgramPackages()
     {
@@ -197,6 +237,9 @@ class SiswaController extends Controller
             'payments.enrollment.privatePackage',
         ]);
 
+        // Jumlah pertemuan yang diikuti siswa per kelas: [class_id => jumlah_hadir]
+        $attendedByClass = $this->attendedByStudentClass([$siswa->id])->get($siswa->id, collect());
+
         return response()->json([
             'id' => $siswa->id,
             'name' => $siswa->name,
@@ -210,7 +253,11 @@ class SiswaController extends Controller
                 'end_time' => $s->end_time,
             ]) ?? [],
 
-            'programs' => $siswa->enrollments->map(function ($e) {
+            'programs' => $siswa->enrollments->map(function ($e) use ($attendedByClass) {
+                $attended = $e->class_id
+                    ? (int) ($attendedByClass[$e->class_id] ?? 0)
+                    : null;
+
                 if ($e->private_package_id) {
                     return [
                         'class_name' => $e->class->class_name ?? '-',
@@ -218,6 +265,8 @@ class SiswaController extends Controller
                         'course_type' => 'Private',
                         'enrollment_status' => $e->status,
                         'enrollment_date' => optional($e->enrollment_date)->format('d M Y'),
+                        'attended' => $attended,
+                        'total_meetings' => $e->privatePackage->total_meetings ?? null,
                     ];
                 }
 
@@ -229,6 +278,8 @@ class SiswaController extends Controller
                     'course_type' => 'Reguler',
                     'enrollment_status' => $e->status,
                     'enrollment_date' => optional($e->enrollment_date)->format('d M Y'),
+                    'attended' => $attended,
+                    'total_meetings' => $programPackage->total_meetings ?? null,
                 ];
             }),
 
@@ -456,6 +507,55 @@ class SiswaController extends Controller
         return ! $payments->isFullyPaid($enrollment);
     }
 
+    /**
+     * Kelas private lama yang akan ditutup saat siswa lanjut program:
+     * hanya kelas private yang TIDAK dipakai siswa lain (private 1-on-1, atau Exclusive yang sudah kosong).
+     * Kelas reguler dan kelas bersama yang masih punya anggota lain tidak disentuh.
+     */
+    private function closableClass(?ClassEnrollment $enrollment): ?ClassModel
+    {
+        if (! $enrollment || ! $enrollment->class_id || ! $enrollment->private_package_id) {
+            return null;
+        }
+
+        $class = ClassModel::find($enrollment->class_id);
+
+        if (! $class) {
+            return null;
+        }
+
+        $othersExist = $class->enrollments()
+            ->where('id', '!=', $enrollment->id)
+            ->whereIn('status', ClassModel::SEAT_STATUSES)
+            ->exists();
+
+        return $othersExist ? null : $class;
+    }
+
+    /**
+     * Lepaskan kelas private lama: pertemuan yang belum terjadi (hari ini ke depan) dibatalkan
+     * dan kelas ditandai selesai, supaya slot guru kembali kosong dan tidak ada pertemuan "hantu".
+     * Pertemuan yang sudah lewat tidak diubah (riwayat tetap).
+     */
+    private function releaseOldClass(?ClassEnrollment $enrollment): void
+    {
+        $class = $this->closableClass($enrollment);
+
+        if (! $class) {
+            return;
+        }
+
+        ClassSession::where('class_id', $class->id)
+            ->where('status', 'Scheduled')
+            ->whereDate('session_date', '>=', today())
+            ->update([
+                'status'        => 'Cancelled',
+                'change_reason' => 'Siswa lanjut ke program berikutnya',
+            ]);
+
+        $class->update(['status' => 'Completed']);
+    }
+
     // Biaya tambahan untuk siswa lama yang lanjut program: [biaya pendaftaran, biaya aktivitas, info]
     private function continueFees(Student $siswa): array
     {
@@ -655,9 +755,21 @@ class SiswaController extends Controller
             return redirect()->route('admin.siswa.settle', $siswa);
         }
 
+        // Siswa tanpa calon siswa (seeder / data impor) tetap bisa lanjut program:
+        // form hanya butuh nama, telepon, dan relasi kosong sebagai pengganti.
         $candidateStudent = $siswa->candidateStudent;
-        abort_if(! $candidateStudent, 404, 'Data calon siswa tidak ditemukan.');
-        $candidateStudent->load(['program', 'privatePackage', 'availableSchedules']);
+
+        if ($candidateStudent) {
+            $candidateStudent->load(['program', 'privatePackage', 'availableSchedules']);
+        } else {
+            $candidateStudent = new CandidateStudent([
+                'name'  => $siswa->name,
+                'phone' => $siswa->user->phone ?? '-',
+            ]);
+            $candidateStudent->setRelation('program', null);
+            $candidateStudent->setRelation('privatePackage', null);
+            $candidateStudent->setRelation('availableSchedules', collect());
+        }
 
         $packages = ProgramPackage::leftJoin('program_categories', 'program_categories.id', '=', 'program_packages.category_id')
             ->leftJoin('program_levels', 'program_levels.id', '=', 'program_packages.level_id')
@@ -684,6 +796,11 @@ class SiswaController extends Controller
             ->where('room', '!=', '')
             ->where('room', '!=', 'Online')
             ->distinct()->orderBy('room')->pluck('room');
+
+        // Jadwal tersedia & jam terpakai tiap guru. Kelas private lama siswa ini diabaikan
+        // (akan ditutup saat lanjut program), supaya slotnya tidak tampil sebagai bentrok.
+        $teacherSlots = app(ClassScheduleService::class)
+            ->teacherSlotsMap($this->closableClass($enrollment)?->id);
 
         // Draft: pilihan sebelumnya (kalau kembali dari step 2), kalau kosong pakai rekomendasi
         $draft = session(self::CONTINUE_DRAFT . $siswa->id);
@@ -724,6 +841,7 @@ class SiswaController extends Controller
             'privatePackages'     => $privatePackages,
             'teachers'            => $teachers,
             'roomSuggestions'     => $roomSuggestions,
+            'teacherSlots'        => $teacherSlots,
             'recommendedCategory' => null,
             'defaultPackageType'  => $draft['package_type'] ?? 'program',
             'draft'               => $draft,
@@ -733,7 +851,9 @@ class SiswaController extends Controller
     // STEP 1 (submit): validasi, simpan pilihan ke session
     public function continueProgram(Request $request, Student $siswa)
     {
-        if ($this->hasOutstandingBalance($siswa->activeEnrollment)) {
+        $currentEnrollment = $siswa->activeEnrollment;
+
+        if ($this->hasOutstandingBalance($currentEnrollment)) {
             return redirect()->route('admin.siswa.settle', $siswa);
         }
 
@@ -775,7 +895,11 @@ class SiswaController extends Controller
                 $validated['delivery_mode']
             );
 
-            $classes->assertTeacherFree((int) $validated['teacher_id'], $validated['schedules']);
+            // Kelas private lama siswa ini akan ditutup saat lanjut program, jadi tidak dihitung sebagai bentrok
+            $oldClassId = $this->closableClass($currentEnrollment)?->id;
+
+            $classes->assertTeacherFree((int) $validated['teacher_id'], $validated['schedules'], $oldClassId);
+            $classes->assertTeacherAvailable((int) $validated['teacher_id'], $validated['schedules']);
 
             if (empty($validated['end_date'])) {
                 $privatePackage = PrivatePackage::findOrFail($validated['private_package_id']);
@@ -831,28 +955,40 @@ class SiswaController extends Controller
 
         $canInstallment = $this->continueAllowsInstallment($payments, $isPrivate, $package);
         $months         = $payments->monthsForPackage($package, $isPrivate);
+
+        // Harga lunas (skema "Lunas")
         $lesTotal       = (float) $payments->packageTotalFor($package, $isPrivate);
         $totalBill      = $lesTotal + $registrationFee + $activityFee;
 
+        // Harga termin (installment_price x lama paket). null = paket ini tidak punya harga termin khusus
+        $lesTotalTermin = (! $isPrivate && $package->installment_price)
+            ? $package->totalFor('Termin')
+            : null;
+        $totalBillTermin = $lesTotalTermin !== null
+            ? $lesTotalTermin + $registrationFee + $activityFee
+            : null;
+
         return view('admin.calon-siswa.convert', [
-            'step'            => 2,
-            'stepDisplay'     => 2,
-            'personName'      => $siswa->name,
-            'personLabel'     => 'Siswa',
-            'eyebrow'         => 'Lanjut Program:',
-            'subtitle'        => 'Catat pembayaran untuk program baru dan upload bukti pembayaran.',
-            'formAction'      => route('admin.siswa.continue.store', $siswa),
-            'backUrl'         => route('admin.siswa.continue.program', $siswa),
-            'cancelUrl'       => route('admin.siswa'),
-            'package'         => $package,
-            'isPrivate'       => $isPrivate,
-            'canInstallment'  => $canInstallment,
-            'registrationFee' => $registrationFee,
+            'step'             => 2,
+            'stepDisplay'      => 2,
+            'personName'       => $siswa->name,
+            'personLabel'      => 'Siswa',
+            'eyebrow'          => 'Lanjut Program:',
+            'subtitle'         => 'Catat pembayaran untuk program baru dan upload bukti pembayaran.',
+            'formAction'       => route('admin.siswa.continue.store', $siswa),
+            'backUrl'          => route('admin.siswa.continue.program', $siswa),
+            'cancelUrl'        => route('admin.siswa'),
+            'package'          => $package,
+            'isPrivate'        => $isPrivate,
+            'canInstallment'   => $canInstallment,
+            'registrationFee'  => $registrationFee,
             'registrationNote' => $registrationNote,
-            'activityFee'     => $activityFee,
-            'months'          => $months,
-            'lesTotal'        => $lesTotal,
-            'totalBill'       => $totalBill,
+            'activityFee'      => $activityFee,
+            'months'           => $months,
+            'lesTotal'         => $lesTotal,
+            'lesTotalTermin'   => $lesTotalTermin,
+            'totalBill'        => $totalBill,
+            'totalBillTermin'  => $totalBillTermin,
         ]);
     }
 
@@ -872,6 +1008,7 @@ class SiswaController extends Controller
         }
 
         $validated = $request->validate([
+            'payment_scheme' => ['nullable', 'in:Lunas,Termin'],
             'discount'       => ['nullable', 'numeric', 'min:0'],
             'amount_paid'    => ['required', 'numeric', 'min:1'],
             'payment_method' => ['required', Rule::in(['Transfer Bank', 'Cash', 'QRIS'])],
@@ -885,7 +1022,22 @@ class SiswaController extends Controller
         [$isPrivate, $package] = $this->resolveContinuePackage($draft);
         [$registrationFee, $activityFee] = $this->continueFees($siswa);
 
-        $baseTotal  = (float) $payments->packageTotalFor($package, $isPrivate) + $registrationFee + $activityFee;
+        $canInstallment = $this->continueAllowsInstallment($payments, $isPrivate, $package);
+
+        // Termin hanya berlaku kalau paket boleh dicicil DAN punya harga termin.
+        // Selain itu otomatis Lunas (private, HSK, dll).
+        $scheme = ($canInstallment
+            && ! $isPrivate
+            && $package->installment_price
+            && ($validated['payment_scheme'] ?? 'Lunas') === 'Termin')
+            ? 'Termin'
+            : 'Lunas';
+
+        $lesTotal = $scheme === 'Termin'
+            ? $package->totalFor('Termin')
+            : (float) $payments->packageTotalFor($package, $isPrivate);
+
+        $baseTotal  = $lesTotal + $registrationFee + $activityFee;
         $discount   = round((float) ($validated['discount'] ?? 0), 2);
         $amountPaid = round((float) $validated['amount_paid'], 2);
 
@@ -897,7 +1049,7 @@ class SiswaController extends Controller
 
         $totalBill = round($baseTotal - $discount, 2);
 
-        if (! $this->continueAllowsInstallment($payments, $isPrivate, $package) && $amountPaid < $totalBill) {
+        if (! $canInstallment && $amountPaid < $totalBill) {
             throw ValidationException::withMessages([
                 'amount_paid' => 'Paket ini wajib dibayar lunas (Rp' . number_format($totalBill, 0, ',', '.') . '), tidak bisa dicicil/DP.',
             ]);
@@ -910,9 +1062,12 @@ class SiswaController extends Controller
         try {
             $enrollment = DB::transaction(function () use (
                 $siswa, $currentEnrollment, $draft, $isPrivate, $validated, $payments,
-                $registrationFee, $activityFee, $discount, $amountPaid, $totalBill, $classId, $levelId, $proofPath
+                $registrationFee, $activityFee, $discount, $amountPaid, $totalBill, $classId, $levelId, $proofPath, $scheme
             ) {
                 $currentEnrollment?->update(['status' => 'Completed']);
+
+                // Kelas private lama (kalau tidak dipakai siswa lain) ditutup dan pertemuan yang belum terjadi dibatalkan
+                $this->releaseOldClass($currentEnrollment);
 
                 // kuota kelas reguler (dikunci supaya dua admin tidak mengisi kursi terakhir bersamaan)
                 if ($classId) {
@@ -933,8 +1088,9 @@ class SiswaController extends Controller
                 if ($isPrivate) {
                     $classesSvc = app(ClassScheduleService::class);
 
-                    // cek ulang bentrok guru, karena bisa berubah antara step 1 dan step 2
+                    // cek ulang bentrok dan ketersediaan guru, karena bisa berubah antara step 1 dan step 2
                     $classesSvc->assertTeacherFree((int) $draft['teacher_id'], $draft['schedules']);
+                    $classesSvc->assertTeacherAvailable((int) $draft['teacher_id'], $draft['schedules']);
 
                     $privatePackage = PrivatePackage::findOrFail($draft['private_package_id']);
 
@@ -952,7 +1108,11 @@ class SiswaController extends Controller
                         'status'             => 'Open',
                     ])->save();
 
-                    $classesSvc->createSchedules($kelas, $draft['schedules']);
+                    $classesSvc->createSchedules($kelas, $draft['schedules'], $draft['start_date']);
+
+                    // Bangkitkan pertemuan bertanggal sebanyak total_meetings paket
+                    app(ClassSessionService::class)
+                        ->generateForNewClass($kelas->refresh(), (int) $privatePackage->total_meetings);
 
                     $classId = $kelas->id;
                 }
@@ -971,6 +1131,8 @@ class SiswaController extends Controller
                     'registration_fee'   => $registrationFee,
                     'activity_fee'       => $activityFee,
                     'discount'           => $discount,
+                    // Skema bayar menentukan total tagihan (Lunas = price, Termin = installment_price x lama paket)
+                    'payment_scheme'     => $scheme,
                 ]);
 
                 $payments->recordPayment(

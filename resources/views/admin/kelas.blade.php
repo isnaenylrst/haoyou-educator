@@ -10,6 +10,25 @@
         .schedule-row { display: flex; gap: 10px; align-items: flex-end; }
         .schedule-row .form-field { flex: 1; min-width: 0; }
         .schedule-row .schedule-remove { flex: none; }
+
+        /* Panel "Jadwal Tersedia Guru" */
+        .avail-title { display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+        .avail-panel { background: #fafafa; border: 1px solid #eee; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+        .avail-empty { font-size: 13px; color: #888; }
+        .avail-row { display: flex; gap: 14px; align-items: flex-start; padding: 5px 0; }
+        .avail-day { width: 56px; flex: none; font-size: 13px; font-weight: 600; padding-top: 3px; }
+        .avail-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+        .avail-chip { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+        .avail-chip.ok   { background: #f0fdf4; border-color: #bbf7d0; color: #16a34a; }
+        .avail-chip.busy { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
+        .avail-legend { display: flex; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e5e5e5; }
+        .avail-warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 10px; padding: 10px 14px; margin-top: 12px; font-size: 13px; line-height: 1.6; }
+
+        /* Progres pertemuan */
+        .meet-label { font-size: 13px; color: #6b7280; }
+        .meet-label strong { color: #111827; font-size: 14px; }
+        .meet-bar { height: 5px; width: 90px; background: #eee; border-radius: 999px; overflow: hidden; margin: 5px 0 4px; }
+        .meet-bar span { display: block; height: 100%; background: #facc15; border-radius: 999px; }
     </style>
 @endpush
 
@@ -156,10 +175,11 @@
             <thead>
                 <tr>
                     <th>Kelas</th>
-                    <th>Program &amp; Paket</th>
-                    <th>Tipe</th>
+                    {{-- <th>Program &amp; Paket</th> --}}
+                    {{-- <th>Tipe</th> --}}
                     <th>Guru</th>
                     <th>Jadwal Mingguan</th>
+                    <th>Pertemuan</th>
                     <th>Kapasitas</th>
                     <th>Status</th>
                     <th width="140" style="text-align: center;">Aksi</th>
@@ -213,7 +233,7 @@
                             </div>
                         </td>
 
-                        <td>
+                        {{-- <td>
                             @if ($isPrivate)
                                 Private
                                 <div class="cand-sub">{{ $kelas->privatePackage?->package_name ?? '-' }}</div>
@@ -221,14 +241,14 @@
                                 {{ $kelas->programPackage?->program?->program_name ?? '-' }}
                                 <div class="cand-sub">{{ $kelas->programPackage?->package_name ?? '' }}</div>
                             @endif
-                        </td>
+                        </td> --}}
 
-                        <td>
+                        {{-- <td>
                             <span class="badge {{ $isPrivate ? 'badge-private' : 'badge-reguler' }}">
                                 <span class="badge-dot"></span>
                                 {{ $isPrivate ? 'Private' : 'Reguler' }}
                             </span>
-                        </td>
+                        </td> --}}
 
                         <td>
                             @if ($kelas->teacher)
@@ -251,6 +271,34 @@
                                 <span class="cand-sub">Belum ada jadwal</span>
                             @endif
                         </td>
+
+                        <td>
+                            @php
+                                $mp    = $meetingProgress[$kelas->id] ?? null;
+                                $done  = (int) ($mp->done ?? 0);
+                                $total = (int) ($kelas->programPackage?->total_meetings ?? $kelas->privatePackage?->total_meetings ?? 0);
+                                $pct   = $total > 0 ? min(100, (int) round($done / $total * 100)) : 0;
+                            @endphp
+
+                            <div class="meet-label">
+                                <strong>{{ $done }}</strong>@if ($total > 0)<span>/{{ $total }}</span>@endif
+                                <span>pertemuan</span>
+                            </div>
+
+                            @if ($total > 0)
+                                <div class="meet-bar"><span style="width: {{ $pct }}%"></span></div>
+                            @endif
+
+                            <div class="cand-sub">
+                                @if ($total > 0 && $done >= $total)
+                                    Semua pertemuan selesai
+                                @elseif ($mp)
+                                    Terakhir {{ \Illuminate\Support\Carbon::parse($mp->last_date)->format('d M Y') }}
+                                @else
+                                    Belum ada jurnal
+                                @endif
+                            </div>
+                        </td>                        
 
                         <td>
                             @php $full = $kelas->students_count >= $kelas->capacity; @endphp
@@ -286,15 +334,16 @@
                                     <i class="fa-solid fa-users-gear"></i>
                                 </button>
 
-                                <button type="button" class="icon-btn" title="Lihat di Jadwal">
+                                <a href="{{ route('admin.jadwal', ['class_id' => $kelas->id]) }}"
+                                class="icon-btn" title="Lihat di Jadwal">
                                     <i class="fa-solid fa-calendar-days"></i>
-                                </button>
+                                </a>
                             </div>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="8" style="text-align:center;padding:50px;color:#888;">
+                        <td colspan="9" style="text-align:center;padding:50px;color:#888;">
                             Belum ada data kelas.
                         </td>
                     </tr>
@@ -465,7 +514,7 @@
 
                             <div class="form-field full">
                                 <label>Guru Pengampu</label>
-                                <select name="teacher_id" id="add_teacher_id">
+                                <select name="teacher_id" id="add_teacher_id" onchange="refreshTeacherAvailability('add')">
                                     <option value="">Belum Ditentukan</option>
                                     @foreach ($teachers as $teacher)
                                         <option value="{{ $teacher->id }}">{{ $teacher->name }}</option>
@@ -477,10 +526,14 @@
 
                     <div class="form-section">
                         <div class="form-section-title"><i class="fa-solid fa-calendar-week"></i> Jadwal Mingguan</div>
+                        <label class="avail-title">Jadwal Tersedia Guru</label>
+                        <div class="avail-panel" id="add_avail_panel"></div>
+
                         <div id="add_schedule_rows"></div>
                         <button type="button" class="add-schedule-btn" onclick="addScheduleRow('add_schedule_rows')">
                             <i class="fa-solid fa-plus"></i> Tambah Jadwal
                         </button>
+                        <div class="avail-warn" id="add_avail_warn" style="display:none;"></div>
                         <div class="auto-note">
                             <i class="fa-solid fa-circle-info"></i>
                             Jadwal ini menjadi pola sesi mingguan kelas dan dipakai untuk mencatat jurnal mengajar.
@@ -613,7 +666,7 @@
 
                             <div class="form-field full">
                                 <label>Guru Pengampu</label>
-                                <select name="teacher_id" id="edit_teacher_id">
+                                <select name="teacher_id" id="edit_teacher_id" onchange="refreshTeacherAvailability('edit')">
                                     <option value="">Belum Ditentukan</option>
                                     @foreach ($teachers as $teacher)
                                         <option value="{{ $teacher->id }}">{{ $teacher->name }}</option>
@@ -625,10 +678,14 @@
 
                     <div class="form-section">
                         <div class="form-section-title"><i class="fa-solid fa-calendar-week"></i> Jadwal Mingguan</div>
+                        <label class="avail-title">Jadwal Tersedia Guru</label>
+                        <div class="avail-panel" id="edit_avail_panel"></div>
+
                         <div id="edit_schedule_rows"></div>
                         <button type="button" class="add-schedule-btn" onclick="addScheduleRow('edit_schedule_rows')">
                             <i class="fa-solid fa-plus"></i> Tambah Jadwal
                         </button>
+                        <div class="avail-warn" id="edit_avail_warn" style="display:none;"></div>
                         <div class="auto-note">
                             <i class="fa-solid fa-circle-info"></i>
                             Jadwal yang sudah punya jurnal mengajar tidak bisa dihapus, hanya bisa diubah hari/jamnya.
@@ -638,10 +695,10 @@
 
                 <div class="modal-foot">
                     <div class="modal-foot-left">
-                        <button type="button" class="btn btn-convert">
+                        <a href="#" id="edit_jadwal_link" class="btn btn-convert">
                             <i class="fa-solid fa-calendar-days"></i>
                             Lihat di Jadwal
-                        </button>
+                        </a>
                     </div>
                     <div class="modal-foot-right">
                         <button type="button" class="btn btn-secondary" onclick="closeEditKelasModal()">Batal</button>
@@ -729,6 +786,12 @@
     ============================================================ */
     let scheduleIndex = 0;
 
+    // Ketersediaan guru: { teacher_id: [ {day, start, end}, ... ] }
+    const TEACHER_AVAIL = @json($teacherAvailabilities);
+    // Slot guru yang sudah dipakai kelas aktif lain: { teacher_id: [ {class_id, class_name, day, start, end}, ... ] }
+    const TEACHER_BUSY = @json($teacherBusy);
+    const DAY_ORDER = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+
     function setValue(id, value) {
         const el = document.getElementById(id);
         if (el) el.value = value ?? '';
@@ -801,6 +864,101 @@
         });
     }
 
+    /* ============================================================
+       KETERSEDIAAN GURU
+       Slot yang menyambung digabung (08:00–10:00 + 10:00–12:00 = 08:00–12:00),
+       logikanya sama dengan TeacherAvailability::teacherCovers() di server.
+    ============================================================ */
+    function slotCovered(slots, day, start, end) {
+        const list = slots
+            .filter(s => s.day === day)
+            .sort((a, b) => a.start.localeCompare(b.start));
+
+        let cursor = start;
+        for (const s of list) {
+            if (s.start > cursor) break;
+            if (s.end > cursor) cursor = s.end;
+            if (cursor >= end) return true;
+        }
+        return false;
+    }
+
+    function readScheduleRows(prefix) {
+        return Array.from(document.querySelectorAll(`#${prefix}_schedule_rows .schedule-row`))
+            .map(r => ({
+                day:   r.querySelector('select[name$="[day]"]').value,
+                start: r.querySelector('input[name$="[start_time]"]').value,
+                end:   r.querySelector('input[name$="[end_time]"]').value,
+            }))
+            .filter(r => r.start && r.end && r.end > r.start);
+    }
+
+    function timesOverlap(aStart, aEnd, bStart, bEnd) {
+        return aStart < bEnd && bStart < aEnd;
+    }
+
+    // Slot guru yang dipakai kelas lain (kelas yang sedang diedit tidak dihitung)
+    function busySlotsFor(teacherId, prefix) {
+        const selfId = prefix === 'edit'
+            ? (Number(document.getElementById('edit_kelas_id').value) || null)
+            : null;
+        return (TEACHER_BUSY[teacherId] || []).filter(b => b.class_id !== selfId);
+    }
+
+    // Gambar panel "Jadwal Tersedia Guru" + peringatan jadwal yang tidak cocok
+    function refreshTeacherAvailability(prefix) {
+        const select = document.getElementById(prefix + '_teacher_id');
+        const panel  = document.getElementById(prefix + '_avail_panel');
+        const warn   = document.getElementById(prefix + '_avail_warn');
+        if (! select || ! panel || ! warn) return;
+
+        const teacherId = select.value;
+
+        if (! teacherId) {
+            panel.innerHTML = '<div class="avail-empty">Pilih guru pengampu untuk melihat jadwal tersedianya.</div>';
+            warn.style.display = 'none';
+            return;
+        }
+
+        const slots = TEACHER_AVAIL[teacherId] || [];
+        const busy  = busySlotsFor(teacherId, prefix);
+
+        if (! slots.length) {
+            panel.innerHTML = '<div class="avail-empty">Guru ini belum memiliki jadwal tersedia. Atur ketersediaan guru terlebih dahulu.</div>';
+        } else {
+            const days = DAY_ORDER.filter(d => slots.some(s => s.day === d));
+            panel.innerHTML = days.map(d => {
+                const chips = slots.filter(s => s.day === d)
+                    .map(s => `<span class="avail-chip ok">${s.start}–${s.end}</span>`)
+                    .concat(busy.filter(b => b.day === d)
+                        .map(b => `<span class="avail-chip busy">${b.start}–${b.end} · ${escapeHtml(b.class_name)}</span>`))
+                    .join('');
+                return `<div class="avail-row"><div class="avail-day">${d}</div><div class="avail-chips">${chips}</div></div>`;
+            }).join('') + `<div class="avail-legend">
+                <span class="avail-chip ok">tersedia</span>
+                <span class="avail-chip busy">sudah terpakai kelas lain</span>
+            </div>`;
+        }
+
+        // Peringatan per baris jadwal yang diisi
+        const messages = [];
+        readScheduleRows(prefix).forEach(r => {
+            const label = `${r.day} ${r.start}–${r.end}`;
+
+            if (! slotCovered(slots, r.day, r.start, r.end)) {
+                messages.push(`${label}: di luar jadwal tersedia guru.`);
+            }
+
+            const clash = busy.find(b => b.day === r.day && timesOverlap(r.start, r.end, b.start, b.end));
+            if (clash) {
+                messages.push(`${label}: bentrok dengan kelas "${clash.class_name}" (${clash.start}–${clash.end}).`);
+            }
+        });
+
+        warn.innerHTML = messages.map(m => `<div>⚠ ${escapeHtml(m)}</div>`).join('');
+        warn.style.display = messages.length ? '' : 'none';
+    }
+
     function addScheduleRow(containerId, values = {}) {
         const wrap = document.getElementById(containerId);
         const prefix = containerId.replace('_schedule_rows', '');
@@ -829,7 +987,7 @@
                 <label>Ruangan</label>
                 <input type="text" name="schedules[${i}][room]" list="roomSuggestions" placeholder="mis. Ruang A" maxlength="255">
             </div>
-            <button type="button" class="schedule-remove" onclick="this.closest('.schedule-row').remove()">
+            <button type="button" class="schedule-remove">
                 <i class="fa-solid fa-trash"></i>
             </button>`;
 
@@ -842,8 +1000,17 @@
             roomInput.value = values.room;
         }
 
+        // Setiap perubahan jadwal -> hitung ulang guru yang tersedia
+        row.addEventListener('input', () => refreshTeacherAvailability(prefix));
+        row.addEventListener('change', () => refreshTeacherAvailability(prefix));
+        row.querySelector('.schedule-remove').addEventListener('click', () => {
+            row.remove();
+            refreshTeacherAvailability(prefix);
+        });
+
         wrap.appendChild(row);
         syncRooms(prefix);
+        refreshTeacherAvailability(prefix);
     }
 
     // Isi seluruh field form dari satu objek data
@@ -871,6 +1038,9 @@
         } else {
             addScheduleRow(prefix + '_schedule_rows');
         }
+
+        // Setelah semua baris jadwal terisi, sesuaikan daftar guru
+        refreshTeacherAvailability(prefix);
 
         if (prefix === 'edit') {
             const hint = document.getElementById('edit_capacity_hint');
@@ -903,7 +1073,7 @@
         document.getElementById('editKelasForm').action = data.update_url;
         document.getElementById('edit_kelas_id').value = data.id;
         fillKelasForm('edit', data);
-
+        document.getElementById('edit_jadwal_link').href ="{{ route('admin.jadwal') }}?class_id=" + data.id;
         document.getElementById('editKelasModalOverlay').classList.add('open');
     }
     function closeEditKelasModal() {
@@ -983,11 +1153,6 @@
         list.innerHTML = hint + msEnrolledStudents.map(s => renderStudentItem(s, 'new')).join('');
     }
 
-    function formatScheduleList(schedules) {
-        if (! schedules || ! schedules.length) return 'Belum ada jadwal tersimpan';
-        return schedules.map(s => `${s.day} ${s.start_time}–${s.end_time}`).join(', ');
-    }
-
     function renderEnrolledItem(s) {
         const statusLabel = s.status === 'Completed' ? 'Selesai' : 'Aktif';
         return `<div class="ms-item">
@@ -1047,28 +1212,28 @@
             });
     }
 
-function renderStudentItem(s, source) {
-    const disabled = s.already_in_class || msIsFull;
-    const label = s.already_in_class ? 'Sudah di kelas ini' : (msIsFull ? 'Kelas penuh' : 'Tambahkan');
-    const idValue = source === 'waiting' ? s.enrollment_id : s.student_id;
+    function renderStudentItem(s, source) {
+        const disabled = s.already_in_class || msIsFull;
+        const label = s.already_in_class ? 'Sudah di kelas ini' : (msIsFull ? 'Kelas penuh' : 'Tambahkan');
+        const idValue = source === 'waiting' ? s.enrollment_id : s.student_id;
 
-    // Jadwal hanya relevan untuk siswa yang BELUM masuk kelas ini
-    const scheduleHtml = s.already_in_class
-        ? ''
-        : `<div class="ms-item-schedule">${escapeHtml(formatScheduleList(s.schedules))}</div>`;
+        // Jadwal hanya relevan untuk siswa yang BELUM masuk kelas ini
+        const scheduleHtml = s.already_in_class
+            ? ''
+            : `<div class="ms-item-schedule">${escapeHtml(formatScheduleList(s.schedules))}</div>`;
 
-    return `<div class="ms-item">
-        <div>
-            <div class="ms-item-name">${escapeHtml(s.name)}</div>
-            ${s.join_date ? `<div class="ms-item-sub">Bergabung ${s.join_date}</div>` : ''}
-            ${scheduleHtml}
-        </div>
-        <button type="button" class="btn btn-primary btn-sm" ${disabled ? 'disabled' : ''}
-            onclick="submitEnroll('${source}', ${idValue}, this)">
-            ${label}
-        </button>
-    </div>`;
-}
+        return `<div class="ms-item">
+            <div>
+                <div class="ms-item-name">${escapeHtml(s.name)}</div>
+                ${s.join_date ? `<div class="ms-item-sub">Bergabung ${s.join_date}</div>` : ''}
+                ${scheduleHtml}
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" ${disabled ? 'disabled' : ''}
+                onclick="submitEnroll('${source}', ${idValue}, this)">
+                ${label}
+            </button>
+        </div>`;
+    }
 
     function escapeHtml(str) {
         const div = document.createElement('div');
@@ -1133,5 +1298,12 @@ function renderStudentItem(s, source) {
         }
     })();
     @endif
+    /* ============================================================
+       DIBUKA DARI DASHBOARD (?tambah=1)
+    ============================================================ */
+    if (new URLSearchParams(location.search).get('tambah') === '1') {
+        openKelasModal();
+        history.replaceState(null, '', location.pathname);
+    }
 </script>
 @endpush
