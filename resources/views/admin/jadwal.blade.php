@@ -11,13 +11,8 @@
 
     @php
         $dayCount    = count($days);
-        $keepFilters = request()->only('teacher_id', 'program_id');
-
-        $hourCount   = $endHour - $startHour;
-        $hourMarks   = range($startHour, $endHour - 1);
-        $dayStartMin = $startHour * 60;
-        $totalMin    = $hourCount * 60;
-        $laneHeight  = 52; // px per lane (baris sesi) di timeline
+        $roomCount   = count($roomColumns);
+        $keepFilters = request()->only('teacher_id', 'program_id', 'room', 'class_id');
 
         $kindClass = [
             'Private'        => 'kind-private',
@@ -25,10 +20,10 @@
             'Daily Activity' => 'kind-daily',
         ];
 
-        // Hari yang dibuka pertama kali: hari ini (jika ada di minggu ini), kalau tidak hari pertama
-        $defaultDay = collect($days)->first(
-            fn ($d, $i) => $weekStart->copy()->addDays($i)->isToday()
-        ) ?? $days[0];
+        $hasTrials = collect($trials)->flatten(1)->isNotEmpty();
+
+        // Apakah minggu yang ditampilkan = minggu berjalan?
+        $isCurrentWeek = $weekStart->isSameDay(now()->startOfWeek(\Carbon\Carbon::MONDAY));
     @endphp
 
     <div class="dashboard-header">
@@ -37,21 +32,17 @@
             <h1>Jadwal</h1>
             <p>
                 Lihat seluruh sesi pertemuan — kelas Daily Activity, HSK, Private, dan trial calon siswa —
-                per hari untuk cek ketersediaan ruang.
+                per ruang untuk cek ketersediaan ruangan.
             </p>
-        </div>
-
-        <div class="dashboard-header-actions">
-            <button type="button" class="btn btn-primary" onclick="openSessionModal()">
-                <i class="fa-solid fa-plus"></i>
-                Tambah Sesi
-            </button>
         </div>
     </div>
 
     {{-- ========================= FILTER ========================= --}}
     <form method="GET" action="{{ route('admin.jadwal') }}" id="filterForm">
         <input type="hidden" name="week" value="{{ $weekStart->toDateString() }}">
+        @if (request('class_id'))
+            <input type="hidden" name="class_id" value="{{ request('class_id') }}">
+        @endif
 
         <div class="toolbar">
             <div class="toolbar-search">
@@ -62,7 +53,11 @@
             <a href="{{ route('admin.jadwal', array_merge($keepFilters, ['week' => $prevWeek])) }}" class="jadwal-nav-btn" title="Minggu Sebelumnya">
                 <i class="fa-solid fa-chevron-left"></i>
             </a>
-            <a href="{{ route('admin.jadwal', $keepFilters) }}" class="jadwal-nav-btn" title="Kembali ke minggu ini">Hari Ini</a>
+            <a href="{{ route('admin.jadwal', array_merge($keepFilters, ['week' => now()->toDateString()])) }}"
+               class="jadwal-nav-btn {{ $isCurrentWeek ? 'is-active' : '' }}"
+               title="Kembali ke minggu ini">
+                {{ $isCurrentWeek ? 'Minggu Ini' : 'Kembali ke Minggu Ini' }}
+            </a>
             <a href="{{ route('admin.jadwal', array_merge($keepFilters, ['week' => $nextWeek])) }}" class="jadwal-nav-btn" title="Minggu Berikutnya">
                 <i class="fa-solid fa-chevron-right"></i>
             </a>
@@ -86,6 +81,13 @@
                 <option value="private" {{ request('program_id') === 'private' ? 'selected' : '' }}>Private</option>
             </select>
 
+            <select name="room" class="select-chip" onchange="this.form.submit()">
+                <option value="">Semua Ruang</option>
+                @foreach ($roomOptions as $room)
+                    <option value="{{ $room }}" {{ request('room') === $room ? 'selected' : '' }}>{{ $room }}</option>
+                @endforeach
+            </select>
+
             <div class="legend">
                 <span class="legend-item"><span class="legend-dot dot-daily"></span> Daily Activity</span>
                 <span class="legend-item"><span class="legend-dot dot-hsk"></span> HSK</span>
@@ -94,6 +96,14 @@
             </div>
         </div>
     </form>
+
+    @if (! empty($filteredClass))
+        <div class="class-filter-banner">
+            <i class="fa-solid fa-filter"></i>
+            Menampilkan jadwal kelas <strong>{{ $filteredClass->class_name }}</strong> saja.
+            <a href="{{ route('admin.jadwal', request()->except('class_id')) }}">Tampilkan semua kelas</a>
+        </div>
+    @endif
 
     @if ($conflictCount > 0)
         <div class="conflict-banner">
@@ -105,33 +115,63 @@
 
     <div class="card calendar-card">
 
-        {{-- ==================================================================
-             TAMPILAN HARI — tab per hari + grid per ruang
-             (Beijing/Basement/Atas/Kaca/Online). Guru ditulis langsung di
-             dalam kartu sesi (bukan kolom sendiri).
-        ================================================================== --}}
-        <div id="dayView">
+        @php
+            $slotCount   = count($slots);
+            $dayStartMin = $startHour * 60;
+            $totalMin    = $slotCount * 30;
+            $bodyRow     = $hasTrials ? 4 : 3;
 
-            <div class="day-tabs">
+            $colWidths = [];
+            $colStart  = [];   // kolom grid tempat tiap hari dimulai
+            $nextCol   = 2;    // kolom 1 = jam
+            foreach ($days as $dayName) {
+                $colStart[$dayName] = $nextCol;
+                foreach ($dayRooms[$dayName] as $room) {
+                    $colWidths[] = ($grid[$dayName][$room]['lanes'] ?? 1) * 150;
+                    $nextCol++;
+                }
+            }
+
+            $template = '70px ' . implode(' ', array_map(
+                fn ($w) => 'minmax(' . $w . 'px, ' . ($w / 150) . 'fr)',
+                $colWidths
+            ));
+        @endphp
+
+        {{-- Kolom = hari (tiap hari dibagi per ruang). Jam ke bawah; tinggi kartu mengikuti durasi sesi. --}}
+        <div class="week-scroll" id="weekGrid">
+            <div class="week-grid" style="grid-template-columns: {{ $template }}; --slot-count: {{ $slotCount }};">
+
+                <div class="wg-corner" style="grid-column: 1; grid-row: 1 / span 2;">Jam</div>
+
+                {{-- Header hari --}}
                 @foreach ($days as $i => $dayName)
-                    @php $dayDate = $weekStart->copy()->addDays($i); @endphp
-                    <button type="button"
-                            class="day-tab {{ $dayName === $defaultDay ? 'active' : '' }}"
-                            data-day="{{ $dayName }}"
-                            onclick="showDayView('{{ $dayName }}')">
-                        <strong>{{ $dayName }}</strong>
-                        <span>{{ $dayDate->format('d M') }} · {{ count($sessions[$dayName] ?? []) }} sesi</span>
-                    </button>
+                    @php
+                        $dayDate = $weekStart->copy()->addDays($i);
+                        $isToday = $dayDate->isToday();
+                    @endphp
+                    <div class="wg-day {{ $isToday ? 'is-today' : '' }}"
+                        style="grid-column: {{ $colStart[$dayName] }} / span {{ count($dayRooms[$dayName]) }}; grid-row: 1;">
+                        {{ $dayName }} {{ $dayDate->format('d') }}
+                        <span class="wg-day-sub">{{ $dayDate->format('d M') }} · {{ count($sessions[$dayName] ?? []) }} sesi</span>
+                    </div>
                 @endforeach
-            </div>
 
-            @foreach ($days as $i => $dayName)
-                <div class="day-pane" data-day="{{ $dayName }}" style="{{ $dayName === $defaultDay ? '' : 'display:none;' }}">
+                {{-- Header ruang --}}
+                @foreach ($days as $i => $dayName)
+                    @foreach ($dayRooms[$dayName] as $ri => $room)
+                        <div class="wg-room {{ $ri === 0 ? 'day-start' : '' }}"
+                            style="grid-column: {{ $colStart[$dayName] + $ri }}; grid-row: 2;">{{ $room }}</div>
+                    @endforeach
+                @endforeach
 
-                    @if (! empty($trials[$dayName]))
-                        <div class="day-trials">
-                            <span class="day-trials-label">Trial calon siswa</span>
-                            @foreach ($trials[$dayName] as $trial)
+                {{-- Trial calon siswa: hanya punya tanggal, jadi ditaruh di baris sendiri --}}
+                @if ($hasTrials)
+                    <div class="wg-time wg-trial-label" style="grid-column: 1; grid-row: 3;">Trial</div>
+                    @foreach ($days as $i => $dayName)
+                        <div class="wg-trial-cell day-start"
+                            style="grid-column: {{ $colStart[$dayName] }} / span {{ count($dayRooms[$dayName]) }}; grid-row: 3;">
+                            @foreach ($trials[$dayName] ?? [] as $trial)
                                 <div class="trial-chip {{ $trial['status_key'] === 'Cancelled' ? 'is-cancelled' : '' }}"
                                      title="{{ $trial['title'] }} — {{ $trial['status_label'] }}"
                                      data-session="{{ json_encode($trial) }}"
@@ -140,62 +180,55 @@
                                 </div>
                             @endforeach
                         </div>
-                    @endif
+                    @endforeach
+                @endif
 
-                    <div class="timeline-scroll">
-                        <div class="timeline" style="--hours: {{ $hourCount }};">
-
-                            <div class="tl-row tl-head">
-                                <div class="tl-label">Ruang</div>
-                                <div class="tl-track-head">
-                                    @foreach ($hourMarks as $hour)
-                                        <div class="tl-hour">{{ str_pad($hour, 2, '0', STR_PAD_LEFT) }}:00</div>
-                                    @endforeach
-                                </div>
-                            </div>
-
-                            @forelse ($timeline[$dayName] ?? [] as $row)
-                                <div class="tl-row">
-                                    <div class="tl-label">
-                                        <div class="tl-teacher">{{ $row['room_name'] }}</div>
-                                        <div class="tl-teacher-sub {{ $row['free'] ? 'is-free' : '' }}">
-                                            {{ $row['free'] ? 'Tidak ada sesi' : count($row['sessions']) . ' sesi' }}
-                                        </div>
-                                    </div>
-
-                                    <div class="tl-track" style="height: {{ $row['lanes'] * $laneHeight + 8 }}px;">
-                                        @foreach ($row['sessions'] as $session)
-                                            @php
-                                                $left  = round(($session['start_min'] - $dayStartMin) / $totalMin * 100, 3);
-                                                $width = round(($session['end_min'] - $session['start_min']) / $totalMin * 100, 3);
-                                                $top   = 4 + $session['lane'] * $laneHeight;
-                                                $teacherLabel = $session['teacher_name']
-                                                    ? $session['teacher_name'] . ($session['teacher_note'] ? ' (' . $session['teacher_note'] . ')' : '')
-                                                    : 'Belum ada guru';
-                                            @endphp
-                                            <div class="tl-block {{ $kindClass[$session['kind']] ?? 'kind-daily' }} {{ $session['has_conflict'] ? 'has-conflict' : '' }} {{ $session['status_key'] === 'Cancelled' ? 'is-cancelled' : '' }}"
-                                                 style="left: {{ $left }}%; width: {{ $width }}%; top: {{ $top }}px; height: {{ $laneHeight - 4 }}px;"
-                                                 title="{{ $session['title'] }} · {{ $teacherLabel }} · {{ $session['start_time'] }}–{{ $session['end_time'] }}"
-                                                 data-session="{{ json_encode($session) }}"
-                                                 onclick="openSessionDetail(this)">
-                                                <div class="tl-block-title">
-                                                    @if ($session['status_key'] === 'Conducted')
-                                                        <i class="fa-solid fa-check session-done"></i>
-                                                    @endif
-                                                    {{ $session['title'] }}
-                                                </div>
-                                                <div class="tl-block-sub">{{ $session['start_time'] }}–{{ $session['end_time'] }} · {{ $teacherLabel }}</div>
-                                            </div>
-                                        @endforeach
-                                    </div>
-                                </div>
-                            @empty
-                                <div class="week-empty" style="padding:24px;">Tidak ada ruang untuk ditampilkan.</div>
-                            @endforelse
-                        </div>
-                    </div>
+                {{-- Kolom jam --}}
+                <div class="wg-time wg-time-body" style="grid-column: 1; grid-row: {{ $bodyRow }};">
+                    @foreach ($slots as $si => $slot)
+                        <span class="wg-tick {{ $slot['is_hour'] ? 'is-hour' : '' }}"
+                              style="top: {{ round($si / $slotCount * 100, 3) }}%;">{{ $slot['label'] }}</span>
+                    @endforeach
                 </div>
-            @endforeach
+
+                {{-- Kolom per hari x ruang --}}
+                @foreach ($days as $i => $dayName)
+                    @php $isToday = $weekStart->copy()->addDays($i)->isToday(); @endphp
+                    @foreach ($dayRooms[$dayName] as $ri => $room)
+                        <div class="wg-col {{ $ri === 0 ? 'day-start' : '' }} {{ $isToday ? 'is-today' : '' }}"
+                            style="grid-column: {{ $colStart[$dayName] + $ri }}; grid-row: {{ $bodyRow }};">
+
+                            @foreach ($grid[$dayName][$room]['sessions'] ?? [] as $session)
+                                @php
+                                    $teacherLabel = $session['teacher_name']
+                                        ? $session['teacher_name'] . ($session['teacher_note'] ? ' (' . $session['teacher_note'] . ')' : '')
+                                        : 'Belum ada guru';
+
+                                    $duration = $session['end_min'] - $session['start_min'];
+                                    $top      = ($session['start_min'] - $dayStartMin) / $totalMin * 100;
+                                    $height   = $duration / $totalMin * 100;
+                                    $left     = $session['lane'] / $session['lanes'] * 100;
+                                    $width    = 100 / $session['lanes'];
+                                @endphp
+                                <div class="sess {{ $kindClass[$session['kind']] ?? 'kind-daily' }} {{ $duration <= 30 ? 'is-short' : '' }} {{ $session['has_conflict'] ? 'has-conflict' : '' }} {{ $session['status_key'] === 'Cancelled' ? 'is-cancelled' : '' }}"
+                                     style="top: calc({{ round($top, 3) }}% + 1px); height: calc({{ round($height, 3) }}% - 2px); left: calc({{ round($left, 3) }}% + 2px); width: calc({{ round($width, 3) }}% - 4px);"
+                                     title="{{ $session['title'] }} · {{ $teacherLabel }} · {{ $session['start_time'] }}–{{ $session['end_time'] }}"
+                                     data-session="{{ json_encode($session) }}"
+                                     onclick="openSessionDetail(this)">
+                                    <div class="sess-title">
+                                        @if ($session['status_key'] === 'Conducted')
+                                            <i class="fa-solid fa-check session-done"></i>
+                                        @endif
+                                        {{ $session['title'] }}
+                                    </div>
+                                    <div class="sess-meta">{{ $teacherLabel }} · {{ $session['students_count'] }} siswa</div>
+                                    <div class="sess-meta sess-time">{{ $session['start_time'] }} – {{ $session['end_time'] }}</div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endforeach
+                @endforeach
+            </div>
         </div>
     </div>
 
@@ -291,34 +324,27 @@
 @push('scripts')
 <script>
 
-    /* ============================================================
-       Ganti tab hari (hanya satu tampilan: grid per ruang per hari)
-    ============================================================ */
-    function showDayView(dayName) {
-        document.querySelectorAll('.day-tab').forEach(t => {
-            t.classList.toggle('active', t.dataset.day === dayName);
-        });
-        document.querySelectorAll('.day-pane').forEach(p => {
-            p.style.display = p.dataset.day === dayName ? '' : 'none';
-        });
-    }
+    /* Saat dibuka: scroll horizontal ke kolom hari ini (kalau ada di minggu ini) */
+    document.addEventListener('DOMContentLoaded', function () {
+        const wrap  = document.getElementById('weekGrid');
+        const today = wrap?.querySelector('.wg-day.is-today');
+        if (today) {
+            wrap.scrollLeft = Math.max(0, today.offsetLeft - 90);
+        }
+    });
 
     function highlightConflicts(e) {
         e.preventDefault();
 
-        // Bentrok bisa ada di hari lain, jadi cari di semua pane (walau sedang disembunyikan)
-        const firstConflict = document.querySelector('#dayView .has-conflict');
-        if (! firstConflict) return;
+        const all = document.querySelectorAll('#weekGrid .has-conflict');
+        if (!all.length) return;
 
-        const pane = firstConflict.closest('.day-pane');
-        if (pane) showDayView(pane.dataset.day);
-
-        document.querySelectorAll('#dayView .has-conflict').forEach(el => {
+        all.forEach(el => {
             el.classList.add('pulse');
             setTimeout(() => el.classList.remove('pulse'), 2500);
         });
 
-        setTimeout(() => firstConflict.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+        all[0].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
     }
 
     /* ============================================================

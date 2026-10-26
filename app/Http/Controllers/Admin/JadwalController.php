@@ -23,20 +23,42 @@ class JadwalController extends Controller
     // sendiri (bukan ruang fisik, tapi tetap satu "jalur" seperti di sheet).
     private const ROOMS = ['Beijing', 'Basement', 'Atas', 'Kaca', 'Online'];
 
+    // Satu baris di grid = 30 menit
+    private const SLOT_MINUTES = 30;
+
     public function index(Request $request)
     {
         $request->validate([
             'week'       => ['nullable', 'date'],
             'teacher_id' => ['nullable', 'integer'],
             'program_id' => ['nullable', 'string'],
+            'room'       => ['nullable', 'string'],
+            'class_id'   => ['nullable', 'integer'],
         ]);
 
-        $anchor    = $request->filled('week') ? Carbon::parse($request->week) : Carbon::today();
+        $filteredClass = $request->filled('class_id')
+            ? ClassModel::find($request->class_id)
+            : null;
+
+        if ($request->filled('week')) {
+            $anchor = Carbon::parse($request->week);
+        } elseif ($filteredClass) {
+            $today = Carbon::today();
+            $start = Carbon::parse($filteredClass->start_date);
+            $end   = $filteredClass->end_date ? Carbon::parse($filteredClass->end_date) : null;
+
+            $anchor = $today->lt($start) ? $start : ($end && $today->gt($end) ? $end : $today);
+        } else {
+            $anchor = Carbon::today();
+        }
         $weekStart = $anchor->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
         $weekEnd   = $weekStart->copy()->addDays(6);
 
         $teacherFilter = $request->filled('teacher_id') ? (int) $request->teacher_id : null;
         $programFilter = $request->filled('program_id') ? $request->program_id : null; // 'private' atau id program
+        $roomFilter    = $request->filled('room') && in_array($request->room, self::ROOMS, true)
+            ? $request->room
+            : null;
 
         /* ---------- Kelas yang relevan di minggu ini ---------- */
         $classes = ClassModel::query()
@@ -54,6 +76,7 @@ class JadwalController extends Controller
                 'programPackage',
                 fn ($p) => $p->where('program_id', $programFilter)
             ))
+            ->when($filteredClass, fn ($q) => $q->where('id', $filteredClass->id))
             ->get();
 
         $scheduleIds = $classes->flatMap(fn ($k) => $k->schedules->pluck('id'))->all();
@@ -160,8 +183,6 @@ class JadwalController extends Controller
                     'status_key'     => $statusKey,
                     'status_label'   => $statusLabel,
                     'has_conflict'   => false,
-                    'lane'           => 0,
-                    'lanes'          => 1,
                 ];
             }
         }
@@ -194,7 +215,7 @@ class JadwalController extends Controller
         /* ---------- Trial calon siswa (hanya punya tanggal, tanpa jam & guru) ---------- */
         $trialsByDay = [];
 
-        if (! $teacherFilter) {
+        if (! $teacherFilter && ! $filteredClass) {
             $programNames = Program::pluck('program_name', 'id');
             $privateNames = PrivatePackage::pluck('package_name', 'id');
 
@@ -232,67 +253,102 @@ class JadwalController extends Controller
                 });
         }
 
-        /* ---------- Rentang jam kalender & hari yang ditampilkan ---------- */
+        /* ---------- Rentang jam (baris per 30 menit) & hari yang ditampilkan ---------- */
         $allItems = collect($byDay)->flatten(1);
 
-        $startHour = 8;
-        $endHour   = 20;
+        $startHour = 9;
+        $endHour   = 21;
         if ($allItems->isNotEmpty()) {
             $startHour = min($startHour, (int) floor($allItems->min('start_min') / 60));
             $endHour   = max($endHour, (int) ceil($allItems->max('end_min') / 60));
         }
 
+        $slots = [];
+        for ($m = $startHour * 60; $m < $endHour * 60; $m += self::SLOT_MINUTES) {
+            $slots[] = [
+                'min'     => $m,
+                'label'   => sprintf('%02d:%02d', intdiv($m, 60), $m % 60),
+                'is_hour' => $m % 60 === 0,
+            ];
+        }
+
         $dayCount = (isset($byDay[6]) || isset($trialsByDay[6])) ? 7 : 6;
         $days     = array_slice(self::DAY_ORDER, 0, $dayCount);
 
-        // Daftar kolom ruang dipakai SAMA untuk semua hari (bukan dihitung ulang
-        // per hari), supaya kolom hari Senin, Selasa, dst tetap sejajar di grid
-        // mingguan. "Lainnya" cuma ditambah kalau memang ada sesi berruang di luar
-        // 5 nama baku, dicek sekali untuk seluruh minggu.
-        $hasOtherRoom = collect($byDay)->flatten(1)->contains(
-            fn ($s) => ! in_array($s['room'], self::ROOMS, true)
-        );
-        $roomColumns = $hasOtherRoom ? [...self::ROOMS, 'Lainnya'] : self::ROOMS;
+        if ($roomFilter) {
+            $roomColumns = [$roomFilter];
+        } elseif ($filteredClass && $allItems->isNotEmpty()) {
+            // Hanya ruang yang dipakai kelas ini, urutan tetap mengikuti ROOMS
+            $roomColumns = array_values(array_filter(
+                self::ROOMS,
+                fn ($r) => $allItems->contains('room', $r)
+            ));
 
-        /* ---------- Data per hari: daftar kartu & grid ruang×jam (dipakai tampilan Minggu & Hari) ---------- */
+            if ($allItems->contains(fn ($s) => ! in_array($s['room'], self::ROOMS, true))) {
+                $roomColumns[] = 'Lainnya';
+            }
+        } else {
+            $hasOtherRoom = $allItems->contains(
+                fn ($s) => ! in_array($s['room'], self::ROOMS, true)
+            );
+            $roomColumns = $hasOtherRoom ? [...self::ROOMS, 'Lainnya'] : self::ROOMS;
+        }
+
+        // Menampilkan ruangan perkelas pada jadwal kelas
+        $dayRooms = [];
+        foreach ($days as $i => $dayName) {
+            if ($filteredClass && ! $roomFilter) {
+                $used = collect($byDay[$i] ?? [])
+                    ->pluck('room')
+                    ->map(fn ($r) => in_array($r, self::ROOMS, true) ? $r : 'Lainnya')
+                    ->unique();
+
+                $cols = array_values(array_filter(
+                    [...self::ROOMS, 'Lainnya'],
+                    fn ($r) => $used->contains($r)
+                ));
+
+                $dayRooms[$dayName] = $cols ?: [''];
+            } else {
+                $dayRooms[$dayName] = $roomColumns;
+            }
+        }
+
         $sessions = [];
         $trials   = [];
-        $timeline = [];
+        $grid     = [];
 
         foreach ($days as $i => $dayName) {
-            $items = $byDay[$i] ?? [];
-            usort($items, fn ($a, $b) => [$a['start_min'], $a['end_min'], $a['title']] <=> [$b['start_min'], $b['end_min'], $b['title']]);
+            $trials[$dayName] = $trialsByDay[$i] ?? [];
 
-            $sessions[$dayName] = $items;
-            $trials[$dayName]   = $trialsByDay[$i] ?? [];
+            $perRoom = [];
+            foreach ($byDay[$i] ?? [] as $item) {
+                $roomKey = in_array($item['room'], self::ROOMS, true) ? $item['room'] : 'Lainnya';
 
-            // Satu baris per ruang (seperti kolom Beijing/Basement/Atas/Kaca/Online di
-            // sheet). Guru ditampilkan langsung di dalam kartu sesi, bukan kolom sendiri.
-            // Sesi yang bertumpuk pada satu ruang (mis. beberapa kelas Online sekaligus)
-            // tetap ditumpuk vertikal, bukan dianggap error.
-            $grouped = collect($items)->groupBy(
-                fn ($s) => in_array($s['room'], self::ROOMS, true) ? $s['room'] : 'Lainnya'
-            );
+                if (! in_array($roomKey, $dayRooms[$dayName], true)) {
+                    continue; // ruang disaring / tidak ada kolomnya
+                }
 
-            $rows = [];
-
-            foreach ($roomColumns as $room) {
-                $group = $grouped->get($room);
-                $laid  = $group ? $this->layoutDay($group->all()) : [];
-
-                $rows[] = [
-                    'room_name' => $room,
-                    'free'      => empty($laid),
-                    'lanes'     => $laid ? (int) collect($laid)->max('lanes') : 1,
-                    'sessions'  => $laid,
-                ];
+                $perRoom[$roomKey][] = $item;
             }
 
-            $timeline[$dayName] = $rows;
+            $sessions[$dayName] = [];
+
+                foreach ($dayRooms[$dayName] as $room) {
+                    $laid = isset($perRoom[$room]) ? $this->layoutDay($perRoom[$room]) : [];
+
+                $grid[$dayName][$room] = [
+                    'lanes'    => $laid ? (int) max(array_column($laid, 'lanes')) : 1,
+                    'sessions' => $laid,
+                ];
+
+                array_push($sessions[$dayName], ...$laid);
+            }
         }
 
         /* ---------- Data filter & form ---------- */
         $programs     = Program::orderBy('id')->get(['id', 'program_name']);
+        $roomOptions  = self::ROOMS;
         $classOptions = ClassModel::whereIn('status', ['Open', 'Running'])
             ->orderBy('class_name')
             ->get(['id', 'class_name', 'private_package_id']);
@@ -305,23 +361,23 @@ class JadwalController extends Controller
             'days',
             'sessions',
             'trials',
-            'timeline',
-            'roomColumns',
-            'conflictCount',
+            'slots',
             'startHour',
             'endHour',
+            'grid',
+            'roomColumns',
+            'roomOptions',
+            'conflictCount',
             'teachers',
             'programs',
             'classOptions',
             'prevWeek',
-            'nextWeek'
+            'nextWeek',
+            'filteredClass',
+            'dayRooms'
         ));
     }
 
-    /**
-     * Bagi sesi yang jamnya beririsan ke beberapa "lane" supaya tampil
-     * berdampingan, bukan saling menimpa.
-     */
     private function layoutDay(array $items): array
     {
         usort($items, fn ($a, $b) => [$a['start_min'], $a['end_min']] <=> [$b['start_min'], $b['end_min']]);
