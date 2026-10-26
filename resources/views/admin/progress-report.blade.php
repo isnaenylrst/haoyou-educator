@@ -14,8 +14,8 @@
             <div class="eyebrow">LAPORAN</div>
             <h1>Progress Report</h1>
             <p>
-                Laporan perkembangan siswa yang sudah diterbitkan laoshi. Admin dapat melihat
-                dan mengunduh arsipnya.
+                Laporan perkembangan siswa yang sudah diterbitkan laoshi. Admin dapat melihat,
+                mengunduh arsipnya, dan mencatat follow up kelanjutan les siswa.
             </p>
         </div>
     </div>
@@ -33,31 +33,31 @@
             <div class="stat-note">Sudah diterbitkan laoshi</div>
         </div>
 
-        <div class="stat-card c-blue">
-            <div class="stat-top">
-                <span class="stat-label">Bulanan</span>
-                <i class="fa-solid fa-calendar-days stat-icon"></i>
-            </div>
-            <div class="stat-value">{{ $stats['bulanan'] }}</div>
-            <div class="stat-note">Laporan per bulan</div>
-        </div>
-
         <div class="stat-card c-yellow">
             <div class="stat-top">
-                <span class="stat-label">Akhir Paket</span>
-                <i class="fa-solid fa-flag-checkered stat-icon"></i>
+                <span class="stat-label">Belum Di-follow up</span>
+                <i class="fa-solid fa-phone-volume stat-icon"></i>
             </div>
-            <div class="stat-value">{{ $stats['akhir'] }}</div>
-            <div class="stat-note">Laporan akhir paket</div>
+            <div class="stat-value">{{ $stats['belum'] }}</div>
+            <div class="stat-note">Perlu ditanya lanjut les</div>
+        </div>
+
+        <div class="stat-card c-blue">
+            <div class="stat-top">
+                <span class="stat-label">Lanjut</span>
+                <i class="fa-solid fa-circle-check stat-icon"></i>
+            </div>
+            <div class="stat-value">{{ $stats['lanjut'] }}</div>
+            <div class="stat-note">Siswa lanjut ke level berikutnya</div>
         </div>
 
         <div class="stat-card c-red">
             <div class="stat-top">
-                <span class="stat-label">Masih Draft</span>
-                <i class="fa-solid fa-pen-ruler stat-icon"></i>
+                <span class="stat-label">Tidak Lanjut</span>
+                <i class="fa-solid fa-circle-xmark stat-icon"></i>
             </div>
-            <div class="stat-value">{{ $stats['draft'] }}</div>
-            <div class="stat-note">Belum diterbitkan laoshi</div>
+            <div class="stat-value">{{ $stats['tidak'] }}</div>
+            <div class="stat-note">Siswa tidak melanjutkan</div>
         </div>
     </div>
 
@@ -85,10 +85,10 @@
                 @endforeach
             </select>
 
-            <select name="report_type" class="select-chip" onchange="this.form.submit()">
-                <option value="">Semua Tipe</option>
-                @foreach ($types as $type)
-                    <option value="{{ $type }}" {{ request('report_type') == $type ? 'selected' : '' }}>{{ $type }}</option>
+            <select name="follow_up" class="select-chip" onchange="this.form.submit()">
+                <option value="">Semua Status</option>
+                @foreach (\App\Models\ProgressReport::FOLLOW_UPS as $f)
+                    <option value="{{ $f }}" {{ request('follow_up') === $f ? 'selected' : '' }}>{{ $f }}</option>
                 @endforeach
             </select>
 
@@ -106,11 +106,11 @@
                 <tr>
                     <th>Siswa</th>
                     <th>Program</th>
-                    <th>Tipe</th>
                     <th>Periode</th>
                     <th>Laoshi</th>
                     <th>Tanggal Terbit</th>
-                    <th width="110" style="text-align:center;">Aksi</th>
+                    <th>Status</th>
+                    <th width="220" style="text-align:center;">Aksi</th>
                 </tr>
             </thead>
 
@@ -137,10 +137,18 @@
                             ? ($enrollment->privatePackage?->package_name ?? 'Private')
                             : ($enrollment?->class?->class_name ?? '-');
 
-                        // created_at bisa null (model ProgressReport memakai $timestamps = false)
-                        $issued = $r->created_at
-                            ? \Carbon\Carbon::parse($r->created_at)->locale('id')->translatedFormat('d M Y')
+                        // tanggal terbit = published_at, cadangan created_at
+                        $issuedAt = $r->published_at ?? $r->created_at;
+                        $issued = $issuedAt
+                            ? \Carbon\Carbon::parse($issuedAt)->locale('id')->translatedFormat('d M Y')
                             : '-';
+
+                        $fuBadge = match ($r->follow_up_status) {
+                            'Lanjut' => 'badge-completed',
+                            'Menunggu Jawaban' => 'badge-warning',
+                            'Tidak Lanjut' => 'badge-cold',
+                            default => '',
+                        };
                     @endphp
                     <tr>
                         <td>
@@ -159,12 +167,27 @@
                                 -
                             @endif
                         </td>
-                        <td>{{ $r->report_type }}</td>
                         <td>{{ $r->report_period }}</td>
                         <td>{{ $r->teacher?->name ?? '-' }}</td>
                         <td>{{ $issued }}</td>
                         <td>
+                            <span class="badge {{ $fuBadge }}">{{ $r->follow_up_status }}</span>
+                        </td>
+                        <td>
                             <div class="row-actions">
+                                <form method="POST"
+                                      action="{{ route('admin.progress-report.follow-up', $r) }}"
+                                      style="display:inline-flex; gap:4px;">
+                                    @csrf
+                                    @method('PATCH')
+                                    <select name="follow_up_status" class="select-chip" title="Ubah status follow up"
+                                            onchange="this.form.submit()">
+                                        @foreach (\App\Models\ProgressReport::FOLLOW_UPS as $f)
+                                            <option value="{{ $f }}" {{ $r->follow_up_status === $f ? 'selected' : '' }}>{{ $f }}</option>
+                                        @endforeach
+                                    </select>
+                                </form>
+
                                 <a href="{{ route('admin.progress-report.lihat', $r) }}" target="_blank" rel="noopener"
                                    class="icon-btn" title="Lihat">
                                     <i class="fa-regular fa-eye"></i>

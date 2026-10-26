@@ -267,6 +267,8 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
         ->name('progress-report.lihat');
     Route::get('/progress-report/{report}/unduh', [ProgressReportController::class, 'unduh'])
         ->name('progress-report.unduh');
+    Route::patch('/progress-report/{report}/follow-up', [ProgressReportController::class, 'followUp'])
+    ->name('progress-report.follow-up');
 
     // DOKUMEN (folder + unggah)
     Route::get('/dokumen', [DokumenController::class, 'index'])->name('dokumen');

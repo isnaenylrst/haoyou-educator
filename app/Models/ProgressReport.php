@@ -12,6 +12,9 @@ class ProgressReport extends Model
     protected $table = 'progress_reports';
 
     public $timestamps = false;
+    public const SUBMITTED = 'Submitted';
+    public const FOLLOW_UPS = ['Belum', 'Menunggu Jawaban', 'Lanjut', 'Tidak Lanjut'];
+
 
     protected $fillable = [
         'student_id',
@@ -22,11 +25,18 @@ class ProgressReport extends Model
         'file_path',
         'status',
         'uploaded_by',
-        'uploaded_at',
+         'listening_score', 
+         'reading_score', 
+         'writing_score',
+        'published_at',
+        'follow_up_status', 
+        'followed_up_at', 
+        'follow_up_note',
     ];
 
     protected $casts = [
-        'uploaded_at' => 'datetime',
+        'published_at' => 'datetime',
+        'followed_up_at' => 'datetime',
     ];
 
     public function student()
