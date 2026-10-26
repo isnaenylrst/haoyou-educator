@@ -19,7 +19,7 @@
 <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-7">
 
   {{-- TOTAL POIN --}}
-  <div class="bg-white border border-[#F3EFDD] rounded-3xl p-6 shadow-[0_2px_12px_rgba(120,95,0,.08)]">
+  <div class="bg-white border border-[#F0EBDD] rounded-3xl p-6 shadow-[0_4px_18px_rgba(31,27,22,.08)]">
     <div class="w-11 h-11 rounded-2xl bg-[#FFF3B8] flex items-center justify-center text-xl">⭐</div>
     <div class="text-[40px] font-bold leading-none mt-4">
       {{ number_format($stats['total_poin'], 0, ',', '.') }}
@@ -28,7 +28,7 @@
   </div>
 
   {{-- RANKING --}}
-  <div class="bg-white border border-[#F3EFDD] rounded-3xl p-6 shadow-[0_2px_12px_rgba(120,95,0,.08)]">
+  <div class="bg-white border border-[#F0EBDD] rounded-3xl p-6 shadow-[0_4px_18px_rgba(31,27,22,.08)]">
     <div class="w-11 h-11 rounded-2xl bg-[#FFF3B8] flex items-center justify-center text-xl">🏆</div>
     <div class="text-[40px] font-bold leading-none mt-4">
       #{{ $stats['peringkat'] }}
@@ -37,7 +37,7 @@
   </div>
 
   {{-- KELAS MINGGU INI --}}
-  <div class="bg-white border border-[#F3EFDD] rounded-3xl p-6 shadow-[0_2px_12px_rgba(120,95,0,.08)]">
+  <div class="bg-white border border-[#F0EBDD] rounded-3xl p-6 shadow-[0_4px_18px_rgba(31,27,22,.08)]">
     <div class="w-11 h-11 rounded-2xl bg-[#FFF3B8] flex items-center justify-center text-xl">📅</div>
     <div class="text-[40px] font-bold leading-none mt-4">
       {{ $stats['kelas_minggu_ini'] }}
@@ -50,7 +50,7 @@
 {{-- =========================================================
     JADWAL TERDEKAT
 ========================================================== --}}
-<div class="bg-white border border-[#F3EFDD] rounded-3xl p-6 md:p-7 mb-7 shadow-[0_2px_12px_rgba(120,95,0,.08)]">
+<div class="bg-white border border-[#F0EBDD] rounded-3xl p-6 md:p-7 mb-7 shadow-[0_4px_18px_rgba(31,27,22,.08)]">
 
   <div class="flex items-center justify-between mb-3">
     <h3 class="text-xl font-bold">Jadwal Terdekat</h3>
@@ -61,7 +61,7 @@
   </div>
 
   @forelse ($jadwalTerdekat as $jadwal)
-    <div class="flex items-center justify-between py-3.5 border-b border-[#F3EFDD] last:border-0">
+    <div class="flex items-center justify-between py-3.5 border-b border-[#EEE9DC] last:border-0">
       <div class="flex items-center gap-3.5">
         {{-- ICON --}}
         <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-xl bg-[#FFF3B8]">
@@ -92,7 +92,7 @@
 {{-- =========================================================
     LEADERBOARD
 ========================================================== --}}
-<div class="bg-white border border-[#F3EFDD] rounded-3xl p-6 md:p-7 shadow-[0_2px_12px_rgba(120,95,0,.08)]">
+<div class="bg-white border border-[#F0EBDD] rounded-3xl p-6 md:p-7 shadow-[0_4px_18px_rgba(31,27,22,.08)]">
 
   <h3 class="text-xl font-bold mb-4">Leaderboard Poin</h3>
 

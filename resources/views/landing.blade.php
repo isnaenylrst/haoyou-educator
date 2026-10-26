@@ -254,7 +254,7 @@
     </div>
     <div class="hy-pics">
       <div class="hy-big"><img src="{{ asset('assets/img/logo.png') }}" alt="Logo Haoyou"></div>
-      <img src="{{ asset('assets/img/kelas.jpeg') }}" alt="Foto siswa belajar Mandarin">
+      <img src="{{ asset('assets/img/landing.jpeg') }}" alt="Foto siswa belajar Mandarin">
       <div class="hy-chip hy-c1"><em>你好!</em>Berani ngomong</div>
       <div class="hy-chip hy-c2">⭐ Belajar sambil main</div>
       <div class="hy-chip hy-c3">🎓 200++ siswa sudah bergabung</div>

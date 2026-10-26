@@ -18,38 +18,32 @@ class ProfilController extends Controller
         ]);
     }
 
-    /** Simpan username/nama dan foto profil */
+    /** Simpan foto profil */
     public function update(Request $request)
     {
         $user = $request->user();
 
-        $data = $request->validate([
-            'nama_lengkap' => ['required', 'string', 'max:255'],
-            'foto'         => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        // Form Edit profil sekarang hanya berisi foto,
+        // jadi nama_lengkap tidak lagi divalidasi / disimpan.
+        $request->validate([
+            'foto' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ], [
-            'foto.image' => 'File harus berupa gambar.',
-            'foto.max'   => 'Ukuran foto maksimal 2 MB.',
+            'foto.required' => 'Pilih foto terlebih dahulu.',
+            'foto.image'    => 'File harus berupa gambar.',
+            'foto.mimes'    => 'Format foto harus JPG, PNG, atau WEBP.',
+            'foto.max'      => 'Ukuran foto maksimal 2 MB.',
         ]);
 
-        // Upload foto baru
-        if ($request->hasFile('foto')) {
-
-            // Hapus foto lama
-            if ($user->foto) {
-                Storage::disk('public')->delete($user->foto);
-            }
-
-            // Simpan foto baru
-            $user->foto = $request->file('foto')->store('foto-profil', 'public');
+        // Hapus foto lama
+        if ($user->foto) {
+            Storage::disk('public')->delete($user->foto);
         }
 
-        // Karena tabel users tidak punya nama_lengkap,
-        // gunakan kolom username sebagai nama
-        $user->username = $data['nama_lengkap'];
-
+        // Simpan foto baru
+        $user->foto = $request->file('foto')->store('foto-profil', 'public');
         $user->save();
 
-        return back()->with('success', 'Profil berhasil diperbarui.');
+        return back()->with('success', 'Foto profil berhasil diperbarui.');
     }
 
     /** Ganti password */
