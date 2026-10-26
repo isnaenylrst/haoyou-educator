@@ -102,16 +102,13 @@ class CalonSiswaController extends Controller
         $totalLead = CandidateStudent::whereDoesntHave('student')->count();
 
         // Trial Pending
-        $trialScheduled = CandidateStudent::whereDoesntHave('student')
-            ->where('trial_status', 'Pending')
+        $trialToday = CandidateStudent::whereDoesntHave('student')
+            ->where('trial_date', today())
             ->count();
 
-        // Follow Up Overdue (pakai latestFollowUpIds yang sama, konsisten dengan filter di atas)
-        $followUpOverdue = CandidateStudent::whereDoesntHave('student')
-            ->whereHas('followUps', function ($q) use ($latestFollowUpIds) {
-                $q->whereIn('id', $latestFollowUpIds)
-                ->whereDate('next_followup', '<', today());
-            })
+        // Konsultasi
+        $konsulToday = CandidateStudent::whereDoesntHave('student')
+            ->whereDate('consultation_date', today())
             ->count();
 
         // Lead yang berhasil menjadi siswa (dihitung dari total keseluruhan, termasuk yang sudah konversi)
@@ -136,8 +133,8 @@ class CalonSiswaController extends Controller
         return view('admin.calon-siswa.index', compact(
             'candidateStudents',
             'totalLead',
-            'trialScheduled',
-            'followUpOverdue',
+            'trialToday',
+            'konsulToday',
             'conversionRate',
             'programs',
             'privatePackages'

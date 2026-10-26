@@ -44,20 +44,20 @@
 
         <div class="stat-card c-blue">
             <div class="stat-top">
-                <span class="stat-label">Trial Terjadwal</span>
+                <span class="stat-label">Trial Hari ini</span>
                 <i class="fa-solid fa-flask stat-icon"></i>
             </div>
-            <div class="stat-value">{{ $trialScheduled }}</div>
-            <div class="stat-note">Status Pending</div>
+            <div class="stat-value">{{ $trialToday }}</div>
+            <div class="stat-note">Jumlah Trail Hari ini</div>
         </div>
 
         <div class="stat-card c-red">
             <div class="stat-top">
-                <span class="stat-label">Follow-up Overdue</span>
-                <i class="fa-solid fa-triangle-exclamation stat-icon"></i>
+                <span class="stat-label">Konsultasi</span>
+                <i class="fa-solid fa-comments stat-icon"></i>
             </div>
-            <div class="stat-value">{{ $followUpOverdue }}</div>
-            <div class="stat-note warn">Perlu ditindaklanjuti</div>
+            <div class="stat-value">{{ $konsulToday }}</div>
+            <div class="stat-note">Jumlah Konsultasi Hari ini</div>
         </div>
 
         <div class="stat-card c-green">
@@ -912,5 +912,12 @@
         if (e.target === this) closeEditModal();
     });
 
+    /* ============================================================
+       DIBUKA DARI DASHBOARD (?tambah=1)
+    ============================================================ */
+    if (new URLSearchParams(location.search).get('tambah') === '1') {
+        openLeadModal();
+        history.replaceState(null, '', location.pathname);
+    }
 </script>
 @endpush

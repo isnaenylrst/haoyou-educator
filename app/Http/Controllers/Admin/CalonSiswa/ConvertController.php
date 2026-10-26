@@ -16,6 +16,7 @@ use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\User;
 use App\Services\ClassScheduleService;
+use App\Services\ClassSessionService;
 use App\Services\PaymentInstallmentService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -33,6 +34,7 @@ class ConvertController extends Controller
     public function __construct(
         private PaymentInstallmentService $payments,
         private ClassScheduleService $classes,
+        private ClassSessionService $sessions,
     ) {
     }
 
@@ -88,6 +90,9 @@ class ConvertController extends Controller
             ->orderBy('room')
             ->pluck('room');
 
+        // Jadwal tersedia & jam terpakai tiap guru, ditampilkan di form agar admin bisa memilih slot
+        $teacherSlots = $this->classes->teacherSlotsMap();
+
         // --- Rekomendasi kategori berdasarkan umur (khusus Daily Activity) ---
         $candidateAge = null;
         $recommendedCategory = null;
@@ -113,6 +118,7 @@ class ConvertController extends Controller
             'privatePackages',
             'teachers',
             'roomSuggestions',
+            'teacherSlots',
             'candidateAge',
             'recommendedCategory',
             'defaultPackageType',
@@ -169,6 +175,8 @@ class ConvertController extends Controller
 
             // Guru tidak boleh bentrok dengan kelas lain
             $this->classes->assertTeacherFree((int) $validated['teacher_id'], $validated['schedules']);
+            // Slot harus berada di dalam jam tersedia guru
+            $this->classes->assertTeacherAvailable((int) $validated['teacher_id'], $validated['schedules']);
 
             // Tanggal selesai otomatis kalau dikosongkan
             if (empty($validated['end_date'])) {
@@ -349,6 +357,7 @@ class ConvertController extends Controller
                     // Cek ulang bentrok guru, karena di antara step 1 dan step 2
                     // bisa saja ada kelas lain yang mengisi jam tersebut.
                     $this->classes->assertTeacherFree((int) $draft['teacher_id'], $draft['schedules']);
+                    $this->classes->assertTeacherAvailable((int) $draft['teacher_id'], $draft['schedules']);
 
                     $privatePackage = PrivatePackage::findOrFail($draft['private_package_id']);
 
@@ -366,7 +375,8 @@ class ConvertController extends Controller
                         'status'             => 'Open',
                     ])->save();
 
-                    $this->classes->createSchedules($kelas, $draft['schedules']);
+                    $this->classes->createSchedules($kelas, $draft['schedules'], $draft['start_date']);
+                    $this->sessions->generateForNewClass($kelas->refresh(), (int) $privatePackage->total_meetings);
 
                     $classId = $kelas->id;
                 }

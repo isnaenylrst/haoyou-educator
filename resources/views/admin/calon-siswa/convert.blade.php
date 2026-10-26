@@ -669,6 +669,92 @@
     }
 
     /* =====================================================
+       JADWAL TERSEDIA GURU (panel info di form kelas private)
+    ===================================================== */
+
+    .teacher-availability {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 10px 12px;
+        border: 1px solid #edeef1;
+        border-radius: 9px;
+        background: #fafafa;
+    }
+
+    .ta-row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+    }
+
+    .ta-day {
+        width: 62px;
+        flex-shrink: 0;
+        padding-top: 3px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #374151;
+    }
+
+    .ta-slots {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .ta-chip {
+        display: inline-block;
+        padding: 2px 9px;
+        border-radius: 999px;
+        font-size: 11.5px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .ta-chip.free {
+        background: #f0fdf4;
+        color: #16a34a;
+        border: 1px solid #bbf7d0;
+    }
+
+    .ta-chip.busy {
+        background: #fef2f2;
+        color: #dc2626;
+        border: 1px solid #fecaca;
+    }
+
+    .ta-legend {
+        display: flex;
+        gap: 8px;
+        margin-top: 4px;
+        padding-top: 6px;
+        border-top: 1px dashed #e5e7eb;
+    }
+
+    .ta-empty {
+        font-size: 12px;
+        color: #9ca3af;
+    }
+
+    .ta-warn {
+        font-size: 12px;
+        font-weight: 600;
+        color: #dc2626;
+    }
+
+    .schedule-check {
+        margin-top: 8px;
+        padding: 8px 12px;
+        border-radius: 9px;
+        border: 1px solid #fde68a;
+        background: #fffbeb;
+        color: #92400e;
+        font-size: 12px;
+        line-height: 1.6;
+    }
+
+    /* =====================================================
        RESPONSIVE
     ===================================================== */
 
@@ -931,7 +1017,7 @@
                                 <div class="form-grid">
                                     <div class="form-field">
                                         <label>Guru *</label>
-                                        <select name="teacher_id" id="teacher_id" required>
+                                        <select name="teacher_id" id="teacher_id" required onchange="onTeacherChange()">
                                             <option value="">Pilih Guru</option>
                                             @foreach ($teachers as $teacher)
                                                 <option value="{{ $teacher->id }}"
@@ -965,11 +1051,17 @@
                                     </div>
 
                                     <div class="form-field full">
+                                        <label>Jadwal Tersedia Guru</label>
+                                        <div id="teacher-availability" class="teacher-availability"></div>
+                                    </div>
+
+                                    <div class="form-field full">
                                         <label>Jadwal Mingguan *</label>
                                         <div class="schedule-rows" id="schedule-rows"></div>
                                         <button type="button" class="schedule-add" onclick="addScheduleRow()">
                                             <i class="fa-solid fa-plus"></i> Tambah jadwal
                                         </button>
+                                        <div id="schedule-check" class="schedule-check" style="display:none;"></div>
                                         <span class="form-section-note" style="margin-top:6px;">
                                             <i class="fa-solid fa-circle-info"></i>
                                             Baris awal diisi dari jadwal yang diminta calon siswa. Sesuaikan dengan jadwal guru.
@@ -1066,18 +1158,20 @@
                     <div class="form-section-title"><i class="fa-solid fa-money-bill-wave"></i> Pembayaran</div>
 
                     <div class="form-grid">
+
+                        {{-- Skema pembayaran: hanya muncul kalau paket punya harga termin & boleh dicicil --}}
                         @if (isset($totalBillTermin) && $canInstallment && empty($settlement))
                             <div class="form-field full">
                                 <label>Skema Pembayaran *</label>
                                 <div class="package-type-toggle" style="margin:0;">
                                     <label class="radio-pill">
                                         <input type="radio" name="payment_scheme" value="Lunas"
-                                            {{ old('payment_scheme', 'Lunas') === 'Lunas' ? 'checked' : '' }}>
+                                               {{ old('payment_scheme', 'Lunas') === 'Lunas' ? 'checked' : '' }}>
                                         <span>Lunas di awal (Rp {{ number_format($lesTotal, 0, ',', '.') }})</span>
                                     </label>
                                     <label class="radio-pill">
                                         <input type="radio" name="payment_scheme" value="Termin"
-                                            {{ old('payment_scheme') === 'Termin' ? 'checked' : '' }}>
+                                               {{ old('payment_scheme') === 'Termin' ? 'checked' : '' }}>
                                         <span>Termin (Rp {{ number_format($lesTotalTermin, 0, ',', '.') }} total)</span>
                                     </label>
                                 </div>
@@ -1104,17 +1198,18 @@
                             <input type="hidden" name="discount" id="discount" value="0">
                         @endif
 
-                        @unless ($isContinueFlow)
+                        {{-- Catatan enrollment: konversi calon siswa dan lanjut program (tidak untuk pelunasan) --}}
+                        @if (empty($settlement))
                             <div class="form-field full">
                                 <label>Catatan Enrollment</label>
                                 <textarea name="notes" id="notes" rows="3" maxlength="1000"
-                                          placeholder="Contoh: Masuk di pertengahan kelas (mulai pertemuan ke-5), berhak potongan.">{{ old('notes', $candidateStudent->notes) }}</textarea>
+                                          placeholder="Contoh: Masuk di pertengahan kelas (mulai pertemuan ke-5), berhak potongan.">{{ old('notes', $isContinueFlow ? '' : ($candidateStudent->notes ?? '')) }}</textarea>
                                 <span class="form-section-note" style="margin-top:0;">
                                     <i class="fa-solid fa-circle-info"></i>
                                     Catatan ini akan tercetak di invoice.
                                 </span>
                             </div>
-                        @endunless
+                        @endif
 
                         <div class="form-field">
                             <label>Metode Pembayaran *</label>
@@ -1535,12 +1630,105 @@
 
         container.appendChild(row);
         applyPrivateState();
+        checkScheduleRows();
     }
 
     function removeScheduleRow(btn) {
         const container = document.getElementById('schedule-rows');
         if (container.children.length <= 1) return; // minimal satu jadwal
         btn.closest('.schedule-row').remove();
+        checkScheduleRows();
+    }
+
+    /* ============================================================
+       JADWAL TERSEDIA GURU: ditampilkan ke admin + peringatan langsung
+       kalau slot yang diisi di luar jam tersedia atau bentrok.
+       (Validasi sebenarnya tetap dilakukan server saat submit.)
+    ============================================================ */
+    const TEACHER_SLOTS = @json($teacherSlots ?? ['availability' => [], 'booked' => []]);
+
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    function selectedTeacherSlots() {
+        const select = document.getElementById('teacher_id');
+        const id = select ? select.value : '';
+
+        return {
+            id,
+            availability: (TEACHER_SLOTS.availability || {})[id] || {},
+            booked: (TEACHER_SLOTS.booked || {})[id] || {},
+        };
+    }
+
+    function renderTeacherAvailability() {
+        const box = document.getElementById('teacher-availability');
+        if (! box) return;
+
+        const { id, availability, booked } = selectedTeacherSlots();
+
+        if (! id) {
+            box.innerHTML = '<span class="ta-empty">Pilih guru untuk melihat jadwal tersedianya.</span>';
+            return;
+        }
+
+        const days = DAYS.filter(d => (availability[d] || []).length);
+
+        if (! days.length) {
+            box.innerHTML = '<span class="ta-warn">Guru ini belum mengisi jadwal tersedia, jadi belum bisa dijadwalkan.</span>';
+            return;
+        }
+
+        box.innerHTML = days.map(day => {
+            const free = availability[day]
+                .map(a => `<span class="ta-chip free">${esc(a.start)}–${esc(a.end)}</span>`)
+                .join('');
+
+            const used = (booked[day] || [])
+                .map(b => `<span class="ta-chip busy" title="${esc(b.class)}">${esc(b.start)}–${esc(b.end)} · ${esc(b.class)}</span>`)
+                .join('');
+
+            return `<div class="ta-row"><div class="ta-day">${day}</div><div class="ta-slots">${free}${used}</div></div>`;
+        }).join('')
+            + '<div class="ta-legend"><span class="ta-chip free">tersedia</span><span class="ta-chip busy">sudah terpakai kelas lain</span></div>';
+    }
+
+    function checkScheduleRows() {
+        const out = document.getElementById('schedule-check');
+        if (! out) return;
+
+        const { id, availability, booked } = selectedTeacherSlots();
+        const problems = [];
+
+        if (id) {
+            const hasAny = Object.values(availability).some(list => list.length);
+
+            document.querySelectorAll('#schedule-rows .schedule-row').forEach(row => {
+                const day   = row.querySelector('select[name$="[day]"]')?.value;
+                const start = row.querySelector('input[name$="[start_time]"]')?.value;
+                const end   = row.querySelector('input[name$="[end_time]"]')?.value;
+
+                if (! day || ! start || ! end) return;
+
+                const label = `${day} ${start}–${end}`;
+
+                if (hasAny && ! (availability[day] || []).some(a => a.start <= start && a.end >= end)) {
+                    problems.push(`${label}: di luar jadwal tersedia guru.`);
+                }
+
+                const clash = (booked[day] || []).find(b => start < b.end && b.start < end);
+                if (clash) {
+                    problems.push(`${label}: bentrok dengan kelas "${clash.class}".`);
+                }
+            });
+        }
+
+        out.style.display = problems.length ? 'block' : 'none';
+        out.innerHTML = problems.map(p => `<div>⚠ ${esc(p)}</div>`).join('');
+    }
+
+    function onTeacherChange() {
+        renderTeacherAvailability();
+        checkScheduleRows();
     }
 
     /**
@@ -1670,6 +1858,12 @@
 
         togglePackageType();
 
+        // Panel jadwal guru + cek jadwal: tampil awal, lalu ikut berubah saat baris jadwal diedit
+        const rowsBox = document.getElementById('schedule-rows');
+        ['input', 'change'].forEach(evt => rowsBox.addEventListener(evt, checkScheduleRows));
+        renderTeacherAvailability();
+        checkScheduleRows();
+
         const recommendedOption = document.querySelector('#program_package_id option[data-recommended="1"]');
         if (recommendedOption) {
             recommendedOption.selected = true;
@@ -1712,7 +1906,7 @@
 @endif
 
 
-{{-- JavaScript step 2: hitung ulang total saat diskon diisi --}}
+{{-- JavaScript step 2: hitung ulang total saat diskon diisi atau skema pembayaran diganti --}}
 @if (($step ?? 1) === 2)
 @push('scripts')
 <script>
@@ -1729,6 +1923,7 @@
         const rupiah        = n => 'Rp ' + Math.round(n).toLocaleString('id-ID');
         let total = baseLunas;
 
+        // true kalau admin memilih skema Termin (radio hanya ada untuk paket yang punya harga termin)
         function isTermin() {
             const checked = document.querySelector('input[name="payment_scheme"]:checked');
             return hasTermin && checked && checked.value === 'Termin';
@@ -1742,6 +1937,7 @@
             discount = Math.min(Math.max(discount, 0), base);
             total = base - discount;
 
+            // Harga paket di ringkasan ikut berubah sesuai skema
             const pkg = document.getElementById('bill-package');
             if (pkg && ! isNaN(les)) pkg.textContent = rupiah(les);
 
