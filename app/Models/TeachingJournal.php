@@ -26,12 +26,29 @@ class TeachingJournal extends Model
         'notes',
         'status',
         'session_score',
+
+        // Baru: field dari Google Form "Jurnal Harian Laoshi"
+        'is_last_meeting',
+        'meeting_number',
+        'start_time',
+        'end_time',
+        'course_type',
+        'course_level',
+        'focus_materials',
+        'material_taught',
+        'student_names',
+        'filled_by',
     ];
 
     protected $casts = [
         'session_date' => 'date',
         'is_substitute' => 'boolean',
         'session_score' => 'integer',
+
+        // Baru
+        'is_last_meeting' => 'boolean',
+        'meeting_number' => 'integer',
+        'focus_materials' => 'array',
     ];
 
     public function teacher()
@@ -65,7 +82,7 @@ class TeachingJournal extends Model
         return $this->belongsTo(Teacher::class, 'substitute_teacher_id');
     }
 
-    // Baru: menyatukan pencatatan guru pengganti dengan pengajuan cuti terkait
+    // Menyatukan pencatatan guru pengganti dengan pengajuan cuti terkait
     public function teacherLeave()
     {
         return $this->belongsTo(TeacherLeave::class, 'teacher_leave_id');

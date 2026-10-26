@@ -175,8 +175,9 @@
     <div class="mb-3 d-flex flex-wrap gap-2">
         <button class="doc-pill active" onclick="showDocTab('material', this)">LP & PPT ({{ $materials->count() }})</button>
         <button class="doc-pill" onclick="showDocTab('jurnal', this)">Jurnal Online ({{ $journals->count() }})</button>
-        <button class="doc-pill" onclick="showDocTab('report', this)">Progress Report ({{ $reports->count() }})</button>
+        <button class="doc-pill" onclick="showDocTab('report', this)">Progress Report ({{ $reports->count() }}{{ $lateEnrollments->isNotEmpty() ? ' + ' . $lateEnrollments->count() . ' terlambat' : '' }})</button>
         <button class="doc-pill" onclick="showDocTab('cuti', this)">Cuti / Pengajuan Kelas ({{ $leaves->count() }})</button>
+        <button class="doc-pill" onclick="showDocTab('sertifikat', this)">Sertifikat ({{ $certificates->count() }})</button>
     </div>
 
     <div class="card border-0 shadow-sm">
@@ -188,7 +189,7 @@
                 <div class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <div>
                         <div class="fw-semibold">
-                            {{ $item->teacher->name ?? '-' }} — {{ $item->ppt_title }} ({{ $item->material->classroom->class_name ?? '-' }})
+                            {{ $item->teacher->name ?? '-' }} — {{ $item->ppt_title }} ({{ $item->material->level->level_name ?? '-' }})
                         </div>
                         <small class="text-muted">Diajukan {{ $item->created_at->diffForHumans() }}</small>
                     </div>
@@ -199,9 +200,11 @@
                             <input type="hidden" name="decision" value="Approved">
                             <button class="btn btn-primary btn-sm">ACC</button>
                         </form>
-                        <form action="{{ route('kurikulum.review-pengajuan.material', $item) }}" method="POST">
+                        <form action="{{ route('kurikulum.review-pengajuan.material', $item) }}" method="POST" class="d-flex gap-1">
                             @csrf @method('PATCH')
                             <input type="hidden" name="decision" value="Rejected">
+                            <input type="text" name="note" maxlength="1000" class="form-control form-control-sm"
+                                   placeholder="Alasan (opsional)" style="min-width:170px">
                             <button class="btn btn-outline-danger btn-sm">Kembalikan</button>
                         </form>
                     </div>
@@ -247,7 +250,31 @@
                         <div class="fw-semibold">
                             {{ $item->teacher->name ?? '-' }} — Progress Report {{ $item->student->name ?? '-' }}
                         </div>
-                        <small class="text-muted">{{ $item->report_period }}</small>
+                        <small class="text-muted">
+                            {{ $item->report_period }}
+                            @if($item->submitted_at) · Dikirim {{ $item->submitted_at->diffForHumans() }} @endif
+                            @if($item->average_score !== null) · Rata-rata nilai {{ $item->average_score }} @endif
+                        </small>
+
+                        @if(!empty($item->content))
+                            <details class="mt-2">
+                                <summary class="small text-primary" style="cursor:pointer">Lihat isi nilai</summary>
+                                <table class="table table-sm table-bordered mt-2 mb-0 small">
+                                    <thead class="table-light">
+                                        <tr><th>Kompetensi</th><th>Level</th><th>Nilai</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($item->content as $row)
+                                            <tr>
+                                                <td>{{ $row['competency'] ?? ($row['materials'] ?? '-') }}</td>
+                                                <td>{{ $row['level'] ?? '-' }}</td>
+                                                <td>{{ $row['score'] ?? '-' }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </details>
+                        @endif
                     </div>
                     <div class="d-flex gap-2">
                         <a href="{{ asset('storage/'.$item->file_path) }}" target="_blank" class="btn btn-outline-secondary btn-sm">Download</a>
@@ -256,9 +283,11 @@
                             <input type="hidden" name="decision" value="Approved">
                             <button class="btn btn-primary btn-sm">ACC</button>
                         </form>
-                        <form action="{{ route('kurikulum.review-pengajuan.report', $item) }}" method="POST">
+                        <form action="{{ route('kurikulum.review-pengajuan.report', $item) }}" method="POST" class="d-flex gap-1">
                             @csrf @method('PATCH')
                             <input type="hidden" name="decision" value="Rejected">
+                            <input type="text" name="note" maxlength="1000" class="form-control form-control-sm"
+                                   placeholder="Alasan (wajib)" style="min-width:170px" required>
                             <button class="btn btn-outline-danger btn-sm">Kembalikan</button>
                         </form>
                     </div>
@@ -266,27 +295,71 @@
                 @empty
                 <div class="list-group-item text-center text-muted py-4">Tidak ada progress report yang perlu direview.</div>
                 @endforelse
+
+                {{-- Lewat batas H+3 dan belum dikirim --}}
+                @if($lateEnrollments->isNotEmpty())
+                    <div class="list-group-item bg-light fw-bold small text-danger">
+                        Lewat batas H+3 &amp; belum dikirim guru ({{ $lateEnrollments->count() }})
+                    </div>
+
+                    @foreach($lateEnrollments as $late)
+                        <div class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div>
+                                <div class="fw-semibold">
+                                    {{ $late['enrollment']->class->teacher->name ?? '-' }} —
+                                    {{ $late['enrollment']->student->name ?? '-' }}
+                                </div>
+                                <small class="text-danger">
+                                    {{ $late['enrollment']->class->class_name ?? '-' }} · batas
+                                    {{ $late['deadline']->translatedFormat('d M Y') }} sudah lewat
+                                </small>
+                            </div>
+                            <form action="{{ route('kurikulum.review-pengajuan.reopen-report', $late['enrollment']) }}" method="POST">
+                                @csrf
+                                <button class="btn btn-outline-primary btn-sm">Buka Kembali (+3 hari)</button>
+                            </form>
+                        </div>
+                    @endforeach
+                @endif
             </div>
 
             {{-- ===== TAB CUTI ===== --}}
             <div class="doc-tab d-none" data-tab="cuti">
                 @forelse ($leaves as $item)
+                @php
+                    $waitingReplacement = $item->replacement_teacher_id && $item->replacement_response !== 'Accepted';
+                @endphp
                 <div class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <div>
                         <div class="fw-semibold">
-                            {{ $item->teacher->name ?? '-' }} — {{ $item->leave_type }} ({{ $item->classSchedule->class->class_name ?? '-' }})
+                            {{ $item->teacher->name ?? '-' }} — {{ $item->request_type ?? 'Cuti' }} ({{ $item->classSchedule->class->class_name ?? '-' }})
                         </div>
-                        <small class="text-muted">{{ $item->reason }}</small>
+                        <small class="text-muted d-block">
+                            {{ $item->leave_date ? $item->leave_date->translatedFormat('d M Y') : '-' }} · {{ $item->reason }}
+                        </small>
+                        @if ($item->replacement_teacher_id)
+                            <small class="d-block">
+                                Pengganti: <strong>{{ $item->replacementTeacher->name ?? '-' }}</strong>
+                                @if ($item->replacement_response === 'Accepted')
+                                    <span class="badge bg-success">sudah menerima</span>
+                                @else
+                                    <span class="badge bg-warning text-dark">menunggu jawaban pengganti</span>
+                                @endif
+                            </small>
+                        @endif
                     </div>
                     <div class="d-flex gap-2">
                         <form action="{{ route('kurikulum.review-pengajuan.leave', $item) }}" method="POST">
                             @csrf @method('PATCH')
                             <input type="hidden" name="decision" value="Approved">
-                            <button class="btn btn-primary btn-sm">Setujui</button>
+                            <button class="btn btn-primary btn-sm" @disabled($waitingReplacement)
+                                    title="{{ $waitingReplacement ? 'Menunggu guru pengganti menerima' : '' }}">Setujui</button>
                         </form>
-                        <form action="{{ route('kurikulum.review-pengajuan.leave', $item) }}" method="POST">
+                        <form action="{{ route('kurikulum.review-pengajuan.leave', $item) }}" method="POST" class="d-flex gap-1">
                             @csrf @method('PATCH')
                             <input type="hidden" name="decision" value="Rejected">
+                            <input type="text" name="note" maxlength="1000" class="form-control form-control-sm"
+                                   placeholder="Alasan (opsional)" style="min-width:170px">
                             <button class="btn btn-outline-danger btn-sm">Tolak</button>
                         </form>
                     </div>
@@ -296,12 +369,19 @@
                 @endforelse
             </div>
 
+            {{-- ===== TAB SERTIFIKAT ===== --}}
+            <div class="doc-tab d-none" data-tab="sertifikat">
+                @include('kurikulum.partials.review-sertifikat')
+            </div>
+
         </div>
     </div>
 
     <small class="text-muted d-block mt-3">
         Kalau ditekan "Kembalikan", status berubah menjadi perlu revisi dan otomatis muncul tombol
         "Upload Ulang" di sisi Guru pada menu Kelas.
+        Progress report yang dikembalikan wajib disertai alasan dan guru diberi waktu 3 hari untuk memperbaiki.
+        Progress report baru tampil di siswa setelah di-ACC.
     </small>
 
 </div>
@@ -327,5 +407,12 @@ function showDocTab(tab, btn) {
         el.classList.toggle('d-none', el.dataset.tab !== tab);
     });
 }
+document.addEventListener('DOMContentLoaded', function () {
+    const tab = new URLSearchParams(location.search).get('tab');
+    if (!tab) return;
+    const btn = [...document.querySelectorAll('.doc-pill')]
+        .find(b => (b.getAttribute('onclick') || '').includes("'" + tab + "'"));
+    if (btn) { btn.click(); btn.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+});
 </script>
 @endpush

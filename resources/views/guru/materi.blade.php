@@ -7,395 +7,161 @@
 <div class="container-fluid py-3">
 
     {{-- Header --}}
-    <div class="mb-3">
-        <h2 class="fw-bold mb-1">
-            Materi & Silabus
-        </h2>
-
-        <p class="text-muted mb-3">
+    <div class="mb-4">
+        <h2 class="fw-bold mb-1">Materi & Silabus</h2>
+        <p class="text-muted mb-0">
             Perpustakaan referensi kurikulum — lihat silabus, kosakata resmi & materi ACC dari semua guru per kategori kelas
         </p>
-
-        {{-- Filter --}}
-        <div class="d-flex flex-wrap gap-2">
-
-            <button class="btn btn-dark btn-sm rounded-pill">Semua</button>
-
-            <button class="btn btn-outline-secondary btn-sm rounded-pill">Maochong</button>
-
-            <button class="btn btn-outline-secondary btn-sm rounded-pill">Jianer</button>
-
-            <button class="btn btn-outline-secondary btn-sm rounded-pill">Hudie</button>
-
-            <button class="btn btn-outline-secondary btn-sm rounded-pill">Feixiang</button>
-
-            <button class="btn btn-outline-secondary btn-sm rounded-pill">HSK</button>
-
-            <button class="btn btn-outline-secondary btn-sm rounded-pill">Private</button>
-
-            <button class="btn btn-outline-secondary btn-sm rounded-pill">Bisnis</button>
-
-            <button class="btn btn-outline-secondary btn-sm rounded-pill">Tradisional / TOCFL</button>
-
-        </div>
-
     </div>
 
-    {{-- ===================== LIST MATERI ===================== --}}
-
-    <div class="card shadow-sm border-0 rounded-4 mb-4">
-
-        <div class="list-group list-group-flush">
-
-            <div class="list-group-item py-3">
-
-                <div class="d-flex justify-content-between align-items-center">
-
-                    <div>
-
-                        <h6 class="fw-semibold mb-1">
-                            HSK 3 (9A) — Silabus & Kosakata Lengkap
-                        </h6>
-
-                        <small class="text-muted">
-                            V4 • Kurikulum
-                        </small>
-
-                    </div>
-
-                    <div>
-
-                        <button class="btn btn-outline-dark btn-sm">
-                            Lihat
-                        </button>
-
-                        <button class="btn btn-warning btn-sm">
-                            Download
-                        </button>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-            <div class="list-group-item py-3">
-
-                <div class="d-flex justify-content-between align-items-center">
-
-                    <div>
-
-                        <h6 class="fw-semibold mb-1">
-                            Maochong 3A — Unit 5: Keluarga
-                        </h6>
-
-                        <small class="text-muted">
-                            V2 • Kurikulum
-                        </small>
-
-                    </div>
-
-                    <div>
-
-                        <button class="btn btn-outline-dark btn-sm">
-                            Lihat
-                        </button>
-
-                        <button class="btn btn-warning btn-sm">
-                            Download
-                        </button>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-            <div class="list-group-item py-3">
-
-                <div class="d-flex justify-content-between align-items-center">
-
-                    <div>
-
-                        <h6 class="fw-semibold mb-1">
-                            Hudie 1A — Unit 1: Salam
-                        </h6>
-
-                        <small class="text-muted">
-                            V3 • Kurikulum
-                        </small>
-
-                    </div>
-
-                    <div>
-
-                        <button class="btn btn-outline-dark btn-sm">
-                            Lihat
-                        </button>
-
-                        <button class="btn btn-warning btn-sm">
-                            Download
-                        </button>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-            <div class="list-group-item py-3">
-
-                <div class="d-flex justify-content-between align-items-center">
-
-                    <div>
-
-                        <h6 class="fw-semibold mb-1">
-                            Bisnis — Unit 1: Perkenalan di Kantor
-                        </h6>
-
-                        <small class="text-muted">
-                            V1 • Kurikulum
-                        </small>
-
-                    </div>
-
-                    <div>
-
-                        <button class="btn btn-outline-dark btn-sm">
-                            Lihat
-                        </button>
-
-                        <button class="btn btn-warning btn-sm">
-                            Download
-                        </button>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-            <div class="list-group-item py-3">
-
-                <div class="d-flex justify-content-between align-items-center">
-
-                    <div>
-
-                        <h6 class="fw-semibold mb-1">
-                            Mandarin Tradisional / TOCFL — Unit 1
-                        </h6>
-
-                        <small class="text-muted">
-                            V1 • Kurikulum
-                        </small>
-
-                    </div>
-
-                    <div>
-
-                        <button class="btn btn-outline-dark btn-sm">
-                            Lihat
-                        </button>
-
-                        <button class="btn btn-warning btn-sm">
-                            Download
-                        </button>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-    <small class="text-muted">
-
-        Semua materi, silabus & kosakata pada halaman ini diupload oleh Kepala Kurikulum.
-
-        Guru hanya dapat melihat dan mengunduh sebagai acuan mengajar.
-
-    </small>
-
-    {{-- ================= SILABUS ================== --}}
-
-    <div class="card shadow-sm border-0 rounded-4 mt-4">
-
-        <div class="card-body">
-
-            <h4 class="fw-bold">
-                Silabus — Kompetensi & Target Pencapaian
-            </h4>
-
-            <span class="badge bg-secondary">
-                Guru hanya melihat
-            </span>
-
-            <p class="text-muted mt-3">
-
-                Maochong 3A, Unit 5 (Keluarga)
-
-            </p>
-
-            <table class="table mt-3">
-
-                <thead>
-
-                <tr>
-
-                    <th>Kompetensi</th>
-
-                    <th>Tema Mid</th>
-
-                    <th>Target</th>
-
-                </tr>
-
-                </thead>
-
-                <tbody>
-
-                <tr>
-
-                    <td>
-
-                        Menyebutkan anggota keluarga dalam Bahasa Mandarin
-
-                    </td>
-
-                    <td>
-
-                        Keluarga & Kekerabatan
-
-                    </td>
-
-                    <td>
-
-                        80% siswa mampu menghafal 12 kosakata
-
-                    </td>
-
-                </tr>
-
-                </tbody>
-
-            </table>
-
-        </div>
-
-    </div>
-
-    {{-- =================== KOSAKATA =================== --}}
-
-    <div class="card shadow-sm border-0 rounded-4 mt-4">
-
-        <div class="card-body">
-
-            <h4 class="fw-bold">
-
-                Silabus — Kosakata yang Diajarkan
-
-            </h4>
-
-            <p class="text-muted">
-
-                Maochong 3A Unit 5
-
-            </p>
-
-            <table class="table table-bordered align-middle">
-
-                <thead>
-
-                <tr>
-
-                    <th>Pertemuan</th>
-
-                    <th>Hanzi</th>
-
-                    <th>Pinyin</th>
-
-                    <th>Arti</th>
-
-                </tr>
-
-                </thead>
-
-                <tbody>
-
-                <tr>
-
-                    <td>Pertemuan 1</td>
-
-                    <td>爸爸</td>
-
-                    <td>bàba</td>
-
-                    <td>Ayah</td>
-
-                </tr>
-
-                <tr>
-
-                    <td></td>
-
-                    <td>妈妈</td>
-
-                    <td>māma</td>
-
-                    <td>Ibu</td>
-
-                </tr>
-
-                <tr>
-
-                    <td>Pertemuan 2</td>
-
-                    <td>哥哥</td>
-
-                    <td>gēge</td>
-
-                    <td>Kakak laki-laki</td>
-
-                </tr>
-
-                <tr>
-
-                    <td></td>
-
-                    <td>姐姐</td>
-
-                    <td>jiějie</td>
-
-                    <td>Kakak perempuan</td>
-
-                </tr>
-
-                <tr>
-
-                    <td>Pertemuan 3</td>
-
-                    <td colspan="3" class="text-muted">
-
-                        Belum dijadwalkan Kurikulum
-
-                    </td>
-
-                </tr>
-
-                </tbody>
-
-            </table>
-
-            <button class="btn btn-warning">
-
-                <i class="fas fa-file-pdf me-2"></i>
-
-                Lihat PDF
-
+    @if (session('error'))
+        <div class="alert alert-danger">{{ session('error') }}</div>
+    @endif
+
+    {{-- Filter Kategori --}}
+    <div class="mb-3 d-flex flex-wrap gap-2" id="categoryFilterTabs">
+        <button class="btn btn-dark rounded-pill btn-sm px-3" data-cat="all" onclick="filterByCategory('all', this)">
+            Semua
+        </button>
+        @foreach ($categories as $cat)
+            <button class="btn btn-outline-secondary rounded-pill btn-sm px-3" data-cat="{{ $cat }}" onclick="filterByCategory('{{ $cat }}', this)">
+                {{ $cat }}
             </button>
+        @endforeach
+    </div>
+
+    {{-- List Materi --}}
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+
+        <div class="card-body p-0" id="materialListWrapper">
+
+            @forelse ($materials as $material)
+
+                <div class="d-flex justify-content-between align-items-center p-4 {{ !$loop->last ? 'border-bottom' : '' }}"
+                     data-category="{{ $material->level->category->category_name ?? '' }}">
+
+                    <div>
+
+                        <h5 class="fw-semibold mb-1">
+                            {{ $material->title }}
+                        </h5>
+
+                        <small class="text-muted">
+                            V{{ $material->meeting_number }}
+                            •
+                            {{ $material->uploader->username ?? 'Kurikulum' }}
+                        </small>
+
+                    </div>
+
+                    <div class="d-flex gap-2">
+
+                        <a href="{{ route('teacher.materi.show', $material) }}"
+                           target="_blank"
+                           class="btn btn-outline-dark rounded-3">
+                            Lihat
+                        </a>
+
+                        <a href="{{ route('teacher.materi.download', $material) }}"
+                           class="btn btn-warning rounded-3 fw-semibold">
+                            Download
+                        </a>
+
+                    </div>
+
+                </div>
+
+            @empty
+
+                <div class="text-center text-muted py-5">
+                    Belum ada materi yang diupload Kurikulum.
+                </div>
+
+            @endforelse
+
+        </div>
+
+    </div>
+
+    <p class="text-muted small mb-4">
+        Semua materi, silabus & kosakata pada halaman ini diupload oleh Kepala Kurikulum.
+        Guru hanya dapat melihat dan mengunduh sebagai acuan mengajar.
+    </p>
+
+    {{-- Detail Silabus per Materi --}}
+    <div class="card border-0 shadow-sm rounded-4">
+
+        <div class="card-body">
+
+            <div class="d-flex align-items-center gap-2 mb-4">
+                <h5 class="fw-bold mb-0">Silabus & Kosakata</h5>
+                <span class="badge bg-secondary">Guru hanya melihat</span>
+            </div>
+
+            @forelse ($materials as $material)
+
+                <div class="mb-4 pb-4 {{ !$loop->last ? 'border-bottom' : '' }}">
+
+                    <h6 class="fw-semibold">
+                        {{ $material->title }}
+                    </h6>
+
+                    @if ($material->syllabus)
+                        <div class="border rounded p-3 bg-light mb-3">
+                            {!! nl2br(e($material->syllabus)) !!}
+                        </div>
+                    @endif
+
+                    @foreach ([
+                        'cco' => 'CCO',
+                        'lesson_plan' => 'Lesson Plan',
+                        'activity' => 'Aktivitas',
+                    ] as $field => $label)
+                        @if ($material->{$field})
+                            <div class="mb-3">
+                                <div class="fw-semibold small text-muted mb-1">{{ $label }}</div>
+                                <div class="border rounded p-3 bg-light">
+                                    {!! nl2br(e($material->{$field})) !!}
+                                </div>
+                            </div>
+                        @endif
+                    @endforeach
+
+                    @if ($material->box_code || $material->equipment_list)
+                        <div class="mb-3">
+                            <div class="fw-semibold small text-muted mb-1">
+                                Box Perlengkapan
+                                @if ($material->box_code)
+                                    <span class="badge bg-dark ms-1">{{ $material->box_code }}</span>
+                                @endif
+                            </div>
+                            @if ($material->equipment_list)
+                                <div class="border rounded p-3 bg-light">
+                                    {!! nl2br(e($material->equipment_list)) !!}
+                                </div>
+                            @endif
+                        </div>
+                    @endif
+
+                    @if ($material->vocabularies->count())
+                        <div class="row">
+                            @foreach ($material->vocabularies as $vocab)
+                                <div class="col-md-6 mb-1">
+                                    <strong>{{ $vocab->hanzi }}</strong>
+                                    <span class="text-muted">({{ $vocab->pinyin }})</span>
+                                    - {{ $vocab->meaning }}
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+
+                </div>
+
+            @empty
+                <div class="text-center text-muted py-4">
+                    Belum ada silabus.
+                </div>
+            @endforelse
 
         </div>
 
@@ -404,3 +170,20 @@
 </div>
 
 @endsection
+
+@push('scripts')
+<script>
+function filterByCategory(cat, btn) {
+    document.querySelectorAll('#categoryFilterTabs button').forEach(b => {
+        b.classList.remove('btn-dark');
+        b.classList.add('btn-outline-secondary');
+    });
+    btn.classList.remove('btn-outline-secondary');
+    btn.classList.add('btn-dark');
+
+    document.querySelectorAll('#materialListWrapper [data-category]').forEach(row => {
+        row.style.display = (cat === 'all' || row.dataset.category === cat) ? '' : 'none';
+    });
+}
+</script>
+@endpush

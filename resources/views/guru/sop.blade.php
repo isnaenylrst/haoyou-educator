@@ -14,88 +14,59 @@
         </p>
     </div>
 
+    @if (session('error'))
+        <div class="alert alert-danger">{{ session('error') }}</div>
+    @endif
+
     {{-- Card --}}
     <div class="card border-0 shadow-sm rounded-4">
 
         <div class="card-body p-0">
 
-            {{-- SOP 1 --}}
-            <div class="d-flex justify-content-between align-items-center p-4 border-bottom">
+            @forelse ($sops as $sop)
 
-                <div>
+                <div class="d-flex justify-content-between align-items-center p-4 {{ !$loop->last ? 'border-bottom' : '' }}">
 
-                    <h5 class="fw-semibold mb-1">
-                        SOP Pengajaran Umum
-                    </h5>
+                    <div>
 
-                    <small class="text-muted">
-                        Diperbarui 2 minggu lalu • PDF
-                    </small>
+                        <h5 class="fw-semibold mb-1">
+                            {{ $sop->title }}
+                        </h5>
 
-                </div>
+                        <small class="text-muted">
+                            Diperbarui
+                            {{ optional($sop->uploaded_at ?? $sop->updated_at)->diffForHumans() ?? '-' }}
+                            • PDF
+                        </small>
 
-                <div>
+                    </div>
 
-                    <button class="btn btn-outline-dark rounded-3">
-                        <i class="fas fa-download me-2"></i>
-                        Buka / Download
-                    </button>
+                    <div class="d-flex gap-2">
 
-                </div>
+                        <a href="{{ route('teacher.sop.show', $sop) }}"
+                           target="_blank"
+                           class="btn btn-outline-dark rounded-3">
+                            <i class="fas fa-eye me-2"></i>
+                            Buka
+                        </a>
 
-            </div>
+                        <a href="{{ route('teacher.sop.download', $sop) }}"
+                           class="btn btn-outline-dark rounded-3">
+                            <i class="fas fa-download me-2"></i>
+                            Download
+                        </a>
 
-            {{-- SOP 2 --}}
-            <div class="d-flex justify-content-between align-items-center p-4 border-bottom">
-
-                <div>
-
-                    <h5 class="fw-semibold mb-1">
-                        SOP Penilaian & Progress Report
-                    </h5>
-
-                    <small class="text-muted">
-                        Diperbarui 1 bulan lalu • PDF
-                    </small>
+                    </div>
 
                 </div>
 
-                <div>
+            @empty
 
-                    <button class="btn btn-outline-dark rounded-3">
-                        <i class="fas fa-download me-2"></i>
-                        Buka / Download
-                    </button>
-
+                <div class="text-center text-muted py-5">
+                    Belum ada SOP yang diupload Kurikulum.
                 </div>
 
-            </div>
-
-            {{-- SOP 3 --}}
-            <div class="d-flex justify-content-between align-items-center p-4">
-
-                <div>
-
-                    <h5 class="fw-semibold mb-1">
-                        Fundamental Mengajar & Reward Point
-                    </h5>
-
-                    <small class="text-muted">
-                        Materi pembekalan awal • PDF
-                    </small>
-
-                </div>
-
-                <div>
-
-                    <button class="btn btn-outline-dark rounded-3">
-                        <i class="fas fa-download me-2"></i>
-                        Buka / Download
-                    </button>
-
-                </div>
-
-            </div>
+            @endforelse
 
         </div>
 

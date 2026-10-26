@@ -19,6 +19,7 @@ class Consultation extends Model
         'notify_whatsapp',
         'notes',
         'created_by',
+        'teacher_material_id',
     ];
 
     protected $casts = [
@@ -44,5 +45,9 @@ class Consultation extends Model
             'Trial_Teaching' => 'Trial Teaching',
             default => $this->type,
         };
+    }
+    public function teacherMaterial()
+    {
+    return $this->belongsTo(TeacherMaterial::class);
     }
 }

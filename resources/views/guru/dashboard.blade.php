@@ -1,834 +1,154 @@
 @extends('layouts.guru')
 
-@section('title','Dashboard Guru')
+@section('title', 'Dashboard Guru')
+
+@push('styles')
+<style>
+    .dash-card { background: var(--bs-body-bg, #fff); border-radius: 14px; padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .stat-label { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: #8a8a8a; font-weight: 700; }
+    .stat-value { font-size: 34px; font-weight: 800; line-height: 1.1; }
+    .stat-sub { font-size: 12px; color: #1e9e5a; }
+    .prog-row { padding: 14px 0; border-bottom: 1px solid rgba(128,128,128,.18); }
+    .prog-row:last-child { border-bottom: 0; }
+    .prog-track { height: 5px; background: rgba(128,128,128,.2); border-radius: 4px; overflow: hidden; }
+    .prog-fill { height: 100%; border-radius: 4px; }
+    .pill { font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 99px; border: 1px solid; text-transform: uppercase; }
+    .pill.Ongoing { color: #1e9e5a; border-color: #1e9e5a; }
+    .pill.Completed { color: #777; border-color: #999; }
+    .pill.Scheduled { color: #3B82F6; border-color: #3B82F6; }
+    .today-item { border: 1px solid rgba(128,128,128,.22); border-radius: 10px; padding: 10px 14px; margin-bottom: 10px; }
+    .today-item.highlight { background: #FFF4D8; border-color: #F2D48A; color: #222; }
+    .today-item.completed { opacity: .55; }
+    .today-time { font-size: 11px; color: #9a9a9a; }
+    .today-item.highlight .today-time { color: #D48A00; }
+    .avatar { width: 34px; height: 34px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .act-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(128,128,128,.18); }
+    .act-row:last-child { border-bottom: 0; }
+    .tone-ok { color: #1e9e5a; } .tone-bad { color: #dc3545; } .tone-warn { color: #d99100; }
+    .bg-ok { background: #1e9e5a; } .bg-bad { background: #dc3545; } .bg-warn { background: #d99100; }
+</style>
+@endpush
 
 @section('content')
-
-<style>
-
-.dashboard-title{
-    font-size:40px;
-    font-weight:700;
-    color:#1F2937;
-}
-
-.dashboard-subtitle{
-    color:#8C8C8C;
-    font-size:15px;
-}
-
-.btn-add{
-
-    background:#F28C38;
-    color:#fff;
-    border:none;
-    border-radius:10px;
-    padding:10px 22px;
-    font-weight:600;
-
-}
-
-.btn-add:hover{
-
-    background:#e67f22;
-    color:#fff;
-
-}
-
-.stat-card{
-
-    border:1px solid #ECECEC;
-    border-radius:18px;
-    background:#fff;
-    transition:.25s;
-    height:100%;
-
-}
-
-.stat-card:hover{
-
-    box-shadow:0 5px 18px rgba(0,0,0,.06);
-
-}
-
-.stat-title{
-
-    font-size:12px;
-    text-transform:uppercase;
-    letter-spacing:.7px;
-    color:#9AA0A6;
-    font-weight:700;
-
-}
-
-.stat-number{
-
-    font-size:42px;
-    font-weight:700;
-    line-height:1;
-    color:#1F2937;
-
-}
-
-.stat-info{
-
-    font-size:14px;
-
-}
-
-.section-card{
-
-    border:1px solid #ECECEC;
-    border-radius:18px;
-    background:#fff;
-
-}
-
-.section-title{
-
-    font-size:28px;
-    font-weight:700;
-
-}
-
-.section-subtitle{
-
-    color:#909090;
-    font-size:14px;
-
-}
-
-.view-link{
-
-    text-decoration:none;
-    font-weight:600;
-
-}
-
-.view-link:hover{
-
-    text-decoration:none;
-
-}
-
-.progress{
-
-    height:6px;
-    border-radius:30px;
-    background:#ECECEC;
-
-}
-
-.progress-bar{
-
-    border-radius:30px;
-
-}
-
-.class-title{
-
-    font-weight:700;
-    font-size:20px;
-
-}
-
-.class-meta{
-
-    color:#888;
-    font-size:14px;
-
-}
-
-.badge-outline-success{
-
-    border:1px solid #34C759;
-    color:#34C759;
-    background:#fff;
-
-}
-
-.badge-outline-secondary{
-
-    border:1px solid #AFAFAF;
-    color:#777;
-    background:#fff;
-
-}
-
-.badge-outline-primary{
-
-    border:1px solid #2962FF;
-    color:#2962FF;
-    background:#fff;
-
-}
-
-.badge{
-
-    border-radius:50px;
-    padding:7px 13px;
-    font-size:11px;
-    font-weight:700;
-
-}
-
-.schedule-item{
-
-    border:1px solid #ECECEC;
-    border-radius:15px;
-    padding:18px;
-    margin-bottom:14px;
-
-}
-
-.schedule-active{
-
-    background:#FFF7E3;
-
-}
-
-.schedule-time{
-
-    color:#8F8F8F;
-    font-size:13px;
-
-}
-
-.schedule-title{
-
-    font-size:20px;
-    font-weight:700;
-
-}
-
-.schedule-meta{
-
-    color:#888;
-    font-size:14px;
-
-}
-
-.activity-item{
-
-    padding:20px 0;
-    border-bottom:1px solid #EFEFEF;
-
-}
-
-.activity-item:last-child{
-
-    border-bottom:none;
-
-}
-
-.avatar{
-
-    width:42px;
-    height:42px;
-    border-radius:50%;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    color:white;
-    font-weight:700;
-
-}
-
-</style>
-
 <div class="container-fluid">
 
-<div class="d-flex justify-content-between align-items-start mb-4">
-
-    <div>
-
-        <h2 class="dashboard-title mb-1">
-            Good afternoon, Ratna!
-        </h2>
-
-        <div class="dashboard-subtitle">
-            Haoyou Educator · Les Mandarin Malang · ringkasan operasional hari ini
-        </div>
-
+    <div class="mb-4">
+        <h2 class="fw-bold mb-1">{{ $greeting }}, {{ $teacher->name }}!</h2>
+        <div class="text-muted small">Haoyou Educator · Les Mandarin Malang · ringkasan operasional hari ini</div>
     </div>
 
-    <button class="btn btn-add">
-
-        <i class="fas fa-plus me-2"></i>
-
-        Add Student
-
-    </button>
-
-</div>
-
-<div class="row g-3 mb-4">
-
-    <div class="col-lg-3 col-md-6">
-
-        <div class="card stat-card">
-
-            <div class="card-body">
-
-                <div class="stat-title">
-
-                    TOTAL ACTIVE STUDENTS
-
-                </div>
-
-                <div class="stat-number mt-2">
-
-                    87
-
-                </div>
-
-                <div class="stat-info text-success mt-2">
-
-                    ↑ +5 new students this month
-
-                </div>
-
+    {{-- STATISTIK --}}
+    <div class="row g-3 mb-4">
+        <div class="col-lg-3 col-6">
+            <div class="dash-card">
+                <div class="stat-label">Total Active Students</div>
+                <div class="stat-value">{{ $stats['students'] }}</div>
+                <div class="stat-sub">↑ +{{ $stats['new'] }} siswa baru bulan ini</div>
             </div>
-
         </div>
-
+        <div class="col-lg-3 col-6">
+            <div class="dash-card">
+                <div class="stat-label">Active Classes</div>
+                <div class="stat-value">{{ $stats['classes'] }}</div>
+                <div class="stat-sub">{{ $stats['online'] }} Online · {{ $stats['offline'] }} Offline</div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-6">
+            <div class="dash-card">
+                <div class="stat-label">Sesi Bulan Ini</div>
+                <div class="stat-value">{{ $stats['sessions'] }}</div>
+                <div class="stat-sub">Sesi terlaksana</div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-6">
+            <div class="dash-card">
+                <div class="stat-label">Cuti Menunggu</div>
+                <div class="stat-value">{{ $stats['leaves'] }}</div>
+                <div class="stat-sub" style="color:#888">Menunggu Kurikulum</div>
+            </div>
+        </div>
     </div>
 
-    <div class="col-lg-3 col-md-6">
+    <div class="row g-3 mb-4">
 
-        <div class="card stat-card">
-
-            <div class="card-body">
-
-                <div class="stat-title">
-
-                    ACTIVE CLASSES
-
-                </div>
-
-                <div class="stat-number mt-2">
-
-                    14
-
-                </div>
-
-                <div class="stat-info text-secondary mt-2">
-
-                    • Online & Offline
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</div>
-
-<div class="row g-4">
-
-<div class="col-lg-8">
-
-<div class="card section-card">
-
-    <div class="card-body p-4">
-
-        <div class="d-flex justify-content-between align-items-start mb-4">
-
-            <div>
-
-                <h4 class="fw-bold mb-1">
-
-                    Active Class Progress
-
-                </h4>
-
-                <div class="section-subtitle">
-
-                    Status penyelesaian sesi untuk semua kelas aktif
-
-                </div>
-
-            </div>
-
-            <a href="#" class="view-link">
-
-                View All <i class="fas fa-arrow-right ms-1"></i>
-
-            </a>
-
-        </div>
-
-        <!-- Class 1 -->
-
-        <div class="mb-4">
-
-            <div class="class-title">
-
-                HSK Preparation — Hudie
-
-            </div>
-
-            <div class="class-meta mb-2">
-
-                Ratna • 6 siswa • Offline
-
-            </div>
-
-            <div class="d-flex align-items-center">
-
-                <div class="progress flex-grow-1 me-3">
-
-                    <div class="progress-bar bg-primary"
-                         style="width:75%;background:#7C4DFF !important;">
-
+        {{-- ACTIVE CLASS PROGRESS --}}
+        <div class="col-lg-8">
+            <div class="dash-card h-100">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <h5 class="fw-bold mb-0">Active Class Progress</h5>
+                        <div class="text-muted small">Status penyelesaian sesi untuk semua kelas aktif</div>
                     </div>
-
+                    <a href="{{ url('/guru/kelas') }}" class="small text-decoration-none">View All →</a>
                 </div>
 
-                <span class="me-3">
-
-                    15/20
-
-                </span>
-
-                <span class="badge badge-outline-success">
-
-                    ONGOING
-
-                </span>
-
-            </div>
-
-        </div>
-
-        <hr>
-
-        <!-- Class 2 -->
-
-        <div class="mb-4">
-
-            <div class="class-title">
-
-                Daily Activity — Jianer
-
-            </div>
-
-            <div class="class-meta mb-2">
-
-                Dinda • 8 siswa • Online
-
-            </div>
-
-            <div class="d-flex align-items-center">
-
-                <div class="progress flex-grow-1 me-3">
-
-                    <div class="progress-bar"
-                         style="width:40%;background:#3F7BFF;">
-
-                    </div>
-
-                </div>
-
-                <span class="me-3">
-
-                    8/20
-
-                </span>
-
-                <span class="badge badge-outline-success">
-
-                    ONGOING
-
-                </span>
-
-            </div>
-
-        </div>
-
-        <hr>
-
-        <!-- Class 3 -->
-
-        <div class="mb-4">
-
-            <div class="class-title">
-
-                Native Speaker — Hudie
-
-            </div>
-
-            <div class="class-meta mb-2">
-
-                Dinda • 4 siswa • Online
-
-            </div>
-
-            <div class="d-flex align-items-center">
-
-                <div class="progress flex-grow-1 me-3">
-
-                    <div class="progress-bar bg-success"
-                         style="width:100%;">
-
-                    </div>
-
-                </div>
-
-                <span class="me-3">
-
-                    20/20
-
-                </span>
-
-                <span class="badge badge-outline-secondary">
-
-                    COMPLETED
-
-                </span>
-
-            </div>
-
-        </div>
-
-        <hr>
-
-        <!-- Class 4 -->
-
-        <div>
-
-            <div class="class-title">
-
-                Traveling Class — Feixiang
-
-            </div>
-
-            <div class="class-meta mb-2">
-
-                Dinda • 6 siswa • Online
-
-            </div>
-
-            <div class="d-flex align-items-center">
-
-                <div class="progress flex-grow-1 me-3">
-
-                    <div class="progress-bar bg-light"
-                         style="width:0%;">
-
-                    </div>
-
-                </div>
-
-                <span class="me-3">
-
-                    0/16
-
-                </span>
-
-                <span class="badge badge-outline-primary">
-
-                    SCHEDULED
-
-                </span>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</div>
-
-</div>
-
-<div class="col-lg-4">
-
-<div class="card section-card h-100">
-
-    <div class="card-body p-4">
-
-        <div class="d-flex justify-content-between align-items-start mb-4">
-
-            <div>
-
-                <h4 class="fw-bold mb-1">
-
-                    Classes Today
-
-                </h4>
-
-                <div class="section-subtitle">
-
-                    8 classes scheduled
-
-                </div>
-
-            </div>
-
-            <a href="#" class="view-link">
-
-                Calendar <i class="fas fa-arrow-right ms-1"></i>
-
-            </a>
-
-        </div>
-
-        <!-- Item 1 -->
-
-        <div class="schedule-item border-0 bg-white opacity-50">
-
-            <div class="schedule-time">
-
-                07:00 – 08:00 • completed
-
-            </div>
-
-            <div class="schedule-title mt-1">
-
-                Daily Activity — Maochong
-
-            </div>
-
-            <div class="schedule-meta">
-
-                Ratna • 5/6 hadir • Offline
-
-            </div>
-
-        </div>
-
-        <!-- Item 2 -->
-
-        <div class="schedule-item schedule-active border-0">
-
-            <div class="schedule-time text-warning">
-
-                09:00 – 10:00 • in 19 minutes
-
-            </div>
-
-            <div class="schedule-title mt-1">
-
-                HSK Preparation — Hudie
-
-            </div>
-
-            <div class="schedule-meta">
-
-                Dinda • 8 siswa • Online
-
-            </div>
-
-        </div>
-
-        <!-- Item 3 -->
-
-        <div class="schedule-item">
-
-            <div class="schedule-time">
-
-                13:00 – 14:00
-
-            </div>
-
-            <div class="schedule-title mt-1">
-
-                Business Class — Feixiang
-
-            </div>
-
-            <div class="schedule-meta">
-
-                Ratna • 5 siswa • Offline
-
-            </div>
-
-        </div>
-
-        <!-- Item 4 -->
-
-        <div class="schedule-item mb-0">
-
-            <div class="schedule-time">
-
-                15:00 – 16:00
-
-            </div>
-
-            <div class="schedule-title mt-1">
-
-                Daily Activity — Jianer
-
-            </div>
-
-            <div class="schedule-meta">
-
-                Dinda • 8 siswa • Online
-
-            </div>
-
-        </div>
-
-    </div>
-
-</div>
-
-</div>
-
-</div>
-
-<!-- Recent Activity -->
-
-<div class="card section-card mt-4">
-
-    <div class="card-body p-4">
-
-        <h3 class="fw-bold mb-1">
-
-            Recent Activity
-
-        </h3>
-
-        <div class="section-subtitle mb-4">
-
-            Last 30 minutes
-
-        </div>
-
-        <!-- Activity 1 -->
-
-        <div class="activity-item">
-
-            <div class="d-flex justify-content-between align-items-center">
-
-                <div class="d-flex align-items-center">
-
-                    <div class="avatar bg-success">
-
-                        ZA
-
-                    </div>
-
-                    <div class="ms-3">
-
-                        <div class="fw-bold">
-
-                            Sari Dewi attended HSK Preparation — Session 12/20
-
+                @forelse($classes as $c)
+                    <div class="prog-row">
+                        <div class="fw-bold">{{ $c->class_name }}</div>
+                        <div class="text-muted small mb-2">{{ $c->students }} siswa · {{ $c->delivery_mode }}</div>
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="prog-track flex-grow-1">
+                                <div class="prog-fill" style="width: {{ $c->pct }}%; background: {{ $c->color }}"></div>
+                            </div>
+                            <div class="small text-muted">{{ $c->done }}/{{ $c->total_meetings ?? '–' }}</div>
+                            <span class="pill {{ $c->state }}">{{ $c->state }}</span>
                         </div>
-
-                        <small class="text-muted">
-
-                            2 minutes ago · Attendance recorded
-
-                        </small>
-
                     </div>
-
-                </div>
-
-                <div class="text-success fw-semibold">
-
-                    ● Present
-
-                </div>
-
+                @empty
+                    <div class="text-muted py-4 text-center">Belum ada kelas aktif yang Anda ampu.</div>
+                @endforelse
             </div>
-
         </div>
 
-        <!-- Activity 2 -->
-
-        <div class="activity-item">
-
-            <div class="d-flex justify-content-between align-items-center">
-
-                <div class="d-flex align-items-center">
-
-                    <div class="avatar bg-danger">
-
-                        RP
-
+        {{-- CLASSES TODAY --}}
+        <div class="col-lg-4">
+            <div class="dash-card h-100">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h5 class="fw-bold mb-0">Classes Today</h5>
+                        <div class="text-muted small">{{ $todayClasses->count() }} kelas terjadwal</div>
                     </div>
+                    <a href="{{ url('/guru/schedule') }}" class="small text-decoration-none">Calendar →</a>
+                </div>
 
-                    <div class="ms-3">
-
-                        <div class="fw-bold">
-
-                            Budi Santoso absent from Daily Activity — 2nd absence
-
+                @forelse($todayClasses as $s)
+                    <div class="today-item {{ $s->highlight ? 'highlight' : '' }} {{ $s->state === 'completed' ? 'completed' : '' }}">
+                        <div class="today-time">
+                            {{ substr($s->start_time, 0, 5) }} – {{ substr($s->end_time, 0, 5) }} · {{ $s->label }}
                         </div>
-
-                        <small class="text-muted">
-
-                            15 minutes ago · Parent notification sent
-
-                        </small>
-
+                        <div class="fw-bold">{{ $s->class_name }}</div>
+                        <div class="small text-muted">{{ $s->students }} siswa · {{ $s->delivery_mode }}{{ $s->room ? ' · ' . $s->room : '' }}</div>
+                        @if(in_array($s->state, ['ongoing', 'missed']))
+                            <a href="{{ url('/guru/attendance') }}" class="btn btn-warning btn-sm mt-2 fw-bold">Isi Attendance</a>
+                        @endif
                     </div>
-
-                </div>
-
-                <div class="text-danger fw-semibold">
-
-                    ● Absent
-
-                </div>
-
+                @empty
+                    <div class="text-muted py-4 text-center">Tidak ada jadwal mengajar hari ini.</div>
+                @endforelse
             </div>
-
         </div>
+    </div>
 
-        <!-- Activity 3 -->
+    {{-- RECENT ACTIVITY --}}
+    <div class="dash-card">
+        <h5 class="fw-bold mb-0">Recent Activity</h5>
+        <div class="text-muted small mb-2">Aktivitas terbaru Anda</div>
 
-        <div class="activity-item border-0">
-
-            <div class="d-flex justify-content-between align-items-center">
-
-                <div class="d-flex align-items-center">
-
-                    <div class="avatar"
-                         style="background:#C68A00;">
-
-                        JS
-
+        @forelse($activities as $a)
+            <div class="act-row">
+                <div class="avatar bg-{{ $a['tone'] }}">{{ strtoupper(mb_substr($a['name'], 0, 2)) }}</div>
+                <div class="flex-grow-1">
+                    <div class="fw-semibold small">{{ $a['title'] }}</div>
+                    <div class="text-muted" style="font-size:11px">
+                        {{ $a['time']->locale('id')->diffForHumans() }} · {{ $a['sub'] }}
                     </div>
-
-                    <div class="ms-3">
-
-                        <div class="fw-bold">
-
-                            Progress report Mid 1 Private Hudie disimpan
-
-                        </div>
-
-                        <small class="text-muted">
-
-                            1 jam lalu · Menunggu review Kurikulum
-
-                        </small>
-
-                    </div>
-
                 </div>
-
-                <div style="color:#C68A00;font-weight:600;">
-
-                    ● Diajukan
-
-                </div>
-
+                <div class="small fw-bold tone-{{ $a['tone'] }}">● {{ $a['badge'] }}</div>
             </div>
-
-        </div>
-
+        @empty
+            <div class="text-muted py-4 text-center">Belum ada aktivitas.</div>
+        @endforelse
     </div>
 
 </div>
-
-</div>
-
 @endsection

@@ -37,11 +37,11 @@ class ReviewNotificationComposer
         $reports = ProgressReport::with('teacher')
             ->where('status', 'Submitted')
             ->whereNull('reviewed_at')
-            ->latest('uploaded_at')
+            ->latest('submitted_at')
             ->get()
             ->map(fn ($item) => [
                 'label' => ($item->teacher->name ?? 'Guru') . ' mengirim progress report',
-                'time'  => $item->uploaded_at,
+                'time'  => $item->submitted_at ?? $item->created_at,
                 'tab'   => 'report',
             ]);
 

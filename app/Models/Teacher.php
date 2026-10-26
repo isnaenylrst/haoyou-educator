@@ -61,6 +61,16 @@ class Teacher extends Model
         return $this->hasMany(ProgressReport::class);
     }
 
+    public function availabilities()
+    {
+        return $this->hasMany(TeacherAvailability::class);
+    }
+
+    public function classTasks()
+    {
+        return $this->hasMany(ClassTask::class);
+    }
+
     public function consultations()
     {
     return $this->hasMany(Consultation::class);

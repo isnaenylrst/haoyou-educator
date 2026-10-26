@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Pagination\Paginator;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -37,6 +38,9 @@ class AppServiceProvider extends ServiceProvider
         | sedang login, memakai method homeRouteName() di model User.
         |--------------------------------------------------------------------------
         */
+
+                Paginator::useBootstrapFive();
+                
         RedirectIfAuthenticated::redirectUsing(function ($request) {
 
             $user = $request->user();

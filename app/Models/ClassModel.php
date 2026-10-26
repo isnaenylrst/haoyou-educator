@@ -22,12 +22,28 @@ class ClassModel extends Model
         'end_date',
         'capacity',
         'status',
+        'teacher_response',
+        'teacher_response_note',
+        'teacher_responded_at',
     ];
 
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
+        'teacher_responded_at' => 'datetime',
     ];
+
+    protected static function booted()
+    {
+        // Ganti guru pada kelas yang sudah ada -> guru baru harus konfirmasi ulang.
+        static::updating(function (ClassModel $class) {
+            if ($class->isDirty('teacher_id') && !$class->isDirty('teacher_response')) {
+                $class->teacher_response = 'Pending';
+                $class->teacher_response_note = null;
+                $class->teacher_responded_at = null;
+            }
+        });
+    }
 
     public function programPackage()
     {

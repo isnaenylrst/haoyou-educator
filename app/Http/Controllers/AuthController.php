@@ -37,7 +37,14 @@ class AuthController extends Controller
             switch ($levelName) {
 
                 case 'Owner':
-                    return redirect()->route('owner.dashboard');
+                    // Modul Owner belum ada -> jangan arahkan ke route yang tidak terdaftar
+                    Auth::logout();
+                    $request->session()->invalidate();
+                    $request->session()->regenerateToken();
+
+                    return redirect()
+                        ->route('login')
+                        ->with('error', 'Modul untuk level akun ini belum tersedia.');
 
                 case 'Admin':
                     return redirect()->route('admin.dashboard');
@@ -46,7 +53,7 @@ class AuthController extends Controller
                     return redirect()->route('teacher.dashboard');
 
                 case 'Student':
-                    return redirect()->route('student.dashboard');
+                    return redirect()->route('dashboard');
 
                 case 'Curriculum':
                     return redirect()->route('kurikulum.dashboard');

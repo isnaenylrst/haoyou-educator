@@ -6,8 +6,9 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\CalonSiswa\PendaftaranController;
 use App\Http\Controllers\Siswa\SiswaDashboardController;
+use App\Http\Controllers\Siswa\SiswaLearningController;
 
-// ===== KURIKULUM (punya Anda) =====
+// ===== KURIKULUM =====
 use App\Http\Controllers\Kurikulum\DashboardController;
 use App\Http\Controllers\Kurikulum\SopController;
 use App\Http\Controllers\Kurikulum\DocumentTemplateController;
@@ -16,8 +17,12 @@ use App\Http\Controllers\Kurikulum\LetterController;
 use App\Http\Controllers\Kurikulum\MonitoringController;
 use App\Http\Controllers\Kurikulum\JadwalKonsultasiController;
 use App\Http\Controllers\Kurikulum\ReviewPengajuanController;
+use App\Http\Controllers\Kurikulum\TugasKelasController as KurikulumTugasKelasController;
+use App\Http\Controllers\Kurikulum\KompetensiController;
+use App\Http\Controllers\Kurikulum\KetersediaanGuruController;
+use App\Http\Controllers\Kurikulum\VideoController as KurikulumVideoController;
 
-// ===== ADMIN (punya teman) =====
+// ===== ADMIN =====
 // PENTING: dikasih alias "Admin..." di depan supaya TIDAK BENTROK
 // dengan DashboardController milik Kurikulum di atas.
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
@@ -27,6 +32,21 @@ use App\Http\Controllers\Admin\ConvertController;
 use App\Http\Controllers\Admin\JadwalController;
 use App\Http\Controllers\Admin\KelasController as AdminKelasController;
 use App\Http\Controllers\Admin\ProgramLevelController;
+
+// ===== GURU =====
+use App\Http\Controllers\Guru\NotifikasiController as GuruNotifikasiController;
+use App\Http\Controllers\Guru\SopController as GuruSopController;
+use App\Http\Controllers\Guru\MaterialController as GuruMaterialController; 
+use App\Http\Controllers\Guru\KelasController as GuruKelasController;
+use App\Http\Controllers\Guru\AttendanceController as GuruAttendanceController;
+use App\Http\Controllers\Guru\ProgressReportController as GuruProgressReportController;
+use App\Http\Controllers\Guru\ScheduleController as GuruScheduleController;
+use App\Http\Controllers\Guru\TeachingLogController as GuruTeachingLogController;
+use App\Http\Controllers\Guru\CutiController as GuruCutiController;
+use App\Http\Controllers\Guru\DashboardController as GuruDashboardController;
+use App\Http\Controllers\Guru\TugasKelasController as GuruTugasKelasController;
+use App\Http\Controllers\Guru\AvailabilityController as GuruAvailabilityController;
+use App\Http\Controllers\Guru\CertificateController as GuruCertificateController;
 
 /*
 |--------------------------------------------------------------------------
@@ -108,11 +128,23 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
     Route::get('/notifikasi', [SiswaDashboardController::class, 'notifikasi'])
         ->name('notifikasi.index');
 
-    Route::get('/sertifikat', [SiswaDashboardController::class, 'sertifikat'])
+    Route::get('/sertifikat', [SiswaLearningController::class, 'sertifikat'])
         ->name('sertifikat.index');
 
-    Route::get('/progress-report', [SiswaDashboardController::class, 'progresReport'])
+    Route::get('/sertifikat/{certificate}/download', [SiswaLearningController::class, 'downloadSertifikat'])
+        ->name('sertifikat.download');
+
+    Route::get('/progress-report', [SiswaLearningController::class, 'progresReport'])
         ->name('progresreport.index');
+
+    Route::get('/progress-report/{report}/download', [SiswaLearningController::class, 'downloadProgressReport'])
+        ->name('progresreport.download');
+
+    Route::get('/video', [SiswaLearningController::class, 'video'])
+        ->name('video.index');
+
+    Route::get('/video/{video}/stream', [SiswaLearningController::class, 'streamVideo'])
+        ->name('video.stream');
 });
 
 /*
@@ -207,6 +239,12 @@ Route::middleware(['auth', 'role:Curriculum'])
 
         Route::delete('/materi/{material}', [MaterialController::class, 'destroy'])
             ->name('materi.destroy');
+        
+        Route::get('/materi/{material}/download', [MaterialController::class, 'download'])
+            ->name('materi.download');
+
+        Route::get('/materi/{material}/preview', [MaterialController::class, 'preview'])
+            ->name('materi.preview');
 
         //Pemberitahuan Surat
         Route::get('/surat', [LetterController::class, 'index'])
@@ -266,6 +304,90 @@ Route::middleware(['auth', 'role:Curriculum'])
         Route::patch('/review-pengajuan/cuti/{teacherLeave}', [ReviewPengajuanController::class, 'reviewLeave'])
             ->name('review-pengajuan.leave');
 
+        // Review sertifikat buatan guru (ACC / tolak)
+        Route::patch('/review-pengajuan/sertifikat/{certificate}', [ReviewPengajuanController::class, 'reviewCertificate'])
+            ->name('review-pengajuan.certificate');
+
+        // Buka kembali progress report yang lewat batas H+3
+        Route::post('/review-pengajuan/enrollment/{enrollment}/reopen-report', [ReviewPengajuanController::class, 'reopenReport'])
+            ->name('review-pengajuan.reopen-report');
+
+        /*
+        |--------------------------------------------------------------------------
+        | TUGAS PERBAIKAN KELAS (masuk ke notifikasi guru)
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get('/tugas-kelas', [KurikulumTugasKelasController::class, 'index'])
+            ->name('tugas-kelas');
+
+        Route::post('/tugas-kelas', [KurikulumTugasKelasController::class, 'store'])
+            ->name('tugas-kelas.store');
+
+        Route::delete('/tugas-kelas/{classTask}', [KurikulumTugasKelasController::class, 'destroy'])
+            ->name('tugas-kelas.destroy');
+
+        /*
+        |--------------------------------------------------------------------------
+        | KOMPETENSI PROGRESS REPORT & DESKRIPSI ACHIEVEMENT LEVEL
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get('/kompetensi', [KompetensiController::class, 'index'])
+            ->name('kompetensi');
+
+        Route::post('/kompetensi', [KompetensiController::class, 'store'])
+            ->name('kompetensi.store');
+
+        Route::put('/kompetensi-deskripsi', [KompetensiController::class, 'updateDescriptions'])
+            ->name('kompetensi.descriptions');
+
+        Route::put('/kompetensi/{competency}', [KompetensiController::class, 'update'])
+            ->name('kompetensi.update');
+
+        Route::delete('/kompetensi/{competency}', [KompetensiController::class, 'destroy'])
+            ->name('kompetensi.destroy');
+
+        /*
+        |--------------------------------------------------------------------------
+        | KETERSEDIAAN GURU
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get('/ketersediaan-guru', [KetersediaanGuruController::class, 'index'])
+            ->name('ketersediaan');
+
+        Route::post('/ketersediaan-guru', [KetersediaanGuruController::class, 'store'])
+            ->name('ketersediaan.store');
+
+        Route::patch('/ketersediaan-guru/kelas/{class}/assign', [KetersediaanGuruController::class, 'assign'])
+            ->name('ketersediaan.assign');
+
+        Route::put('/ketersediaan-guru/{availability}', [KetersediaanGuruController::class, 'update'])
+            ->name('ketersediaan.update');
+
+        Route::delete('/ketersediaan-guru/{availability}', [KetersediaanGuruController::class, 'destroy'])
+            ->name('ketersediaan.destroy');
+
+        /*
+        |--------------------------------------------------------------------------
+        | VIDEO PEMBELAJARAN (upload -> siswa bisa menonton)
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get('/video', [KurikulumVideoController::class, 'index'])
+            ->name('video');
+
+        Route::post('/video', [KurikulumVideoController::class, 'store'])
+            ->name('video.store');
+
+        Route::put('/video/{video}', [KurikulumVideoController::class, 'update'])
+            ->name('video.update');
+
+        Route::delete('/video/{video}', [KurikulumVideoController::class, 'destroy'])
+            ->name('video.destroy');
+
+
     });
 
 /*
@@ -279,35 +401,100 @@ Route::middleware(['auth', 'role:Teacher'])
     ->name('teacher.')
     ->group(function () {
 
-        Route::view('/dashboard', 'guru.dashboard')
-            ->name('dashboard');
 
-        Route::view('/notifikasi', 'guru.notifikasi')
+        // Notifikasi
+        Route::get('/notifikasi', [GuruNotifikasiController::class, 'index'])
             ->name('notifikasi');
 
-        Route::view('/sop', 'guru.sop')
+        Route::get('/notifikasi/{document}/download', [GuruNotifikasiController::class, 'download'])
+            ->name('notifikasi.download');
+
+        // SOP
+        Route::get('/sop', [GuruSopController::class, 'index'])
             ->name('sop');
 
-        Route::view('/materi', 'guru.materi')
-            ->name('materi');
+        Route::get('/sop/{document}', [GuruSopController::class, 'show'])
+            ->name('sop.show');
 
-        Route::view('/kelas', 'guru.kelas')
+        Route::get('/sop/{document}/download', [GuruSopController::class, 'download'])
+            ->name('sop.download');
+
+        // Materi
+        Route::get('/materi', [GuruMaterialController::class, 'index'])
+            ->name('materi');
+        Route::get('/materi/{material}', [GuruMaterialController::class, 'show'])
+            ->name('materi.show');
+        Route::get('/materi/{material}/download', [GuruMaterialController::class, 'download'])
+            ->name('materi.download');
+
+
+
+
+
+
+
+        //Kelas
+        Route::get('/kelas', [GuruKelasController::class, 'index'])
             ->name('kelas');
 
-        Route::view('/attendance', 'guru.attendance')
+        Route::post('/kelas', [GuruKelasController::class, 'store'])
+            ->name('kelas.store');
+
+        Route::post('/kelas/{teacherMaterial}/reupload', [GuruKelasController::class, 'reupload'])
+            ->name('kelas.reupload');
+        Route::post('/kelas/{teacherMaterial}/request-consultation', [GuruKelasController::class, 'requestConsultation'])
+            ->name('kelas.request-consultation');
+
+        // Attendance
+        Route::get('/attendance', [GuruAttendanceController::class, 'index'])
             ->name('attendance');
 
-        Route::view('/progress-report', 'guru.progress-report')
-            ->name('progress-report');
+        Route::post('/attendance/{classSchedule}', [GuruAttendanceController::class, 'store'])
+            ->name('attendance.store');
 
-        Route::view('/schedule', 'guru.schedule')
-            ->name('schedule');
+        Route::get('/attendance/{journal}/pdf', [GuruAttendanceController::class, 'pdf'])
+            ->name('attendance.pdf');
 
-        Route::view('/teaching-log', 'guru.teaching-log')
-            ->name('teaching-log');
+        // Progress Report
+        Route::get('/progress-report', [GuruProgressReportController::class, 'index'])->name('progress-report');
+        Route::get('/progress-report/enrollment/{enrollment}', [GuruProgressReportController::class, 'form'])->name('progress-report.form');
+        Route::post('/progress-report/enrollment/{enrollment}', [GuruProgressReportController::class, 'store'])->name('progress-report.store');
+        Route::get('/progress-report/{report}/download', [GuruProgressReportController::class, 'download'])->name('progress-report.download');
+        Route::post('/progress-report/submit-all', [GuruProgressReportController::class, 'submitAll'])->name('progress-report.submit-all');
+        // Sertifikat: guru membuat -> Kurikulum ACC -> tampil di siswa
+        Route::post('/progress-report/enrollment/{enrollment}/certificate', [GuruCertificateController::class, 'quickStore'])->name('progress-report.certificate.store');
+        Route::get('/sertifikat', [GuruCertificateController::class, 'index'])->name('sertifikat');
+        Route::post('/sertifikat', [GuruCertificateController::class, 'store'])->name('sertifikat.store');
+        Route::put('/sertifikat/{certificate}', [GuruCertificateController::class, 'update'])->name('sertifikat.update');
+        Route::delete('/sertifikat/{certificate}', [GuruCertificateController::class, 'destroy'])->name('sertifikat.destroy');
+        Route::get('/sertifikat/{certificate}/download', [GuruCertificateController::class, 'download'])->name('sertifikat.download');
 
-        Route::view('/cuti', 'guru.cuti')
-            ->name('cuti');
+        // Schedule
+        Route::get('/schedule', [GuruScheduleController::class, 'index'])->name('schedule');
+
+        // Teaching Log
+        Route::get('/teaching-log', [GuruTeachingLogController::class, 'index'])->name('teaching-log');
+
+        // Cuti
+        Route::get('/cuti',  [GuruCutiController::class, 'index'])->name('cuti');
+        Route::post('/cuti', [GuruCutiController::class, 'store'])->name('cuti.store');
+
+        // Dashboard
+        Route::get('/dashboard', [GuruDashboardController::class, 'index'])->name('dashboard');
+
+        // Tugas perbaikan kelas dari Kurikulum (ditandai selesai dari Notifikasi)
+        Route::post('/tugas/{classTask}/selesai', [GuruTugasKelasController::class, 'complete'])->name('tugas.complete');
+
+        // Ketersediaan guru (diisi & diedit guru di halaman Schedule)
+        // Guru pengganti menerima / menolak permintaan menggantikan kelas
+        Route::post('/permintaan-pengganti/{leave}/respond', [GuruAvailabilityController::class, 'respondReplacement'])->name('replacement.respond');
+
+        Route::post('/availability', [GuruAvailabilityController::class, 'store'])->name('availability.store');
+        Route::put('/availability/{availability}', [GuruAvailabilityController::class, 'update'])->name('availability.update');
+        Route::delete('/availability/{availability}', [GuruAvailabilityController::class, 'destroy'])->name('availability.destroy');
+
+        // Terima / tolak kelas yang diberikan Kurikulum
+        Route::post('/kelas-diberikan/{class}/respond', [GuruAvailabilityController::class, 'respondClass'])->name('class.respond');
     });
 
 /*
@@ -316,7 +503,7 @@ Route::middleware(['auth', 'role:Teacher'])
 |--------------------------------------------------------------------------
 */
 
-Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->group(function () {
 
     // DASHBOARD -- pakai alias AdminDashboardController!
     Route::get('/dashboard', [AdminDashboardController::class, 'index'])
