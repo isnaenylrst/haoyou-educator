@@ -123,41 +123,155 @@ class DashboardController extends Controller
     /**
      * Jadwal Kelas Hari Ini: class_sessions hari ini (selain Cancelled), urut jam mulai.
      */
+
     private function jadwalHariIni(Carbon $today)
     {
         $now = now();
+        $today = $today->copy()->startOfDay();
 
-        return ClassSession::onDate($today)
-            ->where('status', '!=', 'Cancelled')
+        /*
+        |--------------------------------------------------------------------------
+        | 1. Ambil semua sesi yang sudah tercatat untuk hari ini
+        |--------------------------------------------------------------------------
+        | Sesi Cancelled tetap diambil sementara untuk mencegah jadwal rutin
+        | yang sudah dibatalkan muncul kembali.
+        */
+        $allSessions = ClassSession::onDate($today)
             ->with([
                 'journal',
                 'teacher',
-                'class' => fn ($q) => $q->withCount([
-                    'enrollments as students_count' => fn ($e) => $e->whereIn('status', self::COUNTED_ENROLLMENT_STATUSES),
-                ]),
                 'class.teacher',
+                'class' => fn ($q) => $q->withCount([
+                    'enrollments as students_count' => fn ($e) => $e
+                        ->whereIn('status', self::COUNTED_ENROLLMENT_STATUSES),
+                ]),
             ])
-            ->orderBy('start_time')
-            ->get()
-            ->each(function ($s) use ($today, $now) {
-                $start = Carbon::parse($today->toDateString() . ' ' . $s->start_time);
-                $end   = Carbon::parse($today->toDateString() . ' ' . $s->end_time);
+            ->get();
 
+        // Jadwal rutin yang sudah memiliki sesi pada tanggal ini.
+        $overriddenScheduleIds = $allSessions
+            ->pluck('class_schedule_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        // Hanya tampilkan sesi yang tidak dibatalkan.
+        $items = $allSessions
+            ->reject(fn ($s) => $s->status === 'Cancelled')
+            ->values();
+
+        /*
+        |--------------------------------------------------------------------------
+        | 2. Ambil jadwal rutin yang berlaku hari ini
+        |--------------------------------------------------------------------------
+        */
+        $day = \App\Services\ClassScheduleService::DAYS[
+            $today->dayOfWeekIso - 1
+        ];
+
+        $regularSchedules = \App\Models\ClassSchedule::query()
+            ->activeOn($today)
+            ->where('day', $day)
+            ->when(
+                ! empty($overriddenScheduleIds),
+                fn ($q) => $q->whereNotIn(
+                    'id',
+                    $overriddenScheduleIds
+                )
+            )
+            ->with([
+                'class.teacher',
+                'class' => fn ($q) => $q->withCount([
+                    'enrollments as students_count' => fn ($e) => $e
+                        ->whereIn('status', self::COUNTED_ENROLLMENT_STATUSES),
+                ]),
+            ])
+            ->get();
+
+        /*
+        |--------------------------------------------------------------------------
+        | 3. Bentuk jadwal rutin menjadi objek untuk ditampilkan di Blade
+        |--------------------------------------------------------------------------
+        */
+        foreach ($regularSchedules as $schedule) {
+            $class = $schedule->class;
+
+            if (! $class) {
+                continue;
+            }
+
+            $session = new ClassSession([
+                'class_id'          => $schedule->class_id,
+                'class_schedule_id' => $schedule->id,
+                'session_date'      => $today->toDateString(),
+                'start_time'        => $schedule->start_time,
+                'end_time'          => $schedule->end_time,
+                'room'              => $schedule->room,
+                'teacher_id'        => $class->teacher_id,
+                'location_type'     => $class->delivery_mode,
+                'status'            => 'Scheduled',
+                'kind'              => 'Regular',
+            ]);
+
+            $session->setRelation('class', $class);
+            $session->setRelation('teacher', $class->teacher);
+            $session->setRelation('journal', null);
+
+            $items->push($session);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | 4. Hitung status waktu dan label jadwal
+        |--------------------------------------------------------------------------
+        */
+        return $items
+            ->each(function ($s) use ($today, $now) {
+                $start = Carbon::parse(
+                    $today->toDateString() . ' ' . $s->start_time
+                );
+
+                $end = Carbon::parse(
+                    $today->toDateString() . ' ' . $s->end_time
+                );
+
+                // Sesi sudah selesai berdasarkan status atau jurnal.
                 if ($s->status === 'Completed' || $s->journal) {
                     $s->state = 'completed';
-                } elseif ($now->between($start, $end)) {
+                }
+
+                // Sesi sedang berlangsung.
+                elseif ($now->betweenIncluded($start, $end)) {
                     $s->state = 'ongoing';
-                } elseif ($start->gt($now) && $now->diffInMinutes($start, true) <= self::SOON_MINUTES) {
-                    $s->state = 'soon';
-                    $s->minutes_to = (int) ceil($now->diffInMinutes($start, true));
-                } else {
-                    $s->state = 'upcoming';
+                }
+
+                // Sesi belum dimulai.
+                elseif ($start->gt($now)) {
+                    $minutesTo = (int) ceil(
+                        $now->diffInSeconds($start) / 60
+                    );
+
+                    if ($minutesTo <= self::SOON_MINUTES) {
+                        $s->state = 'soon';
+                        $s->minutes_to = $minutesTo;
+                    } else {
+                        $s->state = 'upcoming';
+                    }
+                }
+
+                // Jam selesai sudah lewat, tetapi sesi belum berstatus Completed.
+                else {
+                    $s->state = 'past';
                 }
 
                 $s->start_label = $start->format('H:i');
-                $s->end_label   = $end->format('H:i');
-            });
+                $s->end_label = $end->format('H:i');
+            })
+            ->sortBy('start_time')
+            ->values();
     }
+
 
     /**
      * Guru Tersedia Hari Ini: guru yang menyatakan tersedia hari ini (TeacherAvailability),

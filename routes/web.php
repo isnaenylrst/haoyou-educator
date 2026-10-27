@@ -704,24 +704,13 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
             ->name('enrollments.assign-class');
     });
 
+   // =========================================================
     // JADWAL
+    // =========================================================
     Route::prefix('jadwal')->name('jadwal.')->group(function () {
-        // Halaman utama
+
         Route::get('/', [JadwalController::class, 'index'])
             ->name('index');
-        // Session
-        Route::post('/sessions', [JadwalController::class, 'storeSession'])
-            ->name('sessions.store');
-        Route::put('/sessions/{classSession}/complete', [JadwalController::class, 'complete'])
-            ->name('complete');
-        Route::put('/sessions/{classSession}/reschedule', [JadwalController::class, 'reschedule'])
-            ->name('reschedule');
-
-        // Fee
-        Route::put('/fees/{sessionFee}/pay', [JadwalController::class, 'payFee'])
-            ->name('fees.pay');
-        Route::get('/fees/{sessionFee}/invoice', [JadwalController::class, 'feeInvoice'])
-            ->name('fees.invoice');
     });
 
     // PENGATURAN

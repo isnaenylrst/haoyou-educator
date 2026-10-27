@@ -81,7 +81,7 @@ class RegistrationFormService
             'class.schedules',
             'programPackage.program',
             'privatePackage',
-            'payments',
+            'packagePayments',
         ]);
 
         $key = $enrollment->private_package_id ? 'form_private' : 'form_regular';
@@ -171,7 +171,7 @@ class RegistrationFormService
         // Pembayaran dipetakan ke kolom berdasarkan tahapnya
         $slots = [];
 
-        foreach ($enrollment->payments->sortBy('id') as $payment) {
+        foreach ($enrollment->packagePayments->sortBy('id') as $payment) {
             $slot = match ($payment->payment_stage) {
                 'DP'                  => 'dp',
                 'Lunas', 'Pelunasan'  => 'lunas',
