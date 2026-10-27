@@ -2,8 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
@@ -28,13 +29,6 @@ class User extends Authenticatable
         'password' => 'hashed',
     ];
 
-    public function getDisplayNameAttribute(): string
-    {
-        return $this->student->name
-        ?? $this->teacher->name
-        ?? $this->username
-        ?? 'Siswa';
-    }
     /*
     |--------------------------------------------------------------------------
     | RELASI LEVEL
@@ -56,13 +50,9 @@ class User extends Authenticatable
     |--------------------------------------------------------------------------
     */
 
-    public function student()
+    public function student(): HasOne
     {
-        return $this->hasOne(
-            Student::class,
-            'user_id',
-            'id'
-        );
+        return $this->hasOne(Student::class, 'user_id', 'id');
     }
 
     /*
@@ -71,13 +61,9 @@ class User extends Authenticatable
     |--------------------------------------------------------------------------
     */
 
-    public function teacher()
+    public function teacher(): HasOne
     {
-        return $this->hasOne(
-            Teacher::class,
-            'user_id',
-            'id'
-        );
+        return $this->hasOne(Teacher::class, 'user_id', 'id');
     }
 
     /*
@@ -86,12 +72,39 @@ class User extends Authenticatable
     |--------------------------------------------------------------------------
     */
 
-    public function curriculum()
+    public function curriculum(): HasOne
     {
-        return $this->hasOne(
-            Curriculum::class,
-            'user_id',
-            'id'
-        );
+        return $this->hasOne(Curriculum::class, 'user_id', 'id');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | NAMA TAMPILAN
+    |--------------------------------------------------------------------------
+    */
+
+    public function getDisplayNameAttribute(): string
+    {
+        return $this->student?->name
+            ?? $this->teacher?->name
+            ?? $this->username
+            ?? 'Siswa';
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | HALAMAN UTAMA BERDASARKAN LEVEL
+    |--------------------------------------------------------------------------
+    */
+
+    public function homeRouteName(): ?string
+    {
+        return match ($this->level?->nama_level) {
+            'Owner'      => 'owner.dashboard',
+            'Curriculum' => 'kurikulum.dashboard',
+            'Teacher'    => 'teacher.dashboard',
+            'Student'    => 'dashboard',
+            default      => null,
+        };
     }
 }

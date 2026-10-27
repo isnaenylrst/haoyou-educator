@@ -78,6 +78,13 @@ return new class extends Migration
             // Catatan tambahan
             $table->text('notes')->nullable();
 
+            // Status review jurnal
+            $table->enum('status', [
+                'Pending',
+                'Reviewed',
+                'Revision'
+            ])->default('Pending');
+
             $table->timestamps();
         });
     }

@@ -9,12 +9,12 @@ use App\Models\Document;
 use App\Models\Material;
 use App\Models\PrivateBooking;
 use App\Models\ProgressReport;
-use App\Models\ProgramLevel;   
+use App\Models\ProgramLevel;
 use App\Models\ProgramVideo;
 use App\Models\Student;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
-
+use Illuminate\Support\Facades\Storage;
 
 class SiswaDashboardController extends Controller
 {
@@ -30,14 +30,12 @@ class SiswaDashboardController extends Controller
     {
         $student = $this->student();
 
-        // Poin & peringkat (students.points, hanya siswa Active)
         $totalPoin = $student->points ?? 0;
 
         $peringkat = Student::where('status', 'Active')
             ->where('points', '>', $totalPoin)
             ->count() + 1;
 
-        // Kelas reguler yang sudah punya kelas (bukan Waiting Class)
         $enrollments = ClassEnrollment::with([
             'class.teacher',
             'class.schedules',
@@ -48,7 +46,6 @@ class SiswaDashboardController extends Controller
             ->whereNotNull('class_id')
             ->get();
 
-        // Kelas minggu ini = semua sesi (reguler + privat) Senin–Minggu minggu ini
         $sesiMingguIni = $this->sessionsBetween(
             $student,
             $enrollments,
@@ -57,12 +54,11 @@ class SiswaDashboardController extends Controller
         );
 
         $stats = [
-            'total_poin'       => $totalPoin,
-            'peringkat'        => $peringkat,
+            'total_poin' => $totalPoin,
+            'peringkat' => $peringkat,
             'kelas_minggu_ini' => $sesiMingguIni->count(),
         ];
 
-        // Jadwal terdekat = 3 sesi berikutnya (urut waktu) dalam 14 hari ke depan
         $jadwalTerdekat = $this->sessionsBetween(
             $student,
             $enrollments,
@@ -73,15 +69,15 @@ class SiswaDashboardController extends Controller
             ->sortBy('at')
             ->take(3)
             ->map(fn ($s) => [
-                'judul'    => $s['judul'],
-                'waktu'    => $this->tanggalId($s['at']) . ' · ' . $s['at']->format('H:i')
-                              . ($s['room'] ? ' · ' . $s['room'] : ''),
+                'judul' => $s['judul'],
+                'waktu' => $this->tanggalId($s['at'])
+                    . ' · ' . $s['at']->format('H:i')
+                    . ($s['room'] ? ' · ' . $s['room'] : ''),
                 'platform' => $s['platform'],
             ])
             ->values()
             ->all();
 
-        // Leaderboard top 10
         $leaderboard = Student::where('status', 'Active')
             ->orderByDesc('points')
             ->take(10)
@@ -93,7 +89,10 @@ class SiswaDashboardController extends Controller
             ])
             ->all();
 
-        $progressReports = ProgressReport::with(['teacher', 'enrollment.class'])
+        $progressReports = ProgressReport::with([
+            'teacher',
+            'enrollment.class',
+        ])
             ->where('student_id', $student->id)
             ->where('status', 'Submitted')
             ->latest('created_at')
@@ -113,12 +112,14 @@ class SiswaDashboardController extends Controller
     }
 
     /**
-     * Semua sesi (kelas reguler berulang + booking privat) di rentang tanggal.
-     * Jadwal reguler (class_schedules) hanya berisi hari & jam mingguan,
-     * jadi tanggalnya dihitung di sini.
+     * Mengumpulkan sesi kelas reguler dan privat dalam rentang tanggal.
      */
-    private function sessionsBetween(Student $student, $enrollments, Carbon $from, Carbon $to)
-    {
+    private function sessionsBetween(
+        Student $student,
+        $enrollments,
+        Carbon $from,
+        Carbon $to
+    ) {
         $sessions = collect();
 
         foreach ($enrollments as $enrollment) {
@@ -128,12 +129,22 @@ class SiswaDashboardController extends Controller
                 continue;
             }
 
-            for ($d = $from->copy()->startOfDay(); $d->lte($to); $d->addDay()) {
-                // hormati start_date / end_date kelas
-                if ($class->start_date && $d->lt($class->start_date->copy()->startOfDay())) {
+            for (
+                $d = $from->copy()->startOfDay();
+                $d->lte($to);
+                $d->addDay()
+            ) {
+                if (
+                    $class->start_date
+                    && $d->lt($class->start_date->copy()->startOfDay())
+                ) {
                     continue;
                 }
-                if ($class->end_date && $d->gt($class->end_date->copy()->endOfDay())) {
+
+                if (
+                    $class->end_date
+                    && $d->gt($class->end_date->copy()->endOfDay())
+                ) {
                     continue;
                 }
 
@@ -142,18 +153,23 @@ class SiswaDashboardController extends Controller
                         continue;
                     }
 
-                    $at = Carbon::parse($d->format('Y-m-d') . ' ' . $schedule->start_time);
+                    $at = Carbon::parse(
+                        $d->format('Y-m-d') . ' ' . $schedule->start_time
+                    );
 
                     $judul = $class->class_name ?? 'Kelas';
+
                     if ($class->teacher) {
                         $judul .= ' — bersama ' . $class->teacher->name;
                     }
 
                     $sessions->push([
-                        'at'       => $at,
-                        'judul'    => $judul,
-                        'room'     => $schedule->room,
-                        'platform' => strtolower($class->delivery_mode ?? 'offline'),
+                        'at' => $at,
+                        'judul' => $judul,
+                        'room' => $schedule->room,
+                        'platform' => strtolower(
+                            $class->delivery_mode ?? 'offline'
+                        ),
                     ]);
                 }
             }
@@ -162,15 +178,23 @@ class SiswaDashboardController extends Controller
         $bookings = PrivateBooking::with('teacher')
             ->where('student_id', $student->id)
             ->where('status', 'Scheduled')
-            ->whereBetween('session_date', [$from->toDateString(), $to->toDateString()])
+            ->whereBetween('session_date', [
+                $from->toDateString(),
+                $to->toDateString(),
+            ])
             ->get();
 
-        foreach ($bookings as $b) {
+        foreach ($bookings as $booking) {
             $sessions->push([
-                'at'       => $b->startsAt(),
-                'judul'    => 'Kelas Privat' . ($b->teacher ? ' — bersama ' . $b->teacher->name : ''),
-                'room'     => null,
-                'platform' => strtolower($b->delivery_mode),
+                'at' => $booking->startsAt(),
+                'judul' => 'Kelas Privat'
+                    . ($booking->teacher
+                        ? ' — bersama ' . $booking->teacher->name
+                        : ''),
+                'room' => null,
+                'platform' => strtolower(
+                    $booking->delivery_mode ?? 'offline'
+                ),
             ]);
         }
 
@@ -181,8 +205,6 @@ class SiswaDashboardController extends Controller
     |--------------------------------------------------------------------------
     | PROGRAM BELAJAR
     |--------------------------------------------------------------------------
-    | Materi diunggah Kurikulum per LEVEL (materials.level_id -> program_levels).
-    | Level siswa diambil dari kelas / paket yang dia ikuti + current_level_id.
     */
 
     public function program()
@@ -198,107 +220,106 @@ class SiswaDashboardController extends Controller
             ->whereIn('status', ['Active', 'Completed', 'Waiting Class'])
             ->get();
 
-        $levelIds = $enrollments
-            ->flatMap(fn ($e) => [
-                $e->class?->level_id,
-                $e->class?->programPackage?->level_id,
-                $e->programPackage?->level_id,
-            ])
-            ->push($student->current_level_id)
-            ->filter()
-            ->unique()
-            ->values();
+        $levelIds = $this->resolveLevelIds($student, $enrollments);
 
         $materials = Material::with(['level.program', 'vocabs'])
             ->whereIn('level_id', $levelIds)
             ->orderBy('level_id')
             ->orderBy('meeting_number')
             ->get();
-        
-            // ---------- VIDEO PEMBELAJARAN ----------
-            $currentLevel = $this->currentLevel($student, $levelIds);
 
-            // Video budaya: semua bab di level siswa, urut bab
-            $cultureVideos = $currentLevel
-                ? ProgramVideo::where('type', 'culture')
-                    ->where('level_id', $currentLevel->id)
-                    ->where('is_published', true)
-                    ->orderBy('chapter_number')
-                    ->get()
-                : collect();
+        $currentLevel = $this->currentLevel($student, $levelIds);
 
-            // Video replay: 1 per level
-            $replayVideo = $currentLevel
-                ? ProgramVideo::where('type', 'replay')
-                    ->where('level_id', $currentLevel->id)
-                    ->where('is_published', true)
-                    ->first()
-                : null;
+        $cultureVideos = $currentLevel
+            ? ProgramVideo::where('type', 'culture')
+                ->where('level_id', $currentLevel->id)
+                ->where('is_published', true)
+                ->orderBy('chapter_number')
+                ->get()
+            : collect();
 
-            return view('Siswa.program', [
-                'title'         => 'Program Belajar',
-                'student'       => $student,
-                'enrollments'   => $enrollments,
-                'materials'     => $materials,
-                'cultureVideos' => $cultureVideos,
-                'replayVideo'   => $replayVideo,
-     ]);
-}
-    /** Kumpulan level_id milik siswa (logika sama seperti sebelumnya). */
-private function resolveLevelIds(Student $student, $enrollments)
-{
-    return $enrollments
-        ->flatMap(fn ($e) => [
-            $e->class?->level_id,
-            $e->class?->programPackage?->level_id,
-            $e->programPackage?->level_id,
+        $replayVideo = $currentLevel
+            ? ProgramVideo::where('type', 'replay')
+                ->where('level_id', $currentLevel->id)
+                ->where('is_published', true)
+                ->first()
+            : null;
+
+        return view('Siswa.program', [
+            'title' => 'Program Belajar',
+            'student' => $student,
+            'enrollments' => $enrollments,
+            'materials' => $materials,
+            'cultureVideos' => $cultureVideos,
+            'replayVideo' => $replayVideo,
+        ]);
+    }
+
+    /**
+     * Mengambil level yang terkait dengan siswa.
+     */
+    private function resolveLevelIds(Student $student, $enrollments)
+    {
+        return $enrollments
+            ->flatMap(fn ($enrollment) => [
+                $enrollment->class?->level_id,
+                $enrollment->class?->programPackage?->level_id,
+                $enrollment->programPackage?->level_id,
+            ])
+            ->push($student->current_level_id)
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * Level aktif siswa, dengan fallback ke level pertama yang ditemukan.
+     */
+    private function currentLevel(
+        Student $student,
+        $levelIds
+    ): ?ProgramLevel {
+        return ProgramLevel::with('program')
+            ->find($student->current_level_id ?? $levelIds->first());
+    }
+
+    /**
+     * Streaming video yang sudah dipublikasikan untuk siswa yang berhak.
+     */
+    public function streamVideo(ProgramVideo $video)
+    {
+        $student = $this->student();
+
+        abort_unless($video->is_published, 404);
+
+        $enrollments = ClassEnrollment::with([
+            'class.programPackage',
         ])
-        ->push($student->current_level_id)
-        ->filter()
-        ->unique()
-        ->values();
-}
+            ->where('student_id', $student->id)
+            ->whereIn('status', ['Active', 'Completed', 'Waiting Class'])
+            ->get();
 
-/** Level aktif siswa: current_level_id, fallback ke level pertama yang ditemukan. */
-private function currentLevel(Student $student, $levelIds): ?ProgramLevel
-{
-    return ProgramLevel::with('program')
-        ->find($student->current_level_id ?? $levelIds->first());
-}
+        $levelIds = $this->resolveLevelIds($student, $enrollments);
 
-/**
- * Streaming video (hanya bisa ditonton, file tidak ada di folder publik).
- * Hanya siswa yang berhak yang bisa membukanya.
- */
-public function streamVideo(ProgramVideo $video)
-{
-    $student = $this->student();
+        $audience = $this->currentLevel($student, $levelIds)
+            ?->program
+            ?->audience ?? 'hsk';
 
-    abort_unless($video->is_published, 404);
+        $allowed = $video->type === 'culture'
+            ? $video->audience === $audience
+            : $levelIds->contains($video->level_id);
 
-    $enrollments = ClassEnrollment::with('class.programPackage')
-        ->where('student_id', $student->id)
-        ->whereIn('status', ['Active', 'Completed', 'Waiting Class'])
-        ->get();
+        abort_unless($allowed, 403);
 
-    $levelIds = $this->resolveLevelIds($student, $enrollments);
-    $audience = $this->currentLevel($student, $levelIds)?->program?->audience ?? 'hsk';
+        $path = Storage::disk('local')->path($video->video_path);
 
-    $allowed = $video->type === 'culture'
-        ? $video->audience === $audience
-        : $levelIds->contains($video->level_id);
+        abort_unless(is_file($path), 404);
 
-    abort_unless($allowed, 403);
-
-    $path = Storage::disk('local')->path($video->video_path);
-    abort_unless(file_exists($path), 404);
-
-    // response()->file() mendukung Range request, jadi video bisa di-seek
-    return response()->file($path, [
-        'Content-Type'        => 'video/mp4',
-        'Content-Disposition' => 'inline',
-    ]);
-}
+        return response()->file($path, [
+            'Content-Type' => 'video/mp4',
+            'Content-Disposition' => 'inline',
+        ]);
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -327,14 +348,16 @@ public function streamVideo(ProgramVideo $video)
             ->orderBy('start_time')
             ->get();
 
-        return view('Siswa.kelas-saya', compact('student', 'enrollments', 'privateBookings'));
+        return view(
+            'Siswa.kelas-saya',
+            compact('student', 'enrollments', 'privateBookings')
+        );
     }
 
     /*
     |--------------------------------------------------------------------------
     | PROGRESS REPORT
     |--------------------------------------------------------------------------
-    | Siswa hanya melihat yang sudah Submitted (Draft = belum diterbitkan).
     */
 
     public function progressReport()
@@ -350,15 +373,18 @@ public function streamVideo(ProgramVideo $video)
             ->orderByDesc('created_at')
             ->get();
 
-        return view('Siswa.progress-report', compact('student', 'laporan'));
+        return view(
+            'Siswa.progress-report',
+            compact('student', 'laporan')
+        );
     }
 
     /*
     |--------------------------------------------------------------------------
     | SERTIFIKAT
     |--------------------------------------------------------------------------
-    | documents.document_type = 'Certificate', milik user ini,
-    | dan visibility Student / Public.
+    | Sertifikat yang ditampilkan berasal dari dokumen milik pengguna
+    | dengan visibility Student atau Public.
     */
 
     public function sertifikat()
@@ -369,7 +395,10 @@ public function streamVideo(ProgramVideo $video)
             ->with('programLevel.program')
             ->get();
 
-        return view('Siswa.sertifikat', compact('student', 'documents'));
+        return view(
+            'Siswa.sertifikat',
+            compact('student', 'documents')
+        );
     }
 
     private function sertifikatQuery()
@@ -390,17 +419,29 @@ public function streamVideo(ProgramVideo $video)
     {
         $user = Auth::user();
 
-        $map = fn ($n) => [
-            'judul' => $n->data['title'] ?? 'Notifikasi',
-            'ket'   => $n->data['message'] ?? '',
-            'waktu' => $n->created_at?->diffForHumans(),
-            'url'   => $n->data['url'] ?? null,
+        $map = fn ($notification) => [
+            'judul' => $notification->data['title'] ?? 'Notifikasi',
+            'ket' => $notification->data['message'] ?? '',
+            'waktu' => $notification->created_at?->diffForHumans(),
+            'url' => $notification->data['url'] ?? null,
         ];
 
-        $belumDibaca = $user->unreadNotifications()->latest()->take(50)->get()->map($map);
-        $sudahDibaca = $user->readNotifications()->latest()->take(30)->get()->map($map);
+        $belumDibaca = $user->unreadNotifications()
+            ->latest()
+            ->take(50)
+            ->get()
+            ->map($map);
 
-        return view('Siswa.notifikasi', compact('belumDibaca', 'sudahDibaca'));
+        $sudahDibaca = $user->readNotifications()
+            ->latest()
+            ->take(30)
+            ->get()
+            ->map($map);
+
+        return view(
+            'Siswa.notifikasi',
+            compact('belumDibaca', 'sudahDibaca')
+        );
     }
 
     public function notifikasiTandaiDibaca()

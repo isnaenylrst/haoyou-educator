@@ -81,7 +81,7 @@
     </div>
 
     <nav class="relative z-10 flex-1 p-3.5 pt-5">
-      <a href="{{ route('student.dashboard') }}" class="side-link alumni-restricted {{ request()->routeIs('student.dashboard') ? 'is-active' : '' }}">
+      <a href="{{ route('dashboard') }}" class="side-link alumni-restricted {{ request()->routeIs('dashboard') ? 'is-active' : '' }}">
         <span class="ico">🏠</span> Dashboard
       </a>
       <a href="{{ route('notifikasi.index') }}" class="side-link alumni-restricted {{ request()->routeIs('notifikasi.*') ? 'is-active' : '' }}">
@@ -96,10 +96,13 @@
       <a href="{{ route('booking.index') }}" class="side-link alumni-restricted {{ request()->routeIs('booking.*') ? 'is-active' : '' }}">
         <span class="ico">🗓️</span> Booking Kelas
       </a>
+      <a href="{{ route('video.index') }}" class="side-link alumni-restricted {{ request()->routeIs('video.*') ? 'is-active' : '' }}">
+        <span class="ico">🎬</span> Video
+      </a>
       <a href="{{ route('progresreport.index') }}" class="side-link {{ request()->routeIs('progresreport.*') ? 'is-active' : '' }}">
         <span class="ico">📊</span> Progress Report
       </a>
-      <a href="{{ route('student.certificates.index') }}" class="side-link {{ request()->routeIs('student.certificates.*') ? 'is-active' : '' }}">
+     <a href="{{ route('sertifikat.index') }}" class="side-link {{ request()->routeIs('sertifikat.*') ? 'is-active' : '' }}">
         <span class="ico">🏅</span> Sertifikat
       </a>
 

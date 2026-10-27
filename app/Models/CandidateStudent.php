@@ -29,7 +29,11 @@ class CandidateStudent extends Model
         'trial_status',
         'trial_date',
         'trial_notes',
+        'consultation_status',
+        'consultation_date',
+        'consultation_notes',
         'lead_status',
+        'notes',
         'registration_fee_paid_at',
         'registration_fee_proof_path',
         'registration_fee_status',
@@ -38,6 +42,7 @@ class CandidateStudent extends Model
     protected $casts = [
         'birth_date' => 'date',
         'trial_date' => 'date',
+        'consultation_date' => 'date',
         'registration_fee_paid_at' => 'datetime',
     ];
 

@@ -45,10 +45,10 @@ class AuthController extends Controller
                     return redirect()->route('teacher.dashboard');
 
                 case 'Student':
-                    return redirect()->route('student.dashboard');
+                    return redirect()->route('dashboard');
 
                 case 'Curriculum':
-                    return redirect()->route('curriculum.dashboard');
+                    return redirect()->route('kurikulum.dashboard');
 
                 default:
                     Auth::logout();
@@ -60,6 +60,15 @@ class AuthController extends Controller
                             'Level pengguna tidak dikenali.'
                         );
             }
+
+            // Owner/Admin/level tidak dikenali -> modul belum ada
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()
+                ->route('login')
+                ->with('error', 'Modul untuk level akun ini belum tersedia.');
         }
 
         return back()

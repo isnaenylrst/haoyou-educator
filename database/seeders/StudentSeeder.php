@@ -5,18 +5,27 @@ namespace Database\Seeders;
 use App\Models\ClassEnrollment;
 use App\Models\ClassModel;
 use App\Models\Level;
-use App\Models\Payment;
 use App\Models\PrivatePackage;
-use App\Models\Program;
 use App\Models\ProgramCategory;
 use App\Models\ProgramLevel;
 use App\Models\ProgramPackage;
+use App\Models\Setting;
 use App\Models\Student;
+use App\Models\Teacher;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
+/**
+ * Siswa dummy + enrollment-nya.
+ *
+ * Jalankan SETELAH ClassSeeder (butuh kelas yang sudah ada) dan SEBELUM ClassScheduleSeeder
+ * (kelas private 1-on-1 dibuat di sini, jadwalnya diisi ClassScheduleSeeder).
+ * Pembayaran TIDAK dibuat di sini: PaymentSeeder yang membuatnya, supaya total tagihan
+ * konsisten dengan PaymentInstallmentService (harga sesuai skema + biaya - diskon).
+ */
 class StudentSeeder extends Seeder
 {
     /** Jumlah siswa dummy yang mau dibuat */
@@ -26,21 +35,22 @@ class StudentSeeder extends Seeder
     private int $privateChancePercent = 25;
 
     /**
-     * Dari siswa yang masuk Reguler, peluang dia langsung dapat kelas
+     * Dari siswa Reguler, peluang dia langsung dimasukkan ke kelas yang masih punya kursi
      * (sisanya jadi "Waiting Class" untuk menguji alur assign-kelas belakangan)
      */
     private int $directClassChancePercent = 70;
 
-    private array $paymentMethods = ['Transfer Bank', 'Cash', 'QRIS', 'E-Wallet'];
-
     private ?int $studentLevelId = null;
+    private float $registrationFee = 0;
+    private float $activityFee = 0;
 
     public function run(): void
     {
         $this->studentLevelId = Level::where('nama_level', 'Student')->value('id_level');
 
-        if (!$this->studentLevelId) {
+        if (! $this->studentLevelId) {
             $this->command->error('Level "Student" belum ada di tabel levels. Jalankan seeder Level dulu.');
+
             return;
         }
 
@@ -49,44 +59,94 @@ class StudentSeeder extends Seeder
 
         if ($programPackages->isEmpty() && $privatePackages->isEmpty()) {
             $this->command->error('Belum ada program_packages atau private_packages. Jalankan ProgramPackageSeeder/PrivatePackageSeeder dulu.');
+
             return;
         }
 
-        // Cache kelas Open/Running per program_package_id, LENGKAP DENGAN
-        // jumlah enrollment aktifnya — supaya kita bisa hormati classes.capacity
-        // dan tidak assign siswa ke kelas yang sudah penuh.
-        $classesByPackage = ClassModel::whereIn('status', ['Open', 'Running'])
-            ->withCount([
-                'enrollments as active_enrollments_count' => fn ($q) => $q->whereIn('status', ['Active', 'Completed']),
-            ])
-            ->get()
-            ->groupBy('program_package_id');
+        $this->registrationFee = (float) Setting::get('registration_fee', 0);
+        $this->activityFee     = (float) Setting::get('activity_fee', 0);
+
+        $teacherIds = Teacher::where('status', 'Active')->orderBy('id')->pluck('id')->values();
+
+        // Kelas yang sudah dibuat ClassSeeder, lengkap dengan jumlah kursi terpakai,
+        // supaya classes.capacity dihormati dan kelas penuh tidak diisi lagi.
+        $regularClasses   = $this->loadClasses('program_package_id');
+        $exclusiveClasses = $this->loadClasses('private_package_id');
 
         $created = 0;
         $waitingClassCount = 0;
+        $placedCount = 0;
 
         for ($i = 1; $i <= $this->totalStudents; $i++) {
             $isPrivate = $privatePackages->isNotEmpty()
                 && (random_int(1, 100) <= $this->privateChancePercent || $programPackages->isEmpty());
 
-            if ($isPrivate) {
-                $this->createPrivateStudent($privatePackages, $i);
-            } else {
-                $waitingClassCount += $this->createRegularStudent($programPackages, $classesByPackage, $i) ? 1 : 0;
-            }
+            $placed = $isPrivate
+                ? $this->createPrivateStudent($privatePackages, $i, $teacherIds, $exclusiveClasses)
+                : $this->createRegularStudent($programPackages, $regularClasses, $i);
 
+            $placed ? $placedCount++ : $waitingClassCount++;
             $created++;
         }
 
-        $this->command->info("Selesai: {$created} siswa dummy berhasil dibuat ({$waitingClassCount} di antaranya berstatus 'Waiting Class').");
+        $this->command->info("Selesai: {$created} siswa dummy dibuat ({$placedCount} masuk kelas, {$waitingClassCount} berstatus 'Waiting Class').");
     }
 
-    private function createPrivateStudent($privatePackages, int $seq): void
+    /** Kelas Open/Running yang terikat ke kolom paket tertentu, beserta kursi terpakai. */
+    private function loadClasses(string $packageColumn)
+    {
+        return ClassModel::whereNotNull($packageColumn)
+            ->whereIn('status', ['Open', 'Running'])
+            ->withCount([
+                'enrollments as seats_taken' => fn ($q) => $q->whereIn('status', ClassModel::SEAT_STATUSES),
+            ])
+            ->get();
+    }
+
+    /**
+     * @return bool true kalau siswa langsung masuk kelas
+     */
+    private function createPrivateStudent($privatePackages, int $seq, $teacherIds, $exclusiveClasses): bool
     {
         $package = $privatePackages->random();
         $name = fake()->name();
 
         $user = $this->createUserAccount($name, $seq);
+
+        // Join 2 bulan terakhir supaya tumpang tindih dengan jurnal & absensi dummy
+        $joinDate = fake()->dateTimeBetween('-2 months', 'now');
+
+        $classId = null;
+
+        if ((int) $package->max_students > 1) {
+            // Private gabungan (Exclusive): gabung kelas yang masih punya kursi
+            $class = $exclusiveClasses->first(
+                fn ($c) => (int) $c->private_package_id === (int) $package->id && $c->seats_taken < $c->capacity
+            );
+
+            if ($class) {
+                $classId = $class->id;
+                $class->seats_taken++;
+            }
+        } elseif ($teacherIds->isNotEmpty()) {
+            // Private 1-on-1: kelas pribadi dibuat langsung (sama seperti alur convert)
+            $start = Carbon::instance($joinDate)->startOfDay();
+
+            $class = ClassModel::create([
+                'program_package_id' => null,
+                'private_package_id' => $package->id,
+                'level_id'           => null,
+                'teacher_id'         => $teacherIds[$seq % $teacherIds->count()],
+                'class_name'         => "Private - {$name}",
+                'delivery_mode'      => $seq % 4 === 3 ? 'Online' : 'Offline',
+                'start_date'         => $start->toDateString(),
+                'end_date'           => $start->copy()->addMonths(max((int) ($package->duration_months ?: 1), 1))->toDateString(),
+                'capacity'           => (int) ($package->max_students ?: 1),
+                'status'             => 'Running',
+            ]);
+
+            $classId = $class->id;
+        }
 
         $student = Student::create([
             'candidate_student_id' => null,
@@ -94,50 +154,67 @@ class StudentSeeder extends Seeder
             'current_level_id' => null, // Private tidak memakai konsep level
             'name' => $name,
             'points' => random_int(0, 50),
-            'join_date' => fake()->dateTimeBetween('-6 months', 'now'),
+            'join_date' => $joinDate,
             'status' => 'Active',
         ]);
 
-        $enrollment = ClassEnrollment::create([
+        ClassEnrollment::create([
             'student_id' => $student->id,
-            'class_id' => null,
+            'class_id' => $classId,
             'program_package_id' => null,
             'private_package_id' => $package->id,
             'enrollment_date' => $student->join_date,
-            'status' => 'Active',
+            'status' => $classId ? 'Active' : 'Waiting Class',
+            'registration_fee' => $this->registrationFee,
+            'activity_fee' => $this->activityFee,
+            'discount' => 0,
         ]);
 
-        $this->createDpPayment($enrollment, $package->price);
+        return $classId !== null;
     }
 
     /**
-     * @return bool true kalau siswa ini jadi 'Waiting Class' (tidak dapat kelas langsung)
+     * @return bool true kalau siswa langsung masuk kelas
      */
-    private function createRegularStudent($programPackages, $classesByPackage, int $seq): bool
+    private function createRegularStudent($programPackages, $regularClasses, int $seq): bool
     {
-        $package = $programPackages->random();
         $name = fake()->name();
-
         $user = $this->createUserAccount($name, $seq);
 
-        $currentLevelId = $this->resolveCurrentLevelId($package);
-
-        // Hanya kelas yang MASIH ADA SLOT KOSONG (active_enrollments_count < capacity)
-        $availableClasses = $classesByPackage->get($package->id, collect())
-            ->filter(fn ($class) => $class->active_enrollments_count < $class->capacity);
+        // Kelas yang masih punya kursi
+        $availableClasses = $regularClasses->filter(fn ($class) => $class->seats_taken < $class->capacity);
 
         $getsClassDirectly = $availableClasses->isNotEmpty()
             && random_int(1, 100) <= $this->directClassChancePercent;
 
         $classId = null;
+        $joinDate = fake()->dateTimeBetween('-6 months', 'now');
+
         if ($getsClassDirectly) {
+            // Paket dan level mengikuti kelas yang dipilih, supaya siswa selalu cocok dengan kelasnya
             $chosenClass = $availableClasses->random();
-            $classId = $chosenClass->id;
-            // Update counter di collection supaya siswa berikutnya di loop ini
-            // tidak ikut mengisi kelas yang baru saja penuh.
-            $chosenClass->active_enrollments_count++;
+            $package = $programPackages->firstWhere('id', $chosenClass->program_package_id);
+
+            if (! $package) {
+                $getsClassDirectly = false;
+            } else {
+                $classId = $chosenClass->id;
+                $currentLevelId = $chosenClass->level_id ?: $this->resolveCurrentLevelId($package);
+
+                // Update hitungan di collection supaya siswa berikutnya tidak mengisi kelas yang sudah penuh
+                $chosenClass->seats_taken++;
+
+                // Bergabung mulai 2 minggu sebelum kelas dimulai sampai hari ini
+                $classStart = $chosenClass->start_date ? Carbon::parse($chosenClass->start_date) : Carbon::today();
+                $from = $classStart->lte(Carbon::today()) ? $classStart->copy()->subWeeks(2) : Carbon::today()->subWeeks(2);
+                $joinDate = fake()->dateTimeBetween($from, 'now');
+            }
         }
-        $isWaitingClass = !$getsClassDirectly;
+
+        if (! $getsClassDirectly) {
+            $package = $programPackages->random();
+            $currentLevelId = $this->resolveCurrentLevelId($package);
+        }
 
         $student = Student::create([
             'candidate_student_id' => null,
@@ -145,22 +222,23 @@ class StudentSeeder extends Seeder
             'current_level_id' => $currentLevelId,
             'name' => $name,
             'points' => random_int(0, 50),
-            'join_date' => fake()->dateTimeBetween('-6 months', 'now'),
+            'join_date' => $joinDate,
             'status' => 'Active',
         ]);
 
-        $enrollment = ClassEnrollment::create([
+        ClassEnrollment::create([
             'student_id' => $student->id,
             'class_id' => $classId,
             'program_package_id' => $package->id,
             'private_package_id' => null,
             'enrollment_date' => $student->join_date,
-            'status' => $isWaitingClass ? 'Waiting Class' : 'Active',
+            'status' => $getsClassDirectly ? 'Active' : 'Waiting Class',
+            'registration_fee' => $this->registrationFee,
+            'activity_fee' => $this->activityFee,
+            'discount' => 0,
         ]);
 
-        $this->createDpPayment($enrollment, $package->price);
-
-        return $isWaitingClass;
+        return $getsClassDirectly;
     }
 
     private function createUserAccount(string $name, int $seq): User
@@ -210,26 +288,5 @@ class StudentSeeder extends Seeder
         return ProgramLevel::whereIn('category_id', $categories)
             ->inRandomOrder()
             ->value('id');
-    }
-
-    private function createDpPayment(ClassEnrollment $enrollment, float $totalBill): void
-    {
-        $isFullyPaid = random_int(1, 100) <= 60; // 60% lunas, sisanya DP sebagian
-        $amountPaid = $isFullyPaid ? $totalBill : round($totalBill * (random_int(30, 70) / 100), -3);
-        $remaining = max($totalBill - $amountPaid, 0);
-
-        Payment::create([
-            'enrollment_id' => $enrollment->id,
-            'invoice_number' => 'INV-' . now()->format('Ymd') . '-' . strtoupper(Str::random(6)),
-            'invoice_file_path' => null,
-            'payment_stage' => $isFullyPaid ? 'Pelunasan' : 'DP',
-            'total_bill' => $totalBill,
-            'amount_paid' => $amountPaid,
-            'remaining_bill' => $remaining,
-            'payment_method' => fake()->randomElement($this->paymentMethods),
-            'payment_date' => $enrollment->enrollment_date,
-            'payment_proof_path' => null,
-            'status' => $remaining <= 0 ? 'Paid' : 'Partial',
-        ]);
     }
 }

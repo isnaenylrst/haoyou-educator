@@ -6,8 +6,9 @@
 
     {{-- Informasi Progress Report --}}
     <div class="bg-pale rounded-xl px-4 py-3 text-xs text-oliveDark mb-4">
-        Laporan perkembangan belajar diterbitkan otomatis secara berkala —
-        setiap <strong>3 bulan</strong> untuk kelas Reguler,
+        Progress report tampil di sini setelah <strong>disetujui Kurikulum</strong>.
+        Laporan yang masih diisi guru atau sedang direview belum ditampilkan.
+        Laporan diterbitkan berkala — setiap <strong>3 bulan</strong> untuk kelas Reguler,
         dan setiap <strong>2 bulan</strong> untuk kelas HSK.
     </div>
 
@@ -27,30 +28,36 @@
                 <div>
                     <div class="text-sm font-semibold text-black">
                         {{ $item->report_type ?: 'Progress Report' }}
-                        @if ($item->enrollment?->class)
+                        @if (optional(optional($item->enrollment)->class)->class_name)
                             — {{ $item->enrollment->class->class_name }}
                         @endif
                     </div>
 
                     <div class="text-xs text-gray-500 mt-1">
                         {{ $item->report_period ?: 'Periode laporan belum tersedia' }}
+                        @if ($item->reviewed_at)
+                            · Disetujui {{ $item->reviewed_at->translatedFormat('d M Y') }}
+                        @endif
                         @if ($item->teacher)
                             · {{ $item->teacher->name }}
                         @endif
+                        @if (!is_null($item->average_score))
+                            · Rata-rata nilai {{ $item->average_score }}
+                        @endif
                     </div>
-
                 </div>
 
             </div>
 
 
             {{-- Tombol --}}
-            <a href="{{ asset('storage/' . $item->file_path) }}"
-               target="_blank"
-               class="text-xs font-semibold border border-black rounded-full px-5 py-2
-                      hover:bg-black hover:text-white transition whitespace-nowrap">
-                Lihat Laporan
-            </a>
+            @if ($item->file_path)
+                <a href="{{ route('progresreport.download', $item) }}"
+                   class="text-xs font-semibold border border-black rounded-full px-5 py-2
+                          hover:bg-black hover:text-white transition whitespace-nowrap">
+                    Unduh PDF
+                </a>
+            @endif
 
         </div>
 
@@ -71,7 +78,7 @@
                     </div>
 
                     <div class="text-xs text-gray-500 mt-1">
-                        Belum ada progress report yang diterbitkan.
+                        Belum ada progress report yang disetujui.
                     </div>
                 </div>
 

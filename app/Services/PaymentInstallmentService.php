@@ -53,7 +53,13 @@ class PaymentInstallmentService
         if ($remaining < 0) {
             $sisaSaatIni = number_format($totalBill - $alreadyPaid, 0, ',', '.');
             throw ValidationException::withMessages([
-                'amount' => "Jumlah bayar melebihi sisa tagihan (Rp{$sisaSaatIni}).",
+                'amount_paid' => "Jumlah bayar melebihi sisa tagihan (Rp{$sisaSaatIni}).",
+            ]);
+        }
+
+        if ($remaining > 0 && ! $this->enrollmentAllowsInstallment($enrollment)) {
+            throw ValidationException::withMessages([
+                'amount_paid' => 'Program/paket ini wajib dibayar lunas, tidak bisa dicicil.',
             ]);
         }
 
@@ -71,13 +77,91 @@ class PaymentInstallmentService
         ]);
     }
 
+    /**
+     * Total tagihan enrollment = harga paket (sudah total, bukan per bulan)
+     * + biaya pendaftaran + biaya aktivitas - diskon.
+     */
     public function totalBillFor(ClassEnrollment $enrollment): ?float
     {
-        $price = $enrollment->programPackage->price
-            ?? $enrollment->privatePackage->price
-            ?? null;
+        $packageTotal = $this->packageTotal($enrollment);
 
-        return $price !== null ? (float) $price : null;
+        if ($packageTotal === null) {
+            return null;
+        }
+
+        $total = $packageTotal
+            + (float) $enrollment->registration_fee
+            + (float) $enrollment->activity_fee
+            - (float) $enrollment->discount;
+
+        return max($total, 0);
+    }
+
+    /** Lama kelas (bulan), hanya informasi. Tidak dipakai untuk mengalikan harga. */
+    public function monthsFor(ClassEnrollment $e): int
+    {
+        $package = $e->programPackage ?? $e->privatePackage;
+
+        return $this->monthsForPackage($package, ! $e->programPackage);
+    }
+
+    /**
+     * Total biaya les dari enrollment.
+     * Skema Termin (khusus paket reguler yang punya installment_price) = harga per bulan x lama paket.
+     * Selain itu = harga paket apa adanya (harga lunas).
+     */
+    public function packageTotal(ClassEnrollment $e): ?float
+    {
+        $isPrivate = ! $e->programPackage;
+        $package   = $e->programPackage ?? $e->privatePackage;
+
+        if (! $isPrivate && $e->payment_scheme === 'Termin' && $package?->installment_price) {
+            return $package->totalFor('Termin');
+        }
+
+        return $this->packageTotalFor($package, $isPrivate);
+    }
+
+    /**
+     * Lama kelas (bulan) dari paketnya langsung. Dipakai juga saat konversi calon siswa,
+     * ketika enrollment belum dibuat. Membaca kolom duration_months; fallback 3 (program) / 1 (private).
+     */
+    public function monthsForPackage(mixed $package, bool $isPrivate): int
+    {
+        return (int) ($package?->duration_months ?: ($isPrivate ? 1 : 3));
+    }
+
+    /**
+     * Total biaya les dari paketnya langsung = harga paket apa adanya (tidak dikali bulan).
+     * Parameter $isPrivate dipertahankan supaya pemanggil lama tidak error.
+     */
+    public function packageTotalFor(mixed $package, bool $isPrivate): ?float
+    {
+        if (! $package || $package->price === null) {
+            return null;
+        }
+
+        return (float) $package->price;
+    }
+
+    public function allowsInstallment(bool $isPrivate, ?string $programName, ?string $levelName): bool
+    {
+        if ($isPrivate) return false;
+        if ($programName === 'Daily Activity') return true;
+        if (! str_starts_with((string) $levelName, 'HSK ')) return false;
+
+        $level = (int) trim(substr($levelName, 4));
+
+        return $level >= 1 && $level <= 3;
+    }
+
+    public function enrollmentAllowsInstallment(ClassEnrollment $e): bool
+    {
+        return $this->allowsInstallment(
+            (bool) $e->private_package_id,
+            $e->programPackage?->program?->program_name,
+            $e->student?->currentLevel?->level_name,
+        );
     }
 
     public function totalPaid(ClassEnrollment $enrollment): float

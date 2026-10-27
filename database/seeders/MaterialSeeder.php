@@ -16,8 +16,12 @@ class MaterialSeeder extends Seeder
      */
     public function run(): void
     {
-        $curriculumLevelId = Level::where('nama_level', 'Curriculum')->value('id_level');
-        $uploaderIds = User::where('level_id', $curriculumLevelId)->pluck('id')->toArray();
+        $curriculumLevelId = Level::where('nama_level', 'Curriculum')
+            ->value('id_level');
+
+        $uploaderIds = User::where('level_id', $curriculumLevelId)
+            ->pluck('id')
+            ->toArray();
 
         if (empty($uploaderIds)) {
             $this->command?->warn('Belum ada User dengan level "Curriculum", pastikan UserSeeder sudah dijalankan.');
@@ -28,11 +32,13 @@ class MaterialSeeder extends Seeder
 
         foreach ($levelIds as $levelId) {
             for ($meeting = 1; $meeting <= 3; $meeting++) {
+
                 Material::factory()->create([
                     'level_id' => $levelId,
                     'uploaded_by' => fake()->randomElement($uploaderIds),
                     'meeting_number' => $meeting,
                 ]);
+
             }
         }
     }
