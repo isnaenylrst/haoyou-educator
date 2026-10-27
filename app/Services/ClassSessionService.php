@@ -6,77 +6,127 @@ use App\Models\ClassEnrollment;
 use App\Models\ClassModel;
 use App\Models\ClassSchedule;
 use App\Models\ClassSession;
+use App\Models\Payment;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-/**
- * Membangkitkan pertemuan bertanggal (class_sessions) dari pola mingguan (class_schedules).
- */
 class ClassSessionService
 {
     public function __construct(
         private ClassScheduleService $schedules,
-        private SessionFeeService $fees,
+        private ExtraFeeService $fees,
     ) {
     }
 
     /**
-     * Dipakai saat kelas baru dibuat (mis. convert siswa private):
-     * bangkitkan $totalMeetings pertemuan mulai start_date kelas, lalu isi end_date
-     * dengan tanggal pertemuan terakhir kalau belum terisi.
+     * Generate pertemuan untuk kelas baru.
      */
-    public function generateForNewClass(ClassModel $class, int $totalMeetings): Collection
-    {
-        $sessions = $this->generate($class, $class->start_date, $totalMeetings);
+    public function generateForNewClass(
+        ClassModel $class,
+        int $totalMeetings
+    ): Collection {
+        $sessions = $this->generate(
+            $class,
+            $class->start_date,
+            $totalMeetings
+        );
 
         if ($sessions->isNotEmpty() && ! $class->end_date) {
-            $class->update(['end_date' => $sessions->last()->session_date->toDateString()]);
+            $class->update([
+                'end_date' => $sessions->last()->session_date->toDateString(),
+            ]);
         }
 
         return $sessions;
     }
 
     /**
-     * Bangkitkan $count pertemuan mulai tanggal $from.
-     * Pola yang dipakai adalah pola yang berlaku pada tanggal masing-masing pertemuan
-     * (memperhatikan effective_from / effective_until).
-     *
-     * @param  int|null  $startNumber  nomor pertemuan pertama; null = lanjutkan dari nomor terbesar yang ada
+     * Generate pertemuan untuk kelas lama yang belum memiliki sesi.
      */
-    public function generate(ClassModel $class, Carbon|string $from, int $count, ?int $startNumber = null): Collection
+    public function generateForExistingClass(ClassModel $class): Collection
     {
-        // Satu transaksi: kalau satu tanggal bentrok, tidak ada pertemuan setengah jadi.
-        return DB::transaction(fn () => $this->doGenerate($class, $from, $count, $startNumber));
+        if (
+            ! $class->start_date
+            || ClassSession::where('class_id', $class->id)->exists()
+        ) {
+            return collect();
+        }
+
+        $total = (int) (
+            $class->programPackage?->total_meetings
+            ?? $class->privatePackage?->total_meetings
+            ?? 0
+        );
+
+        return $total > 0
+            ? $this->generateForNewClass($class, $total)
+            : collect();
     }
 
-    private function doGenerate(ClassModel $class, Carbon|string $from, int $count, ?int $startNumber): Collection
-    {
+    /**
+     * Generate sejumlah pertemuan berdasarkan pola jadwal mingguan.
+     */
+    public function generate(
+        ClassModel $class,
+        Carbon|string $from,
+        int $count,
+        ?int $startNumber = null
+    ): Collection {
+        return DB::transaction(
+            fn () => $this->doGenerate(
+                $class,
+                $from,
+                $count,
+                $startNumber
+            )
+        );
+    }
+
+    private function doGenerate(
+        ClassModel $class,
+        Carbon|string $from,
+        int $count,
+        ?int $startNumber
+    ): Collection {
         $created = collect();
 
         if ($count < 1) {
             return $created;
         }
 
-        $patterns = $class->allSchedules()->orderBy('start_time')->get();
+        $patterns = $class->allSchedules()
+            ->orderBy('start_time')
+            ->get();
 
         if ($patterns->isEmpty()) {
             return $created;
         }
 
-        $number = $startNumber ?? ((int) ClassSession::where('class_id', $class->id)->max('session_number') + 1);
-        $date   = Carbon::parse($from)->startOfDay();
-        $limit  = $date->copy()->addYears(2); // pengaman supaya loop tidak tak terbatas
-        $location = $class->is_home_visit
-            ? 'Home Visit'
-            : ($class->delivery_mode === 'Online' ? 'Online' : 'Studio');
+        $number = $startNumber
+            ?? (
+                (int) ClassSession::where('class_id', $class->id)
+                    ->max('session_number') + 1
+            );
+
+        $date = Carbon::parse($from)->startOfDay();
+        $limit = $date->copy()->addYears(2);
+
+        // Jadwal rutin tidak otomatis menjadi Home Visit.
+        $location = $class->delivery_mode === 'Online'
+            ? 'Online'
+            : 'Studio';
 
         while ($created->count() < $count && $date->lte($limit)) {
-            $dayName = ClassScheduleService::DAYS[$date->dayOfWeekIso - 1];
+            $dayName = ClassScheduleService::DAYS[
+                $date->dayOfWeekIso - 1
+            ];
 
             $todays = $patterns->filter(
-                fn (ClassSchedule $p) => $p->day === $dayName && $this->isActiveOn($p, $date)
+                fn (ClassSchedule $pattern) =>
+                    $pattern->day === $dayName
+                    && $this->isActiveOn($pattern, $date)
             );
 
             foreach ($todays as $pattern) {
@@ -103,22 +153,20 @@ class ClassSessionService
                 );
 
                 $session = ClassSession::create([
-                    'class_id'          => $class->id,
+                    'class_id' => $class->id,
                     'class_schedule_id' => $pattern->id,
-                    'kind'              => 'Regular',
-                    'session_number'    => $number++,
-                    'session_date'      => $date->toDateString(),
-                    'start_time'        => $pattern->start_time,
-                    'end_time'          => $pattern->end_time,
-                    'room'              => $location === 'Home Visit' ? null : $pattern->room,
-                    'teacher_id'        => $class->teacher_id,
-                    'location_type'     => $location,
-                    'status'            => 'Scheduled',
+                    'kind' => 'Regular',
+                    'session_number' => $number++,
+                    'session_date' => $date->toDateString(),
+                    'start_time' => $pattern->start_time,
+                    'end_time' => $pattern->end_time,
+                    'room' => $pattern->room,
+                    'teacher_id' => $class->teacher_id,
+                    'location_type' => $location,
+                    'status' => 'Scheduled',
                 ]);
 
-                // Home Visit: biaya Rp50.000 per pertemuan tercatat otomatis
-                $this->fees->syncFor($session);
-
+                // Tidak membuat pembayaran otomatis saat generate jadwal.
                 $created->push($session);
             }
 
@@ -129,83 +177,272 @@ class ClassSessionService
     }
 
     /**
-     * Tambah pertemuan (kelas pengganti) untuk satu siswa. Satu pertemuan, di luar hitungan paket,
-     * berbayar (SessionFeeService::FEE_REPLACEMENT). Guru boleh berbeda dari guru kelas asal.
-     * Tanpa kelas induk & tanpa pola mingguan. Mengubah jadwal kelas reguler bukan di sini,
-     * melainkan lewat ClassSessionRescheduleService.
+     * Membuat sesi pengganti untuk satu enrollment.
+     *
+     * Jika lokasi Home Visit, buat dua pembayaran:
+     * 1. Replacement.
+     * 2. Home Visit.
+     *
+     * Data pembayaran yang diterima:
+     * payment_date, payment_method, payment_proof_path, amount (opsional).
      */
     public function createReplacement(array $data): ClassSession
     {
-        $enrollment = ClassEnrollment::findOrFail($data['class_enrollment_id']);
-
-        $date  = Carbon::parse($data['session_date']);
+        $date = Carbon::parse($data['session_date'])->startOfDay();
         $start = Carbon::parse($data['start_time'])->format('H:i:s');
-        $end   = Carbon::parse($data['end_time'])->format('H:i:s');
-        $type  = $data['location_type'];
+        $end = Carbon::parse($data['end_time'])->format('H:i:s');
+        $type = $data['location_type'];
 
         if ($date->lt(today())) {
-            throw ValidationException::withMessages(['session_date' => 'Tanggal tidak boleh di masa lalu.']);
+            throw ValidationException::withMessages([
+                'session_date' => 'Tanggal tidak boleh di masa lalu.',
+            ]);
         }
+
         if ($end <= $start) {
-            throw ValidationException::withMessages(['end_time' => 'Jam selesai harus setelah jam mulai.']);
+            throw ValidationException::withMessages([
+                'end_time' => 'Jam selesai harus setelah jam mulai.',
+            ]);
+        }
+
+        if (! in_array($type, ['Studio', 'Online', 'Home Visit'], true)) {
+            throw ValidationException::withMessages([
+                'location_type' => 'Tipe lokasi pertemuan tidak valid.',
+            ]);
         }
 
         $room = match ($type) {
             'Studio' => $data['room'] ?? null,
             'Online' => 'Online',
-            default  => null, // Home Visit
+            default => null,
         };
 
         if ($type === 'Studio' && (! $room || $room === 'Online')) {
-            throw ValidationException::withMessages(['room' => 'Pilih ruangan untuk pertemuan di studio.']);
+            throw ValidationException::withMessages([
+                'room' => 'Pilih ruangan untuk pertemuan di studio.',
+            ]);
         }
 
-        return DB::transaction(function () use ($enrollment, $data, $date, $start, $end, $type, $room) {
-            $this->schedules->assertTeacherFreeOn((int) $data['teacher_id'], $date, $start, $end);
+        $pay = [
+            'payment_date' => $data['payment_date'] ?? null,
+            'payment_method' => $data['payment_method'] ?? null,
+            'payment_proof_path' => $data['payment_proof_path'] ?? null,
+        ];
+
+        if (array_key_exists('amount', $data)) {
+            $pay['amount'] = $data['amount'];
+        }
+
+        return DB::transaction(function () use (
+            $data,
+            $date,
+            $start,
+            $end,
+            $type,
+            $room,
+            $pay
+        ) {
+            $enrollment = ClassEnrollment::query()
+                ->whereKey($data['class_enrollment_id'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($enrollment->status !== 'Active') {
+                throw ValidationException::withMessages([
+                    'class_enrollment_id' =>
+                        'Sesi pengganti hanya dapat dibuat untuk enrollment berstatus Active.',
+                ]);
+            }
+
+            $this->schedules->assertTeacherAvailable(
+                (int) $data['teacher_id'],
+                [[
+                    'day' => ClassScheduleService::DAYS[
+                        $date->dayOfWeekIso - 1
+                    ],
+                    'start_time' => substr($start, 0, 5),
+                    'end_time' => substr($end, 0, 5),
+                ]]
+            );
+
+            $this->schedules->assertTeacherFreeOn(
+                (int) $data['teacher_id'],
+                $date,
+                $start,
+                $end
+            );
 
             if ($type === 'Studio') {
-                $this->schedules->assertRoomFreeOn($room, $date, $start, $end);
+                $this->schedules->assertRoomFreeOn(
+                    $room,
+                    $date,
+                    $start,
+                    $end
+                );
             }
 
             $session = ClassSession::create([
-                'class_id'            => null,
+                'class_id' => null,
                 'class_enrollment_id' => $enrollment->id,
-                'class_schedule_id'   => null,
-                'kind'                => 'Replacement',
-                'session_number'      => null,
-                'session_date'        => $date->toDateString(),
-                'start_time'          => $start,
-                'end_time'            => $end,
-                'room'                => $room,
-                'teacher_id'          => $data['teacher_id'],
-                'location_type'       => $type,
-                'status'              => 'Scheduled',
+                'class_schedule_id' => null,
+                'kind' => 'Replacement',
+                'session_number' => null,
+                'session_date' => $date->toDateString(),
+                'start_time' => $start,
+                'end_time' => $end,
+                'room' => $room,
+                'teacher_id' => $data['teacher_id'],
+                'location_type' => $type,
+                'status' => 'Scheduled',
             ]);
 
-            $this->fees->syncFor($session);
+            // Biaya kelas pengganti selalu dicatat.
+            $this->fees->record(
+                $enrollment,
+                Payment::TYPE_REPLACEMENT,
+                $session,
+                $pay
+            );
 
-            return $session;
+            // Home Visit menambahkan pembayaran kedua.
+            if ($type === 'Home Visit') {
+                $this->fees->record(
+                    $enrollment,
+                    Payment::TYPE_HOME_VISIT,
+                    $session,
+                    $pay
+                );
+            }
+
+            return $session->fresh();
         });
     }
 
-    /** Tandai pertemuan selesai (status Completed). Setelah itu pertemuan terkunci. */
+    /**
+     * Mengubah sesi menjadi Home Visit sekaligus mencatat pembayarannya.
+     */
+    public function makeHomeVisit(
+        ClassSession $session,
+        ClassEnrollment $payer,
+        array $pay
+    ): ClassSession {
+        return DB::transaction(function () use ($session, $payer, $pay) {
+            $lockedSession = ClassSession::query()
+                ->whereKey($session->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (! $lockedSession->canBecomeHomeVisit()) {
+                throw ValidationException::withMessages([
+                    'session' =>
+                        'Sesi ini tidak dapat diubah menjadi Home Visit.',
+                ]);
+            }
+
+            // Sesi pengganti harus terhubung ke enrollment pembayar.
+            if ($lockedSession->class_enrollment_id !== null) {
+                if (
+                    (int) $lockedSession->class_enrollment_id
+                    !== (int) $payer->id
+                ) {
+                    throw ValidationException::withMessages([
+                        'session' =>
+                            'Sesi pengganti ini bukan milik enrollment yang dipilih.',
+                    ]);
+                }
+            } else {
+                // Sesi reguler harus berasal dari kelas enrollment pembayar.
+                if (
+                    $lockedSession->class_id === null
+                    || $payer->class_id === null
+                    || (int) $lockedSession->class_id
+                    !== (int) $payer->class_id
+                ) {
+                    throw ValidationException::withMessages([
+                        'session' =>
+                            'Sesi reguler ini tidak sesuai dengan kelas enrollment yang dipilih.',
+                    ]);
+                }
+            }
+
+            $lockedSession->update([
+                'location_type' => 'Home Visit',
+                'room' => null,
+            ]);
+
+            // Jika pencatatan pembayaran gagal, perubahan lokasi ikut dibatalkan.
+            $this->fees->record(
+                $payer,
+                Payment::TYPE_HOME_VISIT,
+                $lockedSession,
+                $pay
+            );
+
+            return $lockedSession->fresh();
+        });
+    }
+
+    /**
+     * Mengubah beberapa sesi menjadi Home Visit dalam satu transaksi.
+     *
+     * @param array<int> $sessionIds
+     */
+    public function makeHomeVisitMany(
+        array $sessionIds,
+        ClassEnrollment $payer,
+        array $pay
+    ): Collection {
+        if (empty($sessionIds)) {
+            throw ValidationException::withMessages([
+                'session_ids' => 'Pilih minimal satu pertemuan.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($sessionIds, $payer, $pay) {
+            $updated = collect();
+
+            foreach (array_unique($sessionIds) as $sessionId) {
+                $session = ClassSession::query()
+                    ->whereKey($sessionId)
+                    ->firstOrFail();
+
+                $updated->push(
+                    $this->makeHomeVisit($session, $payer, $pay)
+                );
+            }
+
+            return $updated;
+        });
+    }
+
+    /**
+     * Menandai sesi selesai.
+     */
     public function complete(ClassSession $session): ClassSession
     {
         if (! $session->canBeCompleted()) {
             throw ValidationException::withMessages([
-                'session' => 'Hanya pertemuan Scheduled yang tanggalnya sudah tiba dan belum punya jurnal yang bisa ditandai selesai.',
+                'session' =>
+                    'Hanya pertemuan Scheduled yang tanggalnya sudah tiba dan belum punya jurnal yang bisa ditandai selesai.',
             ]);
         }
 
-        $session->update(['status' => 'Completed']);
+        $session->update([
+            'status' => 'Completed',
+        ]);
 
         return $session;
     }
 
-    private function isActiveOn(ClassSchedule $pattern, Carbon $date): bool
-    {
-        $startsOk = ! $pattern->effective_from || $pattern->effective_from->lte($date);
-        $endsOk   = ! $pattern->effective_until || $pattern->effective_until->gte($date);
+    private function isActiveOn(
+        ClassSchedule $pattern,
+        Carbon $date
+    ): bool {
+        $startsOk = ! $pattern->effective_from
+            || $pattern->effective_from->lte($date);
+
+        $endsOk = ! $pattern->effective_until
+            || $pattern->effective_until->gte($date);
 
         return $startsOk && $endsOk;
     }

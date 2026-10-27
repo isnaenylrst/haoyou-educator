@@ -530,15 +530,27 @@
                     return;
                 }
 
-                rows.innerHTML = data.payments.map(p => `
-                    <tr>
-                        <td><strong>${p.stage ?? '-'}</strong></td>
-                        <td>${p.date ?? '-'}</td>
-                        <td>${rupiah(p.amount_paid)}</td>
-                        <td>${p.method ?? '-'}</td>
-                        <td>${p.invoice_number ?? '-'}</td>
-                        <td>${p.proof_url ? `<a href="${p.proof_url}" target="_blank" rel="noopener">Lihat</a>` : '-'}</td>
-                    </tr>`).join('');
+
+            rows.innerHTML = data.payments.map(p => `
+                <tr>
+                    <td>
+                        <strong>${p.stage ?? '-'}</strong>
+                        <div style="margin-top:4px;">
+                            <span class="badge ${p.payment_type === 'package' ? 'bg-primary' : 'bg-info'}">
+                                ${p.payment_type === 'package' ? 'Paket' : 'Biaya Tambahan'}
+                            </span>
+                        </div>
+                    </td>
+                    <td>${p.date ?? '-'}</td>
+                    <td>${rupiah(p.amount_paid)}</td>
+                    <td>${p.method ?? '-'}</td>
+                    <td>${p.invoice_number ?? '-'}</td>
+                    <td>${p.proof_url
+                        ? `<a href="${p.proof_url}" target="_blank" rel="noopener">Lihat</a>`
+                        : '-'}</td>
+                </tr>
+            `).join('');
+
             })
             .catch(() => {
                 rows.innerHTML = '<tr><td colspan="6" class="history-empty">Gagal memuat riwayat.</td></tr>';

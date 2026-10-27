@@ -698,10 +698,17 @@
                     <td>${r.status ?? '-'}</td>
                     <td>${r.uploaded_at ?? '-'}</td>
                 `);
-
+                
                 renderRows('student_payments', data.payments, 8, p => `
                     <td>${p.invoice_number ?? '-'}</td>
-                    <td>${p.program_name ?? '-'}</td>
+                    <td>
+                        ${p.program_name ?? '-'}
+                        <div style="margin-top:4px;">
+                            <span class="badge ${p.payment_type === 'package' ? 'bg-primary' : 'bg-info'}">
+                                ${p.payment_type === 'package' ? 'Paket' : 'Biaya Tambahan'}
+                            </span>
+                        </div>
+                    </td>
                     <td>${formatRupiah(p.total_bill)}</td>
                     <td>${formatRupiah(p.amount_paid)}</td>
                     <td>${formatRupiah(p.remaining_bill)}</td>
@@ -722,6 +729,7 @@
                         </div>
                     </td>
                 `);
+
 
                 saveBtn.disabled = false;
             })

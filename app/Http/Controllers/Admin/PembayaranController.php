@@ -25,9 +25,15 @@ class PembayaranController extends Controller
         0) + class_enrollments.registration_fee)';
 
     private const PAID_SQL = 'COALESCE(
-        (select sum(amount_paid) from payments
-            where payments.enrollment_id = class_enrollments.id and payments.deleted_at is null),
-        0)';
+        (
+            select sum(amount_paid)
+            from payments
+            where payments.enrollment_id = class_enrollments.id
+                and payments.payment_type = \'Package\'
+                and payments.deleted_at is null
+        ),
+        0
+    )';
 
     public function __construct(private PaymentInstallmentService $payments)
     {
@@ -50,7 +56,7 @@ class PembayaranController extends Controller
                 'student:id,name',
                 'programPackage:id,package_name',
                 'privatePackage:id,package_name',
-                'payments:id,enrollment_id,payment_stage',
+                'packagePayments:id,enrollment_id,payment_stage',
             ])
             ->when($request->payment_status === 'lunas', fn ($q) => $q->whereRaw(self::PAID_SQL . ' >= ' . self::BILL_SQL))
             ->when($request->payment_status === 'sebagian', fn ($q) => $q->whereRaw(
@@ -84,14 +90,27 @@ class PembayaranController extends Controller
         $outstanding  = $unpaidRows->sum(fn ($e) => $e->total_bill - $e->total_paid);
         $unpaidCount  = $unpaidRows->pluck('student_id')->unique()->count();
 
-        // Terkumpul = semua pembayaran yang tanggal bayarnya jatuh di rentang filter
         $collected = Payment::query()
             ->whereHas('enrollment', function ($q) use ($request) {
                 $q->where('status', '!=', 'Cancelled');
                 $this->applyEnrollmentFilters($q, $request);
             })
-            ->when($from, fn ($q) => $q->whereDate('payment_date', '>=', $from->toDateString()))
-            ->when($to, fn ($q) => $q->whereDate('payment_date', '<=', $to->toDateString()))
+            ->when(
+                $from,
+                fn ($q) => $q->whereDate(
+                    'payment_date',
+                    '>=',
+                    $from->toDateString()
+                )
+            )
+            ->when(
+                $to,
+                fn ($q) => $q->whereDate(
+                    'payment_date',
+                    '<=',
+                    $to->toDateString()
+                )
+            )
             ->sum('amount_paid');
 
         return view('admin.pembayaran', [
@@ -127,18 +146,16 @@ class PembayaranController extends Controller
             'total_bill'   => $this->payments->totalBillFor($enrollment),
             'total_paid'   => $this->payments->totalPaid($enrollment),
             'remaining'    => $this->payments->remainingBill($enrollment),
-            'payments'     => $payments->map(fn (Payment $p) => [
+            'payments' => $payments->map(fn (Payment $p) => [
                 'id'             => $p->id,
                 'invoice_number' => $p->invoice_number,
+                'payment_type'   => $p->payment_type,
                 'stage'          => $p->payment_stage,
                 'amount_paid'    => (float) $p->amount_paid,
                 'remaining_bill' => (float) $p->remaining_bill,
                 'method'         => $p->payment_method,
                 'date'           => $p->payment_date?->format('d M Y'),
                 'status'         => $p->status,
-                // asset('storage/...') = hasil `php artisan storage:link`; dipakai
-                // ketimbang Storage::disk()->url() karena yang terakhir cuma
-                // "Undefined method" di IDE (kontrak Filesystem tidak mendeklarasikan url()).
                 'proof_url'      => $p->payment_proof_path
                     ? asset('storage/' . $p->payment_proof_path)
                     : null,
@@ -161,9 +178,9 @@ class PembayaranController extends Controller
             ]);
         }
 
-        // Satu tahap hanya boleh tercatat sekali per enrollment (Termin 1 tidak
-        // boleh dobel), sesuai format formulir pendaftaran.
-        $usedStages = $enrollment->payments()->pluck('payment_stage')->all();
+        $usedStages = $enrollment->packagePayments()
+            ->pluck('payment_stage')
+            ->all();
 
         $data = $request->validate([
             'payment_stage'  => ['required', Rule::in(self::STAGES), Rule::notIn($usedStages)],
@@ -212,7 +229,9 @@ class PembayaranController extends Controller
     ============================================================ */
     private function suggestNextStage(ClassEnrollment $enrollment): string
     {
-        $used = $enrollment->payments->pluck('payment_stage')->all();
+        $used = $enrollment->packagePayments
+            ->pluck('payment_stage')
+            ->all();
 
         foreach (['Termin 1', 'Termin 2', 'Termin 3'] as $stage) {
             if (! in_array($stage, $used, true)) {

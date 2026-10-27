@@ -1402,7 +1402,7 @@
                     </a>
                 </div>
 
-                @php $latestPayment = $enrollment->payments()->latest('id')->first(); @endphp
+                @php $latestPayment = $enrollment->packagePayments()->latest('id')->first(); @endphp
                 <div class="doc-download-item">
                     <div class="doc-info">
                         <div class="doc-icon"><i class="fa-solid fa-file-invoice-dollar"></i></div>
