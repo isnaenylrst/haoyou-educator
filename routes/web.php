@@ -31,6 +31,9 @@ use App\Http\Controllers\Admin\SiswaController;
 use App\Http\Controllers\Admin\KelasController;
 use App\Http\Controllers\Admin\JadwalController;
 use App\Http\Controllers\Admin\JurnalMengajarController;
+use App\Http\Controllers\Admin\ProgressReportController;
+use App\Http\Controllers\Admin\KurikulumMateriController;
+use App\Http\Controllers\Admin\DokumenController;
 use App\Http\Controllers\Admin\GuruController;
 use App\Http\Controllers\Admin\PembayaranController;
 use App\Http\Controllers\Admin\ProgramLevelController;
@@ -768,6 +771,7 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
             ->name('pembayaran.store');
     });
 
+
     // INVOICE
     Route::prefix('payments')->group(function () {
         Route::get('/{payment}/invoice', [PaymentInvoiceController::class, 'show'])
@@ -778,11 +782,54 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
     Route::prefix('jurnal-mengajar')->group(function () {
         Route::get('/', [JurnalMengajarController::class, 'index'])
             ->name('jurnal-mengajar');
-        Route::post('/', [JurnalMengajarController::class, 'store'])
-            ->name('jurnal-mengajar.store');
-        Route::get('/{journal}/edit', [JurnalMengajarController::class, 'edit'])
-            ->name('jurnal-mengajar.edit');
-        Route::put('/{journal}', [JurnalMengajarController::class, 'update'])
-            ->name('jurnal-mengajar.update');
-    });
-});
+
+        Route::get('/{journal}', [JurnalMengajarController::class, 'show'])
+            ->name('jurnal-mengajar.show');
+
+        Route::post('/ingatkan', [JurnalMengajarController::class, 'remind'])
+            ->name('jurnal-mengajar.remind');
+    });// KURIKULUM & MATERI (read-only)
+    Route::get('/kurikulum-materi', [KurikulumMateriController::class, 'index'])
+        ->name('kurikulum-materi');
+
+    Route::get('/kurikulum-materi/{material}/unduh', [KurikulumMateriController::class, 'unduh'])
+        ->name('kurikulum-materi.unduh');
+
+    // PROGRESS REPORT
+    Route::get('/progress-report', [ProgressReportController::class, 'index'])
+        ->name('progress-report');
+
+    Route::get('/progress-report/{report}/lihat', [ProgressReportController::class, 'lihat'])
+        ->name('progress-report.lihat');
+
+    Route::get('/progress-report/{report}/unduh', [ProgressReportController::class, 'unduh'])
+        ->name('progress-report.unduh');
+
+    Route::patch('/progress-report/{report}/follow-up', [ProgressReportController::class, 'followUp'])
+        ->name('progress-report.follow-up');
+
+    // DOKUMEN
+    Route::get('/dokumen', [DokumenController::class, 'index'])
+        ->name('dokumen');
+
+    Route::post('/dokumen', [DokumenController::class, 'store'])
+        ->name('dokumen.store');
+
+    Route::put('/dokumen/{document}', [DokumenController::class, 'update'])
+        ->name('dokumen.update');
+
+    Route::delete('/dokumen/{document}', [DokumenController::class, 'destroy'])
+        ->name('dokumen.destroy');
+
+    Route::get('/dokumen/{document}/lihat', [DokumenController::class, 'lihat'])
+        ->name('dokumen.lihat');
+
+    Route::get('/dokumen/{document}/unduh', [DokumenController::class, 'unduh'])
+        ->name('dokumen.unduh');
+
+    Route::post('/dokumen/folder', [DokumenController::class, 'storeFolder'])
+        ->name('dokumen.folder.store');
+
+    Route::delete('/dokumen/folder/{folder}', [DokumenController::class, 'destroyFolder'])
+        ->name('dokumen.folder.destroy');
+   });

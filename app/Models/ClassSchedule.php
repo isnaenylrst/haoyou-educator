@@ -18,6 +18,8 @@ class ClassSchedule extends Model
         'start_time',
         'end_time',
         'room',
+        'zoom_link',
+        'zoom_passcode',
         'effective_from',
         'effective_until',
     ];
@@ -42,14 +44,14 @@ class ClassSchedule extends Model
         return $this->hasMany(TeacherLeave::class, 'class_schedule_id');
     }
 
-    // Pertemuan bertanggal yang dibangkitkan dari pola mingguan ini
+    // Pertemuan bertanggal yang dibangkitkan dari pola mingguan ini.
     public function sessions()
     {
         return $this->hasMany(ClassSession::class, 'class_schedule_id');
     }
 
     /* ---------------------------------------------------------- */
-    /*  Scope masa berlaku                                         */
+    /* Scope masa berlaku                                         */
     /* ---------------------------------------------------------- */
 
     /** Pola yang belum ditutup (effective_until kosong). */
@@ -58,16 +60,18 @@ class ClassSchedule extends Model
         return $query->whereNull('effective_until');
     }
 
-    /** Pola yang berlaku pada tanggal tertentu (null = sejak awal / tanpa batas). */
+    /** Pola yang berlaku pada tanggal tertentu. */
     public function scopeActiveOn(Builder $query, $date): Builder
     {
         return $query
-            ->where(fn ($q) => $q->whereNull('effective_from')->orWhereDate('effective_from', '<=', $date))
-            ->where(fn ($q) => $q->whereNull('effective_until')->orWhereDate('effective_until', '>=', $date));
+            ->where(fn ($q) => $q->whereNull('effective_from')
+                ->orWhereDate('effective_from', '<=', $date))
+            ->where(fn ($q) => $q->whereNull('effective_until')
+                ->orWhereDate('effective_until', '>=', $date));
     }
 
     /* ---------------------------------------------------------- */
-    /*  Helper                                                     */
+    /* Helper                                                     */
     /* ---------------------------------------------------------- */
 
     public function isCurrent(): bool
@@ -76,8 +80,8 @@ class ClassSchedule extends Model
     }
 
     /**
-     * Tutup pola ini mulai hari setelah $lastDate. Pola tidak pernah dihapus
-     * karena jurnal lama masih mengacu ke sini (restrictOnDelete).
+     * Tutup pola ini pada tanggal yang ditentukan.
+     * Jadwal lama tetap disimpan agar jurnal lama tetap terhubung.
      */
     public function closeOn($lastDate): void
     {

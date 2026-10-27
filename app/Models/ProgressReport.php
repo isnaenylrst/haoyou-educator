@@ -11,6 +11,17 @@ class ProgressReport extends Model
 
     protected $table = 'progress_reports';
 
+    public $timestamps = false;
+
+    public const SUBMITTED = 'Submitted';
+
+    public const FOLLOW_UPS = [
+        'Belum',
+        'Menunggu Jawaban',
+        'Lanjut',
+        'Tidak Lanjut',
+    ];
+
     protected $fillable = [
         'student_id',
         'teacher_id',
@@ -20,6 +31,19 @@ class ProgressReport extends Model
         'file_path',
         'status',
         'uploaded_by',
+
+        // Nilai kompetensi
+        'listening_score',
+        'reading_score',
+        'writing_score',
+
+        // Publikasi dan follow-up
+        'published_at',
+        'follow_up_status',
+        'followed_up_at',
+        'follow_up_note',
+
+        // Konten dan review Kurikulum
         'content',
         'attendance_present',
         'attendance_total',
@@ -32,6 +56,9 @@ class ProgressReport extends Model
     ];
 
     protected $casts = [
+        'published_at'   => 'datetime',
+        'followed_up_at' => 'datetime',
+
         'content'        => 'array',
         'reviewed_at'    => 'datetime',
         'returned_at'    => 'datetime',
@@ -62,28 +89,33 @@ class ProgressReport extends Model
     /** Sudah di-ACC Kurikulum (baru boleh tampil ke siswa). */
     public function getIsApprovedAttribute(): bool
     {
-        return $this->status === 'Submitted' && $this->reviewed_at !== null;
+        return $this->status === 'Submitted'
+            && $this->reviewed_at !== null;
     }
 
     /** Menunggu review Kurikulum. */
     public function getIsPendingReviewAttribute(): bool
     {
-        return $this->status === 'Submitted' && $this->reviewed_at === null;
+        return $this->status === 'Submitted'
+            && $this->reviewed_at === null;
     }
 
     /** Dikembalikan Kurikulum dan belum dikirim ulang. */
     public function getIsReturnedAttribute(): bool
     {
-        return $this->status === 'Draft' && $this->returned_at !== null;
+        return $this->status === 'Draft'
+            && $this->returned_at !== null;
     }
 
     /** Hanya report yang sudah di-ACC. */
     public function scopeApproved($query)
     {
-        return $query->where('status', 'Submitted')->whereNotNull('reviewed_at');
+        return $query
+            ->where('status', 'Submitted')
+            ->whereNotNull('reviewed_at');
     }
 
-    /** Rata-rata nilai latihan dari semua kompetensi di report ini (null jika belum ada nilai). */
+    /** Rata-rata nilai latihan dari semua kompetensi di report ini. */
     public function getAverageScoreAttribute(): ?float
     {
         $scores = collect($this->content ?? [])
@@ -91,6 +123,8 @@ class ProgressReport extends Model
             ->filter(fn ($v) => $v !== null && $v !== '')
             ->map(fn ($v) => (float) $v);
 
-        return $scores->isEmpty() ? null : round($scores->avg(), 1);
+        return $scores->isEmpty()
+            ? null
+            : round($scores->avg(), 1);
     }
 }

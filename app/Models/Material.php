@@ -26,7 +26,7 @@ class Material extends Model
         'material_file_path',
     ];
 
-    public function level()
+    public function level(): BelongsTo
     {
         return $this->belongsTo(ProgramLevel::class, 'level_id');
     }
@@ -36,6 +36,14 @@ class Material extends Model
         return $this->belongsTo(User::class, 'uploaded_by');
     }
 
+    // Kosakata materi, diurutkan berdasarkan order_number.
+    public function vocabs(): HasMany
+    {
+        return $this->hasMany(MaterialVocab::class, 'material_id')
+            ->orderBy('order_number');
+    }
+
+    // Alias relasi kosakata untuk kode yang menggunakan vocabularies().
     public function vocabularies(): HasMany
     {
         return $this->hasMany(MaterialVocab::class, 'material_id');
@@ -51,11 +59,15 @@ class Material extends Model
         return $this->hasMany(TeachingJournal::class, 'material_id');
     }
 
-    // ------------------------------------------------------------ INFO FILE
+    // ------------------------------------------------------------
+    // Informasi file materi
+    // ------------------------------------------------------------
 
     public function getFileExtensionAttribute(): string
     {
-        return strtolower(pathinfo((string) $this->material_file_path, PATHINFO_EXTENSION));
+        return strtolower(
+            pathinfo((string) $this->material_file_path, PATHINFO_EXTENSION)
+        );
     }
 
     public function getIsPdfAttribute(): bool
@@ -65,7 +77,8 @@ class Material extends Model
 
     public function getFileExistsAttribute(): bool
     {
-        return $this->material_file_path
+        return $this->material_file_path !== null
+            && $this->material_file_path !== ''
             && Storage::disk('public')->exists($this->material_file_path);
     }
 
