@@ -7,6 +7,10 @@ use App\Http\Controllers\LandingController;
 use App\Http\Controllers\CalonSiswa\PendaftaranController;
 use App\Http\Controllers\Siswa\SiswaDashboardController;
 use App\Http\Controllers\Siswa\SiswaLearningController;
+use App\Http\Controllers\Siswa\BookingController;
+use App\Http\Controllers\Siswa\StudentCertificateController;
+use App\Http\Controllers\Siswa\VocabController;
+use App\Http\Controllers\ProfilController;
 
 // ===== KURIKULUM =====
 use App\Http\Controllers\Kurikulum\DashboardController;
@@ -116,7 +120,18 @@ Route::get('/daftar/sukses', [PendaftaranController::class, 'sukses'])
 
 /*
 |--------------------------------------------------------------------------
-| DASHBOARD SISWA
+| VERIFIKASI SERTIFIKAT (publik, tujuan QR code di sertifikat)
+|--------------------------------------------------------------------------
+*/
+
+Route::get('/verifikasi-sertifikat/{code}', [StudentCertificateController::class, 'verify'])
+    ->name('certificates.verify');
+
+/*
+|--------------------------------------------------------------------------
+| AREA SISWA
+|--------------------------------------------------------------------------
+| Wajib login + role Student.
 |--------------------------------------------------------------------------
 */
 
@@ -125,38 +140,89 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
     Route::get('/dashboard', [SiswaDashboardController::class, 'dashboard'])
         ->name('dashboard');
 
-    Route::get('/program', [SiswaDashboardController::class, 'program'])
+    Route::get('/program-belajar', [SiswaDashboardController::class, 'program'])
         ->name('program.index');
-
-    Route::get('/booking', [SiswaDashboardController::class, 'booking'])
-        ->name('booking.index');
 
     Route::get('/kelas-saya', [SiswaDashboardController::class, 'kelasSaya'])
         ->name('kelassaya.index');
 
-    Route::get('/profil', [SiswaDashboardController::class, 'profil'])
-        ->name('profil.index');
-
+    // NOTIFIKASI
     Route::get('/notifikasi', [SiswaDashboardController::class, 'notifikasi'])
         ->name('notifikasi.index');
 
-    Route::get('/sertifikat', [SiswaLearningController::class, 'sertifikat'])
-        ->name('sertifikat.index');
+    Route::post('/notifikasi/tandai-dibaca', [SiswaDashboardController::class, 'notifikasiTandaiDibaca'])
+        ->name('notifikasi.read-all');
 
-    Route::get('/sertifikat/{certificate}/download', [SiswaLearningController::class, 'downloadSertifikat'])
-        ->name('sertifikat.download');
-
+    // PROGRESS REPORT (disetujui Kurikulum)
     Route::get('/progress-report', [SiswaLearningController::class, 'progresReport'])
         ->name('progresreport.index');
 
     Route::get('/progress-report/{report}/download', [SiswaLearningController::class, 'downloadProgressReport'])
         ->name('progresreport.download');
 
+    // SERTIFIKAT (disetujui Kurikulum)
+    Route::get('/sertifikat', [SiswaLearningController::class, 'sertifikat'])
+        ->name('sertifikat.index');
+
+    Route::get('/sertifikat/{certificate}/download', [SiswaLearningController::class, 'downloadSertifikat'])
+        ->name('sertifikat.download');
+
+    // VIDEO
     Route::get('/video', [SiswaLearningController::class, 'video'])
         ->name('video.index');
 
     Route::get('/video/{video}/stream', [SiswaLearningController::class, 'streamVideo'])
         ->name('video.stream');
+
+    // BELAJAR VOCAB
+    Route::prefix('student/belajar-vocab')->name('student.vocab.')->group(function () {
+
+        Route::get('study-plan', [VocabController::class, 'plan'])->name('plan');
+        Route::post('study-plan', [VocabController::class, 'planSave'])->name('plan.save');
+
+        Route::get('vocab-list', [VocabController::class, 'list'])->name('list');
+
+        Route::get('test/{type?}', [VocabController::class, 'test'])->name('test')
+            ->where('type', 'reading|listening|writing');
+        Route::post('test/{type}/answer', [VocabController::class, 'answer'])->name('test.answer');
+        Route::get('test/{type}/pending', [VocabController::class, 'pending'])->name('test.pending');
+        Route::post('test/{type}/reset', [VocabController::class, 'reset'])->name('test.reset');
+
+        Route::get('vocab-traps', [VocabController::class, 'traps'])->name('traps');
+        Route::post('vocab-traps/{word}/paham', [VocabController::class, 'understood'])->name('traps.understood');
+    });
+
+    // BOOKING KELAS
+    Route::get('/booking', [BookingController::class, 'index'])
+        ->name('booking.index');
+
+    Route::post('/booking/privat', [BookingController::class, 'storePrivate'])
+        ->name('booking.privat.store');
+
+    Route::patch('/booking/privat/{booking}/reschedule', [BookingController::class, 'reschedulePrivate'])
+        ->name('booking.privat.reschedule');
+
+    Route::post('/booking/reguler/{class}', [BookingController::class, 'daftarReguler'])
+        ->name('booking.reguler.daftar');
+
+    Route::post('/booking/request-privat', [BookingController::class, 'requestPrivate'])
+        ->name('booking.request.privat');
+
+    Route::post('/booking/request-reguler', [BookingController::class, 'requestReguler'])
+        ->name('booking.request.reguler');
+
+    // PROFIL
+    Route::get('/profil', [ProfilController::class, 'index'])
+        ->name('profil.index');
+
+    Route::put('/profil', [ProfilController::class, 'update'])
+        ->name('profil.update');
+
+    Route::put('/profil/password', [ProfilController::class, 'updatePassword'])
+        ->name('profil.password');
+
+    Route::delete('/profil/foto', [ProfilController::class, 'destroyFoto'])
+        ->name('profil.foto.destroy');
 });
 
 /*
@@ -771,7 +837,6 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
             ->name('pembayaran.store');
     });
 
-
     // INVOICE
     Route::prefix('payments')->group(function () {
         Route::get('/{payment}/invoice', [PaymentInvoiceController::class, 'show'])
@@ -788,7 +853,9 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
 
         Route::post('/ingatkan', [JurnalMengajarController::class, 'remind'])
             ->name('jurnal-mengajar.remind');
-    });// KURIKULUM & MATERI (read-only)
+    });
+
+    // KURIKULUM & MATERI (read-only)
     Route::get('/kurikulum-materi', [KurikulumMateriController::class, 'index'])
         ->name('kurikulum-materi');
 
@@ -832,4 +899,4 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
 
     Route::delete('/dokumen/folder/{folder}', [DokumenController::class, 'destroyFolder'])
         ->name('dokumen.folder.destroy');
-   });
+});

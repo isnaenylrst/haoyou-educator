@@ -25,7 +25,7 @@ class ClassSchedule extends Model
     ];
 
     protected $casts = [
-        'effective_from'  => 'date',
+        'effective_from' => 'date',
         'effective_until' => 'date',
     ];
 
@@ -50,9 +50,9 @@ class ClassSchedule extends Model
         return $this->hasMany(ClassSession::class, 'class_schedule_id');
     }
 
-    /* ---------------------------------------------------------- */
-    /* Scope masa berlaku                                         */
-    /* ---------------------------------------------------------- */
+    /* ----------------------------------------------------------
+     * Scope masa berlaku
+     * ---------------------------------------------------------- */
 
     /** Pola yang belum ditutup (effective_until kosong). */
     public function scopeCurrent(Builder $query): Builder
@@ -64,15 +64,19 @@ class ClassSchedule extends Model
     public function scopeActiveOn(Builder $query, $date): Builder
     {
         return $query
-            ->where(fn ($q) => $q->whereNull('effective_from')
-                ->orWhereDate('effective_from', '<=', $date))
-            ->where(fn ($q) => $q->whereNull('effective_until')
-                ->orWhereDate('effective_until', '>=', $date));
+            ->where(function ($q) use ($date) {
+                $q->whereNull('effective_from')
+                    ->orWhereDate('effective_from', '<=', $date);
+            })
+            ->where(function ($q) use ($date) {
+                $q->whereNull('effective_until')
+                    ->orWhereDate('effective_until', '>=', $date);
+            });
     }
 
-    /* ---------------------------------------------------------- */
-    /* Helper                                                     */
-    /* ---------------------------------------------------------- */
+    /* ----------------------------------------------------------
+     * Helper
+     * ---------------------------------------------------------- */
 
     public function isCurrent(): bool
     {

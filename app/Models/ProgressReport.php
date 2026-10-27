@@ -56,13 +56,14 @@ class ProgressReport extends Model
     ];
 
     protected $casts = [
-        'published_at'   => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'published_at' => 'datetime',
         'followed_up_at' => 'datetime',
-
-        'content'        => 'array',
-        'reviewed_at'    => 'datetime',
-        'returned_at'    => 'datetime',
-        'submitted_at'   => 'datetime',
+        'content' => 'array',
+        'reviewed_at' => 'datetime',
+        'returned_at' => 'datetime',
+        'submitted_at' => 'datetime',
         'extended_until' => 'date',
     ];
 
@@ -89,14 +90,14 @@ class ProgressReport extends Model
     /** Sudah di-ACC Kurikulum (baru boleh tampil ke siswa). */
     public function getIsApprovedAttribute(): bool
     {
-        return $this->status === 'Submitted'
+        return $this->status === self::SUBMITTED
             && $this->reviewed_at !== null;
     }
 
     /** Menunggu review Kurikulum. */
     public function getIsPendingReviewAttribute(): bool
     {
-        return $this->status === 'Submitted'
+        return $this->status === self::SUBMITTED
             && $this->reviewed_at === null;
     }
 
@@ -111,7 +112,7 @@ class ProgressReport extends Model
     public function scopeApproved($query)
     {
         return $query
-            ->where('status', 'Submitted')
+            ->where('status', self::SUBMITTED)
             ->whereNotNull('reviewed_at');
     }
 
@@ -120,8 +121,8 @@ class ProgressReport extends Model
     {
         $scores = collect($this->content ?? [])
             ->pluck('score')
-            ->filter(fn ($v) => $v !== null && $v !== '')
-            ->map(fn ($v) => (float) $v);
+            ->filter(fn ($value) => $value !== null && $value !== '')
+            ->map(fn ($value) => (float) $value);
 
         return $scores->isEmpty()
             ? null

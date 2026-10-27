@@ -2,8 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
@@ -21,96 +22,89 @@ class User extends Authenticatable
 
     protected $hidden = [
         'password',
+        'remember_token',
     ];
+
+    protected $casts = [
+        'password' => 'hashed',
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | RELASI LEVEL
+    |--------------------------------------------------------------------------
+    */
 
     public function level()
     {
         return $this->belongsTo(
             Level::class,
-            'level_id', // foreign key di tabel users
-            'id_level'  // primary key di tabel levels
+            'level_id',
+            'id_level'
         );
     }
 
     /*
     |--------------------------------------------------------------------------
-    | FIX: sebelumnya salah arah (nunjuk ke model Wali & kolom siswa_id).
-    | Sekarang benar: 1 User -> 1 baris di tabel teachers (lewat user_id).
+    | RELASI SISWA
     |--------------------------------------------------------------------------
     */
-    public function teacher()
+
+    public function student(): HasOne
     {
-        return $this->hasOne(Teacher::class, 'user_id');
+        return $this->hasOne(Student::class, 'user_id', 'id');
     }
 
     /*
     |--------------------------------------------------------------------------
-    | FIX: sebelumnya cuma return boolean (bukan relasi Eloquent beneran),
-    | jadi tidak bisa dipakai ->student->nama dsb.
+    | RELASI GURU
     |--------------------------------------------------------------------------
     */
-    public function student()
-    {
-        return $this->hasOne(Student::class, 'user_id');
-    }
 
-    public function curriculum()
+    public function teacher(): HasOne
     {
-        return $this->hasOne(Curriculum::class);
-    }
-
-    public function uploadedMaterials()
-    {
-        return $this->hasMany(Material::class, 'uploaded_by');
-    }
-
-    public function uploadedProgressReports()
-    {
-        return $this->hasMany(ProgressReport::class, 'uploaded_by');
-    }
-
-    public function uploadedTemplates()
-    {
-        return $this->hasMany(DocumentTemplate::class, 'uploaded_by');
-    }
-
-    public function uploadedDocuments()
-    {
-        return $this->hasMany(Document::class, 'uploaded_by');
-    }
-
-    public function documents()
-    {
-        return $this->hasMany(Document::class);
-    }
-
-    public function approvedTeacherMaterials()
-    {
-        return $this->hasMany(TeacherMaterial::class, 'approved_by');
-    }
-
-    public function approvedTeacherLeaves()
-    {
-        return $this->hasMany(TeacherLeave::class, 'approved_by');
+        return $this->hasOne(Teacher::class, 'user_id', 'id');
     }
 
     /*
     |--------------------------------------------------------------------------
-    | PENTING: JANGAN DIHAPUS meskipun AuthController sekarang pakai versi
-    | main (switch-case manual). Method ini MASIH DIPAKAI oleh
-    | AppServiceProvider (override RedirectIfAuthenticated) untuk menangani
-    | kasus "user sudah login lalu buka /login lagi". Kalau dihapus,
-    | fitur anti-403-loop yang sudah kita bangun akan error.
+    | RELASI CURRICULUM
     |--------------------------------------------------------------------------
     */
+
+    public function curriculum(): HasOne
+    {
+        return $this->hasOne(Curriculum::class, 'user_id', 'id');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | NAMA TAMPILAN
+    |--------------------------------------------------------------------------
+    */
+
+    public function getDisplayNameAttribute(): string
+    {
+        return $this->student?->name
+            ?? $this->teacher?->name
+            ?? $this->username
+            ?? 'Siswa';
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | HALAMAN UTAMA BERDASARKAN LEVEL
+    |--------------------------------------------------------------------------
+    */
+
     public function homeRouteName(): ?string
     {
-        return match ($this->level->nama_level ?? null) {
+        return match ($this->level?->nama_level) {
             'Owner'      => 'owner.dashboard',
             'Curriculum' => 'kurikulum.dashboard',
             'Teacher'    => 'teacher.dashboard',
             'Student'    => 'dashboard',
-            default      => null, // Owner/Admin/tidak dikenali -> belum ada modul
+            default      => null,
         };
     }
 }

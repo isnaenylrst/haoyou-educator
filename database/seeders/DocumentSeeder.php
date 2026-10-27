@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Document;
 use App\Models\DocumentTemplate;
 use App\Models\Level;
+use App\Models\ProgramLevel;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\User;
@@ -52,21 +53,34 @@ class DocumentSeeder extends Seeder
                 'visibility' => 'Student',
             ]);
         }
+    $levels = ProgramLevel::with('program')->get()->keyBy('id');
 
-        $graduatedStudents = $students->filter(fn ($s) => $s->current_level_id)->random(
-            min(10, $students->filter(fn ($s) => $s->current_level_id)->count())
-        );
+    $graduatedStudents = $students->filter(fn ($s) => $s->current_level_id)->random(
+        min(10, $students->filter(fn ($s) => $s->current_level_id)->count())
+    );
 
-        foreach ($graduatedStudents as $student) {
-            Document::factory()
-                ->certificate($student->current_level_id)
-                ->create([
-                    'user_id' => $student->user_id,
-                    'uploaded_by' => $uploaderId,
-                    'document_template_id' => $certificateTemplateId,
-                    'title' => 'Sertifikat Kelulusan Level',
-                ]);
-        }
+    foreach ($graduatedStudents as $student) {
+        $level     = $levels->get($student->current_level_id);
+        $program   = $level?->program?->program_name;
+        $levelName = $level?->level_name;
+
+    // Hindari dobel seperti "HSK HSK 2"
+    if ($program && $levelName && ! str_starts_with(strtolower($levelName), strtolower($program))) {
+        $label = $program . ' ' . $levelName;
+    } else {
+        $label = $levelName ?: $program ?: 'Level';
+    }
+
+    Document::factory()
+        ->certificate($student->current_level_id)
+        ->create([
+            'user_id' => $student->user_id,
+            'uploaded_by' => $uploaderId,
+            'document_template_id' => $certificateTemplateId,
+            'title' => 'Sertifikat Kelulusan ' . $label,
+            'description' => "Selamat! Kamu telah menyelesaikan seluruh materi {$label} dengan baik.",
+        ]);
+}
 
         // Materi kelas privat (request siswa, diunggah guru)
         if ($students->isNotEmpty()) {

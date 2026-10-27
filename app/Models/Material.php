@@ -43,7 +43,7 @@ class Material extends Model
             ->orderBy('order_number');
     }
 
-    // Alias relasi kosakata untuk kode yang menggunakan vocabularies().
+    // Alias relasi untuk kode yang menggunakan vocabularies().
     public function vocabularies(): HasMany
     {
         return $this->hasMany(MaterialVocab::class, 'material_id');
@@ -59,10 +59,7 @@ class Material extends Model
         return $this->hasMany(TeachingJournal::class, 'material_id');
     }
 
-    // ------------------------------------------------------------
-    // Informasi file materi
-    // ------------------------------------------------------------
-
+    // Informasi file materi.
     public function getFileExtensionAttribute(): string
     {
         return strtolower(
