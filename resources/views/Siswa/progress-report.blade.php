@@ -4,32 +4,28 @@
 
 <div class="bg-white border border-line rounded-2xl p-5 mb-5">
   <div class="bg-pale rounded-xl px-4 py-3 text-xs text-oliveDark mb-4">
-    Laporan perkembangan belajar diterbitkan otomatis secara berkala — setiap <strong>3 bulan</strong> untuk kelas Reguler, dan setiap <strong>2 bulan</strong> untuk kelas HSK.
+    Progress report tampil di sini setelah <strong>disetujui Kurikulum</strong>. Laporan yang masih diisi guru atau sedang direview belum ditampilkan.
   </div>
 
-  @foreach ($laporan as $item)
+  @forelse ($laporan as $item)
     <div class="flex items-center justify-between py-3 border-b border-line last:border-0">
       <div class="flex items-center gap-3">
         <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg">📊</div>
         <div>
-          <div class="text-sm font-medium">{{ $item['judul'] }}</div>
-          <div class="text-xs text-gray-500">{{ $item['periode'] }}</div>
+          <div class="text-sm font-medium">{{ $item->report_type }}{{ optional(optional($item->enrollment)->class)->class_name ? ' — ' . $item->enrollment->class->class_name : '' }}</div>
+          <div class="text-xs text-gray-500">
+            {{ $item->report_period }} · Disetujui {{ optional($item->reviewed_at)->translatedFormat('d M Y') }}
+            @if (!is_null($item->average_score)) · Rata-rata nilai {{ $item->average_score }} @endif
+          </div>
         </div>
       </div>
-      <button class="text-xs font-semibold border border-ink rounded-full px-4 py-2 hover:bg-ink hover:text-white transition">Lihat Laporan</button>
+      @if ($item->file_path)
+        <a href="{{ route('progresreport.download', $item) }}" class="text-xs font-semibold border border-ink rounded-full px-4 py-2 hover:bg-ink hover:text-white transition">Unduh PDF</a>
+      @endif
     </div>
-  @endforeach
-
-  <div class="flex items-center justify-between py-3 border-t border-line mt-1">
-    <div class="flex items-center gap-3">
-      <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg">⏳</div>
-      <div>
-        <div class="text-sm font-medium">Progress Report Berikutnya</div>
-        <div class="text-xs text-gray-500">Reguler: terbit Apr 2026 · HSK: terbit Mar 2026</div>
-      </div>
-    </div>
-    <span class="text-[11px] font-semibold px-3 py-1 rounded-full bg-pale text-oliveDark">Belum Terbit</span>
-  </div>
+  @empty
+    <div class="py-6 text-center text-xs text-gray-500">Belum ada progress report yang disetujui.</div>
+  @endforelse
 </div>
 
 <div class="alumni-banner bg-pale border border-gold rounded-xl p-4">

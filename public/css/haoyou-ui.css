@@ -1,0 +1,230 @@
+/* =====================================================================
+   haoyou-ui.css
+   Gaya bersama untuk layout GURU dan KURIKULUM, mengikuti tampilan
+   halaman Admin (Poppins 14px, sidebar 240px, topbar 68px, kartu radius 12px).
+   Dimuat SETELAH @stack('styles') supaya menyeragamkan semua halaman.
+   Mendukung mode gelap lewat variabel --bg, --surface, --text, --muted, --line.
+   ===================================================================== */
+
+:root {
+    --hy-font: 'Poppins', sans-serif;
+    --hy-radius: 12px;
+    --hy-radius-sm: 7px;
+    --hy-yellow: #FFD400;
+    --hy-yellow-hover: #F2C800;
+    --hy-yellow-ink: #111827;
+    --sidebar-w: 240px;
+}
+
+/* ---------- Dasar ---------- */
+body {
+    font-family: var(--hy-font);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea, .btn, .form-control, .form-select {
+    font-family: var(--hy-font);
+}
+
+/* ---------- Sidebar (sama dengan Admin) ---------- */
+.sidebar .nav-label {
+    font-size: 11px;
+    letter-spacing: .07em;
+    padding: 16px 12px 6px;
+}
+.sidebar .nav-link-item {
+    font-size: 13.5px;
+    padding: 9px 12px;
+    gap: 12px;
+    margin-bottom: 2px;
+    border-radius: var(--hy-radius-sm);
+}
+.sidebar .nav-link-item i { font-size: 15px; }
+.sidebar .user-meta .n { font-size: 12.5px; }
+.sidebar .user-meta .r { font-size: 11px; }
+
+/* ---------- Topbar ---------- */
+.topbar { height: 68px; padding: 0 24px; }
+.topbar .searchbox input { font-size: 13px; padding: 9px 70px 9px 38px; }
+.topbar .icon-btn { width: 38px; height: 38px; border-radius: 10px; }
+.topbar .top-user .n { font-size: 13px; }
+.topbar .top-user .r { font-size: 11px; }
+
+/* ---------- Area konten: jarak kiri, kanan, atas, bawah seragam ---------- */
+.content {
+    padding: 26px 28px 60px;
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
+}
+.content > .container-fluid,
+.content .container-fluid:first-child {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+/* ---------- Judul ---------- */
+.content h1, .content h2, .content h3 {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    line-height: 1.25;
+    color: var(--text);
+}
+.content h4 { font-size: 19px; font-weight: 700; line-height: 1.3; }
+.content h5 { font-size: 15px; font-weight: 700; line-height: 1.35; }
+.content h6 { font-size: 13.5px; font-weight: 600; line-height: 1.4; }
+
+/* angka statistik di dalam kartu (sama dengan stat-value Admin) */
+.content .card h2, .content .card h3 { font-size: 26px; }
+
+/* subjudul halaman dan teks kecil */
+.content p.text-muted,
+.content small.text-muted { font-size: 13px; }
+.content small, .content .small { font-size: 12.5px; }
+.content .text-muted { color: var(--muted) !important; }
+
+/* ---------- Kartu ---------- */
+.content .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--hy-radius);
+    box-shadow: none;
+    margin-bottom: 20px;
+}
+.content .card-body { padding: 18px 20px; }
+.content .card-header,
+.content .card-footer {
+    background: transparent;
+    border-color: var(--line);
+    padding: 14px 20px;
+}
+.content .card-header { font-weight: 600; }
+/* kartu di dalam grid: jarak diatur oleh gutter (g-2/g-3/g-4) */
+.content .row > [class*="col"] > .card.h-100,
+.content .row.g-2 .card,
+.content .row.g-3 .card,
+.content .row.g-4 .card { margin-bottom: 0; }
+
+/* ---------- Tabel ---------- */
+.content .table {
+    font-size: 13px;
+    color: var(--text);
+    margin-bottom: 0;
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--text);
+    --bs-table-border-color: var(--line);
+}
+.content .table > :not(caption) > * > * {
+    padding: 12px 14px;
+    border-bottom-color: var(--line);
+    background-color: transparent;
+}
+.content .table thead th,
+.content .table .table-light th,
+.content .table thead.table-light th {
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--muted);
+    background-color: transparent;
+    white-space: nowrap;
+}
+.content .table-light { --bs-table-bg: transparent; --bs-table-color: var(--muted); }
+.content .table-hover > tbody > tr:hover > * { background-color: var(--accent-soft); }
+
+/* ---------- Tombol ---------- */
+.content .btn, .modal .btn {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: var(--hy-radius-sm);
+    line-height: 1.4;
+}
+.content .btn-sm, .modal .btn-sm {
+    font-size: 12px;
+    padding: 5px 11px;
+}
+.content .btn-lg, .modal .btn-lg { font-size: 14px; padding: 10px 20px; }
+
+.content .btn-primary, .content .btn-warning,
+.modal .btn-primary, .modal .btn-warning {
+    background: var(--hy-yellow);
+    border-color: var(--hy-yellow);
+    color: var(--hy-yellow-ink);
+}
+.content .btn-primary:hover, .content .btn-warning:hover,
+.modal .btn-primary:hover, .modal .btn-warning:hover {
+    background: var(--hy-yellow-hover);
+    border-color: var(--hy-yellow-hover);
+    color: var(--hy-yellow-ink);
+}
+.content .btn-outline-primary { border-color: var(--hy-yellow); color: #8A6D00; }
+.content .btn-outline-primary:hover { background: var(--hy-yellow); color: var(--hy-yellow-ink); }
+[data-theme="dark"] .content .btn-outline-primary { color: var(--hy-yellow); }
+
+/* ---------- Formulir ---------- */
+.content .form-control, .content .form-select,
+.modal .form-control, .modal .form-select {
+    font-size: 13px;
+    padding: 9px 12px;
+    min-height: 38px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background-color: var(--surface);
+    color: var(--text);
+}
+.content .form-control-sm, .content .form-select-sm,
+.modal .form-control-sm, .modal .form-select-sm {
+    font-size: 12.5px;
+    padding: 6px 10px;
+    min-height: 32px;
+}
+.content textarea.form-control, .modal textarea.form-control { min-height: 0; }
+.content input[type="file"].form-control, .modal input[type="file"].form-control { padding: 6px 10px; }
+.content .form-control:focus, .content .form-select:focus,
+.modal .form-control:focus, .modal .form-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(255, 214, 0, .25);
+}
+.content .form-label, .modal .form-label {
+    font-size: 12.5px;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.content .form-text { font-size: 12px; }
+
+/* ---------- Badge, alert, daftar, progress ---------- */
+.content .badge, .modal .badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 9px;
+    border-radius: 99px;
+    letter-spacing: 0;
+}
+.content .alert {
+    font-size: 13px;
+    padding: 12px 16px;
+    border-radius: 10px;
+}
+.content .list-group-item { font-size: 13px; border-color: var(--line); background: var(--surface); color: var(--text); }
+.content .progress { height: 8px; border-radius: 99px; background: var(--line); }
+
+/* ---------- Modal ---------- */
+.modal-content {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+}
+.modal-header, .modal-footer { padding: 14px 20px; border-color: var(--line); }
+.modal-body { padding: 18px 20px; font-size: 13px; }
+.modal-title { font-size: 16px; font-weight: 700; }
+
+/* ---------- Layar kecil ---------- */
+@media (max-width: 991.98px) {
+    .topbar { padding: 0 16px; }
+    .content { padding: 18px 16px 48px; }
+}

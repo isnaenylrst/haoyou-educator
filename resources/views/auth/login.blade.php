@@ -30,6 +30,12 @@
       </div>
     @endif
 
+    @if (session('error'))
+      <div class="bg-[#f6e3df] border border-[#e4b6ab] text-[#8a3b2c] text-[12.5px] px-3.5 py-2.5 rounded-[10px] mb-4">
+        {{ session('error') }}
+      </div>
+    @endif
+
     <form method="POST" action="{{ route('login') }}">
       @csrf
 

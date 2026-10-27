@@ -23,33 +23,35 @@ class User extends Authenticatable
         'password',
     ];
 
-public function level()
-{
-    return $this->belongsTo(
-        Level::class,
-        'level_id', // foreign key di tabel users
-        'id_level'  // primary key di tabel levels
-    );
-}
-
-    // public function teacher()
-    // {
-    //     return $this->hasOne(Wali::class, 'siswa_id');
-    // }
-
-    // public function student()
-    // {
-    //     return $this->status_akun === 'alumni';
-    // }
-
-    public function teacher()
+    public function level()
     {
-        return $this->hasOne(Teacher::class);
+        return $this->belongsTo(
+            Level::class,
+            'level_id', // foreign key di tabel users
+            'id_level'  // primary key di tabel levels
+        );
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | FIX: sebelumnya salah arah (nunjuk ke model Wali & kolom siswa_id).
+    | Sekarang benar: 1 User -> 1 baris di tabel teachers (lewat user_id).
+    |--------------------------------------------------------------------------
+    */
+    public function teacher()
+    {
+        return $this->hasOne(Teacher::class, 'user_id');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | FIX: sebelumnya cuma return boolean (bukan relasi Eloquent beneran),
+    | jadi tidak bisa dipakai ->student->nama dsb.
+    |--------------------------------------------------------------------------
+    */
     public function student()
     {
-        return $this->hasOne(Student::class);
+        return $this->hasOne(Student::class, 'user_id');
     }
 
     public function curriculum()
@@ -90,5 +92,25 @@ public function level()
     public function approvedTeacherLeaves()
     {
         return $this->hasMany(TeacherLeave::class, 'approved_by');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | PENTING: JANGAN DIHAPUS meskipun AuthController sekarang pakai versi
+    | main (switch-case manual). Method ini MASIH DIPAKAI oleh
+    | AppServiceProvider (override RedirectIfAuthenticated) untuk menangani
+    | kasus "user sudah login lalu buka /login lagi". Kalau dihapus,
+    | fitur anti-403-loop yang sudah kita bangun akan error.
+    |--------------------------------------------------------------------------
+    */
+    public function homeRouteName(): ?string
+    {
+        return match ($this->level->nama_level ?? null) {
+            'Owner'      => 'owner.dashboard',
+            'Curriculum' => 'kurikulum.dashboard',
+            'Teacher'    => 'teacher.dashboard',
+            'Student'    => 'dashboard',
+            default      => null, // Owner/Admin/tidak dikenali -> belum ada modul
+        };
     }
 }

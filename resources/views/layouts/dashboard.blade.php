@@ -55,6 +55,10 @@
         <span>🗓️</span> Booking Kelas
     </a>
 
+    <a href="{{ route('video.index') }}" class="side-link alumni-restricted {{ request()->routeIs('video.*') ? 'is-active' : '' }}">
+        <span>🎬</span> Video
+    </a>
+
     <a href="{{ route('progresreport.index') }}" class="side-link {{ request()->routeIs('progresreport.*') ? 'is-active' : '' }}">
         <span>📊</span> Progress Report
     </a>
