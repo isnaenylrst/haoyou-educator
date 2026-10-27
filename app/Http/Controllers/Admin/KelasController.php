@@ -15,9 +15,16 @@ use App\Models\TeacherAvailability;
 use App\Models\TeacherLeave;
 use App\Models\TeachingJournal;
 use App\Models\ClassEnrollment;
+use App\Models\ClassSession;
+use App\Models\Payment;
 use App\Models\Student;
+use App\Services\ClassScheduleService;
+use App\Services\ClassSessionRescheduleService;
+use App\Services\ClassSessionService;
+use App\Services\ExtraFeeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -29,6 +36,15 @@ class KelasController extends Controller
 
 
     private const COUNTED_ENROLLMENT_STATUSES = ['Active', 'Completed'];
+
+    private const PAYMENT_METHODS = ['Transfer Bank', 'Cash', 'QRIS'];
+
+    public function __construct(
+        private ClassScheduleService $scheduleSvc,
+        private ClassSessionService $sessionSvc,
+        private ClassSessionRescheduleService $rescheduleSvc,
+    ) {
+    }
 
     /* ============================================================
        INDEX
@@ -138,6 +154,10 @@ class KelasController extends Controller
             ->orderBy('program_levels.sort_order')
             ->get();
 
+        // Untuk modal pertemuan kelas: tarif home visit (nilai awal form) dan metode bayar
+        $homeVisitFee   = ExtraFeeService::FEE_HOME_VISIT;
+        $paymentMethods = self::PAYMENT_METHODS;
+
         return view('admin.kelas', compact(
             'classes',
             'meetingProgress',
@@ -152,7 +172,9 @@ class KelasController extends Controller
             'kelasAktif',
             'kelasDailyActivity',
             'kelasHsk',
-            'kelasPrivate'
+            'kelasPrivate',
+            'homeVisitFee',
+            'paymentMethods'
         ));
     }
 
@@ -163,7 +185,7 @@ class KelasController extends Controller
     {
         $data = $this->validated($request);
 
-        DB::transaction(function () use ($data) {
+        DB::transaction(function () use ($data, $request) {
             $kelas = new ClassModel();
             $kelas->forceFill([
                 'program_package_id' => $data['program_package_id'],
@@ -178,9 +200,11 @@ class KelasController extends Controller
                 'status'             => 'Open',
             ])->save();
 
-            foreach ($data['schedules'] as $row) {
-                $this->createSchedule($kelas, $row);
-            }
+            $this->scheduleSvc->createSchedules($kelas, $data['schedules']);
+
+            // Bangkitkan pertemuan bertanggal (class_sessions) supaya kelas muncul di Jadwal.
+            // Kalau jadwal bentrok (guru/ruang), seluruh transaksi dibatalkan.
+            $this->generateSessions($kelas, ! $request->filled('end_date'));
         });
 
         return redirect()->route('admin.kelas')->with('success', 'Kelas berhasil ditambahkan.');
@@ -192,9 +216,14 @@ class KelasController extends Controller
     public function update(Request $request, $id)
     {
         $kelas = ClassModel::findOrFail($id);
-        $data  = $this->validated($request, $kelas);
 
-        DB::transaction(function () use ($kelas, $data) {
+        // Kelas yang sudah punya pertemuan bertanggal: jadwal mingguan, tanggal mulai, dan mode kelas
+        // dikunci. Perubahan jadwal dilakukan lewat "Ubah Jadwal" di daftar pertemuan kelas.
+        $hasSessions    = ClassSession::where('class_id', $kelas->id)->exists();
+        $data           = $this->validated($request, $kelas, $hasSessions);
+        $teacherChanged = (int) $kelas->teacher_id !== (int) ($data['teacher_id'] ?? 0);
+
+        DB::transaction(function () use ($kelas, $data, $hasSessions, $teacherChanged) {
             // Tipe & paket sengaja TIDAK diubah setelah kelas dibuat.
             $kelas->forceFill([
                 'level_id'      => $data['level_id'],
@@ -207,7 +236,13 @@ class KelasController extends Controller
                 'status'        => $data['status'],
             ])->save();
 
-            $this->syncSchedules($kelas, $data['schedules']);
+            if ($hasSessions) {
+                if ($teacherChanged) {
+                    $this->reassignTeacher($kelas, $data['teacher_id'] ? (int) $data['teacher_id'] : null);
+                }
+            } else {
+                $this->syncSchedules($kelas, $data['schedules']);
+            }
         });
 
         return redirect()->route('admin.kelas')->with('success', 'Kelas berhasil diperbarui.');
@@ -216,8 +251,25 @@ class KelasController extends Controller
     /* ============================================================
        VALIDASI (dipakai store & update)
     ============================================================ */
-    private function validated(Request $request, ?ClassModel $kelas = null): array
+    private function validated(Request $request, ?ClassModel $kelas = null, bool $lockSchedule = false): array
     {
+        // Kelas yang sudah punya pertemuan: pakai jadwal, tanggal mulai, dan mode yang tersimpan
+        // (input form diabaikan). Cek guru di bawah tetap jalan terhadap jadwal yang berlaku.
+        if ($kelas && $lockSchedule) {
+            $request->merge([
+                'delivery_mode' => $kelas->delivery_mode,
+                'start_date'    => Carbon::parse($kelas->start_date)->toDateString(),
+                'end_date'      => $kelas->end_date ? Carbon::parse($kelas->end_date)->toDateString() : null,
+                'schedules'     => $kelas->schedules()->get()->map(fn ($sc) => [
+                    'id'         => $sc->id,
+                    'day'        => $sc->day,
+                    'start_time' => substr($sc->start_time, 0, 5),
+                    'end_time'   => substr($sc->end_time, 0, 5),
+                    'room'       => $sc->room,
+                ])->all(),
+            ]);
+        }
+
         // Saat edit, tipe & paket diambil dari data kelas yang sudah ada.
         if ($kelas) {
             $request->merge([
@@ -380,7 +432,7 @@ class KelasController extends Controller
         $data['program_package_id'] = $data['program_package_id'] ?? null;
         $data['private_package_id'] = $data['private_package_id'] ?? null;
         $data['teacher_id'] = $data['teacher_id'] ?? null;
-        $data['end_date'] = $data['end_date'] ?? $this->resolveEndDate($package, $data['start_date'], $schedules);
+        $data['end_date'] = $data['end_date'] ?? $this->scheduleSvc->resolveEndDate($package, $data['start_date'], $schedules);
         $data['status'] = $data['status'] ?? 'Open';
 
         return $data;
@@ -637,29 +689,201 @@ class KelasController extends Controller
         return response()->json(['success' => true]);
     }
 
-    private function resolveEndDate($package, string $startDate, array $schedules): ?string
+    /* ============================================================
+       PERTEMUAN KELAS (class_sessions)
+    ============================================================ */
+
+    /** Bangkitkan pertemuan bertanggal sebanyak total_meetings paket kelas. */
+    private function generateSessions(ClassModel $kelas, bool $fillEndDate): void
     {
-        $meetings = (int) ($package->total_meetings ?? 0);
-        if ($meetings < 1 || empty($schedules)) {
-            return null;
+        $package = $kelas->private_package_id
+            ? PrivatePackage::find($kelas->private_package_id)
+            : ProgramPackage::find($kelas->program_package_id);
+
+        $total = (int) ($package?->total_meetings ?? 0);
+
+        if ($total < 1) {
+            return;
         }
 
-        $dayMap = [
-            'Senin' => Carbon::MONDAY, 'Selasa' => Carbon::TUESDAY, 'Rabu' => Carbon::WEDNESDAY,
-            'Kamis' => Carbon::THURSDAY, 'Jumat' => Carbon::FRIDAY, 'Sabtu' => Carbon::SATURDAY,
-            'Minggu' => Carbon::SUNDAY,
-        ];
-        $weekdays = array_unique(array_map(fn ($s) => $dayMap[$s['day']], $schedules));
+        $sessions = $this->sessionSvc->generateForNewClass($kelas, $total);
+        $last     = $sessions->last();
 
-        $date  = Carbon::parse($startDate);
-        $count = 0;
-        for ($i = 0; $i < 3650; $i++) { // batas pengaman ±10 tahun
-            if (in_array($date->dayOfWeek, $weekdays, true) && ++$count === $meetings) {
-                return $date->toDateString();
-            }
-            $date->addDay();
+        // Tanggal selesai mengikuti pertemuan terakhir yang benar-benar terbentuk
+        if ($fillEndDate && $last) {
+            $kelas->forceFill(['end_date' => $last->session_date->toDateString()])->save();
+        }
+    }
+
+    /**
+     * Ganti guru kelas: pertemuan reguler mendatang yang belum terkunci ikut pindah ke guru baru,
+     * dicek bentrok per tanggal. Pertemuan lampau, selesai, dan kelas pengganti tidak disentuh.
+     */
+    private function reassignTeacher(ClassModel $kelas, ?int $teacherId): void
+    {
+        ClassSession::where('class_id', $kelas->id)
+            ->where('kind', 'Regular')
+            ->where('status', 'Scheduled')
+            ->whereDate('session_date', '>=', today())
+            ->orderBy('session_date')
+            ->get()
+            ->each(function (ClassSession $s) use ($teacherId) {
+                if ($s->isLocked()) {
+                    return;
+                }
+
+                if ($teacherId) {
+                    $this->scheduleSvc->assertTeacherFreeOn(
+                        $teacherId,
+                        $s->session_date,
+                        $s->start_time,
+                        $s->end_time,
+                        $s->id
+                    );
+                }
+
+                $s->update(['teacher_id' => $teacherId]);
+            });
+    }
+
+    /** Daftar pertemuan kelas (JSON untuk modal): status, aksi yang boleh, dan pembayarannya. */
+    public function sessions($id)
+    {
+        $kelas = ClassModel::findOrFail($id);
+
+        $sessions = ClassSession::with(['schedule', 'teacher:id,name', 'journal:id,class_session_id', 'payments'])
+            ->where('class_id', $kelas->id)
+            ->orderBy('session_date')
+            ->orderBy('start_time')
+            ->get()
+            ->map(fn (ClassSession $s) => [
+                'id'             => $s->id,
+                'number'         => $s->session_number,
+                'date'           => $s->session_date->toDateString(),
+                'date_label'     => $s->session_date->locale('id')->translatedFormat('D, j M Y'),
+                'original_date'  => $s->original_date?->toDateString(),
+                'start'          => substr($s->start_time, 0, 5),
+                'end'            => substr($s->end_time, 0, 5),
+                'room'           => $s->room,
+                'location_type'  => $s->location_type,
+                'teacher'        => $s->teacher?->name,
+                'status'         => $s->status,
+                'deviates'       => $s->deviatesFromPattern(),
+                'change_reason'  => $s->change_reason,
+                'can_reschedule' => $s->canBeRescheduled(),
+                'can_following'  => $s->kind === 'Regular' && (bool) $s->schedule?->isCurrent(),
+                'can_complete'   => $s->canBeCompleted(),
+                'can_home_visit' => $s->canBecomeHomeVisit(),
+                'payments'       => $s->payments->map(fn ($p) => [
+                    'type'           => $p->payment_type,
+                    'amount'         => (float) $p->amount_paid,
+                    'invoice_number' => $p->invoice_number,
+                    'invoice_url'    => route('admin.pembayaran.invoice', $p->id),
+                ])->values(),
+            ])
+            ->values();
+
+        // Calon pembayar home visit: siswa Active di kelas ini
+        $payers = ClassEnrollment::with('student:id,name')
+            ->where('class_id', $kelas->id)
+            ->where('status', 'Active')
+            ->get()
+            ->filter(fn ($e) => $e->student)
+            ->map(fn ($e) => ['enrollment_id' => $e->id, 'name' => $e->student->name])
+            ->values();
+
+        return response()->json([
+            'kelas'    => ['id' => $kelas->id, 'class_name' => $kelas->class_name],
+            'sessions' => $sessions,
+            'payers'   => $payers,
+            'fees'     => ['home_visit' => ExtraFeeService::FEE_HOME_VISIT],
+        ]);
+    }
+
+    /** Ubah jadwal: satu pertemuan saja ("one") atau pertemuan ini dan seterusnya ("following"). */
+    public function rescheduleSession(Request $request, ClassSession $classSession)
+    {
+        $data = $request->validate([
+            'scope'                        => ['required', Rule::in(['one', 'following'])],
+            'session_date'                 => ['required', 'date'],
+            'start_time'                   => ['required', 'date_format:H:i'],
+            'room'                         => ['nullable', 'string', 'max:255'],
+            'reason'                       => ['nullable', 'string', 'max:255'],
+            'confirm_outside_availability' => ['nullable', 'boolean'],
+        ]);
+
+        if ($data['scope'] === 'one') {
+            $this->rescheduleSvc->rescheduleOne($classSession, $data);
+            $message = 'Jadwal pertemuan berhasil diubah.';
+        } else {
+            $count   = $this->rescheduleSvc->rescheduleFollowing($classSession, $data);
+            $message = "Jadwal {$count} pertemuan (ini dan seterusnya) berhasil diubah.";
         }
 
-        return null;
+        return back()->with('success', $message);
+    }
+
+    /** Tandai pertemuan selesai. */
+    public function completeSession(ClassSession $classSession)
+    {
+        $this->sessionSvc->complete($classSession);
+
+        return back()->with('success', 'Pertemuan ditandai selesai.');
+    }
+
+    /**
+     * Jadikan pertemuan kelas ini Home Visit. Dibayar dulu: Rp50.000 per pertemuan,
+     * satu baris pembayaran dan satu invoice per pertemuan. Pertemuan lain tidak kena biaya.
+     */
+    public function makeHomeVisit(Request $request, $id)
+    {
+        $kelas = ClassModel::findOrFail($id);
+
+        $data = $request->validate([
+            'session_ids'         => ['required', 'array', 'min:1'],
+            'session_ids.*'       => ['integer', 'distinct'],
+            'payer_enrollment_id' => ['required', 'integer', 'exists:class_enrollments,id'],
+            'payment_date'        => ['required', 'date', 'before_or_equal:today'],
+            'payment_method'      => ['required', Rule::in(self::PAYMENT_METHODS)],
+            'amount'              => ['nullable', 'numeric', 'min:1'],
+            'proof'               => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'],
+        ], [
+            'session_ids.required' => 'Pilih minimal satu pertemuan.',
+            'session_ids.min'      => 'Pilih minimal satu pertemuan.',
+        ]);
+
+        // Semua pertemuan harus milik kelas ini
+        $sessionIds = ClassSession::where('class_id', $kelas->id)
+            ->whereIn('id', $data['session_ids'])
+            ->pluck('id')
+            ->all();
+
+        if (count($sessionIds) !== count($data['session_ids'])) {
+            throw ValidationException::withMessages([
+                'session_ids' => 'Ada pertemuan yang bukan milik kelas ini.',
+            ]);
+        }
+
+        $payer     = ClassEnrollment::findOrFail($data['payer_enrollment_id']);
+        $proofPath = $request->file('proof')->store('payment-proofs', 'public');
+
+        try {
+            $sessions = $this->sessionSvc->makeHomeVisitMany($sessionIds, $payer, [
+                'payment_date'       => $data['payment_date'],
+                'payment_method'     => $data['payment_method'],
+                'payment_proof_path' => $proofPath,
+                'amount'             => $data['amount'] ?? null,
+            ]);
+        } catch (\Throwable $e) {
+            Storage::disk('public')->delete($proofPath); // jangan tinggalkan file yatim
+            throw $e;
+        }
+
+        $total = Payment::whereIn('class_session_id', $sessionIds)
+            ->where('payment_type', Payment::TYPE_HOME_VISIT)
+            ->sum('amount_paid');
+
+        return back()->with('success', $sessions->count() . ' pertemuan dijadikan Home Visit. Pembayaran Rp'
+            . number_format((float) $total, 0, ',', '.') . ' tercatat lunas (satu invoice per pertemuan).');
     }
 }

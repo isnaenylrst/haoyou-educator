@@ -18,6 +18,7 @@ use App\Models\Attendance;
 use App\Models\TeachingJournal;
 use App\Services\ClassScheduleService;
 use App\Services\ClassSessionService;
+use App\Services\ExtraFeeService;
 use App\Services\PaymentInstallmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -30,6 +31,7 @@ class SiswaController extends Controller
 {
     private const CONTINUE_DRAFT = 'continue_draft.';
     private const ATTENDED_STATUSES = ['Present', 'Late'];
+    private const PAYMENT_METHODS = ['Transfer Bank', 'Cash', 'QRIS'];
 
     public function index(Request $request)
     {
@@ -252,6 +254,17 @@ class SiswaController extends Controller
             'points' => $siswa->points,
             'join_date' => optional($siswa->join_date)->format('Y-m-d'),
 
+            // Form kelas pengganti: pendaftaran Active yang bisa diberi pertemuan tambahan + tarif awal form
+            'replacement_enrollments' => $siswa->enrollments->where('status', 'Active')->map(fn ($e) => [
+                'id'         => $e->id,
+                'class_name' => $e->class->class_name ?? '-',
+            ])->values(),
+            'fees' => [
+                'replacement' => ExtraFeeService::FEE_REPLACEMENT,
+                'home_visit'  => ExtraFeeService::FEE_HOME_VISIT,
+            ],
+            'replacements' => $this->replacementHistory($siswa),
+
             'schedules' => $siswa->activeEnrollment?->class?->schedules->map(fn ($s) => [
                 'day' => $s->day,
                 'start_time' => $s->start_time,
@@ -313,6 +326,8 @@ class SiswaController extends Controller
                 return [
                     'invoice_number' => $p->invoice_number,
                     'payment_type' => $p->payment_type,
+                    'payment_stage' => $p->payment_stage,
+                    'session_date' => $p->session?->session_date?->format('d M Y'),
                     'program_name' => $programName,
 
                     'total_bill' => $p->total_bill,
@@ -332,6 +347,130 @@ class SiswaController extends Controller
                 ];
             }),
         ]);
+    }
+
+    /* =====================================================================
+     |  KELAS PENGGANTI (Rp175.000, dibayar dulu baru dijadwalkan)
+     |  Home Visit pada kelas pengganti ditambah Rp50.000 (dua pembayaran, dua invoice).
+     * ===================================================================== */
+
+    /** Riwayat kelas pengganti siswa beserta pembayaran dan invoicenya. */
+    private function replacementHistory(Student $siswa)
+    {
+        // withTrashed: pendaftaran yang sudah di-soft-delete tetap menampilkan riwayatnya
+        $enrollmentIds = ClassEnrollment::withTrashed()->where('student_id', $siswa->id)->pluck('id');
+
+        return ClassSession::with(['teacher:id,name', 'payments'])
+            ->where('kind', 'Replacement')
+            ->whereIn('class_enrollment_id', $enrollmentIds)
+            ->orderByDesc('session_date')
+            ->orderByDesc('start_time')
+            ->get()
+            ->map(fn (ClassSession $s) => [
+                'id'            => $s->id,
+                'date'          => $s->session_date->format('d M Y'),
+                'time'          => substr($s->start_time, 0, 5) . ' - ' . substr($s->end_time, 0, 5),
+                'teacher'       => $s->teacher?->name,
+                'location_type' => $s->location_type,
+                'room'          => $s->room,
+                'status'        => $s->status,
+                'payments'      => $s->payments->map(fn ($p) => [
+                    'type'           => $p->payment_type,
+                    'amount'         => (float) $p->amount_paid,
+                    'invoice_number' => $p->invoice_number,
+                    'invoice_url'    => route('admin.pembayaran.invoice', $p->id),
+                ])->values(),
+            ])
+            ->values();
+    }
+
+    /** Guru yang tersedia (jam tersedia + tidak bentrok) pada tanggal dan jam tertentu. */
+    public function replacementTeachers(Request $request, ClassScheduleService $schedules)
+    {
+        $data = $request->validate([
+            'session_date' => ['required', 'date'],
+            'start_time'   => ['required', 'date_format:H:i'],
+            'end_time'     => ['required', 'date_format:H:i', 'after:start_time'],
+        ]);
+
+        $day = ClassScheduleService::DAYS[Carbon::parse($data['session_date'])->dayOfWeekIso - 1];
+
+        $list = Teacher::orderBy('name')->get(['id', 'name'])
+            ->filter(function ($t) use ($schedules, $data, $day) {
+                if (! $schedules->isTeacherAvailable($t->id, $day, $data['start_time'], $data['end_time'])) {
+                    return false;
+                }
+
+                try {
+                    $schedules->assertTeacherFreeOn($t->id, $data['session_date'], $data['start_time'], $data['end_time']);
+
+                    return true;
+                } catch (ValidationException) {
+                    return false;
+                }
+            })
+            ->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])
+            ->values();
+
+        return response()->json($list);
+    }
+
+    /**
+     * Tambah kelas pengganti. Pertemuan dan pembayarannya dibuat dalam satu transaksi
+     * (ClassSessionService::createReplacement), jadi jadwal yang bentrok tidak meninggalkan pembayaran.
+     */
+    public function storeReplacement(Request $request, Student $siswa, ClassSessionService $service)
+    {
+        $data = $request->validate([
+            // Hanya pendaftaran Active milik siswa ini
+            'class_enrollment_id' => ['required', 'integer', Rule::exists('class_enrollments', 'id')->where(
+                fn ($q) => $q->where('student_id', $siswa->id)->where('status', 'Active')->whereNull('deleted_at')
+            )],
+            'teacher_id'          => ['required', 'exists:teachers,id'],
+            'session_date'        => ['required', 'date', 'after_or_equal:today'],
+            'start_time'          => ['required', 'date_format:H:i'],
+            'end_time'            => ['required', 'date_format:H:i', 'after:start_time'],
+            'location_type'       => ['required', Rule::in(['Studio', 'Online', 'Home Visit'])],
+            'room'                => ['nullable', 'string', 'max:255'],
+
+            'payment_date'        => ['required', 'date', 'before_or_equal:today'],
+            'payment_method'      => ['required', Rule::in(self::PAYMENT_METHODS)],
+            'amount'              => ['nullable', 'numeric', 'min:1'],
+            'home_visit_amount'   => ['nullable', 'numeric', 'min:1'],
+            'proof'               => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'],
+        ], [
+            'class_enrollment_id.exists' => 'Pendaftaran tidak ditemukan atau tidak aktif.',
+            'end_time.after'             => 'Jam selesai harus setelah jam mulai.',
+        ]);
+
+        $proofPath = $request->file('proof')->store('payment-proofs', 'public');
+
+        try {
+            $session = $service->createReplacement([
+                'class_enrollment_id' => $data['class_enrollment_id'],
+                'teacher_id'          => $data['teacher_id'],
+                'session_date'        => $data['session_date'],
+                'start_time'          => $data['start_time'],
+                'end_time'            => $data['end_time'],
+                'location_type'       => $data['location_type'],
+                'room'                => $data['room'] ?? null,
+
+                'payment_date'        => $data['payment_date'],
+                'payment_method'      => $data['payment_method'],
+                'payment_proof_path'  => $proofPath,
+                'amount'              => $data['amount'] ?? null,
+                'home_visit_amount'   => $data['home_visit_amount'] ?? null,
+            ]);
+        } catch (\Throwable $e) {
+            Storage::disk('public')->delete($proofPath); // jangan tinggalkan file yatim
+            throw $e;
+        }
+
+        $total = (float) $session->payments->sum('amount_paid');
+        $count = $session->payments->count();
+
+        return back()->with('success', 'Kelas pengganti dijadwalkan. Pembayaran Rp'
+            . number_format($total, 0, ',', '.') . ' tercatat lunas (' . $count . ' invoice).');
     }
 
     public function destroy(Student $siswa)
