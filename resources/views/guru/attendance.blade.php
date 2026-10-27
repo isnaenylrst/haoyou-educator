@@ -64,6 +64,14 @@
         </div></div>
     </div>
 
+    @if ($revisionCount > 0)
+        <div class="alert alert-danger">
+            <i class="fas fa-triangle-exclamation me-2"></i>
+            Ada <strong>{{ $revisionCount }}</strong> jurnal yang dikembalikan Kurikulum dan perlu direvisi.
+            Buka kartu bertanda <span class="badge bg-danger">Perlu Revisi</span> di bawah, perbaiki, lalu kirim ulang.
+        </div>
+    @endif
+
     @unless ($canFill)
         <div class="alert alert-info">Tanggal ini belum tiba, jurnal baru bisa diisi pada hari kelas atau sesudahnya.</div>
     @endunless
@@ -74,6 +82,10 @@
         <button class="btn btn-outline-secondary rounded-pill btn-sm px-3" onclick="filterSessions('belum_diisi', this)">Belum Diisi</button>
         <button class="btn btn-outline-secondary rounded-pill btn-sm px-3" onclick="filterSessions('sudah_diisi', this)">Sudah Diisi</button>
         <button class="btn btn-outline-secondary rounded-pill btn-sm px-3" onclick="filterSessions('dikunci', this)">Dikunci</button>
+        <button class="btn btn-outline-secondary rounded-pill btn-sm px-3" onclick="filterSessions('revisi', this)">
+            Perlu Revisi
+            @if ($revisionCount > 0)<span class="badge bg-danger ms-1">{{ $revisionCount }}</span>@endif
+        </button>
     </div>
 
     <div id="sessionWrapper">

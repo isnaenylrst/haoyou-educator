@@ -52,6 +52,7 @@ use App\Http\Controllers\Guru\DashboardController as GuruDashboardController;
 use App\Http\Controllers\Guru\TugasKelasController as GuruTugasKelasController;
 use App\Http\Controllers\Guru\AvailabilityController as GuruAvailabilityController;
 use App\Http\Controllers\Guru\CertificateController as GuruCertificateController;
+use App\Http\Controllers\Guru\SuratController as GuruSuratController;
 
 // ===== OWNER =====
 use App\Http\Controllers\Owner\DashboardController as OwnerDashboardController;
@@ -257,14 +258,12 @@ Route::middleware(['auth', 'role:Curriculum'])
             ->name('materi.preview');
 
         // Pemberitahuan Surat
-        Route::get('/surat', [LetterController::class, 'index'])
-            ->name('surat');
-
-        Route::post('/surat', [LetterController::class, 'store'])
-            ->name('surat.store');
-
-        Route::delete('/surat/{document}', [LetterController::class, 'destroy'])
-            ->name('surat.destroy');
+        Route::get('/surat', [LetterController::class, 'index'])->name('surat');
+        Route::post('/surat', [LetterController::class, 'store'])->name('surat.store');
+        Route::put('/surat/{document}', [LetterController::class, 'update'])->name('surat.update');
+        Route::get('/surat/{document}/berkas', [LetterController::class, 'file'])->name('surat.file');
+        Route::get('/surat/{document}/download', [LetterController::class, 'download'])->name('surat.download');
+        Route::delete('/surat/{document}', [LetterController::class, 'destroy'])->name('surat.destroy');
 
         // Monitoring Guru
         Route::get('/monitoring', [MonitoringController::class, 'index'])
@@ -299,8 +298,8 @@ Route::middleware(['auth', 'role:Curriculum'])
         Route::patch('/review-pengajuan/sesi/{teachingJournal}/ack', [ReviewPengajuanController::class, 'ackSession'])
             ->name('review-pengajuan.ack-session');
 
-        Route::post('/review-pengajuan/sesi/{classSchedule}/reminder', [ReviewPengajuanController::class, 'sendReminder'])
-            ->name('review-pengajuan.reminder');
+        //Route::post('/review-pengajuan/sesi/{classSchedule}/reminder', [ReviewPengajuanController::class, 'sendReminder'])
+            //->name('review-pengajuan.reminder');
 
         Route::patch('/review-pengajuan/material/{teacherMaterial}', [ReviewPengajuanController::class, 'reviewMaterial'])
             ->name('review-pengajuan.material');
@@ -313,6 +312,11 @@ Route::middleware(['auth', 'role:Curriculum'])
 
         Route::patch('/review-pengajuan/cuti/{teacherLeave}', [ReviewPengajuanController::class, 'reviewLeave'])
             ->name('review-pengajuan.leave');
+
+          Route::get('/review-pengajuan/berkas/{type}/{id}', [ReviewPengajuanController::class, 'file'])
+            ->whereIn('type', ['lp', 'ppt', 'report', 'cert', 'cuti'])
+            ->whereNumber('id')
+            ->name('review-pengajuan.file');
 
         // Review sertifikat buatan guru (ACC / tolak)
         Route::patch('/review-pengajuan/sertifikat/{certificate}', [ReviewPengajuanController::class, 'reviewCertificate'])
@@ -336,6 +340,12 @@ Route::middleware(['auth', 'role:Curriculum'])
 
         Route::delete('/tugas-kelas/{classTask}', [KurikulumTugasKelasController::class, 'destroy'])
             ->name('tugas-kelas.destroy');
+
+        Route::put('/tugas-kelas/{classTask}', [KurikulumTugasKelasController::class, 'update'])
+            ->name('tugas-kelas.update');
+
+        Route::patch('/tugas-kelas/{classTask}/buka-kembali', [KurikulumTugasKelasController::class, 'reopen'])
+            ->name('tugas-kelas.reopen');
 
         /*
         |--------------------------------------------------------------------------
@@ -416,8 +426,8 @@ Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
         Route::get('/notifikasi', [GuruNotifikasiController::class, 'index'])
             ->name('notifikasi');
 
-        Route::get('/notifikasi/{document}/download', [GuruNotifikasiController::class, 'download'])
-            ->name('notifikasi.download');
+        //Route::get('/notifikasi/{document}/download', [GuruNotifikasiController::class, 'download'])
+        //    ->name('notifikasi.download');
 
         // SOP
         Route::get('/sop', [GuruSopController::class, 'index'])
@@ -462,6 +472,9 @@ Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
         Route::get('/attendance/{journal}/pdf', [GuruAttendanceController::class, 'pdf'])
             ->name('attendance.pdf');
 
+        Route::put('/attendance/{journal}', [GuruAttendanceController::class, 'update'])
+            ->name('attendance.update');
+
         // Progress Report
         Route::get('/progress-report', [GuruProgressReportController::class, 'index'])->name('progress-report');
         Route::get('/progress-report/enrollment/{enrollment}', [GuruProgressReportController::class, 'form'])->name('progress-report.form');
@@ -503,6 +516,13 @@ Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
 
         // Terima / tolak kelas yang diberikan Kurikulum
         Route::post('/kelas-diberikan/{class}/respond', [GuruAvailabilityController::class, 'respondClass'])->name('class.respond');
+
+        // Surat dari Kurikulum
+        Route::get('/surat', [GuruSuratController::class, 'index'])->name('surat');
+        Route::patch('/surat/baca-semua', [GuruSuratController::class, 'readAll'])->name('surat.read-all');
+        Route::get('/surat/{document}', [GuruSuratController::class, 'show'])->name('surat.show');
+        Route::get('/surat/{document}/download', [GuruSuratController::class, 'download'])->name('surat.download');
+        Route::patch('/surat/{document}/baca', [GuruSuratController::class, 'read'])->name('surat.read');
     });
 
 /*

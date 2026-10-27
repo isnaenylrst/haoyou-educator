@@ -39,6 +39,9 @@ class TeachingJournal extends Model
         'material_taught',
         'student_names',
         'filled_by',
+        'review_note',
+        'reviewed_by',
+        'reviewed_at',
     ];
 
     protected $casts = [
@@ -50,6 +53,7 @@ class TeachingJournal extends Model
         'is_last_meeting' => 'boolean',
         'meeting_number' => 'integer',
         'focus_materials' => 'array',
+        'reviewed_at' => 'datetime',
     ];
 
     public function teacher()

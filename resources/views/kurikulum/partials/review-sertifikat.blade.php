@@ -1,4 +1,4 @@
-{{-- Tab "Sertifikat" pada Review Pengajuan. Variabel: $certificates --}}
+{{-- Tab "Sertifikat" pada Review Pengajuan. Variabel: $certificates (paginator) --}}
 @forelse ($certificates as $item)
     <div class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div>
@@ -7,19 +7,20 @@
             </div>
             <small class="text-muted">
                 Guru: {{ $item->teacher->name ?? '-' }}
-                · {{ $item->start_date->translatedFormat('d M Y') }} s/d {{ $item->end_date->translatedFormat('d M Y') }}
+                · {{ $item->start_date?->translatedFormat('d M Y') }} s/d {{ $item->end_date?->translatedFormat('d M Y') }}
                 · Nilai: {{ $item->score ?? '-' }}
                 · No. {{ $item->certificate_number }}
             </small>
         </div>
 
-        <div class="d-flex gap-2 flex-wrap">
+        <div class="d-flex gap-2 flex-wrap review-actions">
             @if ($item->file_path)
-                <a href="{{ asset('storage/' . $item->file_path) }}" target="_blank"
+                <a href="{{ route('kurikulum.review-pengajuan.file', ['cert', $item->id]) }}" target="_blank"
                    class="btn btn-outline-secondary btn-sm">Lihat PDF</a>
             @endif
 
-            <form action="{{ route('kurikulum.review-pengajuan.certificate', $item) }}" method="POST">
+            <form action="{{ route('kurikulum.review-pengajuan.certificate', $item) }}" method="POST"
+                  onsubmit="return confirm('ACC sertifikat ini? Setelah ACC langsung tampil di siswa.')">
                 @csrf @method('PATCH')
                 <input type="hidden" name="decision" value="Approved">
                 <button class="btn btn-primary btn-sm">ACC</button>
@@ -37,3 +38,7 @@
 @empty
     <div class="list-group-item text-center text-muted py-4">Tidak ada sertifikat yang perlu direview.</div>
 @endforelse
+
+@if ($certificates->hasPages())
+    <div class="list-group-item">{{ $certificates->links() }}</div>
+@endif

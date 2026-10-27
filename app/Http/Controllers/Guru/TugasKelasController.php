@@ -16,6 +16,10 @@ class TugasKelasController extends Controller
 
         abort_if(!$teacher || (int) $classTask->teacher_id !== (int) $teacher->id, 403);
 
+        if ($classTask->status === 'Done') {
+            return back()->with('error', 'Tugas ini sudah ditandai selesai.');
+        }
+
         $data = $request->validate([
             'teacher_note' => ['nullable', 'string', 'max:1000'],
         ]);
@@ -26,6 +30,6 @@ class TugasKelasController extends Controller
             'teacher_note' => $data['teacher_note'] ?? null,
         ]);
 
-        return back()->with('success', 'Tugas ditandai selesai.');
+        return back()->with('success', 'Tugas ditandai selesai. Kurikulum akan memeriksanya.');
     }
 }
