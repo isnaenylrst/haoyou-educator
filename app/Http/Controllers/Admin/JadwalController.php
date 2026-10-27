@@ -4,14 +4,20 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\CandidateStudent;
+use App\Models\ClassEnrollment;
 use App\Models\ClassModel;
+use App\Models\ClassSession;
+use App\Models\SessionFee;
 use App\Models\PrivatePackage;
 use App\Models\Program;
 use App\Models\Teacher;
 use App\Models\TeacherLeave;
-use App\Models\TeachingJournal;
+use App\Services\ClassSessionRescheduleService;
+use App\Services\ClassSessionService;
+use App\Services\SessionFeeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 
 class JadwalController extends Controller
 {
@@ -23,52 +29,75 @@ class JadwalController extends Controller
     // sendiri (bukan ruang fisik, tapi tetap satu "jalur" seperti di sheet).
     private const ROOMS = ['Beijing', 'Basement', 'Atas', 'Kaca', 'Online'];
 
+    // Satu baris di grid = 30 menit
+    private const SLOT_MINUTES = 30;
+
     public function index(Request $request)
     {
         $request->validate([
             'week'       => ['nullable', 'date'],
             'teacher_id' => ['nullable', 'integer'],
             'program_id' => ['nullable', 'string'],
+            'room'       => ['nullable', 'string'],
+            'class_id'   => ['nullable', 'integer'],
         ]);
 
-        $anchor    = $request->filled('week') ? Carbon::parse($request->week) : Carbon::today();
+        $filteredClass = $request->filled('class_id')
+            ? ClassModel::find($request->class_id)
+            : null;
+
+        if ($request->filled('week')) {
+            $anchor = Carbon::parse($request->week);
+        } elseif ($filteredClass) {
+            $today = Carbon::today();
+            $start = Carbon::parse($filteredClass->start_date);
+            $end   = $filteredClass->end_date ? Carbon::parse($filteredClass->end_date) : null;
+
+            $anchor = $today->lt($start) ? $start : ($end && $today->gt($end) ? $end : $today);
+        } else {
+            $anchor = Carbon::today();
+        }
         $weekStart = $anchor->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
         $weekEnd   = $weekStart->copy()->addDays(6);
 
         $teacherFilter = $request->filled('teacher_id') ? (int) $request->teacher_id : null;
         $programFilter = $request->filled('program_id') ? $request->program_id : null; // 'private' atau id program
+        $roomFilter    = $request->filled('room') && in_array($request->room, self::ROOMS, true)
+            ? $request->room
+            : null;
 
-        /* ---------- Kelas yang relevan di minggu ini ---------- */
-        $classes = ClassModel::query()
-            ->with(['schedules', 'programPackage.program', 'privatePackage', 'teacher'])
-            ->withCount([
-                'enrollments as students_count' => fn ($q) => $q->whereIn('status', self::COUNTED_ENROLLMENT_STATUSES),
+        /* ---------- Pertemuan minggu ini (sumber: class_sessions) ---------- */
+        $rows = ClassSession::query()
+            ->with([
+                'journal',
+                'schedule',
+                'enrollment.student',
+                'fees',
+                'class' => fn ($q) => $q
+                    ->with(['programPackage.program', 'privatePackage'])
+                    ->withCount([
+                        'enrollments as students_count' => fn ($e) => $e->whereIn('status', self::COUNTED_ENROLLMENT_STATUSES),
+                    ]),
             ])
-            ->where('status', '!=', 'Closed')
-            ->where('start_date', '<=', $weekEnd->toDateString())
-            ->where(fn ($q) => $q->whereNull('end_date')->orWhere('end_date', '>=', $weekStart->toDateString()))
-            // kelas Completed tanpa end_date tidak ditampilkan terus-menerus
-            ->where(fn ($q) => $q->whereIn('status', ['Open', 'Running'])->orWhereNotNull('end_date'))
-            ->when($programFilter === 'private', fn ($q) => $q->whereNotNull('private_package_id'))
+            ->whereBetween('session_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+            ->when($filteredClass, fn ($q) => $q->where('class_id', $filteredClass->id))
+            ->when($programFilter === 'private', fn ($q) => $q->where(
+                fn ($w) => $w->where('kind', 'Replacement')
+                    ->orWhereHas('class', fn ($c) => $c->whereNotNull('private_package_id'))
+            ))
             ->when($programFilter && $programFilter !== 'private', fn ($q) => $q->whereHas(
-                'programPackage',
+                'class.programPackage',
                 fn ($p) => $p->where('program_id', $programFilter)
             ))
+            ->orderBy('session_date')
+            ->orderBy('start_time')
             ->get();
 
-        $scheduleIds = $classes->flatMap(fn ($k) => $k->schedules->pluck('id'))->all();
-
-        /* ---------- Jurnal & izin guru di minggu ini (untuk status & guru pengganti) ---------- */
-        $journals = TeachingJournal::query()
-            ->whereIn('class_schedule_id', $scheduleIds)
-            ->whereBetween('session_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
-            ->get(['id', 'class_schedule_id', 'session_date', 'class_status', 'is_substitute', 'substitute_teacher_id'])
-            ->keyBy(fn ($j) => $j->class_schedule_id . '|' . Carbon::parse($j->session_date)->toDateString());
-
+        /* ---------- Izin guru di minggu ini (untuk guru pengganti) ---------- */
         $leaves = TeacherLeave::query()
-            ->whereIn('class_schedule_id', $scheduleIds)
-            ->whereBetween('leave_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+            ->whereIn('class_schedule_id', $rows->pluck('class_schedule_id')->filter()->unique())
             ->where('status', 'Approved')
+            ->whereBetween('leave_date', [$weekStart->copy()->subWeeks(4)->toDateString(), $weekEnd->copy()->addWeeks(4)->toDateString()])
             ->get(['id', 'class_schedule_id', 'leave_date', 'replacement_teacher_id'])
             ->keyBy(fn ($l) => $l->class_schedule_id . '|' . Carbon::parse($l->leave_date)->toDateString());
 
@@ -83,87 +112,113 @@ class JadwalController extends Controller
         /* ---------- Bangun sesi per hari ---------- */
         $byDay = []; // [dayIndex => [session, ...]]
 
-        foreach ($classes as $kelas) {
-            $isPrivate   = ! is_null($kelas->private_package_id);
-            $programName = $kelas->programPackage?->program?->program_name ?? '';
-            $kind        = $isPrivate
-                ? 'Private'
-                : (str_contains(strtolower($programName), 'hsk') ? 'HSK' : 'Daily Activity');
+        foreach ($rows as $s) {
+            $kelas       = $s->class; // null untuk kelas pengganti
+            $isReplace   = $s->kind === 'Replacement';
+            $isPrivate   = $isReplace || ($kelas && ! is_null($kelas->private_package_id));
+            $programName = $kelas?->programPackage?->program?->program_name ?? '';
+            $kind        = $isReplace
+                ? 'Replacement'
+                : ($isPrivate ? 'Private' : (str_contains(strtolower($programName), 'hsk') ? 'HSK' : 'Daily Activity'));
 
-            foreach ($kelas->schedules as $sch) {
-                $dayIndex = array_search($sch->day, self::DAY_ORDER, true);
-                if ($dayIndex === false) {
-                    continue;
-                }
+            $date     = $s->session_date->copy();
+            $dayIndex = $date->dayOfWeekIso - 1;
+            $journal  = $s->journal;
 
-                $date = $weekStart->copy()->addDays($dayIndex);
+            // Izin disetujui merujuk tanggal pola asli, jadi cek tanggal sekarang dan tanggal asal
+            $leave = $leaves->get($s->class_schedule_id . '|' . $date->toDateString())
+                ?? ($s->original_date ? $leaves->get($s->class_schedule_id . '|' . $s->original_date->toDateString()) : null);
 
-                if ($date->lt(Carbon::parse($kelas->start_date)->startOfDay())) {
-                    continue;
-                }
-                if ($kelas->end_date && $date->gt(Carbon::parse($kelas->end_date)->endOfDay())) {
-                    continue;
-                }
+            // Guru yang sebenarnya mengajar pada tanggal ini
+            $teacherId = $s->teacher_id;
+            $note      = null;
 
-                $key     = $sch->id . '|' . $date->toDateString();
-                $journal = $journals->get($key);
-                $leave   = $leaves->get($key);
-
-                // Guru yang sebenarnya mengajar pada tanggal ini
-                $teacherId = $kelas->teacher_id;
-                $note      = null;
-
-                if ($journal && $journal->is_substitute && $journal->substitute_teacher_id) {
-                    $teacherId = $journal->substitute_teacher_id;
-                    $note      = 'Guru pengganti';
-                } elseif ($leave && $leave->replacement_teacher_id) {
-                    $teacherId = $leave->replacement_teacher_id;
-                    $note      = 'Guru pengganti (izin disetujui)';
-                }
-
-                if ($teacherFilter && (int) $teacherId !== $teacherFilter) {
-                    continue;
-                }
-
-                if ($journal) {
-                    $statusKey   = $journal->class_status;
-                    $statusLabel = $statusLabels[$journal->class_status] ?? $journal->class_status;
-                } else {
-                    $statusKey   = $date->isPast() && ! $date->isToday() ? 'NoJournal' : 'Scheduled';
-                    $statusLabel = $statusKey === 'NoJournal' ? 'Belum ada jurnal' : 'Terjadwal';
-                }
-
-                [$sh, $sm] = array_map('intval', explode(':', $sch->start_time));
-                [$eh, $em] = array_map('intval', explode(':', $sch->end_time));
-                $startMin  = $sh * 60 + $sm;
-                $endMin    = $eh * 60 + $em;
-                $startText = substr($sch->start_time, 0, 5);
-                $endText   = substr($sch->end_time, 0, 5);
-
-                $byDay[$dayIndex][] = [
-                    'id'             => $key,
-                    'title'          => $kelas->class_name,
-                    'kind'           => $kind,
-                    'class_name'     => $kelas->class_name,
-                    'teacher_id'     => $teacherId,
-                    'teacher_name'   => $teacherId ? ($teacherNames[$teacherId] ?? null) : null,
-                    'teacher_note'   => $note,
-                    'start_time'     => $startText,
-                    'end_time'       => $endText,
-                    'time_label'     => "{$startText} – {$endText}",
-                    'start_min'      => $startMin,
-                    'end_min'        => $endMin,
-                    'date_label'     => self::DAY_ORDER[$dayIndex] . ', ' . $date->format('d M Y'),
-                    'room'           => $sch->room ?: ($kelas->delivery_mode ?? '-'),
-                    'delivery_mode'  => $kelas->delivery_mode,
-                    'students_count' => $kelas->students_count,
-                    'status_key'     => $statusKey,
-                    'status_label'   => $statusLabel,
-                    'has_conflict'   => false,
-                    'lane'           => 0,
-                    'lanes'          => 1,
-                ];
+            if ($journal && $journal->is_substitute && $journal->substitute_teacher_id) {
+                $teacherId = $journal->substitute_teacher_id;
+                $note      = 'Guru pengganti';
+            } elseif ($leave && $leave->replacement_teacher_id) {
+                $teacherId = $leave->replacement_teacher_id;
+                $note      = 'Guru pengganti (izin disetujui)';
             }
+
+            if ($teacherFilter && (int) $teacherId !== $teacherFilter) {
+                continue;
+            }
+
+            if ($journal) {
+                $statusKey = $journal->class_status;
+            } elseif ($s->status === 'Cancelled') {
+                $statusKey = 'Cancelled';
+            } elseif ($s->status === 'Completed') {
+                $statusKey = 'Conducted';
+            } else {
+                $statusKey = $date->isPast() && ! $date->isToday() ? 'NoJournal' : 'Scheduled';
+            }
+
+            $statusLabel = match ($statusKey) {
+                'NoJournal' => 'Belum ada jurnal',
+                'Scheduled' => 'Terjadwal',
+                default     => $statusLabels[$statusKey] ?? $statusKey,
+            };
+
+            [$sh, $sm] = array_map('intval', explode(':', $s->start_time));
+            [$eh, $em] = array_map('intval', explode(':', $s->end_time));
+            $startText = substr($s->start_time, 0, 5);
+            $endText   = substr($s->end_time, 0, 5);
+
+            $canReschedule = $s->canBeRescheduled();
+            $studentName   = $s->enrollment?->student?->name;
+            $title         = $kelas?->class_name ?? ('Pengganti' . ($studentName ? ': ' . $studentName : ''));
+
+            $kindNote = $s->kind === 'Replacement' ? 'Pertemuan tambahan (di luar hitungan paket)' : null;
+
+            $fees = $s->fees->map(fn ($f) => [
+                'id'      => $f->id,
+                'label'   => $f->fee_type === 'Replacement' ? 'Kelas pengganti tambahan' : 'Biaya ke rumah murid',
+                'amount'  => 'Rp' . number_format((float) $f->amount, 0, ',', '.'),
+                'paid'    => $f->status === 'Paid',
+                'paid_at' => $f->paid_at?->format('d M Y'),
+                'invoice_number' => $f->invoice_number,
+                'invoice_url'    => $f->invoice_number ? route('admin.jadwal.fees.invoice', $f) : null,
+            ])->values()->all();
+
+            $byDay[$dayIndex][] = [
+                'id'             => 'session-' . $s->id,
+                'session_id'     => $s->id,
+                'title'          => $title,
+                'kind'           => $kind,
+                'class_name'     => $title,
+                'student_name'   => $studentName,
+                'teacher_id'     => $teacherId,
+                'teacher_name'   => $teacherId ? ($teacherNames[$teacherId] ?? null) : null,
+                'teacher_note'   => $note,
+                'start_time'     => $startText,
+                'end_time'       => $endText,
+                'time_label'     => "{$startText} – {$endText}",
+                'start_min'      => $sh * 60 + $sm,
+                'end_min'        => $eh * 60 + $em,
+                'date_label'     => self::DAY_ORDER[$dayIndex] . ', ' . $date->format('d M Y'),
+                'date_value'     => $date->toDateString(),
+                'room'           => $s->room ?: ($s->location_type ?? '-'),
+                'room_value'     => $s->room,
+                'location_type'  => $s->location_type,
+                'delivery_mode'  => $kelas?->delivery_mode,
+                'students_count' => $kelas?->students_count,
+                'session_number' => $s->session_number,
+                'kind_note'      => $kindNote,
+                'fees'           => $fees,
+                'status_key'     => $statusKey,
+                'status_label'   => $statusLabel,
+                'has_conflict'   => false,
+                // dipakai modal reschedule
+                'can_complete'             => $s->canBeCompleted(),
+                'can_reschedule'           => $canReschedule,
+                'can_reschedule_following' => $canReschedule && $s->kind === 'Regular' && (bool) $s->schedule?->isCurrent(),
+                'moved_from'               => $s->original_date && ! $s->original_date->isSameDay($date)
+                    ? $s->original_date->format('d M Y')
+                    : null,
+                'change_reason'            => $s->change_reason,
+            ];
         }
 
         /* ---------- Deteksi bentrok guru (guru sama, hari sama, jam beririsan) ---------- */
@@ -194,7 +249,7 @@ class JadwalController extends Controller
         /* ---------- Trial calon siswa (hanya punya tanggal, tanpa jam & guru) ---------- */
         $trialsByDay = [];
 
-        if (! $teacherFilter) {
+        if (! $teacherFilter && ! $filteredClass) {
             $programNames = Program::pluck('program_name', 'id');
             $privateNames = PrivatePackage::pluck('package_name', 'id');
 
@@ -232,67 +287,111 @@ class JadwalController extends Controller
                 });
         }
 
-        /* ---------- Rentang jam kalender & hari yang ditampilkan ---------- */
+        /* ---------- Rentang jam (baris per 30 menit) & hari yang ditampilkan ---------- */
         $allItems = collect($byDay)->flatten(1);
 
-        $startHour = 8;
-        $endHour   = 20;
+        $startHour = 9;
+        $endHour   = 21;
         if ($allItems->isNotEmpty()) {
             $startHour = min($startHour, (int) floor($allItems->min('start_min') / 60));
             $endHour   = max($endHour, (int) ceil($allItems->max('end_min') / 60));
         }
 
+        $slots = [];
+        for ($m = $startHour * 60; $m < $endHour * 60; $m += self::SLOT_MINUTES) {
+            $slots[] = [
+                'min'     => $m,
+                'label'   => sprintf('%02d:%02d', intdiv($m, 60), $m % 60),
+                'is_hour' => $m % 60 === 0,
+            ];
+        }
+
         $dayCount = (isset($byDay[6]) || isset($trialsByDay[6])) ? 7 : 6;
         $days     = array_slice(self::DAY_ORDER, 0, $dayCount);
 
-        // Daftar kolom ruang dipakai SAMA untuk semua hari (bukan dihitung ulang
-        // per hari), supaya kolom hari Senin, Selasa, dst tetap sejajar di grid
-        // mingguan. "Lainnya" cuma ditambah kalau memang ada sesi berruang di luar
-        // 5 nama baku, dicek sekali untuk seluruh minggu.
-        $hasOtherRoom = collect($byDay)->flatten(1)->contains(
-            fn ($s) => ! in_array($s['room'], self::ROOMS, true)
-        );
-        $roomColumns = $hasOtherRoom ? [...self::ROOMS, 'Lainnya'] : self::ROOMS;
+        if ($roomFilter) {
+            $roomColumns = [$roomFilter];
+        } elseif ($filteredClass && $allItems->isNotEmpty()) {
+            // Hanya ruang yang dipakai kelas ini, urutan tetap mengikuti ROOMS
+            $roomColumns = array_values(array_filter(
+                self::ROOMS,
+                fn ($r) => $allItems->contains('room', $r)
+            ));
 
-        /* ---------- Data per hari: daftar kartu & grid ruang×jam (dipakai tampilan Minggu & Hari) ---------- */
+            if ($allItems->contains(fn ($s) => ! in_array($s['room'], self::ROOMS, true))) {
+                $roomColumns[] = 'Lainnya';
+            }
+        } else {
+            $hasOtherRoom = $allItems->contains(
+                fn ($s) => ! in_array($s['room'], self::ROOMS, true)
+            );
+            $roomColumns = $hasOtherRoom ? [...self::ROOMS, 'Lainnya'] : self::ROOMS;
+        }
+
+        // Menampilkan ruangan perkelas pada jadwal kelas
+        $dayRooms = [];
+        foreach ($days as $i => $dayName) {
+            if ($filteredClass && ! $roomFilter) {
+                $used = collect($byDay[$i] ?? [])
+                    ->pluck('room')
+                    ->map(fn ($r) => in_array($r, self::ROOMS, true) ? $r : 'Lainnya')
+                    ->unique();
+
+                $cols = array_values(array_filter(
+                    [...self::ROOMS, 'Lainnya'],
+                    fn ($r) => $used->contains($r)
+                ));
+
+                $dayRooms[$dayName] = $cols ?: [''];
+            } else {
+                $dayRooms[$dayName] = $roomColumns;
+            }
+        }
+
         $sessions = [];
         $trials   = [];
-        $timeline = [];
+        $grid     = [];
 
         foreach ($days as $i => $dayName) {
-            $items = $byDay[$i] ?? [];
-            usort($items, fn ($a, $b) => [$a['start_min'], $a['end_min'], $a['title']] <=> [$b['start_min'], $b['end_min'], $b['title']]);
+            $trials[$dayName] = $trialsByDay[$i] ?? [];
 
-            $sessions[$dayName] = $items;
-            $trials[$dayName]   = $trialsByDay[$i] ?? [];
+            $perRoom = [];
+            foreach ($byDay[$i] ?? [] as $item) {
+                $roomKey = in_array($item['room'], self::ROOMS, true) ? $item['room'] : 'Lainnya';
 
-            // Satu baris per ruang (seperti kolom Beijing/Basement/Atas/Kaca/Online di
-            // sheet). Guru ditampilkan langsung di dalam kartu sesi, bukan kolom sendiri.
-            // Sesi yang bertumpuk pada satu ruang (mis. beberapa kelas Online sekaligus)
-            // tetap ditumpuk vertikal, bukan dianggap error.
-            $grouped = collect($items)->groupBy(
-                fn ($s) => in_array($s['room'], self::ROOMS, true) ? $s['room'] : 'Lainnya'
-            );
+                if (! in_array($roomKey, $dayRooms[$dayName], true)) {
+                    continue; // ruang disaring / tidak ada kolomnya
+                }
 
-            $rows = [];
-
-            foreach ($roomColumns as $room) {
-                $group = $grouped->get($room);
-                $laid  = $group ? $this->layoutDay($group->all()) : [];
-
-                $rows[] = [
-                    'room_name' => $room,
-                    'free'      => empty($laid),
-                    'lanes'     => $laid ? (int) collect($laid)->max('lanes') : 1,
-                    'sessions'  => $laid,
-                ];
+                $perRoom[$roomKey][] = $item;
             }
 
-            $timeline[$dayName] = $rows;
+            $sessions[$dayName] = [];
+
+                foreach ($dayRooms[$dayName] as $room) {
+                    $laid = isset($perRoom[$room]) ? $this->layoutDay($perRoom[$room]) : [];
+
+                $grid[$dayName][$room] = [
+                    'lanes'    => $laid ? (int) max(array_column($laid, 'lanes')) : 1,
+                    'sessions' => $laid,
+                ];
+
+                array_push($sessions[$dayName], ...$laid);
+            }
         }
 
         /* ---------- Data filter & form ---------- */
         $programs     = Program::orderBy('id')->get(['id', 'program_name']);
+        $roomOptions  = self::ROOMS;
+        // Pendaftaran aktif yang sudah punya kelas (reguler maupun private) untuk dipilih sebagai penerima kelas pengganti
+        $enrollmentOptions = ClassEnrollment::with(['student:id,name', 'class:id,class_name'])
+            ->where('status', 'Active') // sesuai COUNTED_ENROLLMENT_STATUSES, tanpa 'Completed'
+            ->whereNotNull('class_id')
+            ->get()
+            ->map(fn ($e) => ['id' => $e->id, 'label' => ($e->student?->name ?? '-') . ' — ' . ($e->class?->class_name ?? '-')])
+            ->sortBy('label')
+            ->values();
+
         $classOptions = ClassModel::whereIn('status', ['Open', 'Running'])
             ->orderBy('class_name')
             ->get(['id', 'class_name', 'private_package_id']);
@@ -300,28 +399,107 @@ class JadwalController extends Controller
         $prevWeek = $weekStart->copy()->subWeek()->toDateString();
         $nextWeek = $weekStart->copy()->addWeek()->toDateString();
 
-        return view('admin.jadwal', compact(
+        return view('admin.jadwal.index', compact(
             'weekStart',
             'days',
             'sessions',
             'trials',
-            'timeline',
-            'roomColumns',
-            'conflictCount',
+            'slots',
             'startHour',
             'endHour',
+            'grid',
+            'roomColumns',
+            'roomOptions',
+            'conflictCount',
             'teachers',
             'programs',
             'classOptions',
+            'enrollmentOptions',
             'prevWeek',
-            'nextWeek'
+            'nextWeek',
+            'filteredClass',
+            'dayRooms'
         ));
     }
 
+    /** Tambah kelas pengganti untuk satu siswa. */
+    public function storeSession(Request $request, ClassSessionService $service)
+    {
+        $data = $request->validate([
+            'class_enrollment_id' => ['required', 'exists:class_enrollments,id'],
+            'teacher_id'          => ['required', 'exists:teachers,id'],
+            'session_date'        => ['required', 'date'],
+            'start_time'          => ['required', 'date_format:H:i'],
+            'end_time'            => ['required', 'date_format:H:i'],
+            'location_type'       => ['required', Rule::in(['Studio', 'Online', 'Home Visit'])],
+            'room'                => ['nullable', Rule::in(self::ROOMS)],
+        ]);
+
+        $service->createReplacement($data);
+
+        return back()->with('success', 'Pertemuan tambahan ditambahkan. Biaya Rp'
+            . number_format(SessionFeeService::FEE_REPLACEMENT, 0, ',', '.') . ' tercatat belum dibayar.');
+    }
+
+    /** Tandai biaya tambahan (pengganti tambahan / ke rumah murid) sudah dibayar. */
+    public function payFee(Request $request, SessionFee $sessionFee, SessionFeeService $service)
+    {
+        $data = $request->validate([
+            'paid_at'        => ['required', 'date', 'before_or_equal:today'],
+            'payment_method' => ['required', 'string', 'max:50'],
+            'proof'          => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:2048'],
+        ]);
+
+        $data['payment_proof_path'] = $request->file('proof')?->store('session-fee-proofs', 'public');
+
+        $service->markPaid($sessionFee, $data);
+
+        return back()->with('success', 'Biaya ditandai lunas.');
+    }
+
+    /** Cetak invoice biaya tambahan (hanya setelah lunas). */
+    public function feeInvoice(SessionFee $sessionFee)
+    {
+        abort_unless($sessionFee->isPaid() && $sessionFee->invoice_number, 404);
+
+        $sessionFee->load(['session.teacher', 'session.class:id,class_name', 'enrollment.student']);
+
+        return view('admin.jadwal.feeinvoice', ['fee' => $sessionFee]);
+    }
+
+    /** Tandai pertemuan selesai. */
+    public function complete(ClassSession $classSession, ClassSessionService $service)
+    {
+        $service->complete($classSession);
+
+        return back()->with('success', 'Pertemuan ditandai selesai.');
+    }
+
     /**
-     * Bagi sesi yang jamnya beririsan ke beberapa "lane" supaya tampil
-     * berdampingan, bukan saling menimpa.
+     * Ubah jadwal pertemuan: scope "one" (hanya pertemuan ini) atau "following" (ini dan seterusnya).
      */
+    public function reschedule(Request $request, ClassSession $classSession, ClassSessionRescheduleService $service)
+    {
+        $data = $request->validate([
+            'scope'                        => ['required', Rule::in(['one', 'following'])],
+            'session_date'                 => ['required', 'date'],
+            'start_time'                   => ['required', 'date_format:H:i'],
+            'room'                         => ['nullable', Rule::in(self::ROOMS)],
+            'reason'                       => ['nullable', 'string', 'max:255'],
+            'confirm_outside_availability' => ['nullable', 'boolean'],
+        ]);
+
+        if ($data['scope'] === 'one') {
+            $service->rescheduleOne($classSession, $data);
+            $message = 'Jadwal pertemuan berhasil diubah.';
+        } else {
+            $count   = $service->rescheduleFollowing($classSession, $data);
+            $message = "Jadwal {$count} pertemuan (ini dan seterusnya) berhasil diubah.";
+        }
+
+        return back()->with('success', $message);
+    }
+
     private function layoutDay(array $items): array
     {
         usort($items, fn ($a, $b) => [$a['start_min'], $a['end_min']] <=> [$b['start_min'], $b['end_min']]);

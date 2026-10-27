@@ -44,20 +44,20 @@
 
         <div class="stat-card c-blue">
             <div class="stat-top">
-                <span class="stat-label">Trial Terjadwal</span>
+                <span class="stat-label">Trial Hari ini</span>
                 <i class="fa-solid fa-flask stat-icon"></i>
             </div>
-            <div class="stat-value">{{ $trialScheduled }}</div>
-            <div class="stat-note">Status Pending</div>
+            <div class="stat-value">{{ $trialToday }}</div>
+            <div class="stat-note">Jumlah Trail Hari ini</div>
         </div>
 
         <div class="stat-card c-red">
             <div class="stat-top">
-                <span class="stat-label">Follow-up Overdue</span>
-                <i class="fa-solid fa-triangle-exclamation stat-icon"></i>
+                <span class="stat-label">Konsultasi</span>
+                <i class="fa-solid fa-comments stat-icon"></i>
             </div>
-            <div class="stat-value">{{ $followUpOverdue }}</div>
-            <div class="stat-note warn">Perlu ditindaklanjuti</div>
+            <div class="stat-value">{{ $konsulToday }}</div>
+            <div class="stat-note">Jumlah Konsultasi Hari ini</div>
         </div>
 
         <div class="stat-card c-green">
@@ -127,10 +127,11 @@
                 <tr>
                     <th>Calon Siswa</th>
                     <th>Program</th>
-                    <th>Sumber</th>
+                    {{-- <th>Sumber</th> --}}
                     <th>Status Lead</th>
                     <th>Status Trial</th>
                     <th>Tanggal Trial</th>
+                    <th>Jadwal Konsultasi</th>
                     {{-- <th>Follow-up Berikutnya</th> --}}
                     <th width="120" style="text-align: center;">Aksi</th>
                 </tr>
@@ -169,7 +170,7 @@
                                 -
                             @endif
                         </td>
-                        <td>{{ $candidate->source ?: '-' }}</td>
+                        {{-- <td>{{ $candidate->source ?: '-' }}</td> --}}
 
                         <td>
                             @php
@@ -222,6 +223,10 @@
                                 <span class="followup-flag upcoming">-</span>
                             @endif
                         </td> --}}
+
+                        <td>
+                            {{ $candidate->consultation_date ? \Carbon\Carbon::parse($candidate->consultation_date)->format('d M Y') : '-' }}
+                        </td>
 
                         {{-- Action --}}
                         <td>
@@ -436,18 +441,32 @@
                     </div>
 
                     <div class="form-section">
-                        <div class="form-section-title"><i class="fa-solid fa-flask"></i> Trial Class</div>
+                        <div class="form-section-title"><i class="fa-solid fa-flask"></i> Trial & Konsultasi</div>
                         <div class="form-grid">
                             <div class="form-field">
                                 <label>Tanggal Trial</label>
                                 <input type="date" name="trial_date">
                             </div>
                             <div class="form-field">
-                                <label>Status Trial</label>
-                                <input type="text" value="Pending" disabled>
+                                <label>Tanggal Konsultasi</label>
+                                <input type="date" name="consultation_date">
+                            </div>
+                            <div class="form-field full">
+                                <label>Catatan Konsultasi</label>
+                                <textarea name="consultation_notes" rows="2"></textarea>
                             </div>
                         </div>
                     </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-note-sticky"></i> Catatan</div>
+                        <div class="form-grid">
+                            <div class="form-field full">
+                                <label>Catatan Siswa</label>
+                                <textarea name="notes" rows="3" placeholder="Contoh: Masuk dipertengahan kelas"></textarea>
+                            </div>
+                        </div>
+                    </div>                    
 
                     <div class="form-section">
                         <div class="form-section-title"><i class="fa-solid fa-calendar-week"></i> Jadwal Tersedia</div>
@@ -632,6 +651,38 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-comments"></i> Jadwal Konsultasi</div>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label>Tanggal Konsultasi</label>
+                                <input type="date" name="consultation_date" id="edit_consultation_date">
+                            </div>
+                            <div class="form-field">
+                                <label>Status Konsultasi</label>
+                                <select name="consultation_status" id="edit_consultation_status">
+                                    <option value="Pending">Pending</option>
+                                    <option value="Completed">Completed</option>
+                                    <option value="Cancelled">Cancelled</option>
+                                </select>
+                            </div>
+                            <div class="form-field full">
+                                <label>Catatan Konsultasi</label>
+                                <textarea name="consultation_notes" id="edit_consultation_notes" rows="2"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-note-sticky"></i> Catatan</div>
+                        <div class="form-grid">
+                            <div class="form-field full">
+                                <label>Catatan Siswa</label>
+                                <textarea name="notes" id="edit_notes" rows="3" placeholder="Contoh: Masuk dipertengahan kelas"></textarea>
+                            </div>
+                        </div>
+                    </div>                    
 
                     <div class="form-section">
                         <div class="form-section-title"><i class="fa-solid fa-calendar-week"></i> Jadwal Tersedia</div>
@@ -834,6 +885,11 @@
             document.getElementById('edit_lead_status').value = data.lead_status ?? 'Cold';
             document.getElementById('edit_trial_date').value = data.trial_date ?? '';
             document.getElementById('edit_trial_status').value = data.trial_status ?? 'Pending';
+            document.getElementById('edit_trial_status').value = data.trial_status ?? 'Pending';
+            document.getElementById('edit_consultation_date').value = data.consultation_date ?? '';
+            document.getElementById('edit_consultation_status').value = data.consultation_status ?? 'Pending';
+            document.getElementById('edit_consultation_notes').value = data.consultation_notes ?? '';
+            document.getElementById('edit_notes').value = data.notes ?? '';            
             document.getElementById('btnConvertToStudent').href = `/admin/calon-siswa/${id}/convert`;
 
             if (data.schedules && data.schedules.length > 0) {
@@ -856,5 +912,12 @@
         if (e.target === this) closeEditModal();
     });
 
+    /* ============================================================
+       DIBUKA DARI DASHBOARD (?tambah=1)
+    ============================================================ */
+    if (new URLSearchParams(location.search).get('tambah') === '1') {
+        openLeadModal();
+        history.replaceState(null, '', location.pathname);
+    }
 </script>
 @endpush

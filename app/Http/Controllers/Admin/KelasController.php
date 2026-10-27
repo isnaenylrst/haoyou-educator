@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use Carbon\Carbon;
 use App\Http\Controllers\Controller;
 use App\Models\ClassModel;
 use App\Models\ClassSchedule;
@@ -10,6 +11,7 @@ use App\Models\Program;
 use App\Models\ProgramLevel;
 use App\Models\ProgramPackage;
 use App\Models\Teacher;
+use App\Models\TeacherAvailability;
 use App\Models\TeacherLeave;
 use App\Models\TeachingJournal;
 use App\Models\ClassEnrollment;
@@ -25,10 +27,7 @@ class KelasController extends Controller
 
     private const ACTIVE_STATUSES = ['Open', 'Running'];
 
-    /**
-     * Siswa yang dihitung mengisi kapasitas kelas
-     * (sama dengan aturan ClassCapacityService: Active + Completed).
-     */
+
     private const COUNTED_ENROLLMENT_STATUSES = ['Active', 'Completed'];
 
     /* ============================================================
@@ -54,6 +53,15 @@ class KelasController extends Controller
             ->orderBy('class_name')
             ->paginate(10)
             ->withQueryString();
+
+        // ---- Progres pertemuan dari jurnal mengajar (hanya sesi yang benar-benar berlangsung) ----
+        $meetingProgress = TeachingJournal::query()
+            ->whereIn('class_id', $classes->pluck('id'))
+            ->where('class_status', 'Conducted')
+            ->selectRaw('class_id, COUNT(DISTINCT COALESCE(class_session_id, id)) AS done, MAX(session_date) AS last_date')
+            ->groupBy('class_id')
+            ->get()
+            ->keyBy('class_id');
 
         // ---- Statistik: hanya kelas aktif (Open & Running), tidak terpengaruh filter ----
         $activeClasses = ClassModel::query()
@@ -81,6 +89,31 @@ class KelasController extends Controller
         $programs = Program::orderBy('id')->get(['id', 'program_name']);
         $teachers = Teacher::orderBy('name')->get(['id', 'name', 'status']);
 
+        // Ketersediaan guru: { teacher_id: [ {day, start, end}, ... ] } -> dipakai form untuk menandai guru yang cocok
+        $teacherAvailabilities = TeacherAvailability::orderBy('start_time')
+            ->get()
+            ->groupBy('teacher_id')
+            ->map(fn ($group) => $group->map(fn ($a) => [
+                'day'   => $a->day,
+                'start' => substr($a->start_time, 0, 5),
+                'end'   => substr($a->end_time, 0, 5),
+            ])->values());
+
+        // Slot guru yang sudah terpakai kelas aktif lain: { teacher_id: [ {class_id, class_name, day, start, end}, ... ] }
+        $teacherBusy = ClassModel::query()
+            ->whereIn('status', self::ACTIVE_STATUSES)
+            ->whereNotNull('teacher_id')
+            ->with('schedules')
+            ->get(['id', 'class_name', 'teacher_id'])
+            ->groupBy('teacher_id')
+            ->map(fn ($classes) => $classes->flatMap(fn ($k) => $k->schedules->map(fn ($sc) => [
+                'class_id'   => $k->id,
+                'class_name' => $k->class_name,
+                'day'        => $sc->day,
+                'start'      => substr($sc->start_time, 0, 5),
+                'end'        => substr($sc->end_time, 0, 5),
+            ]))->values());
+
         $programPackages = ProgramPackage::with('program')
             ->orderBy('program_id')
             ->orderBy('id')
@@ -90,7 +123,7 @@ class KelasController extends Controller
 
         // Nama ruangan tidak baku: ambil dari yang pernah dipakai sebagai saran (boleh diketik bebas)
         $roomSuggestions = collect(['Kelas Kaca', 'Kelas Beijing', 'Kelas Feixiang', 'Kelas Atas'])
-        ->merge( 
+        ->merge(
         ClassSchedule::query()
             ->whereNotNull('room')
             ->where('room', '!=', '')
@@ -112,8 +145,11 @@ class KelasController extends Controller
 
         return view('admin.kelas', compact(
             'classes',
+            'meetingProgress',
             'programs',
             'teachers',
+            'teacherAvailabilities',
+            'teacherBusy',
             'programPackages',
             'privatePackages',
             'roomSuggestions',
@@ -311,8 +347,26 @@ class KelasController extends Controller
             }
         }
 
-        // ---- Guru bentrok dengan kelas lain ----
+        // ---- Guru harus tersedia pada jadwal kelas ----
         if (! empty($data['teacher_id'])) {
+            foreach ($schedules as $row) {
+                $available = TeacherAvailability::teacherCovers(
+                    (int) $data['teacher_id'],
+                    $row['day'],
+                    $row['start_time'],
+                    $row['end_time']
+                );
+
+                if (! $available) {
+                    $errors['teacher_id'] = "Guru belum menyatakan tersedia pada {$row['day']} "
+                        . "{$row['start_time']}–{$row['end_time']}. Atur ketersediaan guru terlebih dahulu.";
+                    break;
+                }
+            }
+        }
+
+        // ---- Guru bentrok dengan kelas lain ----
+        if (! empty($data['teacher_id']) && ! isset($errors['teacher_id'])) {
             foreach ($schedules as $row) {
                 $clash = ClassModel::query()
                     ->where('teacher_id', $data['teacher_id'])
@@ -339,7 +393,7 @@ class KelasController extends Controller
         $data['program_package_id'] = $data['program_package_id'] ?? null;
         $data['private_package_id'] = $data['private_package_id'] ?? null;
         $data['teacher_id'] = $data['teacher_id'] ?? null;
-        $data['end_date'] = $data['end_date'] ?? null;
+        $data['end_date'] = $data['end_date'] ?? $this->resolveEndDate($package, $data['start_date'], $schedules);
         $data['status'] = $data['status'] ?? 'Open';
 
         if ($data['delivery_mode'] === 'Offline') {
@@ -367,12 +421,7 @@ class KelasController extends Controller
         ]);
     }
 
-    /**
-     * Sinkronkan jadwal berdasarkan id, BUKAN hapus-lalu-buat-ulang.
-     * teaching_journals.class_schedule_id memakai ON DELETE RESTRICT dan
-     * teacher_leaves.class_schedule_id memakai ON DELETE CASCADE, jadi jadwal
-     * lama tidak boleh dibuang begitu saja.
-     */
+
     private function syncSchedules(ClassModel $kelas, array $rows): void
     {
         $existing = $kelas->schedules()->get()->keyBy('id');
@@ -417,10 +466,6 @@ class KelasController extends Controller
        KELOLA SISWA
     ============================================================ */
 
-    /**
-     * Data awal modal "Kelola Siswa": info kapasitas + daftar siswa
-     * dari daftar tunggu yang program/level-nya cocok dengan kelas ini.
-     */
     public function students($id)
     {
         $kelas = ClassModel::with('programPackage.program')->findOrFail($id);
@@ -489,10 +534,7 @@ class KelasController extends Controller
         ]);
     }
 
-    /**
-     * Jadwal preferensi siswa (dari data calon siswa sebelum konversi),
-     * dipakai untuk ditampilkan di modal Kelola Siswa.
-     */
+
     private function formatSchedules(Student $student): array
     {
         return $student->candidateStudent?->availableSchedules
@@ -505,10 +547,7 @@ class KelasController extends Controller
             ->all() ?? [];
     }
 
-    /**
-     * Cari siswa aktif untuk tab "Siswa Baru" (belum melalui daftar tunggu paket ini).
-     * Untuk kelas Reguler, hanya siswa dengan level yang sama yang ditampilkan.
-     */
+
     public function searchStudents(Request $request, $id)
     {
         $kelas = ClassModel::findOrFail($id);
@@ -537,11 +576,7 @@ class KelasController extends Controller
         return response()->json(['students' => $students]);
     }
 
-    /**
-     * Tambahkan siswa ke kelas ini.
-     * source=waiting → pindahkan enrollment daftar tunggu ke kelas (isi class_id).
-     * source=new     → buat enrollment baru langsung berstatus Active.
-     */
+
     public function enrollStudent(Request $request, $id)
     {
         $kelas = ClassModel::with('programPackage')->findOrFail($id);
@@ -621,5 +656,31 @@ class KelasController extends Controller
         });
 
         return response()->json(['success' => true]);
+    }
+
+    private function resolveEndDate($package, string $startDate, array $schedules): ?string
+    {
+        $meetings = (int) ($package->total_meetings ?? 0);
+        if ($meetings < 1 || empty($schedules)) {
+            return null;
+        }
+
+        $dayMap = [
+            'Senin' => Carbon::MONDAY, 'Selasa' => Carbon::TUESDAY, 'Rabu' => Carbon::WEDNESDAY,
+            'Kamis' => Carbon::THURSDAY, 'Jumat' => Carbon::FRIDAY, 'Sabtu' => Carbon::SATURDAY,
+            'Minggu' => Carbon::SUNDAY,
+        ];
+        $weekdays = array_unique(array_map(fn ($s) => $dayMap[$s['day']], $schedules));
+
+        $date  = Carbon::parse($startDate);
+        $count = 0;
+        for ($i = 0; $i < 3650; $i++) { // batas pengaman ±10 tahun
+            if (in_array($date->dayOfWeek, $weekdays, true) && ++$count === $meetings) {
+                return $date->toDateString();
+            }
+            $date->addDay();
+        }
+
+        return null;
     }
 }

@@ -19,7 +19,10 @@ class ClassEnrollment extends Model
         'private_package_id',
         'enrollment_date',
         'registration_fee',
+        'activity_fee',
         'discount',
+        'notes',
+        'payment_scheme',
         'status',
     ];
 

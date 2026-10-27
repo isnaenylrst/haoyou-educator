@@ -10,7 +10,8 @@ class SettingSeeder extends Seeder
     public function run(): void
     {
         $defaults = [
-            'registration_fee' => 300000, // ganti dengan nominal biaya pendaftaran Haoyou
+            'registration_fee' => 300000,
+            'activity_fee'     => 300000,
         ];
 
         foreach ($defaults as $key => $value) {

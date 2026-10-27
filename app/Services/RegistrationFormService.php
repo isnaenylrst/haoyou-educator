@@ -59,6 +59,14 @@ class RegistrationFormService
         ],
     ];
 
+    /**
+     * PaymentInstallmentService opsional supaya tempat yang masih memakai
+     * `new RegistrationFormService()` tidak error; lewat container otomatis terisi.
+     */
+    public function __construct(private ?PaymentInstallmentService $installments = null)
+    {
+    }
+
     /** Formulir terisi untuk satu siswa (default: enrollment aktif terbaru). */
     public function generate(Student $student, ?ClassEnrollment $enrollment = null): string
     {
@@ -89,6 +97,11 @@ class RegistrationFormService
     }
 
     /* ---------------------------------------------------------- */
+
+    private function installments(): PaymentInstallmentService
+    {
+        return $this->installments ??= new PaymentInstallmentService();
+    }
 
     private function render(string $html, array $values): string
     {
@@ -123,7 +136,8 @@ class RegistrationFormService
 
         $registrationFee = (float) $enrollment->registration_fee;
         $activityFee = (float) $enrollment->activity_fee;
-        $price = (float) ($package?->price ?? 0);
+        // Total biaya les = harga paket (sama dengan yang dipakai total_bill)
+        $lesTotal = (float) ($this->installments()->packageTotal($enrollment) ?? 0);
         $discount = (float) $enrollment->discount;
 
         $values = [
@@ -149,9 +163,9 @@ class RegistrationFormService
 
             'biaya_pendaftaran' => $this->rupiah($registrationFee),
             'biaya_aktivitas'   => $this->rupiah($activityFee),
-            'biaya_les'         => $this->rupiah($price),
+            'biaya_les'         => $this->rupiah($lesTotal),
             'diskon'            => $this->rupiah($discount),
-            'total_pembayaran'  => $this->rupiah(max($price + $registrationFee + $activityFee - $discount, 0)),
+            'total_pembayaran'  => $this->rupiah(max($lesTotal + $registrationFee + $activityFee - $discount, 0)),
         ];
 
         // Pembayaran dipetakan ke kolom berdasarkan tahapnya

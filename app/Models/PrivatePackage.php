@@ -13,6 +13,7 @@ class PrivatePackage extends Model
     protected $fillable = [
         'package_name',
         'duration_minutes',
+        'duration_months',
         'total_meetings',
         'min_students',
         'max_students',

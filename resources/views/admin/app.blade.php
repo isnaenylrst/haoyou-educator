@@ -76,7 +76,7 @@
                     <span class="label">Kelas</span>
                 </a>
 
-                <a href="{{ route('admin.jadwal') }}"class="nav-item {{ request()->routeIs('admin.jadwal') ? 'active' : '' }}">
+                <a href="{{ route('admin.jadwal.index') }}"class="nav-item {{ request()->routeIs('admin.jadwal.index') ? 'active' : '' }}">
                     <i class="fa-solid fa-calendar-days nav-icon" title="Jadwal"></i>
                     <span class="label">Jadwal</span>
                 </a>
@@ -96,7 +96,7 @@
             <div class="nav-group">
                 <div class="nav-group-label">Pengajar</div>
 
-                <a href="{{ route('admin.guru') }}" class="nav-item {{ request()->routeIs('admin.guru') ? 'active' : '' }}">
+                <a href="{{ route('admin.guru.index') }}" class="nav-item {{ request()->routeIs('admin.guru.index') ? 'active' : '' }}">
                     <i class="fa-solid fa-chalkboard-user nav-icon" title="Guru"></i>
                     <span class="label">Guru</span>
                 </a>

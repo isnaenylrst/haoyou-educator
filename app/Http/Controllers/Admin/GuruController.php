@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Teacher;
 use App\Models\User;
 use App\Models\Document;
+use App\Models\ClassModel;
+use App\Models\TeacherAvailability;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -46,7 +48,7 @@ class GuruController extends Controller
         $sedangTraining = Teacher::where('training_status', 'Training')->count();
         $lulusTraining  = Teacher::where('training_status', 'Passed')->count();
 
-        return view('admin.guru', compact(
+        return view('admin.guru.index', compact(
             'teachers',
             'totalGuru',
             'guruAktif',
@@ -87,7 +89,7 @@ class GuruController extends Controller
             ]);
         });
 
-        return redirect()->route('admin.guru')->with('success', 'Guru baru berhasil ditambahkan.');
+        return redirect()->route('admin.guru.index')->with('success', 'Guru baru berhasil ditambahkan.');
     }
 
     public function edit(Teacher $teacher)
@@ -144,7 +146,7 @@ class GuruController extends Controller
             $teacher->user()->update($userData);
         });
 
-        return redirect()->route('admin.guru')->with('success', 'Data guru berhasil diperbarui.');
+        return redirect()->route('admin.guru.index')->with('success', 'Data guru berhasil diperbarui.');
     }
 
     public function destroy(Teacher $teacher)
@@ -156,13 +158,13 @@ class GuruController extends Controller
                 User::where('id', $userId)->delete();
             });
         } catch (\Illuminate\Database\QueryException $e) {
-            return redirect()->route('admin.guru')->with(
+            return redirect()->route('admin.guru.index')->with(
                 'error',
                 'Guru tidak dapat dihapus karena masih memiliki data terkait (kelas, jurnal mengajar, dll). Nonaktifkan saja guru ini jika perlu.'
             );
         }
 
-        return redirect()->route('admin.guru')->with('success', 'Data guru berhasil dihapus.');
+        return redirect()->route('admin.guru.index')->with('success', 'Data guru berhasil dihapus.');
     }
 
     public function show(Teacher $teacher)
@@ -174,6 +176,36 @@ class GuruController extends Controller
             ->whereIn('document_type', ['CV', 'Teacher Certificate', 'Photo'])
             ->orderByDesc('created_at')
             ->get();
+
+        // ---- Jadwal tersedia guru, per hari ----
+        $availabilities = TeacherAvailability::where('teacher_id', $teacher->id)
+            ->orderBy('start_time')
+            ->get();
+
+        // Kelas aktif yang diampu guru ini (slot yang sudah terpakai)
+        $activeClasses = ClassModel::where('teacher_id', $teacher->id)
+            ->whereIn('status', ['Open', 'Running'])
+            ->with('schedules')
+            ->get();
+
+        $scheduleByDay = collect(TeacherAvailability::DAYS)
+            ->mapWithKeys(fn ($day) => [$day => [
+                'slots' => $availabilities->where('day', $day)
+                    ->map(fn ($a) => [
+                        'start' => substr($a->start_time, 0, 5),
+                        'end'   => substr($a->end_time, 0, 5),
+                        'note'  => $a->note,
+                    ])->values(),
+                'classes' => $activeClasses
+                    ->flatMap(fn ($k) => $k->schedules->where('day', $day)->map(fn ($s) => [
+                        'class_name' => $k->class_name,
+                        'start'      => substr($s->start_time, 0, 5),
+                        'end'        => substr($s->end_time, 0, 5),
+                    ]))
+                    ->sortBy('start')
+                    ->values(),
+            ]])
+            ->filter(fn ($d) => $d['slots']->isNotEmpty() || $d['classes']->isNotEmpty());
 
         // Riwayat jurnal mengajar
         // NB: sesuaikan nama relasi 'class' & 'material' kalau di model TeachingJournal beda
@@ -188,9 +220,10 @@ class GuruController extends Controller
             ->orderByDesc('created_at')
             ->paginate(8, ['*'], 'materi_page');
 
-        return view('admin.gurudetail', compact(
+        return view('admin.guru.detail', compact(
             'teacher',
             'documents',
+            'scheduleByDay',
             'teachingJournals',
             'teacherMaterials'
         ));

@@ -136,31 +136,4 @@ class SiswaDashboardController extends Controller
             'sudahDibaca' => $sudahDibaca,
         ]);
     }
-
-    public function sertifikat()
-    {
-        // TODO: $sertifikat = auth()->user()->sertifikat()->first();
-        // hanya ada isinya jika program siswa tipe_program = 'hsk'
-        $adaSertifikat = true; // dummy toggle, nanti dari status program siswa
-
-        return view('siswa.sertifikat', [
-            'title' => 'Sertifikat',
-            'subtitle' => 'Download sertifikat kelulusan',
-            'adaSertifikat' => $adaSertifikat,
-        ]);
-    }
-
-    public function progresReport()
-    {
-        $laporan = [
-            ['judul' => 'Progress Report — Kelas Reguler', 'periode' => 'Periode Jan–Mar 2026 · Terbit setiap 3 bulan'],
-            ['judul' => 'Progress Report — Kelas HSK', 'periode' => 'Periode Jan–Feb 2026 · Terbit setiap 2 bulan'],
-        ];
-
-        return view('siswa.progress-report', [
-            'title' => 'Progress Report',
-            'subtitle' => 'Laporan perkembangan belajar',
-            'laporan' => $laporan,
-        ]);
-    }
 }

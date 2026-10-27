@@ -22,11 +22,17 @@ class TeacherLeave extends Model
         'status',
         'approved_by',
         'approved_at',
+        'request_type',
+        'review_note',
+        'replacement_response',
+        'replacement_response_note',
+        'replacement_responded_at',
     ];
 
     protected $casts = [
         'leave_date' => 'date',
         'approved_at' => 'datetime',
+        'replacement_responded_at' => 'datetime',
     ];
 
     public function teacher()
