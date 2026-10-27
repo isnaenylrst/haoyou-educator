@@ -334,7 +334,7 @@
                                     <i class="fa-solid fa-users-gear"></i>
                                 </button>
 
-                                <a href="{{ route('admin.jadwal', ['class_id' => $kelas->id]) }}"
+                                <a href="{{ route('admin.jadwal.index', ['class_id' => $kelas->id]) }}"
                                 class="icon-btn" title="Lihat di Jadwal">
                                     <i class="fa-solid fa-calendar-days"></i>
                                 </a>
@@ -1073,7 +1073,7 @@
         document.getElementById('editKelasForm').action = data.update_url;
         document.getElementById('edit_kelas_id').value = data.id;
         fillKelasForm('edit', data);
-        document.getElementById('edit_jadwal_link').href ="{{ route('admin.jadwal') }}?class_id=" + data.id;
+        document.getElementById('edit_jadwal_link').href ="{{ route('admin.jadwal.index') }}?class_id=" + data.id;
         document.getElementById('editKelasModalOverlay').classList.add('open');
     }
     function closeEditKelasModal() {

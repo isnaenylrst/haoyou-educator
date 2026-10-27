@@ -18,6 +18,7 @@
             'Private'        => 'kind-private',
             'HSK'            => 'kind-hsk',
             'Daily Activity' => 'kind-daily',
+            'Replacement'    => 'kind-private',
         ];
 
         $hasTrials = collect($trials)->flatten(1)->isNotEmpty();
@@ -37,8 +38,24 @@
         </div>
     </div>
 
+    <div style="margin-bottom: 12px;">
+        <button type="button" class="btn btn-primary" onclick="openSessionModal()">
+            <i class="fa-solid fa-plus"></i> Tambah Kelas Pengganti
+        </button>
+    </div>
+
+    @if (session('success'))
+        <div class="class-filter-banner"><i class="fa-solid fa-circle-check"></i> {{ session('success') }}</div>
+    @endif
+    @if ($errors->any())
+        <div class="conflict-banner">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            {{ $errors->first() }}
+        </div>
+    @endif
+
     {{-- ========================= FILTER ========================= --}}
-    <form method="GET" action="{{ route('admin.jadwal') }}" id="filterForm">
+    <form method="GET" action="{{ route('admin.jadwal.index') }}" id="filterForm">
         <input type="hidden" name="week" value="{{ $weekStart->toDateString() }}">
         @if (request('class_id'))
             <input type="hidden" name="class_id" value="{{ request('class_id') }}">
@@ -50,15 +67,15 @@
                 <span class="week-label">{{ $weekStart->format('d M') }} – {{ $weekStart->copy()->addDays($dayCount - 1)->format('d M Y') }}</span>
             </div>
 
-            <a href="{{ route('admin.jadwal', array_merge($keepFilters, ['week' => $prevWeek])) }}" class="jadwal-nav-btn" title="Minggu Sebelumnya">
+            <a href="{{ route('admin.jadwal.index', array_merge($keepFilters, ['week' => $prevWeek])) }}" class="jadwal-nav-btn" title="Minggu Sebelumnya">
                 <i class="fa-solid fa-chevron-left"></i>
             </a>
-            <a href="{{ route('admin.jadwal', array_merge($keepFilters, ['week' => now()->toDateString()])) }}"
+            <a href="{{ route('admin.jadwal.index', array_merge($keepFilters, ['week' => now()->toDateString()])) }}"
                class="jadwal-nav-btn {{ $isCurrentWeek ? 'is-active' : '' }}"
                title="Kembali ke minggu ini">
                 {{ $isCurrentWeek ? 'Minggu Ini' : 'Kembali ke Minggu Ini' }}
             </a>
-            <a href="{{ route('admin.jadwal', array_merge($keepFilters, ['week' => $nextWeek])) }}" class="jadwal-nav-btn" title="Minggu Berikutnya">
+            <a href="{{ route('admin.jadwal.index', array_merge($keepFilters, ['week' => $nextWeek])) }}" class="jadwal-nav-btn" title="Minggu Berikutnya">
                 <i class="fa-solid fa-chevron-right"></i>
             </a>
 
@@ -101,7 +118,7 @@
         <div class="class-filter-banner">
             <i class="fa-solid fa-filter"></i>
             Menampilkan jadwal kelas <strong>{{ $filteredClass->class_name }}</strong> saja.
-            <a href="{{ route('admin.jadwal', request()->except('class_id')) }}">Tampilkan semua kelas</a>
+            <a href="{{ route('admin.jadwal.index', request()->except('class_id')) }}">Tampilkan semua kelas</a>
         </div>
     @endif
 
@@ -221,7 +238,7 @@
                                         @endif
                                         {{ $session['title'] }}
                                     </div>
-                                    <div class="sess-meta">{{ $teacherLabel }} · {{ $session['students_count'] }} siswa</div>
+                                    <div class="sess-meta">{{ $teacherLabel }} · {{ $session['student_name'] ?? (($session['students_count'] ?? 0) . ' siswa') }}</div>
                                     <div class="sess-meta sess-time">{{ $session['start_time'] }} – {{ $session['end_time'] }}</div>
                                 </div>
                             @endforeach
@@ -251,7 +268,11 @@
                 <div class="detail-row"><span>Waktu</span><strong id="detail_time">-</strong></div>
                 <div class="detail-row"><span>Ruangan</span><strong id="detail_room">-</strong></div>
                 <div class="detail-row"><span>Status Sesi</span><strong id="detail_status">-</strong></div>
-                <div class="detail-row"><span>Siswa Terdaftar</span><strong id="detail_students">-</strong></div>
+                <div class="detail-row" id="detail_moved_row" style="display:none"><span>Dipindah dari</span><strong id="detail_moved">-</strong></div>
+                <div class="detail-row" id="detail_reason_row" style="display:none"><span>Alasan</span><strong id="detail_reason">-</strong></div>
+                <div class="detail-row" id="detail_kindnote_row" style="display:none"><span>Jenis</span><strong id="detail_kindnote">-</strong></div>
+                <div id="detail_fees" style="margin-top:8px"></div>
+                <div class="detail-row"><span id="detail_students_label">Siswa Terdaftar</span><strong id="detail_students">-</strong></div>
             </div>
 
             <div class="modal-foot">
@@ -268,16 +289,75 @@
         </div>
     </div>
 
-    {{-- ========================= MODAL — TAMBAH SESI (Private) ========================= --}}
+    {{-- ========================= MODAL — RESCHEDULE ========================= --}}
+    <div class="modal-overlay" id="rescheduleOverlay">
+        <div class="modal modal-sm">
+            <form method="POST" id="rescheduleForm" action="#">
+                @csrf
+                @method('PUT')
+
+                <div class="modal-head">
+                    <div>
+                        <div class="modal-title">Ubah Jadwal</div>
+                        <div class="modal-sub" id="rs_sub">-</div>
+                    </div>
+                    <button type="button" class="modal-close" onclick="closeReschedule()"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-field full">
+                            <label>Berlaku untuk *</label>
+                            <label><input type="radio" name="scope" value="one" checked> Hanya pertemuan ini</label>
+                            <label id="rs_following_label"><input type="radio" name="scope" value="following" id="rs_following"> Pertemuan ini dan seterusnya</label>
+                        </div>
+                        <div class="form-field">
+                            <label>Tanggal baru *</label>
+                            <input type="date" name="session_date" id="rs_date" required>
+                        </div>
+                        <div class="form-field">
+                            <label>Jam mulai *</label>
+                            <input type="time" name="start_time" id="rs_start" required>
+                        </div>
+                        <div class="form-field full" id="rs_room_wrap">
+                            <label>Ruangan *</label>
+                            <select name="room" id="rs_room">
+                                @foreach ($roomOptions as $room)
+                                    @if ($room !== 'Online')
+                                        <option value="{{ $room }}">{{ $room }}</option>
+                                    @endif
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-field full">
+                            <label>Alasan</label>
+                            <input type="text" name="reason" maxlength="255" placeholder="Mis. guru ada keperluan, siswa minta ganti jam">
+                        </div>
+                        <div class="form-field full">
+                            <label><input type="checkbox" name="confirm_outside_availability" value="1"> Izinkan di luar jam tersedia guru (guru sudah setuju)</label>
+                        </div>
+                    </div>
+                    <small id="rs_note">Durasi pertemuan tetap. "Seterusnya" memindahkan semua pertemuan berikutnya ke hari baru dan memperbarui pola mingguan kelas.</small>
+                </div>
+
+                <div class="modal-foot">
+                    <button type="button" class="btn" onclick="closeReschedule()">Batal</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Simpan Jadwal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {{-- ========================= MODAL — TAMBAH KELAS PENGGANTI ========================= --}}
     <div class="modal-overlay" id="sessionModalOverlay">
         <div class="modal modal-sm">
-            <form onsubmit="return false;">
+            <form method="POST" action="{{ route('admin.jadwal.sessions.store') }}">
                 @csrf
 
                 <div class="modal-head">
                     <div>
-                        <div class="modal-title">Tambah Sesi</div>
-                        <div class="modal-sub">Untuk kelas Private atau sesi tambahan/pengganti.</div>
+                        <div class="modal-title">Tambah Kelas Pengganti</div>
+                        <div class="modal-sub">Pertemuan pengganti untuk siswa kelas reguler yang berhalangan hadir.</div>
                     </div>
                     <button type="button" class="modal-close" onclick="closeSessionModal()"><i class="fa-solid fa-xmark"></i></button>
                 </div>
@@ -285,39 +365,81 @@
                 <div class="modal-body">
                     <div class="form-grid">
                         <div class="form-field full">
-                            <label>Kelas *</label>
-                            <select name="class_id" required>
-                                <option value="">Pilih Kelas</option>
-                                @foreach ($classOptions as $option)
-                                    <option value="{{ $option->id }}">
-                                        {{ $option->class_name }} ({{ $option->private_package_id ? 'Private' : 'Reguler' }})
+                            <label>Siswa (kelas asal) *</label>
+                            <select name="class_enrollment_id" id="add_enrollment" required>
+                                <option value="">Pilih siswa</option>
+                                @foreach ($enrollmentOptions as $option)
+                                    <option value="{{ $option['id'] }}" {{ old('class_enrollment_id') == $option['id'] ? 'selected' : '' }}>
+                                        {{ $option['label'] }}
                                     </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-field full">
+                            <small>Pertemuan tambahan di luar paket, satu pertemuan saja. Biaya Rp175.000 tercatat otomatis sebagai belum dibayar dan bisa ditandai lunas dari detail pertemuan. Guru boleh berbeda dari guru kelas asal.</small>
+                        </div>
+                        <div class="form-field full">
+                            <label>Guru *</label>
+                            <select name="teacher_id" required>
+                                <option value="">Pilih guru</option>
+                                @foreach ($teachers as $teacher)
+                                    <option value="{{ $teacher->id }}" {{ old('teacher_id') == $teacher->id ? 'selected' : '' }}>{{ $teacher->name }}</option>
                                 @endforeach
                             </select>
                         </div>
                         <div class="form-field">
                             <label>Tanggal *</label>
-                            <input type="date" name="date" required>
+                            <input type="date" name="session_date" value="{{ old('session_date') }}" required>
                         </div>
-                        <div class="form-field"></div>
+                        <div class="form-field">
+                            <label>Lokasi *</label>
+                            <select name="location_type" id="add_location" onchange="toggleAddRoom()" required>
+                                @foreach (['Studio', 'Online', 'Home Visit'] as $loc)
+                                    <option value="{{ $loc }}" {{ old('location_type', 'Studio') === $loc ? 'selected' : '' }}>{{ $loc }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                         <div class="form-field">
                             <label>Jam Mulai *</label>
-                            <input type="time" name="start_time" required>
+                            <input type="time" name="start_time" value="{{ old('start_time') }}" required>
                         </div>
                         <div class="form-field">
                             <label>Jam Selesai *</label>
-                            <input type="time" name="end_time" required>
+                            <input type="time" name="end_time" value="{{ old('end_time') }}" required>
+                        </div>
+                        <div class="form-field full" id="add_room_wrap">
+                            <label>Ruangan *</label>
+                            <select name="room" id="add_room">
+                                @foreach ($roomOptions as $room)
+                                    @if ($room !== 'Online')
+                                        <option value="{{ $room }}">{{ $room }}</option>
+                                    @endif
+                                @endforeach
+                            </select>
                         </div>
                     </div>
                 </div>
 
                 <div class="modal-foot">
                     <button type="button" class="btn" onclick="closeSessionModal()">Batal</button>
-                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Simpan Sesi</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Simpan</button>
                 </div>
             </form>
         </div>
     </div>
+
+    {{-- Form tersembunyi untuk "Tandai Selesai" --}}
+    <form method="POST" action="#" id="payFeeForm" style="display:none">
+        @csrf
+        @method('PUT')
+        <input type="hidden" name="payment_method">
+        <input type="hidden" name="paid_at">
+    </form>
+
+    <form method="POST" id="completeForm" action="#" style="display:none">
+        @csrf
+        @method('PUT')
+    </form>
 
 @endsection
 
@@ -353,6 +475,52 @@
     function openSessionModal() {
         document.getElementById('sessionModalOverlay').classList.add('open');
     }
+    function renderFees(fees) {
+        const box = document.getElementById('detail_fees');
+        box.innerHTML = '';
+        fees.forEach(f => {
+            const row = document.createElement('div');
+            row.className = 'detail-row';
+            const left = document.createElement('span');
+            left.textContent = f.label + ' (' + f.amount + ')';
+            const right = document.createElement('strong');
+            if (f.paid) {
+                right.textContent = 'Lunas' + (f.paid_at ? ' · ' + f.paid_at : '') + ' ';
+                if (f.invoice_url) {
+                    const a = document.createElement('a');
+                    a.href = f.invoice_url;
+                    a.target = '_blank';
+                    a.textContent = 'Invoice ' + f.invoice_number;
+                    right.appendChild(a);
+                }
+            } else {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn';
+                btn.textContent = 'Tandai Lunas';
+                btn.onclick = () => {
+                    const method = prompt('Metode pembayaran (mis. Cash / Transfer):');
+                    if (!method) return;
+                    const form = document.getElementById('payFeeForm');
+                    form.action = payFeeUrl.replace('__ID__', f.id);
+                    form.querySelector('[name=payment_method]').value = method;
+                    form.querySelector('[name=paid_at]').value = new Date().toISOString().slice(0, 10);
+                    form.submit();
+                };
+                right.appendChild(btn);
+            }
+            row.append(left, right);
+            box.appendChild(row);
+        });
+    }
+
+    function toggleAddRoom() {
+        const isStudio = document.getElementById('add_location').value === 'Studio';
+        document.getElementById('add_room_wrap').style.display = isStudio ? '' : 'none';
+        document.getElementById('add_room').disabled = !isStudio;
+    }
+    document.addEventListener('DOMContentLoaded', toggleAddRoom);
+
     function closeSessionModal() {
         document.getElementById('sessionModalOverlay').classList.remove('open');
     }
@@ -380,14 +548,65 @@
         document.getElementById('detail_time').textContent = data.time_label ?? '-';
         document.getElementById('detail_room').textContent = data.room ?? '-';
         document.getElementById('detail_status').textContent = data.status_label ?? '-';
-        document.getElementById('detail_students').textContent = data.students_count ?? '-';
+        document.getElementById('detail_students_label').textContent = data.student_name ? 'Siswa' : 'Siswa Terdaftar';
+        document.getElementById('detail_students').textContent = data.student_name ?? data.students_count ?? '-';
 
-        document.getElementById('btnReschedule').style.display = data.kind === 'Private' ? '' : 'none';
-        document.getElementById('btnMarkDone').onclick = () => {
-            alert('Sesi "' + data.title + '" ditandai selesai (contoh statis, belum terhubung ke backend).');
-            closeSessionDetail();
+        document.getElementById('detail_moved_row').style.display = data.moved_from ? '' : 'none';
+        document.getElementById('detail_moved').textContent = data.moved_from ?? '-';
+        document.getElementById('detail_reason_row').style.display = data.change_reason ? '' : 'none';
+        document.getElementById('detail_reason').textContent = data.change_reason ?? '-';
+        document.getElementById('detail_kindnote_row').style.display = data.kind_note ? '' : 'none';
+        document.getElementById('detail_kindnote').textContent = data.kind_note ?? '-';
+        renderFees(data.fees || []);
+
+        const btnRs = document.getElementById('btnReschedule');
+        btnRs.style.display = data.can_reschedule ? '' : 'none';
+        btnRs.onclick = () => { closeSessionDetail(); openReschedule(data); };
+        const btnDone = document.getElementById('btnMarkDone');
+        btnDone.style.display = data.can_complete ? '' : 'none';
+        btnDone.onclick = () => {
+            if (!confirm('Tandai pertemuan "' + data.title + '" sebagai selesai? Setelah ini jadwalnya terkunci.')) return;
+            const form = document.getElementById('completeForm');
+            form.action = completeUrl.replace('__ID__', data.session_id);
+            form.submit();
         };
     }
+
+    /* ============================================================
+       MODAL: RESCHEDULE
+    ============================================================ */
+    const payFeeUrl     = @json(route('admin.jadwal.fees.pay', ['sessionFee' => '__ID__']));
+    const completeUrl   = @json(route('admin.jadwal.complete', ['classSession' => '__ID__']));
+    const rescheduleUrl = @json(route('admin.jadwal.reschedule', ['classSession' => '__ID__']));
+
+    function openReschedule(data) {
+        const form = document.getElementById('rescheduleForm');
+        form.action = rescheduleUrl.replace('__ID__', data.session_id);
+        form.reset();
+
+        document.getElementById('rs_sub').textContent =
+            data.class_name + (data.session_number ? ' · Pertemuan ke-' + data.session_number : '');
+        document.getElementById('rs_date').value  = data.date_value;
+        document.getElementById('rs_start').value = data.start_time;
+
+        const isStudio = data.location_type === 'Studio';
+        document.getElementById('rs_room_wrap').style.display = isStudio ? '' : 'none';
+        document.getElementById('rs_room').disabled = !isStudio;
+        if (isStudio && data.room_value) document.getElementById('rs_room').value = data.room_value;
+
+        const canFollow = !!data.can_reschedule_following;
+        document.getElementById('rs_following').disabled = !canFollow;
+        document.getElementById('rs_following_label').style.opacity = canFollow ? '' : '0.5';
+        document.getElementById('rs_following_label').title = canFollow ? '' : 'Tidak tersedia untuk kelas pengganti / pola yang sudah ditutup';
+
+        document.getElementById('rescheduleOverlay').classList.add('open');
+    }
+    function closeReschedule() {
+        document.getElementById('rescheduleOverlay').classList.remove('open');
+    }
+    document.getElementById('rescheduleOverlay').addEventListener('click', function (e) {
+        if (e.target === this) closeReschedule();
+    });
 
     function closeSessionDetail() {
         document.getElementById('sessionDetailOverlay').classList.remove('open');

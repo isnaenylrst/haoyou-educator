@@ -108,7 +108,7 @@ class ClassScheduleService
         Carbon|string $date,
         string $start,
         string $end,
-        ?int $ignoreSessionId = null,
+        int|array|null $ignoreSessionId = null,
         ?int $ignoreClassId = null,
     ): void {
         $date  = Carbon::parse($date);
@@ -119,7 +119,7 @@ class ClassScheduleService
             ->where('teacher_id', $teacherId)
             ->whereDate('session_date', $date)
             ->overlapping($start, $end)
-            ->when($ignoreSessionId, fn ($q) => $q->where('id', '!=', $ignoreSessionId))
+            ->when($ignoreSessionId, fn ($q) => $q->whereNotIn('id', (array) $ignoreSessionId))
             ->when($ignoreClassId, fn ($q) => $q->where(
                 fn ($w) => $w->whereNull('class_id')->orWhere('class_id', '!=', $ignoreClassId)
             ))
@@ -135,6 +135,52 @@ class ClassScheduleService
                     . substr($start, 0, 5) . '–' . substr($end, 0, 5) . '.',
             ]);
         }
+    }
+
+    /**
+     * Cek bentrok RUANG pada tanggal tertentu. Online dan ruang kosong tidak dicek.
+     * $ignoreSessionIds: pertemuan yang sedang dipindah (tidak dihitung sebagai bentrok).
+     */
+    public function assertRoomFreeOn(
+        ?string $room,
+        Carbon|string $date,
+        string $start,
+        string $end,
+        int|array|null $ignoreSessionIds = null,
+    ): void {
+        if (! $room || $room === 'Online') {
+            return;
+        }
+
+        $date  = Carbon::parse($date);
+        $start = substr($start, 0, 5) . ':00';
+        $end   = substr($end, 0, 5) . ':00';
+
+        $clash = ClassSession::query()
+            ->where('location_type', 'Studio')
+            ->where('room', $room)
+            ->whereDate('session_date', $date)
+            ->overlapping($start, $end)
+            ->when($ignoreSessionIds, fn ($q) => $q->whereNotIn('id', (array) $ignoreSessionIds))
+            ->with('class:id,class_name')
+            ->first();
+
+        if ($clash) {
+            $label = $clash->class?->class_name ?? 'kelas pengganti';
+
+            throw ValidationException::withMessages([
+                'room' => "Ruang {$room} sudah dipakai \"{$label}\" pada "
+                    . $date->copy()->locale('id')->translatedFormat('j F Y') . ' jam '
+                    . substr($start, 0, 5) . '–' . substr($end, 0, 5) . '.',
+            ]);
+        }
+    }
+
+    /** Versi boolean dari assertTeacherAvailable untuk satu slot (dipakai untuk peringatan, bukan blokir). */
+    public function isTeacherAvailable(int $teacherId, string $day, string $start, string $end): bool
+    {
+        return TeacherAvailability::where('teacher_id', $teacherId)->get()
+            ->contains(fn (TeacherAvailability $a) => $a->covers($day, substr($start, 0, 5), substr($end, 0, 5)));
     }
 
     /**

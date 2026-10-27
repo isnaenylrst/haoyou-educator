@@ -76,7 +76,7 @@
                     <span class="label">Kelas</span>
                 </a>
 
-                <a href="{{ route('admin.jadwal') }}"class="nav-item {{ request()->routeIs('admin.jadwal') ? 'active' : '' }}">
+                <a href="{{ route('admin.jadwal.index') }}"class="nav-item {{ request()->routeIs('admin.jadwal.index') ? 'active' : '' }}">
                     <i class="fa-solid fa-calendar-days nav-icon" title="Jadwal"></i>
                     <span class="label">Jadwal</span>
                 </a>
