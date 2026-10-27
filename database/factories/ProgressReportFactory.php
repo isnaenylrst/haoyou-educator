@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use Database\Seeders\Support\DummyFile;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Carbon;
 
@@ -20,7 +21,7 @@ class ProgressReportFactory extends Factory
         return [
             'report_type' => $reportType,
             'report_period' => $this->periodFor($reportType),
-            'file_path' => 'progress_reports/' . fake()->unique()->uuid() . '.pdf',
+            'file_path' => DummyFile::store('progress_reports', 'sample.pdf'),
             'status' => fake()->randomElement(['Draft', 'Submitted', 'Submitted']),
         ];
     }

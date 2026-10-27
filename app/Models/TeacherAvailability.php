@@ -36,4 +36,26 @@ class TeacherAvailability extends Model
             && substr($this->start_time, 0, 5) <= substr($start, 0, 5)
             && substr($this->end_time, 0, 5) >= substr($end, 0, 5);
     }
+
+    public static function teacherCovers(int $teacherId, string $day, string $start, string $end): bool
+    {
+        $start = substr($start, 0, 5);
+        $end   = substr($end, 0, 5);
+
+        $slots = static::where('teacher_id', $teacherId)
+            ->where('day', $day)
+            ->orderBy('start_time')
+            ->get();
+
+        $cursor = $start;
+        foreach ($slots as $s) {
+            $from = substr($s->start_time, 0, 5);
+            $to   = substr($s->end_time, 0, 5);
+
+            if ($from > $cursor) break;          // ada celah, berhenti
+            if ($to > $cursor) $cursor = $to;    // perpanjang area yang tercover
+            if ($cursor >= $end) return true;
+        }
+        return false;
+    }
 }

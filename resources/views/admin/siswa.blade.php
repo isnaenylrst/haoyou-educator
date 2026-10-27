@@ -4,6 +4,51 @@
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
+
+    <style>
+        /* Tinggi mengikuti isi, maksimal 90% layar, sisanya scroll di dalam */
+        .modal {
+            width: 100%;
+            max-width: 860px;          /* ukuran kecil: Edit & Assign Kelas */
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .modal.modal-lg {
+            max-width: 1000px;          /* ukuran besar: Detail & Lanjut Program */
+        }
+
+        /* form membungkus head/body/foot, jadi ikut jadi kolom */
+        .modal > form {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+
+        .modal-head,
+        .modal-foot {
+            flex-shrink: 0;
+        }
+
+        .modal-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+        }
+
+        /* Hindari pop-up "melompat" saat data masih dimuat lewat fetch */
+        .modal-lg .modal-body {
+            min-height: 320px;
+        }
+
+        .meet-label { font-size: 13px; color: #6b7280; }
+        .meet-label strong { color: #111827; font-size: 14px; }
+        .meet-bar { height: 5px; width: 90px; background: #eee; border-radius: 999px; overflow: hidden; margin: 5px 0 4px; }
+        .meet-bar span { display: block; height: 100%; background: #22c55e; border-radius: 999px; }
+    </style>
 @endpush
 
 @section('content')
@@ -113,9 +158,10 @@
                     <th>Siswa</th>
                     <th>Program</th>
                     <th>Kelas Aktif</th>
+                    <th>Pertemuan</th>
                     <th>Status</th>
                     <th>Poin</th>
-                    <th>Tanggal Bergabung</th>
+                    {{-- <th>Tanggal Bergabung</th> --}}
                     <th width="120" style="text-align: center;">Aksi</th>
                 </tr>
             </thead>
@@ -153,7 +199,13 @@
                                 <div>
                                     <div class="cand-name">{{ $student->name }}</div>
                                     <div class="cand-sub">
-                                        {{ $student->user->phone ?? $student->candidateStudent->phone ?? '-' }}
+                                        @if ($isPrivate)
+                                            Private
+                                        @elseif ($student->currentLevel)
+                                                    {{ $student->currentLevel->category?->category_name ? $student->currentLevel->category->category_name . ' - ' : '' }}{{ $student->currentLevel->level_name }}
+                                        @else
+                                            -
+                                        @endif
                                     </div>
                                 </div>
                             </div>
@@ -173,6 +225,36 @@
                                 <span class="badge badge-hot" style="margin-left: 6px;">Menunggu Kelas</span>
                             @endif
                         </td>
+
+                        <td>
+                            @php
+                                $classId = $activeEnrollment?->class_id;
+                                $attended = $classId ? (int) ($attendedMap[$student->id][$classId] ?? 0) : 0;
+                                $held = $classId ? (int) ($heldMap[$classId] ?? 0) : 0;
+                                $totalMeetings = (int) (
+                                    $activeEnrollment?->class?->programPackage?->total_meetings
+                                    ?? $activeEnrollment?->programPackage?->total_meetings
+                                    ?? $activeEnrollment?->privatePackage?->total_meetings
+                                    ?? 0
+                                );
+                                $pct = $totalMeetings > 0 ? min(100, (int) round($attended / $totalMeetings * 100)) : 0;
+                            @endphp
+
+                            @if ($classId)
+                                <div class="meet-label">
+                                    <strong>{{ $attended }}</strong>@if ($totalMeetings > 0)<span>/{{ $totalMeetings }}</span>@endif
+                                    <span>hadir</span>
+                                </div>
+
+                                @if ($totalMeetings > 0)
+                                    <div class="meet-bar"><span style="width: {{ $pct }}%"></span></div>
+                                @endif
+
+                                {{-- <div class="cand-sub">dari {{ $held }} pertemuan berjalan</div> --}}
+                            @else
+                                <span class="cand-sub">-</span>
+                            @endif
+                        </td>                        
 
                         <td>
                             @php
@@ -197,9 +279,9 @@
 
                         <td>{{ $student->points }}</td>
 
-                        <td>
+                        {{-- <td>
                             {{ $student->join_date ? \Carbon\Carbon::parse($student->join_date)->format('d M Y') : '-' }}
-                        </td>
+                        </td> --}}
 
                         {{-- Action --}}
                         <td>
@@ -217,17 +299,18 @@
                                         <i class="fa-solid fa-chalkboard-user"></i>
                                     </button>
                                 @else
-                                    <button type="button" class="icon-btn wa" title="Lanjut Program Berikutnya"
-                                            onclick="openContinueModal({{ $student->id }})">
+                                    <a class="icon-btn wa"
+                                    title="{{ ($student->has_outstanding ?? false) ? 'Lanjutkan Pembayaran' : 'Lanjut Program Berikutnya' }}"
+                                    href="{{ route('admin.siswa.continue.program', $student) }}">
                                         <i class="fa-solid fa-forward"></i>
-                                    </button>
+                                    </a>
                                 @endif
                             </div>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" style="text-align:center;padding:50px;color:#888;">
+                        <td colspan="8" style="text-align:center;padding:50px;color:#888;">
                             Belum ada data siswa.
                         </td>
                     </tr>
@@ -369,7 +452,7 @@
 
     {{-- ========================= MODAL DETAIL ========================= --}}
     <div class="modal-overlay" id="detailModalOverlay">
-        <div class="modal">
+        <div class="modal modal-lg">
             <div class="modal-head">
                 <div>
                     <div class="modal-title">Detail Siswa</div>
@@ -426,10 +509,11 @@
                                 <th>Tipe</th>
                                 <th>Status</th>
                                 <th>Tanggal Daftar</th>
+                                <th>Kehadiran</th>
                             </tr>
                         </thead>
                         <tbody id="detail_programs">
-                            <tr><td colspan="5">-</td></tr>
+                            <tr><td colspan="6">-</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -463,10 +547,11 @@
                                 <th>Sisa</th>
                                 <th>Status</th>
                                 <th>Tanggal</th>
+                                <th>Dokumen</th>
                             </tr>
                         </thead>
                         <tbody id="detail_payments">
-                            <tr><td colspan="7">-</td></tr>
+                            <tr><td colspan="8">-</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -482,8 +567,8 @@
     </div>
 
     {{-- ========================= MODAL LANJUT PROGRAM BERIKUTNYA ========================= --}}
-    <div class="modal-overlay" id="continueModalOverlay">
-        <div class="modal">
+    {{-- <div class="modal-overlay" id="continueModalOverlay">
+        <div class="modal modal-lg">
             <form id="continueForm" method="POST">
                 @csrf
 
@@ -511,7 +596,6 @@
 
                     <div class="form-section">
                         <div id="continue_recommendation_banner" class="recommendation-banner" style="display: none;"></div>
-                        <div id="continue_outstanding_banner" class="alert-error" style="display: none; margin-top: 10px;"></div>
                     </div>
 
                     <div class="form-section">
@@ -557,48 +641,20 @@
                         </div>
                     </div>
 
-                    <div class="form-section">
-                        <div class="form-section-title"><i class="fa-solid fa-money-check-dollar"></i> Pembayaran</div>
-                        <div class="form-grid">
-                            <div class="form-field">
-                                <label>Tahap Pembayaran *</label>
-                                <input type="text" name="payment_stage" id="continue_payment_stage" placeholder="Contoh: DP, Pelunasan, Full Payment" required>
-                            </div>
-                            <div class="form-field">
-                                <label>Jumlah Dibayar *</label>
-                                <input type="number" name="amount_paid" id="continue_amount_paid" min="0" step="1000" required>
-                            </div>
-                            <div class="form-field">
-                                <label>Metode Pembayaran *</label>
-                                <select name="payment_method" id="continue_payment_method" required>
-                                    <option value="">Pilih Metode</option>
-                                    <option value="Transfer Bank">Transfer Bank</option>
-                                    <option value="Cash">Cash</option>
-                                    <option value="QRIS">QRIS</option>
-                                    <option value="E-Wallet">E-Wallet</option>
-                                </select>
-                            </div>
-                            <div class="form-field">
-                                <label>Tanggal Pembayaran *</label>
-                                <input type="date" name="payment_date" id="continue_payment_date" required>
-                            </div>
-                        </div>
-                    </div>
-
                 </div>
 
                 <div class="modal-foot">
                     <div class="modal-foot-right">
                         <button type="button" class="btn btn-secondary" onclick="closeContinueModal()">Batal</button>
                         <button type="submit" class="btn btn-primary">
-                            <i class="fa-solid fa-forward"></i>
-                            Lanjutkan Program
+                            <i class="fa-solid fa-arrow-right"></i>
+                            Lanjut ke Pembayaran
                         </button>
                     </div>
                 </div>
             </form>
         </div>
-    </div>
+    </div> --}}
 
     {{-- ========================= MODAL ASSIGN KELAS ========================= --}}
     <div class="modal-overlay" id="assignClassModalOverlay">
@@ -618,6 +674,13 @@
                 </div>
 
                 <div class="modal-body">
+                    <div class="form-section">
+                        <div class="form-field full">
+                            <label>Jadwal Siswa</label>
+                            <div id="assign_student_schedule" style="font-size:13px;color:#374151;">-</div>
+                        </div>
+                    </div>
+
                     <div class="form-section" style="margin-bottom: 0;">
                         <div class="form-field full">
                             <label>Kelas *</label>
@@ -700,7 +763,6 @@
                 document.getElementById('edit_join_date').value = data.join_date ?? '';
                 document.getElementById('edit_points').value = data.points ?? 0;
                 setSelectValue('edit_status', data.status ?? 'Active');
-
             })
             .catch(() => {
                 alert('Gagal memuat data siswa untuk diedit.');
@@ -714,169 +776,6 @@
 
         document.getElementById('editModalOverlay').addEventListener('click', function (e) {
             if (e.target === this) closeEditModal();
-        });
-
-        /* ============================================================
-        MODAL: LANJUT PROGRAM BERIKUTNYA
-        ============================================================ */
-        let continueClassOptions = [];
-        let continuePrivateOptions = [];
-        let continueRecommendation = { type: null };
-
-        function openContinueModal(id) {
-            const overlay = document.getElementById('continueModalOverlay');
-            const form = document.getElementById('continueForm');
-            const outstandingBanner = document.getElementById('continue_outstanding_banner');
-            const submitBtn = form.querySelector('button[type="submit"]');
-
-            overlay.classList.add('open');
-            form.action = `/admin/siswa/${id}/continue`;
-            form.reset();
-
-            // reset state dari modal sebelumnya
-            outstandingBanner.style.display = 'none';
-            outstandingBanner.innerHTML = '';
-            submitBtn.disabled = false;
-
-            fetch(`/admin/siswa/${id}/continue`, {
-                headers: { 'Accept': 'application/json' }
-            })
-            .then(response => {
-                if (!response.ok) throw new Error('Gagal memuat data');
-                return response.json();
-            })
-            .then(data => {
-                document.getElementById('continue_current_info').textContent =
-                    `Saat ini: ${data.current_program} — ${data.current_class}`;
-
-                continueClassOptions = data.class_options ?? [];
-                continuePrivateOptions = data.private_options ?? [];
-                continueRecommendation = data.recommendation ?? { type: null };
-
-                // Populate dropdown Kelas Reguler
-                const classSelect = document.getElementById('continue_class_id');
-                classSelect.innerHTML = '<option value="">- Pilih Kelas -</option>';
-                continueClassOptions.forEach(opt => {
-                    const option = document.createElement('option');
-                    option.value = opt.id;
-                    option.textContent = `${opt.program_name} — ${opt.class_name} (${opt.package_name})`;
-                    option.dataset.price = opt.price;
-                    option.dataset.package = opt.program_package_id;
-                    classSelect.appendChild(option);
-                });
-
-                // Populate dropdown Private
-                const privateSelect = document.getElementById('continue_private_package_id');
-                privateSelect.innerHTML = '<option value="">- Pilih Package -</option>';
-                continuePrivateOptions.forEach(opt => {
-                    const option = document.createElement('option');
-                    option.value = opt.id;
-                    option.textContent = `${opt.package_name} — ${formatRupiah(opt.price)}`;
-                    option.dataset.price = opt.price;
-                    privateSelect.appendChild(option);
-                });
-
-                const banner = document.getElementById('continue_recommendation_banner');
-
-                if (continueRecommendation.type === 'program') {
-                    banner.style.display = 'flex';
-                    banner.innerHTML = `<i class="fa-solid fa-star"></i> ${continueRecommendation.label}`;
-
-                    document.getElementById('continue_type_program').checked = true;
-                    onContinuePackageTypeChange();
-
-                    if (continueRecommendation.class_id) {
-                        classSelect.value = continueRecommendation.class_id;
-                    }
-                    onContinueClassChange();
-
-                } else if (continueRecommendation.type === 'private') {
-                    banner.style.display = 'flex';
-                    banner.innerHTML = `<i class="fa-solid fa-star"></i> ${continueRecommendation.label}`;
-
-                    document.getElementById('continue_type_private').checked = true;
-                    onContinuePackageTypeChange();
-
-                    if (continueRecommendation.private_package_id) {
-                        privateSelect.value = continueRecommendation.private_package_id;
-                    }
-                    onContinuePrivateChange();
-
-                } else {
-                    banner.style.display = 'none';
-                    document.getElementById('continue_type_program').checked = true;
-                    onContinuePackageTypeChange();
-                    document.getElementById('continue_price_display').textContent = '-';
-                    document.getElementById('continue_price_raw').value = 0;
-                }
-
-                // Cek tagihan belum lunas dari program/kelas saat ini
-                if (data.has_outstanding_balance) {
-                    outstandingBanner.style.display = 'block';
-                    outstandingBanner.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${data.outstanding_message}`;
-                    submitBtn.disabled = true;
-                } else {
-                    outstandingBanner.style.display = 'none';
-                    outstandingBanner.innerHTML = '';
-                    submitBtn.disabled = false;
-                }
-            })
-            .catch(() => {
-                alert('Gagal memuat daftar program/kelas.');
-                closeContinueModal();
-            });
-        }
-
-        function onContinuePackageTypeChange() {
-            const type = document.querySelector('input[name="package_type"]:checked').value;
-            const programBlock = document.getElementById('continue-program-block');
-            const privateBlock = document.getElementById('continue-private-block');
-            const classSelect = document.getElementById('continue_class_id');
-            const privateSelect = document.getElementById('continue_private_package_id');
-
-            if (type === 'private') {
-                programBlock.style.display = 'none';
-                privateBlock.style.display = 'grid';
-                classSelect.removeAttribute('required');
-                classSelect.value = '';
-                privateSelect.setAttribute('required', 'required');
-                onContinuePrivateChange();
-            } else {
-                programBlock.style.display = 'grid';
-                privateBlock.style.display = 'none';
-                privateSelect.removeAttribute('required');
-                privateSelect.value = '';
-                classSelect.setAttribute('required', 'required');
-                onContinueClassChange();
-            }
-        }
-
-        function onContinueClassChange() {
-            const select = document.getElementById('continue_class_id');
-            const selected = select.options[select.selectedIndex];
-            const price = selected?.dataset.price ? Number(selected.dataset.price) : 0;
-            const packageId = selected?.dataset.package ?? '';
-
-            document.getElementById('continue_price_display').textContent = formatRupiah(price);
-            document.getElementById('continue_price_raw').value = price;
-            document.getElementById('continue_program_package_id').value = packageId;
-        }
-
-        function onContinuePrivateChange() {
-            const select = document.getElementById('continue_private_package_id');
-            const selected = select.options[select.selectedIndex];
-            const price = selected?.dataset.price ? Number(selected.dataset.price) : 0;
-
-            document.getElementById('continue_price_display').textContent = formatRupiah(price);
-            document.getElementById('continue_price_raw').value = price;
-        }
-
-        function closeContinueModal() {
-            document.getElementById('continueModalOverlay').classList.remove('open');
-        }
-
-        document.getElementById('continueModalOverlay').addEventListener('click', function (e) {
-            if (e.target === this) closeContinueModal();
         });
 
         /* ============================================================
@@ -944,12 +843,15 @@
                     <td>${s.end_time ?? '-'}</td>
                 `);
 
-                renderRows('detail_programs', data.programs, 5, p => `
+                renderRows('detail_programs', data.programs, 6, p => `
                     <td>${p.program_name ?? '-'}</td>
                     <td>${p.class_name ?? '-'}</td>
                     <td>${p.course_type ?? '-'}</td>
                     <td>${enrollmentStatusLabel(p.enrollment_status)}</td>
                     <td>${p.enrollment_date ?? '-'}</td>
+                    <td>${p.attended === null || p.attended === undefined
+                        ? '-'
+                        : p.attended + (p.total_meetings ? '/' + p.total_meetings : '') + ' pertemuan'}</td>
                 `);
 
                 renderRows('detail_progress_reports', data.progress_reports, 4, r => `
@@ -959,7 +861,7 @@
                     <td>${r.uploaded_at ?? '-'}</td>
                 `);
 
-                renderRows('detail_payments', data.payments, 7, p => `
+                renderRows('detail_payments', data.payments, 8, p => `
                     <td>${p.invoice_number ?? '-'}</td>
                     <td>${p.program_name ?? '-'}</td>
                     <td>${formatRupiah(p.total_bill)}</td>
@@ -967,6 +869,20 @@
                     <td>${formatRupiah(p.remaining_bill)}</td>
                     <td>${p.status ?? '-'}</td>
                     <td>${p.payment_date ?? '-'}</td>
+                    <td>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                            ${p.invoice_url
+                                ? `<a href="${p.invoice_url}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;">
+                                    <i class="fa-regular fa-file-lines"></i> Invoice
+                                </a>`
+                                : ''}
+                            ${p.proof_url
+                                ? `<a href="${p.proof_url}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;">
+                                    <i class="fa-regular fa-file-image"></i> Bukti
+                                </a>`
+                                : '<span style="color:#9ca3af;font-size:12px;">Bukti belum ada</span>'}
+                        </div>
+                    </td>
                 `);
             })
             .catch(() => {
@@ -983,15 +899,20 @@
             if (e.target === this) closeDetailModal();
         });
 
+        /* ============================================================
+        MODAL: ASSIGN KELAS
+        ============================================================ */
         function openAssignClassModal(enrollmentId) {
             const overlay = document.getElementById('assignClassModalOverlay');
             const form = document.getElementById('assignClassForm');
             const select = document.getElementById('assign_class_id');
             const emptyNote = document.getElementById('assign_class_empty_note');
+            const scheduleBox = document.getElementById('assign_student_schedule');
 
             form.action = `/admin/enrollments/${enrollmentId}/assign-class`;
             select.innerHTML = '<option value="">- Pilih Kelas -</option>';
             emptyNote.style.display = 'none';
+            scheduleBox.textContent = '-';
             overlay.classList.add('open');
 
             fetch(`/admin/enrollments/${enrollmentId}/waiting-class-options`, {
@@ -1002,6 +923,11 @@
                 return response.json();
             })
             .then(data => {
+                const schedules = data.student_schedules ?? [];
+                scheduleBox.textContent = schedules.length
+                    ? schedules.map(s => `${s.day} ${s.start_time}–${s.end_time}`).join(', ')
+                    : 'Belum ada jadwal tersimpan';
+
                 const options = data.class_options ?? [];
 
                 if (options.length === 0) {
@@ -1012,7 +938,13 @@
                 options.forEach(opt => {
                     const option = document.createElement('option');
                     option.value = opt.id;
-                    option.textContent = `${opt.class_name} (${opt.delivery_mode}, ${opt.status})`;
+
+                    const scheduleText = opt.schedule_text ? ` — ${opt.schedule_text}` : '';
+                    const kuotaText = opt.kuota_text ? ` [${opt.kuota_text}]` : '';
+
+                    option.textContent = `${opt.class_name} (${opt.delivery_mode}, ${opt.status})${kuotaText}${scheduleText}${opt.is_full ? ' — PENUH' : ''}`;
+                    option.disabled = opt.is_full;
+
                     select.appendChild(option);
                 });
             })
@@ -1029,13 +961,14 @@
         document.getElementById('assignClassModalOverlay').addEventListener('click', function (e) {
             if (e.target === this) closeAssignClassModal();
         });
-    </script>
-@endpush
 
-@if ($errors->any() && session('continue_student_id'))
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            openContinueModal({{ session('continue_student_id') }});
+        /* Tombol Esc menutup pop-up yang sedang terbuka */
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape') return;
+
+            closeEditModal();
+            closeDetailModal();
+            closeAssignClassModal();
         });
     </script>
-@endif
+@endpush
