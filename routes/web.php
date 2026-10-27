@@ -15,6 +15,7 @@ use App\Http\Controllers\Admin\ConvertController;
 use App\Http\Controllers\Admin\JadwalController;
 use App\Http\Controllers\Admin\KelasController;
 use App\Http\Controllers\Siswa\StudentCertificateController;
+use App\Http\Controllers\Siswa\VocabController;
 use App\Http\Controllers\Admin\ProgramLevelController;
 
 
@@ -102,6 +103,24 @@ Route::middleware(['auth', 'student'])->group(function () {
 
     Route::post('/notifikasi/tandai-dibaca', [SiswaDashboardController::class, 'notifikasiTandaiDibaca'])
         ->name('notifikasi.read-all');
+
+    Route::middleware(['auth'])   // tambahkan middleware role Student yang sudah kamu pakai
+    ->prefix('student/belajar-vocab')->name('student.vocab.')->group(function () {
+
+    Route::get('study-plan',  [VocabController::class, 'plan'])->name('plan');
+    Route::post('study-plan', [VocabController::class, 'planSave'])->name('plan.save');
+
+    Route::get('vocab-list',  [VocabController::class, 'list'])->name('list');
+
+    Route::get('test/{type?}', [VocabController::class, 'test'])->name('test')
+        ->where('type', 'reading|listening|writing');
+    Route::post('test/{type}/answer',  [VocabController::class, 'answer'])->name('test.answer');
+    Route::get('test/{type}/pending',  [VocabController::class, 'pending'])->name('test.pending');
+    Route::post('test/{type}/reset',   [VocabController::class, 'reset'])->name('test.reset');
+
+    Route::get('vocab-traps', [VocabController::class, 'traps'])->name('traps');
+    Route::post('vocab-traps/{word}/paham', [VocabController::class, 'understood'])->name('traps.understood');
+}); 
 
     // sertifikat
 
