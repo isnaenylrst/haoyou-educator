@@ -1,0 +1,107 @@
+/* =====================================================================
+   admin-extra.css
+   Komponen tambahan untuk: Jurnal Mengajar, Kurikulum & Materi,
+   Progress Report, Dokumen. Dipakai BERSAMA calonsiswa.css
+   (stat-card, toolbar, table, badge, modal sudah ada di sana).
+   Semua class diawali "x-" supaya tidak bentrok dengan CSS Isna.
+   ===================================================================== */
+
+/* ---------- Alert ---------- */
+.x-alert { border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px; border: 1px solid; }
+.x-alert-success { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+.x-alert-warning { background: #fffbeb; border-color: #fde68a; color: #b45309; }
+.x-alert-danger  { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+
+.x-note { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: #6b7280; margin: -4px 0 16px; }
+.x-note i { margin-top: 2px; color: #a16207; }
+
+/* ---------- Tabs ---------- */
+.x-tabs { display: flex; gap: 4px; margin: 4px 0 16px; border-bottom: 1px solid #e5e7eb; }
+.x-tab { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; margin-bottom: -1px;
+         font-size: 13px; font-weight: 600; color: #6b7280; text-decoration: none; border-bottom: 2px solid transparent; }
+.x-tab:hover { color: #111827; }
+.x-tab.active { color: #111827; border-bottom-color: #facc15; }
+.x-count { background: #f3f4f6; color: #374151; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.x-count-red { background: #fee2e2; color: #b91c1c; }
+
+/* ---------- Teks bantu ---------- */
+.x-muted { color: #6b7280; font-size: 12px; }
+.x-late { color: #dc2626; font-weight: 600; }
+.x-ok { color: #16a34a; font-weight: 600; }
+.x-empty { text-align: center; padding: 50px 20px; color: #888; }
+.x-empty i { display: block; font-size: 28px; margin-bottom: 10px; color: #d1d5db; }
+.x-empty.is-ok i { color: #86efac; }
+
+.x-chip { display: inline-block; background: #f3f4f6; color: #374151; font-size: 12px; padding: 3px 10px; border-radius: 999px; margin: 0 4px 4px 0; }
+.x-chip-warn { background: #fef3c7; color: #92400e; }
+
+/* ---------- Ringkasan laoshi tertunggak ---------- */
+.x-summary { padding: 16px 18px; margin-bottom: 16px; }
+.x-summary-title { font-weight: 700; font-size: 14px; margin-bottom: 12px; display: flex; gap: 8px; align-items: center; }
+.x-summary-title i { color: #eab308; }
+.x-summary-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.x-summary-item { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+                  border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 12px; }
+
+/* ---------- Detail (modal) ---------- */
+.x-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; margin-bottom: 16px; }
+.x-detail-grid .full { grid-column: 1 / -1; }
+.x-detail-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #9ca3af; font-weight: 700; margin-bottom: 2px; }
+.x-detail-value { font-size: 13.5px; color: #111827; }
+.x-pre { white-space: pre-line; background: #f9fafb; border: 1px solid #f3f4f6; border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+
+/* ---------- Folder dokumen ---------- */
+.x-folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.x-folder { display: flex; gap: 14px; align-items: center; padding: 14px 16px; background: #fff; border: 1px solid #e5e7eb;
+            border-radius: 14px; text-decoration: none; color: inherit; transition: .15s; }
+.x-folder:hover { border-color: #facc15; box-shadow: 0 4px 14px rgba(250, 204, 21, .25); transform: translateY(-1px); }
+.x-folder.active { border-color: #facc15; background: #fffbeb; }
+.x-folder-icon { width: 44px; height: 44px; border-radius: 12px; background: #fef9c3; color: #a16207;
+                 display: grid; place-items: center; font-size: 19px; flex: none; }
+.x-folder-name { font-weight: 700; font-size: 14px; color: #111827; }
+.x-folder-count { font-size: 12px; color: #6b7280; }
+
+.x-file { display: flex; gap: 12px; align-items: center; }
+.x-file-icon { width: 36px; height: 36px; border-radius: 10px; background: #f3f4f6; color: #4b5563; display: grid; place-items: center; flex: none; }
+.x-file-icon.pdf { background: #fee2e2; color: #dc2626; }
+.x-file-icon.word { background: #dbeafe; color: #2563eb; }
+.x-file-icon.excel { background: #dcfce7; color: #16a34a; }
+.x-file-icon.ppt { background: #ffedd5; color: #ea580c; }
+.x-file-icon.image { background: #fef9c3; color: #a16207; }
+
+.x-btn-danger { color: #dc2626 !important; }
+.x-inline-form { display: inline; margin: 0; }
+
+/* ---------- Kurikulum & Materi: sesi harian ---------- */
+.x-date-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.x-date-title { font-weight: 700; font-size: 15px; min-width: 220px; text-align: center; }
+
+.x-session { display: grid; grid-template-columns: 130px minmax(0, 1fr) minmax(0, 1.1fr); gap: 18px;
+             background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px 18px; margin-bottom: 12px; }
+.x-session-time { font-weight: 800; font-size: 18px; line-height: 1.1; }
+.x-session-time small { display: block; font-size: 12px; font-weight: 500; color: #6b7280; margin-top: 4px; }
+.x-session-title { font-weight: 700; font-size: 14.5px; margin-bottom: 2px; }
+.x-students { margin-top: 10px; }
+
+.x-material { border-radius: 12px; padding: 12px 14px; border: 1px solid #e5e7eb; background: #f9fafb; font-size: 13px; }
+.x-material.is-rencana { background: #fffbeb; border-color: #fde68a; }
+.x-material.is-sudah { background: #f0fdf4; border-color: #bbf7d0; }
+.x-material.is-warn { background: #fef2f2; border-color: #fecaca; }
+.x-material-meeting { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; color: #6b7280; }
+.x-material-title { font-weight: 700; font-size: 14px; margin: 2px 0 6px; }
+.x-material-syllabus { color: #4b5563; margin-bottom: 8px; }
+.x-material-foot { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.x-flag { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; font-weight: 600; color: #b91c1c; margin-top: 8px; }
+
+/* ---------- Kurikulum & Materi: katalog ---------- */
+.x-material-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; margin-bottom: 10px; }
+.x-material-card > summary { list-style: none; cursor: pointer; display: flex; gap: 14px; align-items: center; padding: 14px 16px; }
+.x-material-card > summary::-webkit-details-marker { display: none; }
+.x-meeting-no { width: 40px; height: 40px; border-radius: 12px; background: #fef9c3; color: #a16207; font-weight: 800; display: grid; place-items: center; flex: none; }
+.x-material-card .x-body { padding: 0 16px 16px 70px; }
+
+@media (max-width: 900px) {
+    .x-session { grid-template-columns: 1fr; gap: 10px; }
+    .x-detail-grid { grid-template-columns: 1fr; }
+    .x-material-card .x-body { padding-left: 16px; }
+}

@@ -15,8 +15,8 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $credentials = $request->validate([
-            'username' => ['required'],
-            'password' => ['required'],
+            'username' => ['required', 'string'],
+            'password' => ['required', 'string'],
         ]);
 
         // Hanya user dengan status Active yang boleh login
@@ -35,7 +35,6 @@ class AuthController extends Controller
             $levelName = $user->level?->nama_level;
 
             switch ($levelName) {
-
                 case 'Owner':
                     return redirect()->route('owner.dashboard');
 
@@ -46,13 +45,12 @@ class AuthController extends Controller
                     return redirect()->route('teacher.dashboard');
 
                 case 'Student':
-                    return redirect()->route('student.dashboard');
+                    return redirect()->route('dashboard');
 
                 case 'Curriculum':
-                    return redirect()->route('curriculum.dashboard');
+                    return redirect()->route('kurikulum.dashboard');
 
                 default:
-
                     Auth::logout();
 
                     return redirect()
@@ -62,6 +60,15 @@ class AuthController extends Controller
                             'Level pengguna tidak dikenali.'
                         );
             }
+
+            // Owner/Admin/level tidak dikenali -> modul belum ada
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()
+                ->route('login')
+                ->with('error', 'Modul untuk level akun ini belum tersedia.');
         }
 
         return back()

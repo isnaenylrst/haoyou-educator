@@ -3,38 +3,138 @@
 @section('dashboard-content')
 
 <div class="bg-white border border-line rounded-2xl p-5 mb-5">
-  <div class="bg-pale rounded-xl px-4 py-3 text-xs text-oliveDark mb-4">
-    Laporan perkembangan belajar diterbitkan otomatis secara berkala — setiap <strong>3 bulan</strong> untuk kelas Reguler, dan setiap <strong>2 bulan</strong> untuk kelas HSK.
-  </div>
 
-  @foreach ($laporan as $item)
-    <div class="flex items-center justify-between py-3 border-b border-line last:border-0">
-      <div class="flex items-center gap-3">
-        <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg">📊</div>
-        <div>
-          <div class="text-sm font-medium">{{ $item['judul'] }}</div>
-          <div class="text-xs text-gray-500">{{ $item['periode'] }}</div>
+    {{-- Informasi Progress Report --}}
+    <div class="bg-pale rounded-xl px-4 py-3 text-xs text-oliveDark mb-4">
+        Progress report tampil di sini setelah <strong>disetujui Kurikulum</strong>.
+        Laporan yang masih diisi guru atau sedang direview belum ditampilkan.
+        Laporan diterbitkan berkala — setiap <strong>3 bulan</strong> untuk kelas Reguler,
+        dan setiap <strong>2 bulan</strong> untuk kelas HSK.
+    </div>
+
+
+    {{-- Daftar laporan --}}
+    @forelse ($laporan as $item)
+
+        <div class="flex items-center justify-between py-3 border-b border-line last:border-0">
+
+            {{-- Icon + Informasi --}}
+            <div class="flex items-center gap-3">
+
+                <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg flex-shrink-0">
+                    📊
+                </div>
+
+                <div>
+                    <div class="text-sm font-semibold text-black">
+                        {{ $item->report_type ?: 'Progress Report' }}
+                        @if (optional(optional($item->enrollment)->class)->class_name)
+                            — {{ $item->enrollment->class->class_name }}
+                        @endif
+                    </div>
+
+                    <div class="text-xs text-gray-500 mt-1">
+                        {{ $item->report_period ?: 'Periode laporan belum tersedia' }}
+                        @if ($item->reviewed_at)
+                            · Disetujui {{ $item->reviewed_at->translatedFormat('d M Y') }}
+                        @endif
+                        @if ($item->teacher)
+                            · {{ $item->teacher->name }}
+                        @endif
+                        @if (!is_null($item->average_score))
+                            · Rata-rata nilai {{ $item->average_score }}
+                        @endif
+                    </div>
+                </div>
+
+            </div>
+
+
+            {{-- Tombol --}}
+            @if ($item->file_path)
+                <a href="{{ route('progresreport.download', $item) }}"
+                   class="text-xs font-semibold border border-black rounded-full px-5 py-2
+                          hover:bg-black hover:text-white transition whitespace-nowrap">
+                    Unduh PDF
+                </a>
+            @endif
+
         </div>
-      </div>
-      <button class="text-xs font-semibold border border-ink rounded-full px-4 py-2 hover:bg-ink hover:text-white transition">Lihat Laporan</button>
-    </div>
-  @endforeach
 
-  <div class="flex items-center justify-between py-3 border-t border-line mt-1">
-    <div class="flex items-center gap-3">
-      <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg">⏳</div>
-      <div>
-        <div class="text-sm font-medium">Progress Report Berikutnya</div>
-        <div class="text-xs text-gray-500">Reguler: terbit Apr 2026 · HSK: terbit Mar 2026</div>
-      </div>
+    @empty
+
+        {{-- Jika belum ada laporan --}}
+        <div class="flex items-center justify-between py-3">
+
+            <div class="flex items-center gap-3">
+
+                <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg">
+                    📊
+                </div>
+
+                <div>
+                    <div class="text-sm font-semibold text-black">
+                        Progress Report
+                    </div>
+
+                    <div class="text-xs text-gray-500 mt-1">
+                        Belum ada progress report yang disetujui.
+                    </div>
+                </div>
+
+            </div>
+
+            <span class="text-[11px] font-semibold px-3 py-1 rounded-full bg-pale text-oliveDark">
+                Belum Terbit
+            </span>
+
+        </div>
+
+    @endforelse
+
+
+    {{-- Progress Report berikutnya --}}
+    <div class="flex items-center justify-between py-3 border-t border-line mt-1">
+
+        <div class="flex items-center gap-3">
+
+            <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg">
+                ⏳
+            </div>
+
+            <div>
+                <div class="text-sm font-semibold text-black">
+                    Progress Report Berikutnya
+                </div>
+
+                <div class="text-xs text-gray-500 mt-1">
+                    Diterbitkan otomatis sesuai periode kelas kamu
+                </div>
+            </div>
+
+        </div>
+
+        <span class="text-[11px] font-semibold px-3 py-1 rounded-full bg-pale text-oliveDark whitespace-nowrap">
+            Belum Terbit
+        </span>
+
     </div>
-    <span class="text-[11px] font-semibold px-3 py-1 rounded-full bg-pale text-oliveDark">Belum Terbit</span>
-  </div>
+
 </div>
 
+
+{{-- Informasi Alumni --}}
 <div class="alumni-banner bg-pale border border-gold rounded-xl p-4">
-  <h3 class="font-semibold mb-1">Status: Alumni</h3>
-  <p class="text-xs text-oliveDark">Riwayat progress report tetap bisa diakses walau kamu sudah menjadi alumni dan tidak lagi memiliki akses ke kelas, materi, atau video pembelajaran.</p>
+
+    <h3 class="font-semibold mb-1">
+        Status: Alumni
+    </h3>
+
+    <p class="text-xs text-oliveDark">
+        Riwayat progress report tetap bisa diakses walau kamu sudah menjadi alumni
+        dan tidak lagi memiliki akses ke kelas, materi, atau video pembelajaran.
+    </p>
+
 </div>
 
 @endsection

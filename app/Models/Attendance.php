@@ -14,15 +14,17 @@ class Attendance extends Model
     protected $fillable = [
         'teaching_journal_id',
         'student_id',
+        'attendance_date',
         'session_date',
         'status',
         'note',
     ];
 
-    // Catatan: cast sebelumnya salah nama ('attendance_date', kolomnya tidak
-    // ada) — sudah dibetulkan ke 'session_date' sesuai migration terbaru.
+    // attendance_date dipakai Monitoring Kurikulum, session_date dipakai jurnal.
+    // Keduanya harus ikut tersimpan (lihat $fillable).
     protected $casts = [
-        'session_date' => 'date',
+        'attendance_date' => 'date',
+        'session_date'    => 'date',
     ];
 
     public function teachingJournal()
