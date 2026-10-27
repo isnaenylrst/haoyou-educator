@@ -36,24 +36,27 @@ class NotifikasiController extends Controller
 
         $notifications = collect();
 
-        // ----- 1. Surat / Dokumen -----
-        $documents = Document::with('uploader')
-            ->where(function ($q) {
-                $q->where('visibility', 'Teacher')
-                    ->orWhere(function ($q2) {
-                        $q2->where('visibility', 'Private')
-                            ->where('user_id', Auth::id());
-                    });
-            })
+        // ----- 1. Surat dari Kurikulum (hanya yang ditujukan ke guru ini) -----
+        $letters = Document::letters()
+            ->join('document_recipients as r', 'r.document_id', '=', 'documents.id')
+            ->where('r.user_id', Auth::id())
+            ->select('documents.*', 'r.read_at as my_read_at')
             ->get();
 
-        foreach ($documents as $doc) {
+        foreach ($letters as $doc) {
             $notifications->push([
-                'title' => $doc->title,
-                'category' => 'Surat Pemberitahuan',
-                'time' => $doc->uploaded_at,
-                'model' => $doc,
-                'type' => 'document',
+                'title'    => $doc->title,
+                'category' => 'Surat Pemberitahuan — ' . $doc->type_label,
+                'time'     => $doc->uploaded_at,
+                'note'     => $doc->description,
+                'model'    => $doc,
+                'type'     => 'document',
+                'unread'   => $doc->my_read_at === null,
+                'action'   => [
+                    'kind'  => 'link',
+                    'url'   => route('teacher.surat.show', $doc),
+                    'label' => 'Buka Surat',
+                ],
             ]);
         }
 
@@ -84,15 +87,24 @@ class NotifikasiController extends Controller
 
         foreach ($journals as $item) {
             $className = $item->class->class_name ?? '-';
+            $revision  = $item->status === 'Revision';
 
             $notifications->push([
-                'title' => $item->status === 'Reviewed'
-                    ? "Jurnal sesi {$className} sudah direview"
-                    : "Jurnal sesi {$className} perlu direvisi",
+                'title'    => $revision
+                    ? "Jurnal sesi {$className} perlu direvisi"
+                    : "Jurnal sesi {$className} sudah direview",
                 'category' => 'Hasil Review Jurnal & Absensi',
-                'time' => $item->updated_at,
-                'model' => $item,
-                'type' => 'journal',
+                'time'     => $item->reviewed_at ?? $item->updated_at,
+                'note'     => $revision ? $item->review_note : null,
+                'model'    => $item,
+                'type'     => 'journal',
+                'action'   => $revision
+                    ? [
+                        'kind'  => 'link',
+                        'url'   => route('teacher.attendance', ['date' => $item->session_date->toDateString()]),
+                        'label' => 'Perbaiki Jurnal',
+                    ]
+                    : null,
             ]);
         }
 
@@ -177,6 +189,9 @@ class NotifikasiController extends Controller
         foreach ($tasks as $task) {
             $className = $task->class->class_name ?? '-';
             $due = $task->due_date ? ' · batas ' . $task->due_date->translatedFormat('d M Y') : '';
+            if ($task->is_overdue) {
+                $due .= ' · TERLAMBAT';
+            }
 
             $notifications->push([
                 'title' => "Tugas perbaikan kelas {$className}: {$task->title}",

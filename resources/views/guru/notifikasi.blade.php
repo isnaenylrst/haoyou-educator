@@ -29,7 +29,7 @@
         @forelse ($notifications as $notif)
 
             @php
-                $isNew = $notif['time'] && $notif['time']->diffInDays(now()) <= 3;
+                $isNew = $notif['unread'] ?? ($notif['time'] && $notif['time']->diffInDays(now()) <= 3);
             @endphp
 
             <div class="d-flex justify-content-between align-items-center gap-3 p-3 {{ !$loop->last ? 'border-bottom' : '' }}">
