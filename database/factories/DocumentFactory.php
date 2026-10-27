@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\ProgramLevel;
+use Database\Seeders\Support\DummyFile;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class DocumentFactory extends Factory
@@ -15,7 +16,13 @@ class DocumentFactory extends Factory
             'title' => fake()->sentence(3),
             'document_type' => fake()->randomElement(['CV', 'Photo', 'Teacher Certificate', 'Agreement', 'SOP', 'Teacher Leave Letter', 'Other']),
             'description' => fake()->optional()->sentence(),
-            'file_path' => 'documents/' . fake()->unique()->uuid() . '.pdf',
+
+            // Pakai closure supaya file HANYA dibuat kalau nilai ini tidak di-override oleh state
+            // (mis. certificate()). Kalau tidak, file yatim akan tercipta di storage.
+            'file_path' => fn (array $attributes) => $attributes['document_type'] === 'Photo'
+                ? DummyFile::store('documents', 'sample.jpg')
+                : DummyFile::store('documents', 'sample.pdf'),
+
             'visibility' => fake()->randomElement(['Private', 'Teacher', 'Student', 'Public']),
         ];
     }
@@ -29,7 +36,7 @@ class DocumentFactory extends Factory
             'program_level_id' => $programLevelId
                 ?? (empty($levelIds) ? null : fake()->randomElement($levelIds)),
             'visibility' => 'Student',
-            'file_path' => 'documents/certificates/' . fake()->unique()->uuid() . '.pdf',
+            'file_path' => fn () => DummyFile::store('documents/certificates', 'sample.pdf'),
         ]);
     }
 

@@ -21,6 +21,10 @@ class Teacher extends Model
         'status',
     ];
 
+    protected $casts = [
+        'join_date' => 'date',
+    ];
+
     public function user()
     {
         return $this->belongsTo(User::class);
@@ -29,6 +33,12 @@ class Teacher extends Model
     public function classes()
     {
         return $this->hasMany(ClassModel::class);
+    }
+
+    // Pertemuan terjadwal milik guru ini (dipakai untuk cek bentrok jadwal)
+    public function classSessions()
+    {
+        return $this->hasMany(ClassSession::class, 'teacher_id');
     }
 
     public function teachingJournals()
@@ -59,5 +69,10 @@ class Teacher extends Model
     public function progressReports()
     {
         return $this->hasMany(ProgressReport::class);
+    }
+
+    public function availabilities()
+    {
+        return $this->hasMany(TeacherAvailability::class);
     }
 }

@@ -8,60 +8,21 @@
 
 @section('content')
 
+
     {{-- =====================================================
         HEADER
     ===================================================== --}}
     <div class="dashboard-header">
         <div>
             <div class="eyebrow">RINGKASAN</div>
-            <h1>Selamat datang kembali, Isnaeny👋</i></h1>
-            <p>Berikut ringkasan operasional Haoyou Educator hari ini, Selasa 14 Juli 2026.</p>
+            <h1>Selamat datang kembali, {{ auth()->user()->name }} 👋</h1>
+            <p>Berikut ringkasan operasional Haoyou Educator hari ini, {{ now()->translatedFormat('l d F Y') }}.</p>
         </div>
 
         <div class="dashboard-header-actions">
             <button class="btn btn-secondary">
                 <i class="fa-solid fa-chart-line"></i> Lihat Laporan
             </button>
-            <button class="btn btn-primary">
-                <i class="fa-solid fa-plus"></i> Tambah Lead
-            </button>
-        </div>
-    </div>
-
-    {{-- =====================================================
-        QUICK ACTIONS
-    ===================================================== --}}
-    <div class="quick-actions">
-        <div class="quick-card">
-            <div class="quick-icon yellow"><i class="fa-solid fa-user-plus"></i></div>
-            <div>
-                <strong>Tambah Lead</strong>
-                <span>Input calon siswa baru</span>
-            </div>
-        </div>
-
-        <div class="quick-card">
-            <div class="quick-icon yellow"><i class="fa-solid fa-file-invoice-dollar"></i></div>
-            <div>
-                <strong>Buat Invoice</strong>
-                <span>Tagihan baru / termin</span>
-            </div>
-        </div>
-
-        <div class="quick-card">
-            <div class="quick-icon yellow"><i class="fa-solid fa-calendar-check"></i></div>
-            <div>
-                <strong>Jadwalkan Trial</strong>
-                <span>Atur tanggal, jam, guru</span>
-            </div>
-        </div>
-
-        <div class="quick-card">
-            <div class="quick-icon yellow"><i class="fa-solid fa-chalkboard-user"></i></div>
-            <div>
-                <strong>Tambah Kelas</strong>
-                <span>Buat kelas baru</span>
-            </div>
         </div>
     </div>
 
@@ -72,91 +33,87 @@
         <div class="priority-title">
             <span class="danger-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
             <strong>Prioritas Hari Ini</strong>
-            <span>2 hal paling mendesak &middot; lihat semua di ikon <i class="fa-solid fa-bell"></i> Notifikasi</span>
+            <span>{{ $prioritas['total'] }} hal perlu ditindaklanjuti</span>
         </div>
 
         <div class="priority-items">
-            <div class="priority-item" style="border-right: 1px solid #F1F2F4;">
-                <div class="priority-icon red"><i class="fa-solid fa-money-check-dollar"></i></div>
-                <div class="priority-text">
-                    <strong>3 Bukti pembayaran belum diverifikasi</strong>
-                    <span>Uang sudah masuk, tinggal dikonfirmasi Admin.</span>
-                </div>
-                <button>Verifikasi</button>
-            </div>
 
-            <div class="priority-item">
-                <div class="priority-icon yellow"><i class="fa-solid fa-calendar-xmark"></i></div>
-                <div class="priority-text">
-                    <strong>2 Jadwal bentrok</strong>
-                    <span>Guru/ruangan dobel booking, harus diatur ulang.</span>
+            {{-- Kelas berakhir hari ini (hari H) --}}
+            @foreach ($prioritas['hari_h'] as $k)
+                <div class="priority-item">
+                    <div class="priority-icon red"><i class="fa-solid fa-flag-checkered"></i></div>
+                    <div class="priority-text">
+                        <strong>{{ $k->class_name }} berakhir hari ini</strong>
+                        <span>Guru {{ $k->teacher->name ?? '-' }} · {{ $k->students_count }} siswa</span>
+                    </div>
                 </div>
-                <button>Lihat Detail</button>
-            </div>
+            @endforeach
+
+            {{-- Kelas akan berakhir (sebelum) --}}
+            @foreach ($prioritas['sebelum'] as $k)
+                <div class="priority-item">
+                    <div class="priority-icon yellow"><i class="fa-solid fa-hourglass-end"></i></div>
+                    <div class="priority-text">
+                        <strong>{{ $k->class_name }} akan berakhir</strong>
+                        <span>{{ (int) abs(today()->diffInDays($k->end_date)) }} hari lagi · Guru {{ $k->teacher->name ?? '-' }}</span>
+                    </div>
+                </div>
+            @endforeach
+
+            {{-- Setelah berakhir: konfirmasi ke guru --}}
+            @foreach ($prioritas['setelah'] as $k)
+                <div class="priority-item">
+                    <div class="priority-icon red"><i class="fa-solid fa-user-check"></i></div>
+                    <div class="priority-text">
+                        <strong>Konfirmasi ke guru: {{ $k->class_name }}</strong>
+                        <span>Berakhir {{ $k->end_date->translatedFormat('d M Y') }} ({{ (int) abs($k->end_date->diffInDays(today())) }} hari lalu) · Guru {{ $k->teacher->name ?? '-' }}</span>
+                    </div>
+                </div>
+            @endforeach
+
+            {{-- Follow up siswa: progress report sudah terverifikasi kurikulum --}}
+            @foreach ($prioritas['follow_up'] as $r)
+                <div class="priority-item">
+                    <div class="priority-icon yellow"><i class="fa-solid fa-phone-volume"></i></div>
+                    <div class="priority-text">
+                        <strong>Follow up {{ $r->student->name ?? '-' }}</strong>
+                        <span>Progress report {{ $r->report_period }} · {{ $r->enrollment->class->class_name ?? '' }} sudah terverifikasi kurikulum</span>
+                    </div>
+                </div>
+            @endforeach
+
+            @if ($prioritas['total'] === 0)
+                <div class="priority-item">
+                    <div class="priority-text"><strong>Tidak ada prioritas hari ini 🎉</strong></div>
+                </div>
+            @endif
         </div>
     </div>
 
     {{-- =====================================================
         STATISTICS
     ===================================================== --}}
+    @php
+        $cards = [
+            ['Siswa Aktif',            $stats['siswa_aktif'],            'green',  'fa-user-graduate'],
+            ['Calon Siswa Minggu Ini', $stats['calon_siswa_minggu_ini'], 'blue',   'fa-user-plus'],
+            ['Waiting Trial Hari Ini', $stats['waiting_trial_hari_ini'], 'blue',   'fa-hourglass-half'],
+            ['Konsultasi Hari Ini',    $stats['konsultasi_hari_ini'],    'red',    'fa-comments'],
+            ['Menunggu Jadwal Kelas',  $stats['menunggu_jadwal_kelas'],  'purple', 'fa-calendar-days'],
+            ['Kelas Berjalan',         $stats['kelas_berjalan'],         'yellow', 'fa-chalkboard'],
+        ];
+    @endphp
+
     <div class="stats-grid">
-        <div class="stat-card blue">
-            <div class="stat-header">
-                <span>Chat Masuk Hari Ini</span>
-                <span class="stat-icon"><i class="fa-solid fa-comments"></i></span>
+        @foreach ($cards as [$label, $value, $color, $icon])
+            <div class="stat-card {{ $color }}">
+                <div class="stat-header">
+                    <span>{{ $label }}</span>
+                    <span class="stat-icon"><i class="fa-solid {{ $icon }}"></i></span>
+                </div>
+                <strong>{{ $value }}</strong>
             </div>
-            <strong>14</strong>
-            <small class="positive">
-                <i class="fa-solid fa-arrow-up"></i> 4 dibanding kemarin
-            </small>
-        </div>
-
-        <div class="stat-card red">
-            <div class="stat-header">
-                <span>Prioritas Follow Up</span>
-                <span class="stat-icon"><i class="fa-solid fa-phone-volume"></i></span>
-            </div>
-            <strong>33</strong>
-            <small class="negative">Client baru, trial, &amp; pembayaran</small>
-        </div>
-
-        <div class="stat-card green">
-            <div class="stat-header">
-                <span>Siswa Aktif</span>
-                <span class="stat-icon"><i class="fa-solid fa-user-graduate"></i></span>
-            </div>
-            <strong>312</strong>
-            <small class="positive">
-                <i class="fa-solid fa-arrow-up"></i> 8 siswa baru bulan ini
-            </small>
-        </div>
-
-        <div class="stat-card blue">
-            <div class="stat-header">
-                <span>Waiting Trial</span>
-                <span class="stat-icon"><i class="fa-solid fa-hourglass-half"></i></span>
-            </div>
-            <strong>9</strong>
-            <small>3 dijadwalkan minggu ini</small>
-        </div>
-
-        <div class="stat-card purple">
-            <div class="stat-header">
-                <span>Menunggu Jadwal Kelas</span>
-                <span class="stat-icon"><i class="fa-solid fa-calendar-days"></i></span>
-            </div>
-            <strong>4</strong>
-            <small>Sudah bayar, belum ada kelas</small>
-        </div>
-
-        <div class="stat-card yellow">
-            <div class="stat-header">
-                <span>Kelas Berjalan Hari Ini</span>
-                <span class="stat-icon"><i class="fa-solid fa-chalkboard"></i></span>
-            </div>
-            <strong>38</strong>
-            <small>4 sedang berlangsung sekarang</small>
-        </div>
+        @endforeach
     </div>
 
     {{-- =====================================================
@@ -258,106 +215,50 @@
                 </div>
             </div>
 
-            <div class="cp-lis">
-                <div class="cp-row">
-                    <div class="cp-head">
-                        <div>
-                            <div class="cp-title">HSK 3 - Batch B</div>
-                            <div class="cp-meta">Guru Mei Wong · 8 siswa · Offline </div>
+            <div class="cp-lis" style="max-height: 520px; overflow-y: auto;">
+                @forelse ($programAktif as $k)
+                    @php
+                        $barColor = match ($k->state) {
+                            'ending' => '#D9A404',
+                            'done'   => '#16A34A',
+                            'closed' => '#9CA3AF',
+                            default  => null,
+                        };
+                    @endphp
+                    <div class="cp-row">
+                        <div class="cp-head">
+                            <div>
+                                <div class="cp-title">{{ $k->class_name }}</div>
+                                <div class="cp-meta">Guru {{ $k->teacher->name ?? '-' }} · {{ $k->students_count }} siswa · {{ $k->delivery_mode }} </div>
+                            </div>
+                            <div class="cp-badges">
+                                @if ($k->state === 'ending')
+                                    <span class="class-status class-ending">Akan Berakhir · {{ $k->sessions_left }} sesi lagi</span>
+                                @elseif ($k->state === 'done')
+                                    <span class="class-status class-done">Selesai</span>
+                                @elseif ($k->state === 'closed')
+                                    <span class="class-status" style="background:#F1F2F4; color:#6B7280;">Ditutup</span>
+                                @elseif ($k->state === 'scheduled')
+                                    <span class="class-status class-scheduled">Belum Mulai</span>
+                                @else
+                                    <span class="class-status class-live">Berjalan</span>
+                                @endif
+                            </div>
                         </div>
-                        <div class="cp-badges">
-                            <span class="class-status class-ending">Akan Berakhir · 2 sesi lagi</span>
+                        <div class="cp-track">
+                            <div class="cp-fill" style="width: {{ $k->progress }}%;{{ $barColor ? ' background:' . $barColor . ';' : '' }}"></div>
                         </div>
-                    </div>
-                    <div class="cp-track">
-                        <div class="cp-fill" style="width: 90%" background:#D9A404;></div>
-                    </div>
-                    <div class="cp-foot">
-                        <span class="cp-sessions">Sesi
-                            <b>18/20</b>
-                        </span>
-                    </div>
-                </div>
-
-                <div class="cp-row">
-                    <div class="cp-head">
-                        <div>
-                            <div class="cp-title">Private - Sinta Nuraini</div>
-                            <div class="cp-meta">Guru Andi Susanto · 1 siswa · Online </div>
-                        </div>
-                        <div class="cp-badges">
-                            <span class="class-status class-ending">Akan Berakhir · 3 sesi lagi</span>
-                        </div>
-                    </div>
-                    <div class="cp-track">
-                        <div class="cp-fill" style="width: 75%"></div>
-                    </div>
-                    <div class="cp-foot">
-                        <span class="cp-sessions">Sesi
-                            <b>9/12</b>
-                        </span>
-                    </div>
-                </div>
-
-                <div class="cp-row">
-                    <div class="cp-head">
-                        <div>
-                            <div class="cp-title">Reguler Kids - Batch A</div>
-                            <div class="cp-meta">Guru Chen Li · 10 siswa · Offline </div>
-                        </div>
-                        <div class="cp-badges">
-                            <span class="class-status class-live">Berjalan</span>
+                        <div class="cp-foot">
+                            <span class="cp-sessions">Pertemuan
+                                <b>{{ $k->done_sessions }}@if ($k->total_sessions > 0)/{{ $k->total_sessions }}@endif</b>
+                            </span>
                         </div>
                     </div>
-                    <div class="cp-track">
-                        <div class="cp-fill" style="width: 30%"></div>
+                @empty
+                    <div class="cp-row">
+                        <div class="cp-meta">Belum ada kelas aktif.</div>
                     </div>
-                    <div class="cp-foot">
-                        <span class="cp-sessions">Sesi
-                            <b>6/20</b>
-                        </span>
-                    </div>
-                </div>
-
-                <div class="cp-row">
-                    <div class="cp-head">
-                        <div>
-                            <div class="cp-title">HSK 1 — Batch A</div>
-                            <div class="cp-meta">Guru Mei Wong · 12 siswa · Offline </div>
-                        </div>
-                        <div class="cp-badges">
-                            <span class="class-status class-done">Selesai</span>
-                        </div>
-                    </div>
-                    <div class="cp-track">
-                        <div class="cp-fill" width:100%; background:#16A34A;></div>
-                    </div>
-                    <div class="cp-foot">
-                        <span class="cp-sessions">Sesi
-                            <b>20/20</b>
-                        </span>
-                    </div>
-                </div>
-
-                <div class="cp-row">
-                    <div class="cp-head">
-                        <div>
-                            <div class="cp-title">Reguler Teen - Batch C</div>
-                            <div class="cp-meta">Guru Dewi Wulandari · 9 siswa · Online </div>
-                        </div>
-                        <div class="cp-badges">
-                            <span class="class-status class-scheduled">Belum Mulai</span>
-                        </div>
-                    </div>
-                    <div class="cp-track">
-                        <div class="cp-fill" style="width: 0%"></div>
-                    </div>
-                    <div class="cp-foot">
-                        <span class="cp-sessions">Sesi
-                            <b>0/16</b>
-                        </span>
-                    </div>
-                </div>
+                @endforelse
             </div>
         </div>
 
@@ -366,39 +267,36 @@
             <div class="card-header">
                 <div>
                     <h3>Jadwal Kelas Hari Ini</h3>
-                    <p>8 kelas terjadwal</p>
+                    <p>{{ $jadwalHariIni->count() }} kelas terjadwal</p>
                 </div>
                 <a href="#">Kalender <i class="fa-solid fa-arrow-right"></i></a>
             </div>
 
             <div class="today-list">
-              <div class="today-item completed">
-                <div class="today-time">07:00 – 08:00 · completed</div>
-                <div class="today-title">Daily Activity — Maochong</div>
-                <div class="today-meta">Ratna · 5/6 hadir · <b>Offline</b></div>
-              </div>
-              <div class="today-item soon">
-                <div class="today-time" style="color: #E0A400; font-weight: 800;">09:00 – 10:00 · in 19 minutes</div>
-                <div class="today-title">HSK Preparation — Hudie</div>
-                <div class="today-meta">Dinda · 8 siswa · <b>Online</b></div>
-              </div>
-              <div class="today-item">
-                <div class="today-time">13:00 – 14:00</div>
-                <div class="today-title">Business Class — Feixiang</div>
-                <div class="today-meta">Ratna · 5 siswa · <b>Offline</b></div>
-              </div>
-              <div class="today-item">
-                <div class="today-time">15:00 – 16:00</div>
-                <div class="today-title">Daily Activity — Jianer</div>
-                <div class="today-meta">Dinda · 8 siswa · <b>Online</b></div>
-              </div>
-              <div class="today-item">
-                <div class="today-time">16:30 – 17:30</div>
-                <div class="today-title">Private Class — Jianer</div>
-                <div class="today-meta">Ratna · 3 siswa · <b>Offline</b></div>
-              </div>
+                @forelse ($jadwalHariIni as $s)
+                    @php
+                        $guru = $s->teacher->name ?? $s->class->teacher->name ?? '-';
+                        $mode = $s->location_type ?: ($s->class->delivery_mode ?? '');
+                    @endphp
+                    <div class="today-item {{ $s->state === 'completed' ? 'completed' : (in_array($s->state, ['soon', 'ongoing']) ? 'soon' : '') }}">
+                        @if (in_array($s->state, ['soon', 'ongoing']))
+                            <div class="today-time" style="color: #E0A400; font-weight: 800;">
+                                {{ $s->start_label }} – {{ $s->end_label }} ·
+                                {{ $s->state === 'ongoing' ? 'sedang berlangsung' : 'dalam ' . $s->minutes_to . ' menit' }}
+                            </div>
+                        @else
+                            <div class="today-time">{{ $s->start_label }} – {{ $s->end_label }}{{ $s->state === 'completed' ? ' · completed' : '' }}</div>
+                        @endif
+                        <div class="today-title">{{ $s->class->class_name ?? '-' }}</div>
+                        <div class="today-meta">{{ $guru }} · {{ $s->class->students_count ?? 0 }} siswa · <b>{{ $mode }}</b>{{ $s->room ? ' · ' . $s->room : '' }}</div>
+                    </div>
+                @empty
+                    <div class="today-item">
+                        <div class="today-title">Tidak ada kelas hari ini</div>
+                    </div>
+                @endforelse
             </div>
-          </div>
+        </div>
         </div>
 
         {{-- =====================================================
@@ -454,27 +352,18 @@
                     </div>
                 </div>
 
-            <div class="panel-list">
-              <div class="panel-row">
-                <div class="panel-avatar" style="background:#FFF7E0; color:#92620A;">AS</div>
-                <div><div class="panel-title">Andi Susanto</div><div class="panel-meta">Kosong 11:00–15:00</div></div>
-                <span class="due-badge class-live" style="margin-left:auto;">Tidak ada jadwal</span>
-              </div>
-              <div class="panel-row">
-                <div class="panel-avatar" style="background:#FFF7E0; color:#92620A;">DW</div>
-                <div><div class="panel-title">Dewi Wulandari</div><div class="panel-meta">Kosong sepanjang hari</div></div>
-                <span class="due-badge class-live" style="margin-left:auto;">Tidak ada jadwal</span>
-              </div>
-              <div class="panel-row">
-                <div class="panel-avatar" style="background:#FFF7E0;">CL</div>
-                <div><div class="panel-title">Chen Li</div><div class="panel-meta">Mengajar sampai 16:30</div></div>
-                <span class="due-badge due-later" style="margin-left:auto;">Mengajar</span>
-              </div>
-              <div class="panel-row">
-                <div class="panel-avatar" style="background:#FFF7E0;">MW</div>
-                <div><div class="panel-title">Mei Wong</div><div class="panel-meta">Mengajar sampai 10:30</div></div>
-                <span class="due-badge due-later" style="margin-left:auto;">Mengajar</span>
-              </div>
+            <div class="panel-list" style="max-height: 420px; overflow-y: auto;">
+              @forelse ($guruTersedia as $g)
+                <div class="panel-row">
+                  <div class="panel-avatar" style="background:#FFF7E0;{{ $g->has_teaching ? '' : ' color:#92620A;' }}">{{ $g->initials }}</div>
+                  <div><div class="panel-title">{{ $g->name }}</div><div class="panel-meta">{{ $g->meta }}</div></div>
+                  <span class="due-badge {{ $g->has_teaching ? 'due-later' : 'class-live' }}" style="margin-left:auto;">{{ $g->has_teaching ? 'Mengajar' : 'Tidak ada jadwal' }}</span>
+                </div>
+              @empty
+                <div class="panel-row">
+                  <div class="panel-meta">Belum ada guru yang menyatakan tersedia hari ini.</div>
+                </div>
+              @endforelse
             </div>
             </div>
 

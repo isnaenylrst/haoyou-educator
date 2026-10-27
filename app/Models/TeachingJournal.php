@@ -13,6 +13,7 @@ class TeachingJournal extends Model
         'teacher_id',
         'class_id',
         'class_schedule_id',
+        'class_session_id',
         'session_date',
         'material_id',
         'is_substitute',
@@ -46,6 +47,12 @@ class TeachingJournal extends Model
         return $this->belongsTo(ClassSchedule::class);
     }
 
+    // Pertemuan terencana yang dicatat jurnal ini (null untuk jurnal lama)
+    public function classSession()
+    {
+        return $this->belongsTo(ClassSession::class, 'class_session_id');
+    }
+
     public function material()
     {
         return $this->belongsTo(Material::class);
@@ -56,7 +63,7 @@ class TeachingJournal extends Model
         return $this->belongsTo(Teacher::class, 'substitute_teacher_id');
     }
 
-    // Baru: menyatukan pencatatan guru pengganti dengan pengajuan cuti terkait
+    // Menyatukan pencatatan guru pengganti dengan pengajuan cuti terkait
     public function teacherLeave()
     {
         return $this->belongsTo(TeacherLeave::class, 'teacher_leave_id');

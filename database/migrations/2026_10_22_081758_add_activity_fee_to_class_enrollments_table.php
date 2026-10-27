@@ -1,0 +1,23 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('class_enrollments', function (Blueprint $table) {
+            // Biaya aktivitas yang ditagihkan pada enrollment ini (snapshot dari Pengaturan)
+            $table->decimal('activity_fee', 12, 2)->default(0)->after('registration_fee');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('class_enrollments', function (Blueprint $table) {
+            $table->dropColumn('activity_fee');
+        });
+    }
+};

@@ -4,161 +4,164 @@ namespace Database\Seeders;
 
 use App\Models\ClassModel;
 use App\Models\PrivatePackage;
-use App\Models\Teacher;
 use App\Models\Program;
 use App\Models\ProgramCategory;
 use App\Models\ProgramLevel;
 use App\Models\ProgramPackage;
+use App\Models\Teacher;
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 
+/**
+ * Kelas dummy:
+ *  - Daily Activity: beberapa level pertama dari tiap kategori (Anak / Dewasa sesuai kategori)
+ *  - HSK Class: level 1-3 (kelas HSK 1 dibuat "Open" dan baru mulai 2 minggu lagi)
+ *  - Private Exclusive (paket max_students > 1): satu kelas berjalan per paket
+ * Kelas private 1-on-1 tidak di-seed karena dibuat otomatis saat calon siswa dikonversi.
+ *
+ * Jadwal mingguan dibuat oleh ClassScheduleSeeder (jalankan setelah seeder ini).
+ * Aman dijalankan ulang: kelas dicari berdasarkan class_name.
+ */
 class ClassSeeder extends Seeder
 {
+    /** Berapa level pertama per kategori Daily Activity yang dibuatkan kelas. */
+    private const LEVELS_PER_CATEGORY = 2;
+
     public function run(): void
     {
-        $teacherIds = Teacher::pluck('id')->toArray();
+        $teacherIds = Teacher::where('status', 'Active')->orderBy('id')->pluck('id')->values();
 
-        if (empty($teacherIds)) {
-            $this->command?->warn('Belum ada Teacher, pastikan TeacherSeeder sudah dijalankan.');
+        if ($teacherIds->isEmpty()) {
+            $this->command?->warn('ClassSeeder dilewati: belum ada guru aktif. Jalankan TeacherSeeder dulu.');
+
             return;
         }
 
-        $dailyActivity = Program::where('program_name', 'Daily Activity')->first();
+        $today = Carbon::today();
+        $n = 0; // penghitung untuk membagi guru (round robin) dan memvariasikan data
 
-        if (! $dailyActivity) {
-            $this->command?->warn('Program Daily Activity tidak ditemukan.');
-            return;
-        }
+        /* ---------------- Daily Activity ---------------- */
+        $daily = Program::where('program_name', 'Daily Activity')->first();
 
-        // course_type_id sudah tidak ada lagi — cukup filter program_id
-        $regularAnakPackageIds = ProgramPackage::where('program_id', $dailyActivity->id)
-            ->where('duration_minutes', 60)
-            ->where('package_name', 'like', 'Regular Class Anak%')
-            ->pluck('id')
-            ->toArray();
+        if ($daily) {
+            $levelsByCategory = ProgramLevel::where('program_id', $daily->id)
+                ->orderBy('category_id')
+                ->orderBy('sort_order')
+                ->get()
+                ->groupBy('category_id');
 
-        $regularDewasaPackageIds = ProgramPackage::where('program_id', $dailyActivity->id)
-            ->where('duration_minutes', 90)
-            ->where('package_name', 'like', 'Regular Class Dewasa%')
-            ->pluck('id')
-            ->toArray();
+            foreach ($levelsByCategory as $categoryId => $levels) {
+                $categoryName = $categoryId
+                    ? ProgramCategory::whereKey($categoryId)->value('category_name')
+                    : null;
 
-        if (empty($regularAnakPackageIds) || empty($regularDewasaPackageIds)) {
-            $this->command?->warn('Paket Regular Anak/Dewasa tidak ditemukan, pastikan ProgramPackageSeeder sudah dijalankan.');
-            return;
-        }
+                // Feixiang (15+ tahun) memakai paket Dewasa, sisanya Anak
+                $audience = $categoryName === 'Feixiang' ? 'Dewasa' : 'Anak';
 
-        $levelsAB = ['1A', '1B', '2A', '2B', '3A', '3B', '4A', '4B', '5A', '5B', '6A', '6B'];
-        $levelsAD = ['1A', '1B', '1C', '1D', '2A', '2B', '2C', '2D', '3A', '3B', '3C', '3D'];
+                foreach ($levels->take(self::LEVELS_PER_CATEGORY) as $level) {
+                    $perWeek = $n % 2 === 0 ? '1x' : '2x';
 
-        $groups = [
-            'Maochong' => ['levels' => $levelsAB, 'packages' => $regularAnakPackageIds],
-            'Jianer'   => ['levels' => $levelsAB, 'packages' => $regularAnakPackageIds],
-            'Hudie'    => ['levels' => $levelsAD, 'packages' => $regularDewasaPackageIds],
-            'Feixiang' => ['levels' => $levelsAD, 'packages' => $regularDewasaPackageIds],
-        ];
+                    $package = ProgramPackage::where('program_id', $daily->id)
+                        ->where('package_name', 'like', "Regular Class {$audience} - {$perWeek}/Minggu%")
+                        ->first()
+                        ?? ProgramPackage::where('program_id', $daily->id)
+                            ->where('package_name', 'like', "Regular Class {$audience}%")
+                            ->first();
 
-        foreach ($groups as $groupName => $data) {
-            $category = ProgramCategory::where('program_id', $dailyActivity->id)
-                ->where('category_name', $groupName)
-                ->first();
+                    if (! $package) {
+                        continue;
+                    }
 
-            if (! $category) {
-                $this->command?->warn("Kategori '{$groupName}' tidak ditemukan, dilewati.");
-                continue;
+                    $label = trim(($categoryName ? $categoryName . ' ' : '') . $level->level_name);
+
+                    $this->createClass([
+                        'program_package_id' => $package->id,
+                        'private_package_id' => null,
+                        'level_id'           => $level->id,
+                        'class_name'         => "{$label} - Kelas A",
+                    ], $package, $teacherIds[$n % $teacherIds->count()], $n, $today, false);
+
+                    $n++;
+                }
             }
+        }
 
-            $packageIds = $data['packages'];
+        /* ---------------- HSK Class (level 1-3) ---------------- */
+        $hsk = Program::where('program_name', 'HSK')->first();
 
-            foreach ($data['levels'] as $index => $levelName) {
-                $level = ProgramLevel::where('category_id', $category->id)
-                    ->where('level_name', $levelName)
-                    ->first();
+        if ($hsk) {
+            $hskCategoryId = ProgramCategory::where('program_id', $hsk->id)
+                ->where('category_name', 'HSK Class')
+                ->value('id');
+
+            $packages = ProgramPackage::where('program_id', $hsk->id)
+                ->where('category_id', $hskCategoryId)
+                ->orderBy('level_id')
+                ->take(3)
+                ->get();
+
+            foreach ($packages as $i => $package) {
+                $level = ProgramLevel::find($package->level_id);
 
                 if (! $level) {
-                    $this->command?->warn("Level '{$levelName}' pada kategori '{$groupName}' tidak ditemukan, dilewati.");
                     continue;
                 }
 
-                $packageId = $packageIds[$index % count($packageIds)];
-
-                ClassModel::factory()->create([
-                    'class_name'         => "{$groupName} {$levelName}",
-                    'program_package_id' => $packageId,
+                $this->createClass([
+                    'program_package_id' => $package->id,
+                    'private_package_id' => null,
                     'level_id'           => $level->id,
-                    'teacher_id'         => fake()->randomElement($teacherIds),
-                ]);
+                    'class_name'         => "HSK Class - {$level->level_name} - Kelas A",
+                ], $package, $teacherIds[$n % $teacherIds->count()], $n, $today, $i === 0);
+
+                $n++;
             }
         }
 
-        $this->seedHskClasses($teacherIds);
-        $this->seedPrivateClasses($teacherIds);
+        /* ---------------- Private Exclusive (kelas gabungan) ---------------- */
+        $exclusivePackages = PrivatePackage::where('is_active', true)
+            ->where('max_students', '>', 1)
+            ->orderBy('id')
+            ->get();
+
+        foreach ($exclusivePackages as $package) {
+            $this->createClass([
+                'program_package_id' => null,
+                'private_package_id' => $package->id,
+                'level_id'           => null,
+                'class_name'         => "Exclusive - {$package->package_name}",
+            ], $package, $teacherIds[$n % $teacherIds->count()], $n, $today, false);
+
+            $n++;
+        }
     }
 
-    private function seedHskClasses(array $teacherIds): void
+    /**
+     * @param  array  $identity  program_package_id, private_package_id, level_id, class_name
+     * @param  mixed  $package   ProgramPackage atau PrivatePackage (sumber kapasitas & durasi)
+     */
+    private function createClass(array $identity, $package, int $teacherId, int $n, Carbon $today, bool $open): void
     {
-        $hsk = Program::where('program_name', 'HSK')->first();
+        // Kelas "Open" belum mulai; sisanya sudah berjalan 4-8 minggu
+        $start = $open
+            ? $today->copy()->addWeeks(2)
+            : $today->copy()->subWeeks(8 - ($n % 3) * 2);
 
-        if (! $hsk) {
-            $this->command?->warn('Program HSK tidak ditemukan.');
-            return;
-        }
+        $months = max((int) ($package->duration_months ?: 1), 1);
 
-        $hskClassCategory = ProgramCategory::where('program_id', $hsk->id)
-            ->where('category_name', 'HSK Class')
-            ->first();
-
-        if (! $hskClassCategory) {
-            $this->command?->warn('Kategori HSK Class tidak ditemukan.');
-            return;
-        }
-
-        foreach (range(1, 6) as $levelNumber) {
-            $level = ProgramLevel::where('category_id', $hskClassCategory->id)
-                ->where('level_name', "HSK {$levelNumber}")
-                ->first();
-
-            if (! $level) {
-                $this->command?->warn("Level 'HSK {$levelNumber}' tidak ditemukan, dilewati.");
-                continue;
-            }
-
-            // Dicari lewat level_id, bukan nama paket persis — lebih aman karena
-            // package_name HSK Class sekarang menyertakan catatan durasi bulan
-            $package = ProgramPackage::where('level_id', $level->id)->first();
-
-            if (! $package) {
-                $this->command?->warn("Package untuk 'HSK {$levelNumber}' tidak ditemukan, dilewati.");
-                continue;
-            }
-
-            ClassModel::factory()->create([
-                'class_name'         => "HSK {$levelNumber}",
-                'program_package_id' => $package->id,
-                'level_id'           => $level->id,
-                'teacher_id'         => fake()->randomElement($teacherIds),
-            ]);
-        }
-    }
-    private function seedPrivateClasses(array $teacherIds): void
-    {
-        $privatePackages = PrivatePackage::where('is_active', true)->get();
-
-        if ($privatePackages->isEmpty()) {
-            $this->command?->warn('Belum ada PrivatePackage aktif, kelas privat dilewati.');
-            return;
-        }
-
-        // 2 kontrak privat per varian paket, biar tiap varian ada contohnya
-        foreach ($privatePackages as $package) {
-            foreach (range(1, 2) as $sequence) {
-                ClassModel::factory()
-                    ->private()
-                    ->create([
-                        'class_name'         => "{$package->package_name} #{$sequence}",
-                        'private_package_id' => $package->id,
-                        'teacher_id'         => fake()->randomElement($teacherIds),
-                    ]);
-            }
-        }
+        ClassModel::firstOrCreate(
+            ['class_name' => $identity['class_name']],
+            [
+                'program_package_id' => $identity['program_package_id'],
+                'private_package_id' => $identity['private_package_id'],
+                'level_id'           => $identity['level_id'],
+                'teacher_id'         => $teacherId,
+                'delivery_mode'      => $n % 4 === 3 ? 'Online' : 'Offline',
+                'start_date'         => $start->toDateString(),
+                'end_date'           => $start->copy()->addMonths($months)->toDateString(),
+                'capacity'           => (int) ($package->max_students ?: 1),
+                'status'             => $open ? 'Open' : 'Running',
+            ]
+        );
     }
 }

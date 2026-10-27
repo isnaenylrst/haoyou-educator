@@ -312,6 +312,7 @@ table {
 .row-actions {
     display: flex;
     gap: 6px;
+    align-items: center;
 }
 
 .icon-btn {
@@ -944,36 +945,8 @@ tbody tr:hover {
     letter-spacing: 0;
 }
 
-/* --- Struktur Program (read-only tree) --- */
-.program-tree-grid{
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 14px;
-    margin-bottom: 8px;
-}
-.program-tree-card{ padding: 18px 20px; }
-.program-tree-head{
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 6px;
-}
-.program-tree-name{ font-weight: 700; font-size: 15px; color: #111827; }
-.program-tree-desc{ font-size: 12.5px; color: #6b7280; margin-bottom: 12px; line-height: 1.5; }
+.program-tree-desc{ font-size: 12.5px; color: #6b7280; margin: 4px 0 0; line-height: 1.5; }
 .program-tree-empty{ font-size: 12px; color: #9ca3af; font-style: italic; }
-.program-tree-categories{ display: flex; flex-direction: column; gap: 6px; }
-.program-tree-category{
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12.5px;
-    padding: 6px 10px;
-    background: #f9fafb;
-    border-radius: 8px;
-}
-.program-tree-category .cat-name{ font-weight: 600; color: #111827; }
-.program-tree-category .cat-age{ color: #9ca3af; font-size: 11px; }
-.program-tree-category .cat-level-count{ margin-left: auto; color: #6b7280; font-size: 11px; }
 
 /* --- Badge tambahan (mengikuti pola badge-hot/warm/cold/pending/
    completed/cancelled yang sudah ada di atas — cuma nambah varian
@@ -1040,26 +1013,131 @@ tbody tr:hover {
     color: #6b7280;
 }
 
-.category-block {
-    margin-bottom: 10px;
-}
+/* ============================================================
+   STRUKTUR PROGRAM — layout accordion
+   Program di-stack vertikal (bukan side-by-side), tiap kategori
+   jadi card yang bisa expand/collapse untuk menampilkan level.
+   ============================================================ */
 
-.level-list {
-    padding-left: 14px;
+.program-accordion {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    margin: 6px 0 10px;
+    gap: 18px;
+    margin-bottom: 8px;
+}
+
+.program-section {
+    background: #e9ebef;
+    border-radius: 16px;
+    padding: 20px 22px 22px;
+}
+
+.program-section-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.program-section-name {
+    font-weight: 700;
+    font-size: 16px;
+    color: #111827;
+}
+
+.category-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    align-items: start;
+}
+
+.category-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.category-card-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 14px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.category-card-head .cat-name {
+    font-weight: 600;
+    font-size: 13.5px;
+    color: #111827;
+    white-space: nowrap;
+}
+
+.category-card-head .cat-age {
+    font-size: 11px;
+    color: #9ca3af;
+    white-space: nowrap;
+}
+
+.category-card-head .cat-level-count {
+    margin-left: auto;
+    font-size: 11.5px;
+    color: #6b7280;
+    white-space: nowrap;
+}
+
+.chevron-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: none;
+    background: transparent;
+    color: #6b7280;
+    font-size: 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform .2s ease;
+}
+
+.category-card.open .chevron-btn {
+    transform: rotate(180deg);
+}
+
+.category-card-body {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0 14px 14px;
+    border-top: 1px solid #f0f1f3;
+    padding-top: 10px;
+}
+
+.category-card.open .category-card-body {
+    display: flex;
 }
 
 .level-chip {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: #fff;
+    background: #f9fafb;
     border: 1px solid #f0f1f3;
     border-radius: 8px;
     padding: 6px 10px;
     font-size: 12.5px;
     color: #111827;
+}
+
+@media (max-width: 640px) {
+    .program-section {
+        padding: 16px;
+    }
+    .category-grid {
+        grid-template-columns: 1fr;
+    }
 }

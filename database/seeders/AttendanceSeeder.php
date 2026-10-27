@@ -9,17 +9,6 @@ use Illuminate\Database\Seeder;
 
 class AttendanceSeeder extends Seeder
 {
-    /**
-     * DUMMY DATA — tiap jurnal mengajar yang BENAR-BENAR terlaksana
-     * (class_status = Conducted) mencatat kehadiran siswa yang:
-     * 1. Terdaftar di kelas terkait (via class_id)
-     * 2. Enrollment-nya masih Active/Completed (bukan Cancelled/Waiting Class)
-     * 3. Sudah bergabung SEBELUM atau PADA tanggal sesi berlangsung
-     *    (mencegah siswa "hadir" di sesi sebelum dia resmi terdaftar)
-     *
-     * Sesi yang Cancelled/Rescheduled sengaja DI-SKIP — tidak masuk akal
-     * mencatat presensi untuk kelas yang tidak benar-benar berjalan.
-     */
     public function run(): void
     {
         $journals = TeachingJournal::where('class_status', 'Conducted')
