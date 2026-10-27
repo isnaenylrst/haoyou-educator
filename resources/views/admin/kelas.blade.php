@@ -11,6 +11,20 @@
         .schedule-row .form-field { flex: 1; min-width: 0; }
         .schedule-row .schedule-remove { flex: none; }
 
+        .room-picker { display: flex; gap: 6px; }
+        .room-picker select { flex: 1; min-width: 0; }
+        .room-add {
+            flex: none; width: 40px; border: 1px dashed #e0c200; background: #fff8cc;
+            border-radius: 10px; font-size: 18px; font-weight: 700; color: #8a6d00; cursor: pointer;
+        }
+        .room-add:hover { background: #ffef99; }
+        a.icon-btn, a.btn {
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         /* Panel "Jadwal Tersedia Guru" */
         .avail-title { display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
         .avail-panel { background: #fafafa; border: 1px solid #eee; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
@@ -19,7 +33,7 @@
         .avail-day { width: 56px; flex: none; font-size: 13px; font-weight: 600; padding-top: 3px; }
         .avail-chips { display: flex; flex-wrap: wrap; gap: 6px; }
         .avail-chip { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
-        .avail-chip.ok   { background: #f0fdf4; border-color: #bbf7d0; color: #16a34a; }
+        .avail-chip.ok { background: #f0fdf4; border-color: #bbf7d0; color: #16a34a; }
         .avail-chip.busy { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
         .avail-legend { display: flex; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e5e5e5; }
         .avail-warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 10px; padding: 10px 14px; margin-top: 12px; font-size: 13px; line-height: 1.6; }
@@ -29,18 +43,10 @@
         .meet-label strong { color: #111827; font-size: 14px; }
         .meet-bar { height: 5px; width: 90px; background: #eee; border-radius: 999px; overflow: hidden; margin: 5px 0 4px; }
         .meet-bar span { display: block; height: 100%; background: #facc15; border-radius: 999px; }
-    </style>
+        </style>
 @endpush
 
 @section('content')
-
-    {{-- Saran nama ruangan (diambil dari yang pernah dipakai; nama ruangan boleh diketik bebas) --}}
-    <datalist id="roomSuggestions">
-        @foreach ($roomSuggestions as $room)
-            <option value="{{ $room }}"></option>
-        @endforeach
-    </datalist>
-
     @php
         $statusBadge = [
             'Open'      => 'badge-pending',
@@ -48,6 +54,9 @@
             'Completed' => 'badge-cold',
             'Closed'    => 'badge-cancelled',
         ];
+
+        $hasJadwalRoute = \Illuminate\Support\Facades\Route::has('admin.jadwal');
+        $hasExportRoute = \Illuminate\Support\Facades\Route::has('admin.kelas.export');
     @endphp
 
     <div class="dashboard-header">
@@ -61,10 +70,10 @@
         </div>
 
         <div class="dashboard-header-actions">
-            <button class="btn">
+            <a href="{{ $hasExportRoute ? route('admin.kelas.export', request()->query()) : '#' }}" class="btn">
                 <i class="fa-solid fa-file-export"></i>
                 Export
-            </button>
+            </a>
 
             <button type="button" class="btn btn-primary" onclick="openKelasModal()">
                 <i class="fa-solid fa-plus"></i>
@@ -190,13 +199,17 @@
                 @forelse ($classes as $kelas)
                     @php
                         $isPrivate = ! is_null($kelas->private_package_id);
+                        $jadwalUrl = $hasJadwalRoute ? route('admin.jadwal', ['class_id' => $kelas->id]) : '#';
 
                         $editData = [
                             'id'                 => $kelas->id,
                             'update_url'         => route('admin.kelas.update', $kelas->id),
+                            'jadwal_url'         => $jadwalUrl,
                             'class_name'         => $kelas->class_name,
                             'type'               => $isPrivate ? 'Private' : 'Reguler',
                             'delivery_mode'      => $kelas->delivery_mode,
+                            'zoom_link'          => $kelas->zoom_link,
+                            'zoom_passcode'      => $kelas->zoom_passcode,
                             'capacity'           => $kelas->capacity,
                             'status'             => $kelas->status,
                             'start_date'         => $kelas->start_date ? \Illuminate\Support\Carbon::parse($kelas->start_date)->format('Y-m-d') : '',
@@ -229,6 +242,11 @@
                                         @endif
                                         {{ $kelas->delivery_mode }}
                                     </div>
+                                    @if ($kelas->delivery_mode === 'Online')
+                                        <div class="cand-sub" style="color: {{ $kelas->zoom_link ? '#16a34a' : '#dc2626' }};">
+                                            {{ $kelas->zoom_link ? 'Zoom ✓' : 'Belum ada link Zoom' }}
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
                         </td>
@@ -333,11 +351,9 @@
                                     onclick="openManageStudentsModal({{ $kelas->id }}, @js($kelas->class_name))">
                                     <i class="fa-solid fa-users-gear"></i>
                                 </button>
-
-                                <a href="{{ route('admin.jadwal.index', ['class_id' => $kelas->id]) }}"
-                                class="icon-btn" title="Lihat di Jadwal">
-                                    <i class="fa-solid fa-calendar-days"></i>
-                                </a>
+                <a href="{{ $jadwalUrl }}" class="icon-btn" title="Lihat di Jadwal">
+                    <i class="fa-solid fa-calendar-days"></i>
+                </a>
                             </div>
                         </td>
                     </tr>
@@ -462,6 +478,15 @@
                             <div class="form-field">
                                 <label>Tanggal Selesai <span class="opt">(opsional)</span></label>
                                 <input type="date" name="end_date" id="add_end_date">
+                            </div>
+
+                            {{-- ZOOM (hanya tampil saat mode Online) --}}
+                            <div class="form-field full" id="add_zoom_fields" style="display:none;">
+                                <label>Link Zoom <span class="opt">(opsional)</span></label>
+                                <input type="url" name="zoom_link" id="add_zoom_link" placeholder="https://zoom.us/j/...">
+                                <label style="margin-top:12px;">Passcode <span class="opt">(opsional)</span></label>
+                                <input type="text" name="zoom_passcode" id="add_zoom_passcode" maxlength="50">
+                                <span class="form-hint">Link ini yang akan muncul sebagai tombol "Buka Zoom" di dashboard siswa.</span>
                             </div>
                         </div>
                     </div>
@@ -618,6 +643,15 @@
                                 <label>Tanggal Selesai <span class="opt">(opsional)</span></label>
                                 <input type="date" name="end_date" id="edit_end_date">
                             </div>
+
+                            {{-- ZOOM (hanya tampil saat mode Online) --}}
+                            <div class="form-field full" id="edit_zoom_fields" style="display:none;">
+                                <label>Link Zoom <span class="opt">(opsional)</span></label>
+                                <input type="url" name="zoom_link" id="edit_zoom_link" placeholder="https://zoom.us/j/...">
+                                <label style="margin-top:12px;">Passcode <span class="opt">(opsional)</span></label>
+                                <input type="text" name="zoom_passcode" id="edit_zoom_passcode" maxlength="50">
+                                <span class="form-hint">Link ini yang akan muncul sebagai tombol "Buka Zoom" di dashboard siswa.</span>
+                            </div>
                         </div>
                     </div>
 
@@ -695,10 +729,10 @@
 
                 <div class="modal-foot">
                     <div class="modal-foot-left">
-                        <a href="#" id="edit_jadwal_link" class="btn btn-convert">
-                            <i class="fa-solid fa-calendar-days"></i>
-                            Lihat di Jadwal
-                        </a>
+                <a href="#" class="btn btn-convert" id="edit_jadwal_link">
+                    <i class="fa-solid fa-calendar-days"></i>
+                    Lihat di Jadwal
+                </a>
                     </div>
                     <div class="modal-foot-right">
                         <button type="button" class="btn btn-secondary" onclick="closeEditKelasModal()">Batal</button>
@@ -786,12 +820,57 @@
     ============================================================ */
     let scheduleIndex = 0;
 
-    // Ketersediaan guru: { teacher_id: [ {day, start, end}, ... ] }
-    const TEACHER_AVAIL = @json($teacherAvailabilities);
-    // Slot guru yang sudah dipakai kelas aktif lain: { teacher_id: [ {class_id, class_name, day, start, end}, ... ] }
-    const TEACHER_BUSY = @json($teacherBusy);
-    const DAY_ORDER = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+// Daftar ruangan (dari server). Ruangan baru lewat tombol + ditambahkan ke daftar ini.
+const ROOM_OPTIONS = @json($roomSuggestions);
 
+function attrEscape(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;');
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+}
+
+function roomOptionsHtml(selected) {
+    const list = [...ROOM_OPTIONS];
+
+    if (selected && selected !== 'Online' && !list.includes(selected)) {
+        list.push(selected);
+    }
+
+    return '<option value="">Pilih ruangan</option>' + list.map(r =>
+        `<option value="${attrEscape(r)}" ${r === selected ? 'selected' : ''}>${escapeHtml(r)}</option>`
+    ).join('');
+}
+
+function addRoomOption(btn) {
+    const name = (prompt('Nama ruangan baru:') || '').trim();
+    if (!name) return;
+
+    const existing = ROOM_OPTIONS.find(
+        r => r.toLowerCase() === name.toLowerCase()
+    );
+
+    const finalName = existing || name;
+    if (!existing) ROOM_OPTIONS.push(name);
+
+    document.querySelectorAll('.room-field select').forEach(sel => {
+        const selected = sel.value;
+        sel.innerHTML = roomOptionsHtml(selected);
+    });
+
+    btn.closest('.room-picker').querySelector('select').value = finalName;
+}
+
+// Ketersediaan guru
+const TEACHER_AVAIL = @json($teacherAvailabilities);
+const TEACHER_BUSY = @json($teacherBusy);
+const DAY_ORDER = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
     function setValue(id, value) {
         const el = document.getElementById(id);
         if (el) el.value = value ?? '';
@@ -856,12 +935,20 @@
         }
     }
 
-    // Ruangan disembunyikan untuk kelas Online (server otomatis mengisi "Online")
+    // Ruangan hanya untuk Offline, field Zoom hanya untuk Online
     function syncRooms(prefix) {
         const online = document.getElementById(prefix + '_delivery_mode').value === 'Online';
+
         document.querySelectorAll('#' + prefix + '_schedule_rows .room-field').forEach(el => {
             el.style.display = online ? 'none' : '';
         });
+
+        const zoom = document.getElementById(prefix + '_zoom_fields');
+        if (zoom) {
+            zoom.style.display = online ? '' : 'none';
+            // field tersembunyi dinonaktifkan agar tidak ikut tervalidasi/terkirim
+            zoom.querySelectorAll('input').forEach(el => { el.disabled = ! online; });
+        }
     }
 
     /* ============================================================
@@ -963,6 +1050,7 @@
         const wrap = document.getElementById(containerId);
         const prefix = containerId.replace('_schedule_rows', '');
         const i = scheduleIndex++;
+        const room = values.room && values.room !== 'Online' ? values.room : '';
 
         const row = document.createElement('div');
         row.className = 'schedule-row';
@@ -985,32 +1073,37 @@
             </div>
             <div class="form-field room-field">
                 <label>Ruangan</label>
-                <input type="text" name="schedules[${i}][room]" list="roomSuggestions" placeholder="mis. Ruang A" maxlength="255">
+                <div class="room-picker">
+                    <select name="schedules[${i}][room]">${roomOptionsHtml(room)}</select>
+                    <button type="button" class="room-add" title="Tambah ruangan baru" onclick="addRoomOption(this)">+</button>
+                </div>
             </div>
             <button type="button" class="schedule-remove">
                 <i class="fa-solid fa-trash"></i>
             </button>`;
+            if (values.day) {
+                row.querySelector('select[name$="[day]"]').value = values.day;
+            }
+            if (values.start_time) {
+                row.querySelector('input[name$="[start_time]"]').value = values.start_time;
+            }
+            if (values.end_time) {
+                row.querySelector('input[name$="[end_time]"]').value = values.end_time;
+            }
 
-        if (values.day) row.querySelector('select[name$="[day]"]').value = values.day;
-        if (values.start_time) row.querySelector('input[name$="[start_time]"]').value = values.start_time;
-        if (values.end_time) row.querySelector('input[name$="[end_time]"]').value = values.end_time;
+            // Setiap perubahan jadwal -> hitung ulang guru yang tersedia
+            row.addEventListener('input', () => refreshTeacherAvailability(prefix));
+            row.addEventListener('change', () => refreshTeacherAvailability(prefix));
 
-        const roomInput = row.querySelector('input[name$="[room]"]');
-        if (values.room && values.room !== 'Online') {
-            roomInput.value = values.room;
-        }
+            row.querySelector('.schedule-remove').addEventListener('click', () => {
+                row.remove();
+                refreshTeacherAvailability(prefix);
+            });
 
-        // Setiap perubahan jadwal -> hitung ulang guru yang tersedia
-        row.addEventListener('input', () => refreshTeacherAvailability(prefix));
-        row.addEventListener('change', () => refreshTeacherAvailability(prefix));
-        row.querySelector('.schedule-remove').addEventListener('click', () => {
-            row.remove();
+            wrap.appendChild(row);
+            syncRooms(prefix);
             refreshTeacherAvailability(prefix);
-        });
-
-        wrap.appendChild(row);
-        syncRooms(prefix);
-        refreshTeacherAvailability(prefix);
+       
     }
 
     // Isi seluruh field form dari satu objek data
@@ -1023,6 +1116,8 @@
         setValue(prefix + '_end_date', data.end_date);
         setValue(prefix + '_status', data.status || 'Open');
         setValue(prefix + '_teacher_id', data.teacher_id);
+        setValue(prefix + '_zoom_link', data.zoom_link);
+        setValue(prefix + '_zoom_passcode', data.zoom_passcode);
         setValue(prefix + '_program_package_id', data.program_package_id);
         setValue(prefix + '_private_package_id', data.private_package_id);
 
@@ -1039,7 +1134,7 @@
             addScheduleRow(prefix + '_schedule_rows');
         }
 
-        // Setelah semua baris jadwal terisi, sesuaikan daftar guru
+        syncRooms(prefix);
         refreshTeacherAvailability(prefix);
 
         if (prefix === 'edit') {
@@ -1072,6 +1167,7 @@
 
         document.getElementById('editKelasForm').action = data.update_url;
         document.getElementById('edit_kelas_id').value = data.id;
+        document.getElementById('edit_jadwal_link').href = data.jadwal_url || '#';
         fillKelasForm('edit', data);
         document.getElementById('edit_jadwal_link').href ="{{ route('admin.jadwal.index') }}?class_id=" + data.id;
         document.getElementById('editKelasModalOverlay').classList.add('open');
@@ -1153,17 +1249,17 @@
         list.innerHTML = hint + msEnrolledStudents.map(s => renderStudentItem(s, 'new')).join('');
     }
 
-    function renderEnrolledItem(s) {
-        const statusLabel = s.status === 'Completed' ? 'Selesai' : 'Aktif';
-        return `<div class="ms-item">
-            <div>
-                <div class="ms-item-name">${escapeHtml(s.name)}</div>
-                <div class="ms-item-schedule">${escapeHtml(formatScheduleList(s.schedules))}</div>
-            </div>
-            <span class="ms-status-chip">${statusLabel}</span>
-        </div>`;
-    }
+function renderEnrolledItem(s) {
+    const statusLabel = s.status === 'Completed' ? 'Selesai' : 'Aktif';
 
+    return `<div class="ms-item">
+        <div>
+            <div class="ms-item-name">${escapeHtml(s.name)}</div>
+            <div class="ms-item-schedule">${escapeHtml(formatScheduleList(s.schedules))}</div>
+        </div>
+        <span class="ms-status-chip">${statusLabel}</span>
+    </div>`;
+}
     function renderCapacityBanner(kelas) {
         const el = document.getElementById('ms_capacity_banner');
         el.textContent = `Siswa terdaftar: ${kelas.students_count}/${kelas.capacity}`
@@ -1233,12 +1329,11 @@
                 ${label}
             </button>
         </div>`;
-    }
+}
 
-    function escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str ?? '';
-        return div.innerHTML;
+    function submitEnroll(source, id, button) {
+        button.disabled = true;
+        button.textContent = 'Menyimpan...';
     }
 
     function submitEnroll(source, id, button) {
@@ -1290,6 +1385,7 @@
             const base = JSON.parse(btn.dataset.kelas);
             document.getElementById('editKelasForm').action = base.update_url;
             document.getElementById('edit_kelas_id').value = base.id;
+            document.getElementById('edit_jadwal_link').href = base.jadwal_url || '#';
             fillKelasForm('edit', Object.assign({}, base, old, { type: base.type, program_package_id: base.program_package_id, private_package_id: base.private_package_id }));
             document.getElementById('editKelasModalOverlay').classList.add('open');
         } else {

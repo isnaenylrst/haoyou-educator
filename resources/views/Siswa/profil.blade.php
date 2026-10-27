@@ -12,17 +12,28 @@
 
 <div class="bg-white border border-line rounded-2xl p-5 mb-5">
   <h3 class="font-semibold mb-4">Riwayat Perolehan Poin</h3>
+  
   @foreach ($riwayatPoin as $riwayat)
-    <div class="flex items-center justify-between py-2.5 border-b border-line last:border-0">
-      <div>
-        <div class="text-sm font-medium">{{ $riwayat['poin'] }} poin</div>
-        <div class="text-xs text-gray-500">{{ $riwayat['ket'] }}</div>
-      </div>
-      <span class="text-[11px] font-semibold px-3 py-1 rounded-full {{ $riwayat['tipe'] === 'tambah' ? 'bg-[#e2ecd7] text-[#4b6b2f]' : 'bg-pale text-oliveDark' }}">
-        {{ $riwayat['tipe'] === 'tambah' ? 'Tambah' : 'Kurang' }}
-      </span>
+
+    <div class="flex items-center justify-between py-3 border-b border-line last:border-0">
+
+        <div>
+            <div class="text-sm font-medium text-black">
+                {{ $riwayat['judul'] }}
+            </div>
+
+            <div class="text-xs text-gray-500">
+                {{ $riwayat['tanggal'] }}
+            </div>
+        </div>
+
+        <span class="text-sm font-semibold text-black">
+            +{{ number_format($riwayat['poin'], 0, ',', '.') }} poin
+        </span>
+
     </div>
-  @endforeach
+
+@endforeach
 </div>
 
 <div class="bg-white border border-line rounded-2xl p-5 mb-5">
@@ -45,7 +56,7 @@
         <div class="text-xs text-gray-500">Lihat laporan perkembangan belajar berkala</div>
       </div>
     </div>
-    <a href="{{ route('progresreport.index') }}" class="text-xs font-semibold border border-ink rounded-full px-4 py-2 hover:bg-ink hover:text-white transition">Buka Halaman →</a>
+    <a href="{{ route('progress-report.index') }}" class="text-xs font-semibold border border-ink rounded-full px-4 py-2 hover:bg-ink hover:text-white transition">Buka Halaman →</a>
   </div>
 </div>
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureStudent;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,11 +14,13 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
+            'student' => EnsureStudent::class,
             'role' => \App\Http\Middleware\CheckRole::class,
             'teacher.profile' => \App\Http\Middleware\EnsureTeacherProfile::class,
         ]);
 
-        // Konteks Owner (memilih guru yang dilihat); berjalan setelah session aktif
+        // Konteks Owner (memilih guru yang dilihat);
+        // berjalan setelah session aktif.
         $middleware->web(append: [
             \App\Http\Middleware\OwnerContext::class,
         ]);

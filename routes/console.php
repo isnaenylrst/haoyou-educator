@@ -11,3 +11,6 @@ Artisan::command('inspire', function () {
 
 // Expire fee pendaftaran calon siswa yang lewat 30 hari
 Schedule::job(new ExpireRegistrationFees())->dailyAt('01:00');
+
+// Pengingat kelas (notifikasi siswa) — tiap jam
+Schedule::command('haoyou:class-reminders')->hourly();
