@@ -4,6 +4,7 @@
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
     <style>
         .alert-success, .alert-error { border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; font-size: 13px; }
         .alert-success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; }
@@ -30,6 +31,14 @@
         .history-table th { text-align: left; font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: .04em; padding: 6px 8px; border-bottom: 1px solid #edeef1; }
         .history-table td { padding: 8px; border-bottom: 1px solid #f4f5f7; vertical-align: top; }
         .history-empty { text-align: center; color: #9ca3af; padding: 24px 0; font-size: 13px; }
+
+        .date-range { display: flex; align-items: center; gap: 6px; }
+        .date-range .date-icon { color: #9ca3af; font-size: 13px; }
+        .date-range input.flatpickr-input,
+        .date-range input.date-range-input {
+            height: 38px; min-width: 230px; padding: 0 12px; border: 1px solid #e5e7eb; border-radius: 10px;
+            background: #fff; font-size: 13px; color: #111827; font-family: inherit; cursor: pointer;
+        }
     </style>
 @endpush
 
@@ -64,7 +73,7 @@
         </div>
     @endif
 
-    {{-- ========================= STATISTIK ========================= --}}
+    {{-- ========================= STATISTIK (semua card ikut kalender; default bulan ini) ========================= --}}
     <div class="stat-row">
         <div class="stat-card c-red">
             <div class="stat-top">
@@ -72,7 +81,7 @@
                 <i class="fa-solid fa-file-invoice-dollar stat-icon"></i>
             </div>
             <div class="stat-value">{{ $rupiah($outstanding) }}</div>
-            <div class="stat-note warn">Belum terbayar</div>
+            <div class="stat-note warn">Belum terbayar &middot; {{ $period['note'] }}</div>
         </div>
 
         <div class="stat-card c-yellow">
@@ -81,16 +90,16 @@
                 <i class="fa-solid fa-hourglass-half stat-icon"></i>
             </div>
             <div class="stat-value">{{ $unpaidCount }}</div>
-            <div class="stat-note">Masih punya sisa tagihan</div>
+            <div class="stat-note">Masih punya sisa tagihan &middot; {{ $period['note'] }}</div>
         </div>
 
         <div class="stat-card c-blue">
             <div class="stat-top">
-                <span class="stat-label">Terkumpul Bulan Ini</span>
+                <span class="stat-label">Terkumpul {{ $period['label'] }}</span>
                 <i class="fa-solid fa-wallet stat-icon"></i>
             </div>
-            <div class="stat-value">{{ $rupiah($collectedThisMonth) }}</div>
-            <div class="stat-note">{{ now()->translatedFormat('F Y') }}</div>
+            <div class="stat-value">{{ $rupiah($collected) }}</div>
+            <div class="stat-note">{{ $period['note'] }}</div>
         </div>
 
         <div class="stat-card c-green">
@@ -99,7 +108,7 @@
                 <i class="fa-solid fa-circle-check stat-icon"></i>
             </div>
             <div class="stat-value">{{ $paidCount }}</div>
-            <div class="stat-note">Enrollment lunas</div>
+            <div class="stat-note">Enrollment lunas &middot; {{ $period['note'] }}</div>
         </div>
     </div>
 
@@ -123,6 +132,21 @@
                 <option value="sebagian" {{ request('payment_status') === 'sebagian' ? 'selected' : '' }}>Bayar sebagian</option>
                 <option value="lunas" {{ request('payment_status') === 'lunas' ? 'selected' : '' }}>Lunas</option>
             </select>
+
+            {{-- Rentang tanggal (kalender): tanggal daftar untuk tabel & kartu tagihan, tanggal bayar untuk kartu Terkumpul. Default bulan ini. --}}
+            <div class="date-range">
+                <i class="fa-regular fa-calendar date-icon"></i>
+                <input type="text" id="dateRange" class="date-range-input" placeholder="Pilih rentang tanggal" readonly>
+                <input type="hidden" name="from" id="filter_from" value="{{ $from }}">
+                <input type="hidden" name="to" id="filter_to" value="{{ $to }}">
+
+                {{-- tombol × hanya muncul kalau rentang bukan default (bulan ini) --}}
+                @if (! ($period['key'] === 'bulan' && $period['current']))
+                    <button type="button" class="btn" id="dateRangeClear" title="Kembali ke bulan ini">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                @endif
+            </div>
         </div>
     </form>
 
@@ -388,6 +412,8 @@
 @endsection
 
 @push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/id.js"></script>
 <script>
     const rupiah = n => 'Rp ' + Number(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
 
@@ -408,6 +434,50 @@
                 filterForm.submit();
             }
         });
+    })();
+
+    /* ============================================================
+       FILTER TANGGAL (kalender rentang)
+    ============================================================ */
+    (function () {
+        const form = document.getElementById('filterForm');
+        const fromInput = document.getElementById('filter_from');
+        const toInput = document.getElementById('filter_to');
+        const clearBtn = document.getElementById('dateRangeClear');
+
+        const initial = [fromInput.value, toInput.value].filter(Boolean);
+
+        flatpickr('#dateRange', {
+            mode: 'range',
+            locale: 'id',
+            dateFormat: 'Y-m-d',
+            altInput: true,
+            altFormat: 'j M Y',
+            altInputClass: 'date-range-input',
+            showMonths: 2,
+            defaultDate: initial.length ? initial : null,
+            onClose(dates, _str, instance) {
+                if (dates.length === 0) return;
+
+                // satu tanggal saja = rentang satu hari
+                const from = instance.formatDate(dates[0], 'Y-m-d');
+                const to = instance.formatDate(dates[1] ?? dates[0], 'Y-m-d');
+
+                if (from === fromInput.value && to === toInput.value) return;
+
+                fromInput.value = from;
+                toInput.value = to;
+                form.submit();
+            },
+        });
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function () {
+                fromInput.value = '';
+                toInput.value = '';
+                form.submit();
+            });
+        }
     })();
 
     /* ============================================================

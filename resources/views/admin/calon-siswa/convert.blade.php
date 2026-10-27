@@ -1000,10 +1000,7 @@
                                     <option value="">Pilih Package</option>
                                     @foreach ($privatePackages as $privatePackage)
                                         <option value="{{ $privatePackage->id }}" data-price="{{ $privatePackage->price }}"
-                                                {{ $candidateStudent->private_package_id === $privatePackage->id ? 'selected' : '' }}>
-                                            {{ $privatePackage->package_name }} &mdash;
-                                            Rp {{ number_format($privatePackage->price, 0, ',', '.') }}
-                                        </option>
+                                            {{ $candidateStudent->private_package_id === $privatePackage->id ? 'selected' : '' }}>{{ $privatePackage->package_name }} &mdash; Rp {{ number_format($privatePackage->price, 0, ',', '.') }}</option>
                                     @endforeach
                                 </select>
                                 @if ($privatePackages->isEmpty())

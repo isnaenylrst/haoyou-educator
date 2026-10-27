@@ -246,6 +246,8 @@ class SiswaController extends Controller
             'phone' => $siswa->user->phone ?? $siswa->candidateStudent->phone ?? '-',
             'age' => $siswa->age,
             'status' => $siswa->status,
+            'points' => $siswa->points,
+            'join_date' => optional($siswa->join_date)->format('Y-m-d'),
 
             'schedules' => $siswa->activeEnrollment?->class?->schedules->map(fn ($s) => [
                 'day' => $s->day,
