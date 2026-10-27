@@ -7,131 +7,154 @@ use App\Models\DocumentTemplate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class DocumentTemplateController extends Controller
 {
-    /*
-    |--------------------------------------------------------------------------
-    | Upload Template Progress Report
-    |--------------------------------------------------------------------------
-    */
+    /** Jenis kelas yang boleh punya template Progress Report. */
+    public const CLASS_TYPES = [
+        'Regular (Non-HSK)',
+        'HSK 1',
+        'HSK 2',
+        'HSK 3',
+        'HSK 4',
+        'HSK 5',
+        'HSK 6',
+    ];
 
+    private const MESSAGES = [
+        'name.in'       => 'Jenis kelas tidak valid.',
+        'name.unique'   => 'Template untuk jenis kelas ini sudah ada. Gunakan "Upload Ulang" pada template tersebut.',
+        'file.required' => 'File template wajib diunggah.',
+        'file.mimes'    => 'Template harus berformat DOC, DOCX, XLS, XLSX, atau PDF.',
+        'file.max'      => 'Ukuran file maksimal 10 MB.',
+        'file.uploaded' => 'Upload gagal. Periksa upload_max_filesize dan post_max_size di php.ini.',
+    ];
+
+    private const ATTRIBUTES = [
+        'name'   => 'jenis kelas',
+        'file'   => 'file template',
+        'status' => 'status',
+    ];
+
+    /** Upload baru. Jika jenis kelas yang sama sudah ada, file lamanya DIGANTI (tidak dobel). */
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|max:255',
-            'file' => 'required|mimes:doc,docx,xls,xlsx,pdf|max:10240',
-        ]);
+            'name' => ['required', Rule::in(self::CLASS_TYPES)],
+            'file' => ['required', 'file', 'mimes:doc,docx,xls,xlsx,pdf', 'max:10240'],
+        ], self::MESSAGES, self::ATTRIBUTES);
 
-        $path = $request->file('file')
-            ->store('documents/templates', 'public');
+        $path = $request->file('file')->store('documents/templates', 'public');
 
-        DocumentTemplate::create([
-
-            'name' => $request->name,
-
+        $template = DocumentTemplate::firstOrNew([
+            'name'          => $request->name,
             'document_type' => 'Progress Report',
-
-            'file_path' => $path,
-
-            'uploaded_by' => Auth::id(),
-
-            'status' => 'Active',
-
         ]);
 
-        return redirect()
-            ->route('kurikulum.sop')
-            ->with('success', 'Template Progress Report berhasil diupload.');
-    }
+        $replaced = $template->exists;
+        $oldPath  = $replaced ? $template->file_path : null;
 
-    /*
-    |--------------------------------------------------------------------------
-    | Download Template
-    |--------------------------------------------------------------------------
-    */
+        try {
+            $template->file_path   = $path;
+            $template->uploaded_by = Auth::id();
+            $template->status      = 'Active';
+            $template->save();
+        } catch (\Throwable $e) {
+            Storage::disk('public')->delete($path);
+            report($e);
 
-    public function download(DocumentTemplate $documentTemplate)
-    {
-        if (!Storage::disk('public')->exists($documentTemplate->file_path)) {
-
-            return back()->with('error', 'File tidak ditemukan.');
-
+            return back()->withInput()->with('error', 'Gagal menyimpan template. Silakan coba lagi.');
         }
 
-        return response()->download(
+        if ($oldPath && Storage::disk('public')->exists($oldPath)) {
+            Storage::disk('public')->delete($oldPath);
+        }
 
-            Storage::disk('public')->path($documentTemplate->file_path),
-
-            basename($documentTemplate->file_path)
-
+        return redirect()->route('kurikulum.sop')->with(
+            'success',
+            $replaced ? 'Template berhasil diperbarui (file lama diganti).' : 'Template Progress Report berhasil ditambahkan.'
         );
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Update Template
-    |--------------------------------------------------------------------------
-    */
-
     public function update(Request $request, DocumentTemplate $documentTemplate)
     {
+        abort_unless($documentTemplate->document_type === 'Progress Report', 404);
+
         $request->validate([
+            'name' => [
+                'required',
+                Rule::in(self::CLASS_TYPES),
+                Rule::unique('document_templates', 'name')
+                    ->where('document_type', 'Progress Report')
+                    ->ignore($documentTemplate->id),
+            ],
+            'status' => ['required', Rule::in(['Active', 'Inactive'])],
+            'file'   => ['nullable', 'file', 'mimes:doc,docx,xls,xlsx,pdf', 'max:10240'],
+        ], self::MESSAGES, self::ATTRIBUTES);
 
-            'name' => 'required|max:255',
+        $oldPath = $documentTemplate->file_path;
+        $newPath = $request->hasFile('file')
+            ? $request->file('file')->store('documents/templates', 'public')
+            : null;
 
-            'file' => 'nullable|mimes:doc,docx,xls,xlsx,pdf|max:10240',
-
-        ]);
-
-        $documentTemplate->name = $request->name;
-
-        if ($request->hasFile('file')) {
-
-            if (
-                $documentTemplate->file_path &&
-                Storage::disk('public')->exists($documentTemplate->file_path)
-            ) {
-
-                Storage::disk('public')->delete($documentTemplate->file_path);
-
+        try {
+            $documentTemplate->name   = $request->name;
+            $documentTemplate->status = $request->status;
+            if ($newPath) {
+                $documentTemplate->file_path = $newPath;
             }
+            $documentTemplate->uploaded_by = Auth::id();
+            $documentTemplate->save();
+        } catch (\Throwable $e) {
+            if ($newPath) {
+                Storage::disk('public')->delete($newPath);
+            }
+            report($e);
 
-            $documentTemplate->file_path = $request->file('file')
-                ->store('documents/templates', 'public');
+            return back()->withInput()->with('error', 'Gagal memperbarui template. Silakan coba lagi.');
         }
 
-        $documentTemplate->uploaded_by = Auth::id();
+        if ($newPath && $oldPath && Storage::disk('public')->exists($oldPath)) {
+            Storage::disk('public')->delete($oldPath);
+        }
 
-        $documentTemplate->save();
-
-        return redirect()
-            ->route('kurikulum.sop')
-            ->with('success', 'Template berhasil diperbarui.');
+        return redirect()->route('kurikulum.sop')->with('success', 'Template berhasil diperbarui.');
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Hapus Template
-    |--------------------------------------------------------------------------
-    */
+    public function download(DocumentTemplate $documentTemplate)
+    {
+        abort_unless($documentTemplate->document_type === 'Progress Report', 404);
+
+        if (!$documentTemplate->file_exists) {
+            return back()->with('error', 'File template tidak ditemukan di server.');
+        }
+
+        $name = (Str::slug($documentTemplate->name) ?: 'template-' . $documentTemplate->id)
+            . '.' . $documentTemplate->file_extension;
+
+        return response()->download(storage_path('app/public/' . $documentTemplate->file_path), $name);
+    }
 
     public function destroy(DocumentTemplate $documentTemplate)
     {
+        abort_unless($documentTemplate->document_type === 'Progress Report', 404);
 
-        if (
-            $documentTemplate->file_path &&
-            Storage::disk('public')->exists($documentTemplate->file_path)
-        ) {
+        $path = $documentTemplate->file_path;
 
-            Storage::disk('public')->delete($documentTemplate->file_path);
+        try {
+            $documentTemplate->delete();
+        } catch (\Throwable $e) {
+            report($e);
 
+            return back()->with('error', 'Gagal menghapus template. Silakan coba lagi.');
         }
 
-        $documentTemplate->delete();
+        if ($path && Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
 
-        return redirect()
-            ->route('kurikulum.sop')
-            ->with('success', 'Template berhasil dihapus.');
+        return redirect()->route('kurikulum.sop')->with('success', 'Template berhasil dihapus.');
     }
 }

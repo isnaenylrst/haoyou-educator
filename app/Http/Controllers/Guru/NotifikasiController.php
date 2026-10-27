@@ -238,6 +238,43 @@ class NotifikasiController extends Controller
             ]);
         }
 
+                // ----- Jadwal konsultasi dari Kurikulum -----
+        $consultations = \App\Models\Consultation::with('teacherMaterial')
+            ->where('teacher_id', $teacher->id)
+            ->where(function ($q) {
+                $q->where('status', 'Terjadwal')
+                  ->orWhere(function ($q2) {
+                      $q2->whereIn('status', ['Selesai', 'Dibatalkan'])
+                         ->where('updated_at', '>=', now()->subDays(14));
+                  });
+            })
+            ->get();
+
+        foreach ($consultations as $c) {
+            $when = $c->scheduled_at ? $c->scheduled_at->translatedFormat('l, d F Y \p\u\k\u\l H:i') : '-';
+
+            $title = match ($c->status) {
+                'Terjadwal'  => "Jadwal {$c->type_label}: {$when}",
+                'Selesai'    => "{$c->type_label} sudah selesai",
+                default      => "{$c->type_label} dibatalkan — silakan ajukan ulang jika diperlukan",
+            };
+
+            $note = collect([
+                $c->notes,
+                $c->teacherMaterial ? 'Terkait pengajuan: ' . $c->teacherMaterial->ppt_title : null,
+            ])->filter()->implode(' · ');
+
+            $notifications->push([
+                'title'    => $title,
+                'category' => 'Jadwal Konsultasi',
+                'time'     => $c->updated_at,
+                'note'     => $note ?: null,
+                'model'    => $c,
+                'type'     => 'consultation',
+                'action'   => $c->status === 'Terjadwal' ? null : ['kind' => 'done'],
+            ]);
+        }
+
         // ----- Urutkan terbaru duluan -----
         $notifications = $notifications
             ->sortByDesc('time')

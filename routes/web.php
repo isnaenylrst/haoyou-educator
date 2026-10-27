@@ -48,6 +48,9 @@ use App\Http\Controllers\Guru\TugasKelasController as GuruTugasKelasController;
 use App\Http\Controllers\Guru\AvailabilityController as GuruAvailabilityController;
 use App\Http\Controllers\Guru\CertificateController as GuruCertificateController;
 
+// OWNER //
+use App\Http\Controllers\Owner\DashboardController as OwnerDashboardController;
+use App\Http\Controllers\Owner\AccessController as OwnerAccessController;
 /*
 |--------------------------------------------------------------------------
 | LANDING PAGE
@@ -387,6 +390,9 @@ Route::middleware(['auth', 'role:Curriculum'])
         Route::delete('/video/{video}', [KurikulumVideoController::class, 'destroy'])
             ->name('video.destroy');
 
+        Route::get('/video/{video}/stream', [KurikulumVideoController::class, 'stream'])
+            ->name('video.stream');
+
 
     });
 
@@ -396,7 +402,7 @@ Route::middleware(['auth', 'role:Curriculum'])
 |--------------------------------------------------------------------------
 */
 
-Route::middleware(['auth', 'role:Teacher'])
+Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
     ->prefix('guru')
     ->name('teacher.')
     ->group(function () {
@@ -412,6 +418,9 @@ Route::middleware(['auth', 'role:Teacher'])
         // SOP
         Route::get('/sop', [GuruSopController::class, 'index'])
             ->name('sop');
+
+        Route::get('/sop/template/{documentTemplate}', [GuruSopController::class, 'template'])
+            ->name('sop.template');
 
         Route::get('/sop/{document}', [GuruSopController::class, 'show'])
             ->name('sop.show');
@@ -497,6 +506,34 @@ Route::middleware(['auth', 'role:Teacher'])
         Route::post('/kelas-diberikan/{class}/respond', [GuruAvailabilityController::class, 'respondClass'])->name('class.respond');
     });
 
+/*
+|--------------------------------------------------------------------------
+| OWNER
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware(['auth', 'role:Owner'])
+    ->prefix('owner')
+    ->name('owner.')
+    ->group(function () {
+
+        Route::get('/dashboard', [OwnerDashboardController::class, 'index'])
+            ->name('dashboard');
+
+        // Akses area Guru (Owner memilih guru yang dibuka)
+        Route::get('/guru', [OwnerAccessController::class, 'teachers'])
+            ->name('guru');
+
+        Route::post('/guru/ganti', [OwnerAccessController::class, 'switch'])
+            ->name('guru.switch');
+
+        Route::post('/guru/keluar', [OwnerAccessController::class, 'clear'])
+            ->name('guru.clear');
+
+        Route::post('/guru/{teacher}/lihat', [OwnerAccessController::class, 'view'])
+            ->name('guru.view');
+    });
+    
 /*
 |--------------------------------------------------------------------------
 | ADMIN (punya teman)

@@ -8,182 +8,178 @@ use App\Models\DocumentTemplate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class SopController extends Controller
 {
+    private const MESSAGES = [
+        'title.unique'  => 'Judul SOP ini sudah ada. Gunakan judul lain, atau pakai "Upload Ulang" pada SOP yang sama.',
+        'file.required' => 'File SOP wajib diunggah.',
+        'file.mimes'    => 'File SOP harus berformat PDF.',
+        'file.max'      => 'Ukuran file maksimal 5 MB.',
+        'file.uploaded' => 'Upload gagal. Periksa upload_max_filesize dan post_max_size di php.ini.',
+    ];
 
-    /*
-    |--------------------------------------------------------------------------
-    | Menampilkan halaman SOP
-    |--------------------------------------------------------------------------
-    */
+    private const ATTRIBUTES = [
+        'title' => 'judul SOP',
+        'file'  => 'file SOP',
+    ];
+
+    /** Pastikan dokumen yang diakses memang SOP, bukan surat/dokumen lain. */
+    private function sop(Document $document): Document
+    {
+        abort_unless($document->document_type === 'SOP', 404);
+
+        return $document;
+    }
+
+    private function titleRules(?Document $document = null): array
+    {
+        return [
+            'required', 'string', 'max:255',
+            Rule::unique('documents', 'title')
+                ->where('document_type', 'SOP')
+                ->ignore($document?->id),
+        ];
+    }
+
+    private function fileName(Document $document): string
+    {
+        return (Str::slug($document->title) ?: 'sop-' . $document->id) . '.pdf';
+    }
+
+    // ------------------------------------------------------------------ LIST
 
     public function index()
     {
-    // Ambil semua SOP
-    $sops = Document::where('document_type', 'SOP')
-        ->latest()
-        ->get();
+        $sops = Document::sop()->with('uploader')->latest('uploaded_at')->get();
 
-    // Ambil Template Progress Report
-    $templates = DocumentTemplate::where('document_type', 'Progress Report')
-        ->where('status', 'Active')
-        ->latest()
-        ->get();
+        $templates = DocumentTemplate::progressReport()
+            ->with('uploader')
+            ->orderBy('name')
+            ->get();
 
-    return view(
-        'kurikulum.sop',
-        compact(
-            'sops',
-            'templates'
-        )
-    );
-}
+        $classTypes = DocumentTemplateController::CLASS_TYPES;
 
-    /*
-    |--------------------------------------------------------------------------
-    | Upload SOP Baru
-    |--------------------------------------------------------------------------
-    */
+        return view('kurikulum.sop', compact('sops', 'templates', 'classTypes'));
+    }
+
+    // ------------------------------------------------------------------ SIMPAN
 
     public function store(Request $request)
     {
         $request->validate([
-            'title' => 'required|max:255',
-            'file'  => 'required|mimes:pdf|max:5120',
-        ]);
+            'title' => $this->titleRules(),
+            'file'  => ['required', 'file', 'mimes:pdf', 'max:5120'],
+        ], self::MESSAGES, self::ATTRIBUTES);
 
-        $path = $request->file('file')
-            ->store('documents/sop', 'public');
+        $path = $request->file('file')->store('documents/sop', 'public');
 
-        Document::create([
+        try {
+            Document::create([
+                'title'         => trim($request->title),
+                'document_type' => 'SOP',
+                'file_path'     => $path,
+                'visibility'    => 'Teacher',
+                'uploaded_by'   => Auth::id(),
+                'uploaded_at'   => now(),
+            ]);
+        } catch (\Throwable $e) {
+            Storage::disk('public')->delete($path);   // jangan sisakan file yatim
+            report($e);
 
-            'title'         => $request->title,
-
-            'document_type' => 'SOP',
-
-            'file_path'     => $path,
-
-            'visibility'    => 'Teacher',
-
-            'uploaded_by'   => Auth::id(),
-
-            'user_id'       => Auth::id(),
-
-            'uploaded_at'   => now(),
-
-        ]);
-
-        return redirect()
-            ->route('kurikulum.sop')
-            ->with('success', 'SOP berhasil diupload.');
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Download / Buka SOP
-    |--------------------------------------------------------------------------
-    */
-
-    public function download(Document $document)
-    {
-        if (!Storage::disk('public')->exists($document->file_path)) {
-
-            return back()->with('error', 'File tidak ditemukan.');
-
+            return back()->withInput()->with('error', 'Gagal menyimpan SOP. Silakan coba lagi.');
         }
 
-        return response()->download(
-            Storage::disk('public')->path($document->file_path),
-            $document->title . '.pdf'
-        );
+        return redirect()->route('kurikulum.sop')->with('success', 'SOP berhasil diupload.');
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Mengambil data SOP untuk edit
-    |--------------------------------------------------------------------------
-    */
-
-    public function edit(Document $document)
-    {
-        return response()->json($document);
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Upload Ulang SOP
-    |--------------------------------------------------------------------------
-    */
 
     public function update(Request $request, Document $document)
     {
+        $this->sop($document);
 
         $request->validate([
+            'title' => $this->titleRules($document),
+            'file'  => ['nullable', 'file', 'mimes:pdf', 'max:5120'],
+        ], self::MESSAGES, self::ATTRIBUTES);
 
-            'title' => 'required|max:255',
+        $oldPath = $document->file_path;
+        $newPath = $request->hasFile('file')
+            ? $request->file('file')->store('documents/sop', 'public')
+            : null;
 
-            'file' => 'nullable|mimes:pdf|max:5120',
-
-        ]);
-
-        $document->title = $request->title;
-
-        if ($request->hasFile('file')) {
-
-            if (
-                $document->file_path &&
-                Storage::disk('public')->exists($document->file_path)
-            ) {
-                Storage::disk('public')->delete($document->file_path);
+        try {
+            $document->title = trim($request->title);
+            if ($newPath) {
+                $document->file_path = $newPath;
             }
+            $document->uploaded_by = Auth::id();
+            $document->uploaded_at = now();
+            $document->save();
+        } catch (\Throwable $e) {
+            if ($newPath) {
+                Storage::disk('public')->delete($newPath);
+            }
+            report($e);
 
-            $document->file_path = $request->file('file')
-                ->store('documents/sop', 'public');
+            return back()->withInput()->with('error', 'Gagal memperbarui SOP. Silakan coba lagi.');
         }
 
-        $document->uploaded_by = Auth::id();
+        // file lama dihapus setelah database sukses
+        if ($newPath && $oldPath && Storage::disk('public')->exists($oldPath)) {
+            Storage::disk('public')->delete($oldPath);
+        }
 
-        $document->uploaded_at = now();
-
-        $document->save();
-
-        return redirect()
-            ->route('kurikulum.sop')
-            ->with('success', 'SOP berhasil diperbarui.');
+        return redirect()->route('kurikulum.sop')->with('success', 'SOP berhasil diperbarui.');
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Hapus SOP
-    |--------------------------------------------------------------------------
-    */
 
     public function destroy(Document $document)
     {
+        $this->sop($document);
 
-        if (
-            $document->file_path &&
-            Storage::disk('public')->exists($document->file_path)
-        ) {
-            Storage::disk('public')->delete($document->file_path);
+        $path = $document->file_path;
+
+        try {
+            $document->delete();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'Gagal menghapus SOP. Silakan coba lagi.');
         }
 
-        $document->delete();
+        if ($path && Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
 
-        return redirect()
-            ->route('kurikulum.sop')
-            ->with('success', 'SOP berhasil dihapus.');
+        return redirect()->route('kurikulum.sop')->with('success', 'SOP berhasil dihapus.');
     }
 
+    // ------------------------------------------------------------------ FILE
+
+    /** Buka PDF di browser (butuh login). */
     public function show(Document $document)
-{
-    if (!Storage::disk('public')->exists($document->file_path)) {
-        abort(404);
+    {
+        $this->sop($document);
+        abort_unless($document->file_exists, 404, 'File SOP tidak ditemukan di server.');
+
+        return response()->file(storage_path('app/public/' . $document->file_path), [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $this->fileName($document) . '"',
+        ]);
     }
 
-    return response()->file(
-        Storage::disk('public')->path($document->file_path)
-    );
-}
+    public function download(Document $document)
+    {
+        $this->sop($document);
+
+        if (!$document->file_exists) {
+            return back()->with('error', 'File SOP tidak ditemukan di server.');
+        }
+
+        return response()->download(
+            storage_path('app/public/' . $document->file_path),
+            $this->fileName($document)
+        );
+    }
 }

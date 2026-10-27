@@ -14,6 +14,12 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
+            'teacher.profile' => \App\Http\Middleware\EnsureTeacherProfile::class,
+        ]);
+
+        // Konteks Owner (memilih guru yang dilihat); berjalan setelah session aktif
+        $middleware->web(append: [
+            \App\Http\Middleware\OwnerContext::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

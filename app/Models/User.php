@@ -106,6 +106,7 @@ class User extends Authenticatable
     public function homeRouteName(): ?string
     {
         return match ($this->level->nama_level ?? null) {
+            'Owner'      => 'owner.dashboard',
             'Curriculum' => 'kurikulum.dashboard',
             'Teacher'    => 'teacher.dashboard',
             'Student'    => 'dashboard',

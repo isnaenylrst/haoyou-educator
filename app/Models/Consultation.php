@@ -23,13 +23,13 @@ class Consultation extends Model
     ];
 
     protected $casts = [
-        'scheduled_at' => 'datetime',
+        'scheduled_at'    => 'datetime',
         'notify_whatsapp' => 'boolean',
     ];
 
     public function teacher()
     {
-        return $this->belongsTo(Teacher::class);
+        return $this->belongsTo(Teacher::class, 'teacher_id');
     }
 
     public function creator()
@@ -37,17 +37,24 @@ class Consultation extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function teacherMaterial()
+    {
+        return $this->belongsTo(TeacherMaterial::class, 'teacher_material_id');
+    }
+
+    /** Konsultasi yang masih berjalan (belum selesai / dibatalkan). */
+    public function scopeActive($query)
+    {
+        return $query->whereIn('status', ['Belum Terjadwal', 'Terjadwal']);
+    }
+
     public function getTypeLabelAttribute(): string
     {
         return match ($this->type) {
-            'LP_PPT' => 'Konsultasi LP & PPT (Kurikulum)',
-            'Direktur' => 'Konsultasi Direktur',
+            'LP_PPT'         => 'Konsultasi LP & PPT (Kurikulum)',
+            'Direktur'       => 'Konsultasi Direktur',
             'Trial_Teaching' => 'Trial Teaching',
-            default => $this->type,
+            default          => (string) $this->type,
         };
-    }
-    public function teacherMaterial()
-    {
-    return $this->belongsTo(TeacherMaterial::class);
     }
 }

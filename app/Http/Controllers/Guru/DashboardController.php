@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Guru;
 
 use App\Http\Controllers\Controller;
+use App\Services\TeacherNotificationService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +27,7 @@ class DashboardController extends Controller
 
     public function index()
     {
-        $teacher = Auth::user()->teacher;
+        $teacher = Auth::user()->teacher; // dijamin ada oleh middleware teacher.profile
         $now     = now();
         $today   = $now->toDateString();
 
@@ -86,11 +87,6 @@ class DashboardController extends Controller
         ];
 
         // ---------- CLASSES TODAY ----------
-        $filledIds = DB::table('teaching_journals')
-            ->where('teacher_id', $teacher->id)
-            ->whereRaw('COALESCE(session_date, DATE(created_at)) = ?', [$today])
-            ->pluck('class_schedule_id')->all();
-
         $todayClasses = DB::table('class_schedules as cs')
             ->join('classes as c', 'c.id', '=', 'cs.class_id')
             ->where('c.teacher_id', $teacher->id)
@@ -101,12 +97,19 @@ class DashboardController extends Controller
                 DB::raw("(select count(*) from class_enrollments ce where ce.class_id = c.id and ce.status = 'Active') as students"))
             ->orderBy('cs.start_time')->get();
 
+        // Jadwal dianggap selesai jika sudah ada jurnal untuk jadwal & tanggal ini,
+        // SIAPA PUN yang mengisi (guru pengganti juga dihitung).
+        $filledIds = $todayClasses->isEmpty() ? [] : DB::table('teaching_journals')
+            ->whereIn('class_schedule_id', $todayClasses->pluck('id'))
+            ->whereRaw('COALESCE(session_date, DATE(created_at)) = ?', [$today])
+            ->pluck('class_schedule_id')->map(fn ($id) => (int) $id)->all();
+
         $highlighted = false;
         $todayClasses = $todayClasses->map(function ($s) use ($now, $today, $filledIds, &$highlighted) {
             $start = Carbon::parse("$today {$s->start_time}");
             $end   = Carbon::parse("$today {$s->end_time}");
 
-            if (in_array($s->id, $filledIds)) {
+            if (in_array((int) $s->id, $filledIds, true)) {
                 $s->state = 'completed'; $s->label = 'selesai';
             } elseif ($now->between($start, $end)) {
                 $s->state = 'ongoing'; $s->label = 'sedang berlangsung';
@@ -126,22 +129,25 @@ class DashboardController extends Controller
         // ---------- RECENT ACTIVITY ----------
         $activities = collect();
 
-        DB::table('attendances as a')
-            ->join('teaching_journals as j', 'j.id', '=', 'a.teaching_journal_id')
-            ->join('students as s', 's.id', '=', 'a.student_id')
+        // Satu baris per SESI (bukan per siswa).
+        DB::table('teaching_journals as j')
             ->join('classes as c', 'c.id', '=', 'j.class_id')
             ->where('j.teacher_id', $teacher->id)
-            ->orderByDesc('a.created_at')->limit(6)
-            ->get(['s.name', 'a.status', 'c.class_name', 'a.created_at'])
+            ->orderByDesc('j.created_at')->limit(4)
+            ->get([
+                'j.class_status', 'c.class_name', 'j.created_at',
+                DB::raw("(select count(*) from attendances a where a.teaching_journal_id = j.id and a.status = 'Present') as hadir"),
+                DB::raw("(select count(*) from attendances a where a.teaching_journal_id = j.id and a.status <> 'Present') as tidak_hadir"),
+            ])
             ->each(function ($r) use ($activities) {
-                $present = $r->status === 'Present';
+                $conducted = $r->class_status === 'Conducted';
                 $activities->push([
                     'time'  => Carbon::parse($r->created_at),
-                    'title' => $present ? "{$r->name} hadir di {$r->class_name}" : "{$r->name} tidak hadir di {$r->class_name} ({$r->status})",
+                    'title' => $conducted ? "Sesi {$r->class_name} terlaksana" : "Sesi {$r->class_name} tidak terlaksana ({$r->class_status})",
                     'sub'   => 'Attendance tercatat',
-                    'badge' => $present ? 'Present' : $r->status,
-                    'tone'  => $present ? 'ok' : 'bad',
-                    'name'  => $r->name,
+                    'badge' => $conducted ? "{$r->hadir} hadir · {$r->tidak_hadir} tidak hadir" : $r->class_status,
+                    'tone'  => !$conducted || $r->tidak_hadir > 0 ? 'warn' : 'ok',
+                    'name'  => $r->class_name,
                 ]);
             });
 
@@ -181,9 +187,13 @@ class DashboardController extends Controller
 
         $activities = $activities->sortByDesc('time')->take(6)->values();
 
+        // ---------- PERLU TINDAKAN (sumber sama dengan lonceng & halaman Notifikasi) ----------
+        $pendingActions = collect(TeacherNotificationService::for($teacher)->bell()['rows'])
+            ->where('type', '!=', 'info')->values();
+
         $hour = (int) $now->format('H');
         $greeting = $hour < 11 ? 'Good morning' : ($hour < 15 ? 'Good afternoon' : ($hour < 19 ? 'Good evening' : 'Good night'));
 
-        return view('guru.dashboard', compact('teacher', 'greeting', 'stats', 'classes', 'todayClasses', 'activities'));
+        return view('guru.dashboard', compact('teacher', 'greeting', 'stats', 'classes', 'todayClasses', 'activities', 'pendingActions'));
     }
 }

@@ -312,6 +312,7 @@
     </header>
 
     <main class="content">
+        @include('partials.owner-bar')
         @yield('content')
     </main>
 </div>

@@ -37,6 +37,29 @@
         <div class="text-muted small">Haoyou Educator · Les Mandarin Malang · ringkasan operasional hari ini</div>
     </div>
 
+        {{-- PERLU TINDAKAN (data sama dengan lonceng & halaman Notifikasi) --}}
+    @if($pendingActions->isNotEmpty())
+        <div class="dash-card mb-4" style="border-left: 4px solid #d99100;">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <h5 class="fw-bold mb-0">Perlu Tindakan</h5>
+                    <div class="text-muted small">{{ $pendingActions->sum('count') }} hal menunggu Anda</div>
+                </div>
+                <a href="{{ route('teacher.notifikasi') }}" class="small text-decoration-none">Semua notifikasi →</a>
+            </div>
+            @foreach($pendingActions as $row)
+                <a href="{{ $row['url'] }}" class="act-row text-decoration-none" style="color:inherit">
+                    <div class="avatar bg-warn">{{ $row['count'] }}</div>
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold small">{{ $row['label'] }}</div>
+                        <div class="text-muted" style="font-size:11px">{{ $row['hint'] }}</div>
+                    </div>
+                    <div class="small fw-bold tone-warn">Buka →</div>
+                </a>
+            @endforeach
+        </div>
+    @endif
+
     {{-- STATISTIK --}}
     <div class="row g-3 mb-4">
         <div class="col-lg-3 col-6">

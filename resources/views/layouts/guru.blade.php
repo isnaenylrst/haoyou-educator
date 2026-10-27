@@ -177,19 +177,23 @@
     $roleLabel = 'Teacher';
     $profileUrl = \Illuminate\Support\Facades\Route::has('profile.edit') ? route('profile.edit') : '#';
 
-    // ====== LONCENG NOTIFIKASI (tiap hitungan aman jika tabel/kolom belum ada) ======
-    $safeCount = function (callable $fn) {
-        try { return (int) $fn(); } catch (\Throwable $e) { return 0; }
-    };
-    $teacherId = $teacher->id ?? null;
-    $db = \Illuminate\Support\Facades\DB::class;
+    // ====== LONCENG NOTIFIKASI ======
+    // $bell disuplai oleh App\View\Composers\GuruBellComposer (didaftarkan di AppServiceProvider)
+    // dan memakai TeacherNotificationService, sumber data yang SAMA dengan halaman Notifikasi
+    // dan kartu "Perlu Tindakan" di Dashboard. Fallback di bawah hanya berjaga jika composer
+    // belum terdaftar; Owner (tanpa data guru) otomatis mendapat lonceng kosong.
+    if (!isset($bell)) {
+        $bell = ['rows' => [], 'total' => 0];
 
-    $offersPending    = $teacherId ? $safeCount(fn () => $db::table('class_assignments')->where('teacher_id', $teacherId)->where('status', 'Pending')->count()) : 0;
-    $journalsRevision = $teacherId ? $safeCount(fn () => $db::table('teaching_journals')->where('teacher_id', $teacherId)->where('status', 'Revision')->count()) : 0;
-    $materialsRejected = $teacherId ? $safeCount(fn () => $db::table('teacher_materials')->where('teacher_id', $teacherId)->where('status', 'Rejected')->where('updated_at', '>=', now()->subDays(7))->count()) : 0;
-    $notifTotal = $offersPending + $journalsRevision + $materialsRejected;
+        if ($teacher) {
+            try {
+                $bell = \App\Services\TeacherNotificationService::for($teacher)->bell();
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+    }
 
-    
     // ===== OWNER: sidebar menampilkan SEMUA fitur Admin, Kurikulum, dan Guru =====
     if (($authUser->level->nama_level ?? null) === 'Owner') {
         $menu      = \App\Support\OwnerMenu::asLayoutMenu();
@@ -197,7 +201,6 @@
         $initials  = strtoupper(mb_substr($userName, 0, 2));
         $roleLabel = 'Owner';
     }
-    
 @endphp
 
 {{-- ===== SIDEBAR ===== --}}
@@ -256,38 +259,26 @@
             <div class="dropdown">
                 <button class="icon-btn" data-bs-toggle="dropdown" aria-expanded="false" title="Notifikasi">
                     <i class="fa-regular fa-bell"></i>
-                    @if($notifTotal > 0)<span class="dot"></span>@endif
+                    @if($bell['total'] > 0)<span class="dot"></span>@endif
                 </button>
                 <div class="dropdown-menu dropdown-menu-end p-0" style="width:320px">
                     <div class="px-3 py-3 fw-bold border-bottom">
                         Notifikasi
-                        @if($notifTotal > 0)<span class="badge text-bg-warning ms-1">{{ $notifTotal }}</span>@endif
+                        @if($bell['total'] > 0)<span class="badge text-bg-warning ms-1">{{ $bell['total'] }}</span>@endif
                     </div>
 
-                    @if($notifTotal === 0)
+                    @if($bell['total'] === 0)
                         <div class="p-4 text-center text-muted small">Tidak ada yang perlu ditindaklanjuti 🎉</div>
                     @else
-                        @if($offersPending > 0)
-                            <a class="notif-item" href="{{ url('/guru/schedule') }}#tawaran-kelas">
-                                <div class="badge-num">{{ $offersPending }}</div>
-                                <div><div class="fw-semibold small">Tawaran kelas menunggu</div>
-                                <div class="text-muted" style="font-size:12px">Terima atau tolak di Schedule</div></div>
+                        @foreach($bell['rows'] as $row)
+                            <a class="notif-item" href="{{ $row['url'] }}">
+                                <div class="badge-num">{{ $row['count'] }}</div>
+                                <div>
+                                    <div class="fw-semibold small">{{ $row['label'] }}</div>
+                                    <div class="text-muted" style="font-size:12px">{{ $row['hint'] }}</div>
+                                </div>
                             </a>
-                        @endif
-                        @if($journalsRevision > 0)
-                            <a class="notif-item" href="{{ url('/guru/teaching-log') }}">
-                                <div class="badge-num">{{ $journalsRevision }}</div>
-                                <div><div class="fw-semibold small">Jurnal perlu revisi</div>
-                                <div class="text-muted" style="font-size:12px">Dikembalikan Kurikulum</div></div>
-                            </a>
-                        @endif
-                        @if($materialsRejected > 0)
-                            <a class="notif-item" href="{{ url('/guru/kelas') }}">
-                                <div class="badge-num">{{ $materialsRejected }}</div>
-                                <div><div class="fw-semibold small">LP / PPT ditolak</div>
-                                <div class="text-muted" style="font-size:12px">7 hari terakhir, upload ulang di Kelas</div></div>
-                            </a>
-                        @endif
+                        @endforeach
                     @endif
 
                     <a href="{{ url('/guru/notifikasi') }}" class="d-block text-center py-2 small fw-semibold border-top text-decoration-none">Lihat semua notifikasi →</a>
@@ -330,6 +321,7 @@
     </header>
 
     <main class="content">
+        @include('partials.owner-bar')
         @yield('content')
     </main>
 </div>

@@ -12,6 +12,9 @@ class LearningVideo extends Model
         'program_level_id',
         'title',
         'description',
+        'source_type',
+        'youtube_url',
+        'youtube_id',
         'file_path',
         'mime_type',
         'file_size',
@@ -53,8 +56,77 @@ class LearningVideo extends Model
         });
     }
 
+    // ------------------------------------------------------------------ YOUTUBE
+
+    public function getIsYoutubeAttribute(): bool
+    {
+        return $this->source_type === 'youtube' && !empty($this->youtube_id);
+    }
+
+    public function getEmbedUrlAttribute(): ?string
+    {
+        return $this->is_youtube
+            ? 'https://www.youtube-nocookie.com/embed/' . $this->youtube_id
+            : null;
+    }
+
+    public function getWatchUrlAttribute(): ?string
+    {
+        return $this->is_youtube ? self::watchUrlFor($this->youtube_id) : null;
+    }
+
+    public function getThumbnailUrlAttribute(): ?string
+    {
+        return $this->is_youtube
+            ? 'https://img.youtube.com/vi/' . $this->youtube_id . '/hqdefault.jpg'
+            : null;
+    }
+
+    public static function watchUrlFor(string $id): string
+    {
+        return 'https://www.youtube.com/watch?v=' . $id;
+    }
+
+    /**
+     * Mengambil ID video (11 karakter) dari berbagai bentuk link YouTube
+     * (watch?v=, youtu.be, shorts, embed, live). Null jika tidak valid.
+     */
+    public static function extractYoutubeId(?string $url): ?string
+    {
+        $url = trim((string) $url);
+        if ($url === '') {
+            return null;
+        }
+
+        if (!preg_match('~^https?://~i', $url)) {
+            $url = 'https://' . $url;
+        }
+
+        $parts = parse_url($url);
+        $host  = strtolower(preg_replace('/^(www\.|m\.)/', '', $parts['host'] ?? ''));
+        $path  = $parts['path'] ?? '';
+        $id    = null;
+
+        if ($host === 'youtu.be') {
+            $id = trim($path, '/');
+        } elseif (in_array($host, ['youtube.com', 'youtube-nocookie.com'], true)) {
+            if ($path === '/watch') {
+                parse_str($parts['query'] ?? '', $query);
+                $id = $query['v'] ?? null;
+            } elseif (preg_match('~^/(embed|shorts|live|v)/([^/?]+)~', $path, $m)) {
+                $id = $m[2];
+            }
+        }
+
+        return ($id && preg_match('/^[A-Za-z0-9_-]{11}$/', $id)) ? $id : null;
+    }
+
     public function getSizeLabelAttribute(): string
     {
+        if ($this->source_type === 'youtube') {
+            return 'Link YouTube';
+        }
+
         $bytes = (int) $this->file_size;
 
         if ($bytes <= 0) {

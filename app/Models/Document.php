@@ -92,6 +92,29 @@ class Document extends Model
         );
     }
 
+        public function scopeSop($query)
+    {
+        return $query->where('document_type', 'SOP');
+    }
+
+    public function getFileExistsAttribute(): bool
+    {
+        return $this->file_path && Storage::disk('public')->exists($this->file_path);
+    }
+
+    public function getFileSizeLabelAttribute(): string
+    {
+        if (!$this->file_exists) {
+            return '-';
+        }
+
+        $bytes = Storage::disk('public')->size($this->file_path);
+
+        return $bytes >= 1048576
+            ? round($bytes / 1048576, 1) . ' MB'
+            : round($bytes / 1024) . ' KB';
+    }
+
     // Baru: dipakai saat dokumen ini sertifikat kelulusan level tertentu
     public function programLevel()
     {

@@ -49,13 +49,16 @@ class KelasController extends Controller
         ));
     }
 
-    private function buildProgressSteps(TeacherMaterial $submission): array
+        private function buildProgressSteps(TeacherMaterial $submission): array
     {
-        $konsultasiKurikulum = $submission->consultations
-            ->firstWhere('type', 'LP_PPT');
+        // ambil konsultasi TERBARU per jenis (yang lama/dibatalkan tidak menutupi pengajuan ulang)
+        $latest = fn (string $type) => $submission->consultations
+            ->where('type', $type)
+            ->sortByDesc('id')
+            ->first();
 
-        $konsultasiDirektur = $submission->consultations
-            ->firstWhere('type', 'Direktur');
+        $konsultasiKurikulum = $latest('LP_PPT');
+        $konsultasiDirektur  = $latest('Direktur');
 
         return [
             [
@@ -84,7 +87,7 @@ class KelasController extends Controller
     {
         $teacher = Auth::user()->teacher;
 
-        if (!$teacher || $teacherMaterial->teacher_id !== $teacher->id) {
+        if (!$teacher || (int) $teacherMaterial->teacher_id !== (int) $teacher->id) {
             abort(403);
         }
 
@@ -92,8 +95,26 @@ class KelasController extends Controller
             'type' => ['required', Rule::in(['LP_PPT', 'Direktur'])],
         ]);
 
+        if ($teacherMaterial->status === 'Approved') {
+            return back()->with('error', 'Pengajuan ini sudah disetujui, tidak perlu konsultasi lagi.');
+        }
+
+        // Konsultasi Direktur hanya boleh setelah konsultasi Kurikulum selesai
+        if ($request->type === 'Direktur') {
+            $kurikulumSelesai = Consultation::where('teacher_material_id', $teacherMaterial->id)
+                ->where('type', 'LP_PPT')
+                ->where('status', 'Selesai')
+                ->exists();
+
+            if (!$kurikulumSelesai) {
+                return back()->with('error', 'Selesaikan konsultasi Kurikulum terlebih dahulu.');
+            }
+        }
+
+        // Yang sudah dibatalkan Kurikulum boleh diajukan ulang
         $exists = Consultation::where('teacher_material_id', $teacherMaterial->id)
             ->where('type', $request->type)
+            ->where('status', '!=', 'Dibatalkan')
             ->exists();
 
         if ($exists) {
@@ -101,12 +122,12 @@ class KelasController extends Controller
         }
 
         Consultation::create([
-            'teacher_id' => $teacher->id,
+            'teacher_id'          => $teacher->id,
             'teacher_material_id' => $teacherMaterial->id,
-            'type' => $request->type,
-            'status' => 'Belum Terjadwal',
-            'notify_whatsapp' => true,
-            'created_by' => Auth::id(),
+            'type'                => $request->type,
+            'status'              => 'Belum Terjadwal',
+            'notify_whatsapp'     => true,
+            'created_by'          => Auth::id(),
         ]);
 
         return back()->with('success', 'Pengajuan jadwal konsultasi berhasil dikirim ke Kurikulum.');

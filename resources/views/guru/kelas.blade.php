@@ -188,8 +188,9 @@
                             ?? $consultation->date
                             ?? null;
 
+                        // PERBAIKAN 1: tampilkan hari, tanggal, dan JAM konsultasi
                         $dateText = $rawDate
-                            ? Carbon::parse($rawDate)->translatedFormat('j F Y')
+                            ? Carbon::parse($rawDate)->translatedFormat('l, j F Y \p\u\k\u\l H:i')
                             : null;
                     @endphp
 
@@ -199,8 +200,12 @@
 
                             @if ($isConsultationStep)
                                 <br>
+
+                                {{-- PERBAIKAN 2: teks status + lokasi/link dari Kurikulum --}}
                                 <small class="text-muted">
-                                    @if ($consultation && $dateText)
+                                    @if ($consultation && $consultation->status === 'Dibatalkan')
+                                        Dibatalkan oleh Kurikulum — ajukan ulang jika masih diperlukan
+                                    @elseif ($consultation && $dateText)
                                         {{ $dateText }}
                                     @elseif ($consultation)
                                         {{ $consultation->status }}
@@ -210,17 +215,36 @@
                                         Belum dijadwalkan
                                     @endif
                                 </small>
+
+                                @if ($consultation && $consultation->notes && $consultation->status !== 'Dibatalkan')
+                                    <br>
+                                    <small>
+                                        <i class="fas fa-location-dot me-1"></i>{{ $consultation->notes }}
+                                    </small>
+                                @endif
                             @endif
                         </div>
 
                         <div>
                             @if ($isConsultationStep)
 
+                                {{-- PERBAIKAN 3: badge status + tombol "Ajukan Ulang" jika dibatalkan --}}
                                 @if ($consultation)
                                     @if ($consultation->status === 'Selesai')
                                         <span class="badge bg-success">Selesai</span>
                                     @elseif ($consultation->status === 'Belum Terjadwal')
                                         <span class="badge bg-secondary">Menunggu Jadwal</span>
+                                    @elseif ($consultation->status === 'Dibatalkan')
+                                        <span class="badge bg-danger me-1">Dibatalkan</span>
+                                        <form action="{{ route('teacher.kelas.request-consultation', $activeSubmission->id) }}"
+                                              method="POST"
+                                              class="d-inline">
+                                            @csrf
+                                            <input type="hidden" name="type" value="{{ $step['type'] }}">
+                                            <button type="submit" class="btn btn-warning btn-sm">
+                                                Ajukan Ulang
+                                            </button>
+                                        </form>
                                     @else
                                         <span class="badge bg-info text-dark">{{ $consultation->status }}</span>
                                     @endif
