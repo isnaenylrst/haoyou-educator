@@ -327,12 +327,10 @@ class JadwalController extends Controller
                 fn ($session) =>
                     (int) $session->class_schedule_id === (int) $schedule->id
                     && (
-                        $session->original_date?->toDateString()
-                            === $date->toDateString()
+                        $session->original_date?->toDateString()=== $date->toDateString()
                         || (
-                            $session->session_date->toDateString()
-                                === $date->toDateString()
-                            && $session->deviatesFromPattern()
+                            $session->kind !== 'Replacement'
+                            && $session->session_date->toDateString() === $date->toDateString()
                         )
                     )
             );

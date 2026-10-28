@@ -251,7 +251,7 @@ class InvoiceService
                 ->day(5);
         }
 
-        return [
+        $values = [
             'logo' => $this->logoTag(),
 
             'nomor_invoice' => e($payment->invoice_number),
@@ -329,6 +329,8 @@ class InvoiceService
                 )
                 : '',
         ];
+
+        return [$values, $hasInstallment, $unpaid];
     }
 
     /* ==========================================================
