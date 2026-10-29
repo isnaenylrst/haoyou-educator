@@ -69,7 +69,7 @@ class KelasController extends Controller
             ->orderBy('class_name')
             ->paginate(10)
             ->withQueryString();
-        
+
         // ---- Progres pertemuan dari jurnal mengajar (hanya sesi yang benar-benar berlangsung) ----
         $meetingProgress = TeachingJournal::query()
             ->whereIn('class_id', $classes->pluck('id'))
@@ -138,13 +138,18 @@ class KelasController extends Controller
         $privatePackages = PrivatePackage::orderBy('id')->get();
 
         // Nama ruangan tidak baku: ambil dari yang pernah dipakai sebagai saran (boleh diketik bebas)
-        $roomSuggestions = ClassSchedule::query()
+        $roomSuggestions = collect(['Kelas Kaca', 'Kelas Beijing', 'Kelas Feixiang', 'Kelas Atas'])
+        ->merge(
+        ClassSchedule::query()
             ->whereNotNull('room')
             ->where('room', '!=', '')
             ->where('room', '!=', 'Online')
             ->distinct()
-            ->orderBy('room')
-            ->pluck('room');
+            ->pluck('room')
+             )
+    ->unique()
+    ->sort()
+    ->values();
 
         $levels = ProgramLevel::query()
             ->leftJoin('program_categories', 'program_levels.category_id', '=', 'program_categories.id')
@@ -198,6 +203,8 @@ class KelasController extends Controller
                 'end_date'           => $data['end_date'],
                 'capacity'           => $data['capacity'],
                 'status'             => 'Open',
+                'zoom_link'     => $data['zoom_link'],
+                'zoom_passcode' => $data['zoom_passcode'],
             ])->save();
 
             $this->scheduleSvc->createSchedules($kelas, $data['schedules']);
@@ -234,6 +241,8 @@ class KelasController extends Controller
                 'end_date'      => $data['end_date'],
                 'capacity'      => $data['capacity'],
                 'status'        => $data['status'],
+                'zoom_link'     => $data['zoom_link'],
+                'zoom_passcode' => $data['zoom_passcode'],
             ])->save();
 
             if ($hasSessions) {
@@ -290,6 +299,8 @@ class KelasController extends Controller
             'end_date'      => ['nullable', 'date', 'after_or_equal:start_date'],
             'status'        => [$kelas ? 'required' : 'nullable', Rule::in(['Open', 'Running', 'Completed', 'Closed'])],
             'teacher_id'    => ['nullable', 'exists:teachers,id'],
+            'zoom_link'     => ['nullable', 'url', 'max:255', 'regex:/^https:\/\/([a-z0-9-]+\.)?zoom\.us\//i'],
+            'zoom_passcode' => ['nullable', 'string', 'max:50'],
 
             'program_package_id' => [Rule::requiredIf(! $isPrivate), 'nullable', 'exists:program_packages,id'],
             'private_package_id' => [Rule::requiredIf($isPrivate), 'nullable', 'exists:private_packages,id'],
@@ -318,6 +329,8 @@ class KelasController extends Controller
             'schedules.*.day'        => 'hari',
             'schedules.*.start_time' => 'jam mulai',
             'schedules.*.end_time'   => 'jam selesai',
+            'zoom_link.regex' => 'Link harus berupa link Zoom (https://...zoom.us/...).',
+            'zoom_passcode.max' => 'Kode akses Zoom tidak boleh lebih dari 50 karakter.',
         ]);
 
         $errors = [];
@@ -434,6 +447,14 @@ class KelasController extends Controller
         $data['teacher_id'] = $data['teacher_id'] ?? null;
         $data['end_date'] = $data['end_date'] ?? $this->scheduleSvc->resolveEndDate($package, $data['start_date'], $schedules);
         $data['status'] = $data['status'] ?? 'Open';
+
+        if ($data['delivery_mode'] === 'Offline') {
+        $data['zoom_link'] = null;
+        $data['zoom_passcode'] = null;
+    } else {
+        $data['zoom_link'] = $data['zoom_link'] ?? null;
+        $data['zoom_passcode'] = $data['zoom_passcode'] ?? null;
+    }
 
         return $data;
     }

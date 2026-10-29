@@ -75,4 +75,14 @@ class Teacher extends Model
     {
         return $this->hasMany(TeacherAvailability::class);
     }
+
+    public function classTasks()
+    {
+        return $this->hasMany(ClassTask::class);
+    }
+
+    public function consultations()
+    {
+        return $this->hasMany(Consultation::class);
+    }
 }

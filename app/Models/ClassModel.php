@@ -23,16 +23,32 @@ class ClassModel extends Model
         'end_date',
         'capacity',
         'status',
+        'teacher_response',
+        'teacher_response_note',
+        'teacher_responded_at',
     ];
 
     protected $casts = [
-        'start_date' => 'date',
-        'end_date'   => 'date',
-        'capacity'   => 'integer',
+        'start_date'           => 'date',
+        'end_date'             => 'date',
+        'capacity'             => 'integer',
+        'teacher_responded_at' => 'datetime',
     ];
 
     /** Status enrollment yang memakai kursi di kelas ini. */
     public const SEAT_STATUSES = ['Active', 'Waiting Class'];
+
+    protected static function booted()
+    {
+        // Ganti guru pada kelas yang sudah ada -> guru baru harus konfirmasi ulang.
+        static::updating(function (ClassModel $class) {
+            if ($class->isDirty('teacher_id') && !$class->isDirty('teacher_response')) {
+                $class->teacher_response = 'Pending';
+                $class->teacher_response_note = null;
+                $class->teacher_responded_at = null;
+            }
+        });
+    }
 
     /* ---------------------------------------------------------- */
     /*  Relasi                                                     */
@@ -83,6 +99,11 @@ class ClassModel extends Model
     public function allSchedules(): HasMany
     {
         return $this->hasMany(ClassSchedule::class, 'class_id');
+    }
+
+    public function materials()
+    {
+        return $this->hasMany(Material::class, 'class_id');
     }
 
     /* ---------------------------------------------------------- */

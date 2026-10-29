@@ -20,6 +20,7 @@ class TeacherMaterial extends Model
         'review_note',
         'approved_by',
         'approved_at',
+        'lp_file_path',
     ];
 
     protected $casts = [
@@ -39,5 +40,11 @@ class TeacherMaterial extends Model
     public function approver()
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    // Relasi yang hilang
+    public function consultations()
+    {
+        return $this->hasMany(Consultation::class);
     }
 }

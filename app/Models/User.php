@@ -2,8 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
@@ -21,74 +22,89 @@ class User extends Authenticatable
 
     protected $hidden = [
         'password',
+        'remember_token',
     ];
 
-public function level()
-{
-    return $this->belongsTo(
-        Level::class,
-        'level_id', // foreign key di tabel users
-        'id_level'  // primary key di tabel levels
-    );
-}
+    protected $casts = [
+        'password' => 'hashed',
+    ];
 
-    // public function teacher()
-    // {
-    //     return $this->hasOne(Wali::class, 'siswa_id');
-    // }
+    /*
+    |--------------------------------------------------------------------------
+    | RELASI LEVEL
+    |--------------------------------------------------------------------------
+    */
 
-    // public function student()
-    // {
-    //     return $this->status_akun === 'alumni';
-    // }
-
-    public function teacher()
+    public function level()
     {
-        return $this->hasOne(Teacher::class);
+        return $this->belongsTo(
+            Level::class,
+            'level_id',
+            'id_level'
+        );
     }
 
-    public function student()
+    /*
+    |--------------------------------------------------------------------------
+    | RELASI SISWA
+    |--------------------------------------------------------------------------
+    */
+
+    public function student(): HasOne
     {
-        return $this->hasOne(Student::class);
+        return $this->hasOne(Student::class, 'user_id', 'id');
     }
 
-    public function curriculum()
+    /*
+    |--------------------------------------------------------------------------
+    | RELASI GURU
+    |--------------------------------------------------------------------------
+    */
+
+    public function teacher(): HasOne
     {
-        return $this->hasOne(Curriculum::class);
+        return $this->hasOne(Teacher::class, 'user_id', 'id');
     }
 
-    public function uploadedMaterials()
+    /*
+    |--------------------------------------------------------------------------
+    | RELASI CURRICULUM
+    |--------------------------------------------------------------------------
+    */
+
+    public function curriculum(): HasOne
     {
-        return $this->hasMany(Material::class, 'uploaded_by');
+        return $this->hasOne(Curriculum::class, 'user_id', 'id');
     }
 
-    public function uploadedProgressReports()
+    /*
+    |--------------------------------------------------------------------------
+    | NAMA TAMPILAN
+    |--------------------------------------------------------------------------
+    */
+
+    public function getDisplayNameAttribute(): string
     {
-        return $this->hasMany(ProgressReport::class, 'uploaded_by');
+        return $this->student?->name
+            ?? $this->teacher?->name
+            ?? $this->username
+            ?? 'Siswa';
     }
 
-    public function uploadedTemplates()
-    {
-        return $this->hasMany(DocumentTemplate::class, 'uploaded_by');
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | HALAMAN UTAMA BERDASARKAN LEVEL
+    |--------------------------------------------------------------------------
+    */
 
-    public function uploadedDocuments()
+    public function homeRouteName(): ?string
     {
-        return $this->hasMany(Document::class, 'uploaded_by');
-    }
-
-    public function documents()
-    {
-        return $this->hasMany(Document::class);
-    }
-
-    public function approvedTeacherMaterials()
-    {
-        return $this->hasMany(TeacherMaterial::class, 'approved_by');
-    }
-
-    public function approvedTeacherLeaves()
-    {
-        return $this->hasMany(TeacherLeave::class, 'approved_by');
+        return match ($this->level?->nama_level) {
+            'Owner'      => 'owner.dashboard',
+            'Curriculum' => 'kurikulum.dashboard',
+            'Teacher'    => 'teacher.dashboard',
+            'Student'    => 'dashboard',
+            default      => null,
+        };
     }
 }

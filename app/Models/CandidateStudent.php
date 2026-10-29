@@ -23,6 +23,7 @@ class CandidateStudent extends Model
         'school',
         'source',
         'allergy',
+        'interested_program',
         'program_id',
         'private_package_id',
         'trial_status',
@@ -48,7 +49,7 @@ class CandidateStudent extends Model
     protected $appends = [
         'age',
     ];
-    
+
     public function getAgeAttribute()
     {
         if (!$this->birth_date) {
@@ -56,7 +57,7 @@ class CandidateStudent extends Model
         }
 
         return $this->birth_date->age;
-    }    
+    }
 
     public function availableSchedules()
     {
@@ -84,19 +85,23 @@ class CandidateStudent extends Model
         return $this->belongsTo(Program::class, 'program_id');
     }
 
-    // Baru: calon siswa bisa tertarik ke program privat, bukan cuma reguler
+    // Calon siswa bisa tertarik ke program privat
     public function privatePackage()
     {
         return $this->belongsTo(PrivatePackage::class, 'private_package_id');
     }
 
-    // Helper buat job ExpireRegistrationFees: cari calon siswa yang fee
-    // pendaftarannya sudah lewat 30 hari, masih Active, dan belum jadi siswa.
+    // Calon siswa yang memenuhi syarat untuk pengecekan
+    // masa berlaku registration fee
     public function scopeEligibleForFeeExpiry($query, int $days = 30)
     {
         return $query->where('registration_fee_status', 'Active')
             ->whereNotNull('registration_fee_paid_at')
-            ->where('registration_fee_paid_at', '<=', now()->subDays($days))
+            ->where(
+                'registration_fee_paid_at',
+                '<=',
+                now()->subDays($days)
+            )
             ->whereDoesntHave('student');
     }
 }

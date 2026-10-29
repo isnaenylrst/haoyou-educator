@@ -13,6 +13,15 @@ class ProgressReport extends Model
 
     public $timestamps = false;
 
+    public const SUBMITTED = 'Submitted';
+
+    public const FOLLOW_UPS = [
+        'Belum',
+        'Menunggu Jawaban',
+        'Lanjut',
+        'Tidak Lanjut',
+    ];
+
     protected $fillable = [
         'student_id',
         'teacher_id',
@@ -22,11 +31,40 @@ class ProgressReport extends Model
         'file_path',
         'status',
         'uploaded_by',
-        'uploaded_at',
+
+        // Nilai kompetensi
+        'listening_score',
+        'reading_score',
+        'writing_score',
+
+        // Publikasi dan follow-up
+        'published_at',
+        'follow_up_status',
+        'followed_up_at',
+        'follow_up_note',
+
+        // Konten dan review Kurikulum
+        'content',
+        'attendance_present',
+        'attendance_total',
+        'reviewed_by',
+        'reviewed_at',
+        'review_note',
+        'returned_at',
+        'submitted_at',
+        'extended_until',
     ];
 
     protected $casts = [
-        'uploaded_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'published_at' => 'datetime',
+        'followed_up_at' => 'datetime',
+        'content' => 'array',
+        'reviewed_at' => 'datetime',
+        'returned_at' => 'datetime',
+        'submitted_at' => 'datetime',
+        'extended_until' => 'date',
     ];
 
     public function student()
@@ -47,5 +85,47 @@ class ProgressReport extends Model
     public function uploader()
     {
         return $this->belongsTo(User::class, 'uploaded_by');
+    }
+
+    /** Sudah di-ACC Kurikulum (baru boleh tampil ke siswa). */
+    public function getIsApprovedAttribute(): bool
+    {
+        return $this->status === self::SUBMITTED
+            && $this->reviewed_at !== null;
+    }
+
+    /** Menunggu review Kurikulum. */
+    public function getIsPendingReviewAttribute(): bool
+    {
+        return $this->status === self::SUBMITTED
+            && $this->reviewed_at === null;
+    }
+
+    /** Dikembalikan Kurikulum dan belum dikirim ulang. */
+    public function getIsReturnedAttribute(): bool
+    {
+        return $this->status === 'Draft'
+            && $this->returned_at !== null;
+    }
+
+    /** Hanya report yang sudah di-ACC. */
+    public function scopeApproved($query)
+    {
+        return $query
+            ->where('status', self::SUBMITTED)
+            ->whereNotNull('reviewed_at');
+    }
+
+    /** Rata-rata nilai latihan dari semua kompetensi di report ini. */
+    public function getAverageScoreAttribute(): ?float
+    {
+        $scores = collect($this->content ?? [])
+            ->pluck('score')
+            ->filter(fn ($value) => $value !== null && $value !== '')
+            ->map(fn ($value) => (float) $value);
+
+        return $scores->isEmpty()
+            ? null
+            : round($scores->avg(), 1);
     }
 }

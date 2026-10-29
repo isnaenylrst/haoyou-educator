@@ -25,11 +25,35 @@ class TeachingJournal extends Model
         'solutions',
         'results',
         'notes',
+        'status',
+        'session_score',
+
+        // Baru: field dari Google Form "Jurnal Harian Laoshi"
+        'is_last_meeting',
+        'meeting_number',
+        'start_time',
+        'end_time',
+        'course_type',
+        'course_level',
+        'focus_materials',
+        'material_taught',
+        'student_names',
+        'filled_by',
+        'review_note',
+        'reviewed_by',
+        'reviewed_at',
     ];
 
     protected $casts = [
         'session_date' => 'date',
         'is_substitute' => 'boolean',
+        'session_score' => 'integer',
+
+        // Baru
+        'is_last_meeting' => 'boolean',
+        'meeting_number' => 'integer',
+        'focus_materials' => 'array',
+        'reviewed_at' => 'datetime',
     ];
 
     public function teacher()
@@ -39,7 +63,10 @@ class TeachingJournal extends Model
 
     public function class()
     {
-        return $this->belongsTo(ClassModel::class, 'class_id');
+        return $this->belongsTo(
+            ClassModel::class,
+            'class_id'
+        );
     }
 
     public function classSchedule()
@@ -55,7 +82,10 @@ class TeachingJournal extends Model
 
     public function material()
     {
-        return $this->belongsTo(Material::class);
+        return $this->belongsTo(
+            Material::class,
+            'material_id'
+        );
     }
 
     public function substituteTeacher()

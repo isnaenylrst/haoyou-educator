@@ -75,7 +75,7 @@ class SiswaController extends Controller
         $students = $query->latest('id')
             ->paginate(15)
             ->withQueryString();
-        
+
         $attendedMap = $this->attendedByStudentClass($students->pluck('id'));
         $heldMap     = $this->heldByClass(
             $students->map(fn ($s) => $s->activeEnrollment?->class_id)->filter()->unique()->values()
@@ -151,7 +151,7 @@ class SiswaController extends Controller
             ->selectRaw('class_id, COUNT(DISTINCT COALESCE(class_session_id, id)) AS held')
             ->groupBy('class_id')
             ->pluck('held', 'class_id');
-    }    
+    }
 
     public function backfillProgramPackages()
     {
