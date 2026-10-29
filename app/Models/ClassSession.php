@@ -180,7 +180,7 @@ class ClassSession extends Model
             // Ruang hanya dibandingkan untuk pertemuan di studio.
             // Home Visit tidak punya ruang.
             || (
-                $this->location_type === 'Studio'
+                $this->location_type === 'Haoyou'
                 && (string) $this->room !== (string) $p->room
             );
     }

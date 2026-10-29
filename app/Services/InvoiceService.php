@@ -105,6 +105,7 @@ class InvoiceService
             'enrollment.student.currentLevel.category',
             'enrollment.class.schedules',
             'enrollment.programPackage.program',
+            'enrollment.programPackage.level',
             'enrollment.privatePackage',
         ]);
 
@@ -239,7 +240,7 @@ class InvoiceService
         $unpaid = $remaining > 0;
         $hasInstallment = $unpaid || $previous > 0;
 
-        $levelName = $student?->currentLevel?->level_name;
+        $levelName = $this->installments->levelNameFor($enrollment);
 
         $paymentDate = $payment->payment_date;
 
@@ -251,7 +252,7 @@ class InvoiceService
                 ->day(5);
         }
 
-        return [
+        $values = [
             'logo' => $this->logoTag(),
 
             'nomor_invoice' => e($payment->invoice_number),
@@ -317,18 +318,17 @@ class InvoiceService
                 ? e($this->dateId($nextDueDate))
                 : '',
 
+            // Bagian kosong (mis. private tanpa level) dibuang supaya tidak ada titik ganda.
             'contoh_keterangan' => $unpaid
-                ? e(
-                    Str::lower(
-                        Str::slug((string) $student?->name, '')
-                    )
-                    . '.'
-                    . str_replace(' ', '', (string) $levelName)
-                    . '.'
-                    . $this->nextStage($payment->payment_stage)
-                )
+                ? e(implode('.', array_filter([
+                    Str::lower(Str::slug((string) $student?->name, '')),
+                    str_replace(' ', '', (string) $levelName),
+                    $this->nextStage($payment->payment_stage),
+                ], fn ($part) => $part !== '')))
                 : '',
         ];
+
+        return [$values, $hasInstallment, $unpaid];
     }
 
     /* ==========================================================

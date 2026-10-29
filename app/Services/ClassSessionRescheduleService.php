@@ -34,6 +34,13 @@ class ClassSessionRescheduleService
             $this->assertNoOpenLeave($session);
             $this->assertSlotFree($session, $slot, [$session->id]);
 
+            // Urutan pertemuan kelas tidak boleh terbalik (ke-3 sebelum ke-2, dst).
+            if ($session->kind === 'Regular' && $session->class_id) {
+                $this->assertOrderKept($session->class_id, [
+                    $session->id => ['date' => $slot['date'], 'start' => $slot['start']],
+                ]);
+            }
+
             // Di luar jam tersedia guru: boleh, tapi admin harus mencentang konfirmasi.
             if ($session->teacher_id
                 && empty($data['confirm_outside_availability'])
@@ -152,6 +159,14 @@ class ClassSessionRescheduleService
                 $prev   = $newDate;
             }
 
+            // Cek urutan seluruh pertemuan kelas, termasuk pertemuan setelahnya yang
+            // tidak ikut pindah (terkunci / pernah dipindah satu-satu).
+            $moved = [];
+            foreach ($plan as [$s, $date]) {
+                $moved[$s->id] = ['date' => $date, 'start' => $slot['start']];
+            }
+            $this->assertOrderKept($session->class_id, $moved);
+
             // 2) Pola mingguan: ubah di tempat kalau belum punya riwayat, kalau sudah tutup & buat versi baru
             $patternDate = ($session->original_date ?? $session->session_date)->toDateString();
 
@@ -196,6 +211,43 @@ class ClassSessionRescheduleService
     /* ---------------------------------------------------------- */
     /*  Helper                                                     */
     /* ---------------------------------------------------------- */
+
+    /**
+     * Pastikan urutan pertemuan Regular satu kelas (menurut session_number) tetap
+     * menaik setelah pemindahan. Hanya pasangan yang melibatkan pertemuan yang
+     * dipindah yang diperiksa, jadi data lama yang sudah tidak urut tidak ikut memblokir.
+     *
+     * @param array<int, array{date: string, start: string}> $moved  id pertemuan => slot barunya
+     */
+    private function assertOrderKept(int $classId, array $moved): void
+    {
+        $all = ClassSession::where('class_id', $classId)
+            ->where('kind', 'Regular')
+            ->where('status', '!=', 'Cancelled')
+            ->whereNotNull('session_number')
+            ->orderBy('session_number')
+            ->get();
+
+        $prev = null;
+
+        foreach ($all as $s) {
+            $isMoved = isset($moved[$s->id]);
+
+            $at = $isMoved
+                ? Carbon::parse($moved[$s->id]['date'] . ' ' . $moved[$s->id]['start'])
+                : Carbon::parse($s->session_date->toDateString() . ' ' . Carbon::parse($s->start_time)->format('H:i:s'));
+
+            if ($prev && ($isMoved || $prev['moved']) && $at->lt($prev['at'])) {
+                throw ValidationException::withMessages([
+                    'session_date' => "Urutan pertemuan jadi tidak valid: pertemuan ke-{$s->session_number} "
+                        . '(' . $at->format('d-m-Y H:i') . ") jatuh sebelum pertemuan ke-{$prev['no']} "
+                        . '(' . $prev['at']->format('d-m-Y H:i') . ').',
+                ]);
+            }
+
+            $prev = ['at' => $at, 'no' => $s->session_number, 'moved' => $isMoved];
+        }
+    }
 
     private function slotFrom(ClassSession $s, array $data): array
     {

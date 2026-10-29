@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ClassEnrollment;
 use App\Models\Payment;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -15,6 +16,9 @@ class PaymentInstallmentService
      * Selalu membuat baris Payment baru, tidak mengubah transaksi lama.
      * remaining_bill dihitung dari total tagihan dikurangi seluruh
      * pembayaran paket sebelumnya dan pembayaran saat ini.
+     *
+     * Berjalan dalam transaksi dengan lock pada baris enrollment, supaya dua
+     * pembayaran yang masuk bersamaan tidak sama-sama lolos cek sisa tagihan.
      */
     public function recordPayment(
         ClassEnrollment $enrollment,
@@ -24,60 +28,89 @@ class PaymentInstallmentService
         ?string $paymentDate = null,
         ?string $proofPath = null,
     ): Payment {
-        $totalBill = $this->totalBillFor($enrollment);
-
-        if (! $totalBill) {
+        if ($amount <= 0) {
             throw ValidationException::withMessages([
-                'enrollment_id' => 'Enrollment ini tidak punya paket (program/private) yang valid, tidak bisa hitung tagihan.',
+                'amount_paid' => 'Nominal bayar harus lebih dari 0.',
             ]);
         }
 
-        $date = $paymentDate ? Carbon::parse($paymentDate) : now();
-        $enrollmentDate = Carbon::parse($enrollment->enrollment_date);
+        return DB::transaction(function () use (
+            $enrollment,
+            $stage,
+            $amount,
+            $paymentMethod,
+            $paymentDate,
+            $proofPath,
+        ) {
+            // Kunci enrollment dulu sebelum membaca total pembayaran.
+            ClassEnrollment::query()
+                ->whereKey($enrollment->getKey())
+                ->lockForUpdate()
+                ->first(['id']);
 
-        if ($date->isFuture()) {
-            throw ValidationException::withMessages([
-                'payment_date' => 'Tanggal bayar tidak boleh di masa depan.',
+            $totalBill = $this->totalBillFor($enrollment);
+
+            if (! $totalBill) {
+                throw ValidationException::withMessages([
+                    'enrollment_id' => 'Enrollment ini tidak punya paket (program/private) yang valid, tidak bisa hitung tagihan.',
+                ]);
+            }
+
+            $date = $paymentDate ? Carbon::parse($paymentDate) : now();
+            $enrollmentDate = Carbon::parse($enrollment->enrollment_date);
+
+            if ($date->isFuture()) {
+                throw ValidationException::withMessages([
+                    'payment_date' => 'Tanggal bayar tidak boleh di masa depan.',
+                ]);
+            }
+
+            if ($date->lt($enrollmentDate)) {
+                throw ValidationException::withMessages([
+                    'payment_date' => 'Tanggal bayar tidak boleh sebelum tanggal enrollment (' . $enrollmentDate->toDateString() . ').',
+                ]);
+            }
+
+            // Total pembayaran paket sebelum transaksi baru.
+            $alreadyPaid = $this->totalPaid($enrollment);
+            $remaining = round($totalBill - $alreadyPaid - $amount, 2);
+
+            if ($remaining < 0) {
+                $sisaSaatIni = number_format($totalBill - $alreadyPaid, 0, ',', '.');
+
+                throw ValidationException::withMessages([
+                    'amount_paid' => "Jumlah bayar melebihi sisa tagihan (Rp{$sisaSaatIni}).",
+                ]);
+            }
+
+            if ($remaining > 0) {
+                if ($enrollment->payment_scheme === 'Lunas') {
+                    throw ValidationException::withMessages([
+                        'amount_paid' => 'Enrollment ini memakai skema Lunas, nominal bayar harus melunasi seluruh tagihan.',
+                    ]);
+                }
+
+                if (! $this->enrollmentAllowsInstallment($enrollment)) {
+                    throw ValidationException::withMessages([
+                        'amount_paid' => 'Program/paket ini wajib dibayar lunas, tidak bisa dicicil.',
+                    ]);
+                }
+            }
+
+            return Payment::create([
+                'enrollment_id' => $enrollment->id,
+                'invoice_number' => $this->generateInvoiceNumber(),
+                'payment_type' => Payment::TYPE_PACKAGE,
+                'payment_stage' => $stage,
+                'total_bill' => $totalBill,
+                'amount_paid' => $amount,
+                'remaining_bill' => $remaining,
+                'payment_method' => $paymentMethod,
+                'payment_date' => $date->toDateString(),
+                'payment_proof_path' => $proofPath,
+                'status' => $remaining <= 0 ? 'Paid' : 'Partial',
             ]);
-        }
-
-        if ($date->lt($enrollmentDate)) {
-            throw ValidationException::withMessages([
-                'payment_date' => 'Tanggal bayar tidak boleh sebelum tanggal enrollment (' . $enrollmentDate->toDateString() . ').',
-            ]);
-        }
-
-        // Total pembayaran paket sebelum transaksi baru.
-        $alreadyPaid = $this->totalPaid($enrollment);
-        $remaining = round($totalBill - $alreadyPaid - $amount, 2);
-
-        if ($remaining < 0) {
-            $sisaSaatIni = number_format($totalBill - $alreadyPaid, 0, ',', '.');
-
-            throw ValidationException::withMessages([
-                'amount_paid' => "Jumlah bayar melebihi sisa tagihan (Rp{$sisaSaatIni}).",
-            ]);
-        }
-
-        if ($remaining > 0 && ! $this->enrollmentAllowsInstallment($enrollment)) {
-            throw ValidationException::withMessages([
-                'amount_paid' => 'Program/paket ini wajib dibayar lunas, tidak bisa dicicil.',
-            ]);
-        }
-
-        return Payment::create([
-            'enrollment_id' => $enrollment->id,
-            'invoice_number' => $this->generateInvoiceNumber(),
-            'payment_type' => Payment::TYPE_PACKAGE,
-            'payment_stage' => $stage,
-            'total_bill' => $totalBill,
-            'amount_paid' => $amount,
-            'remaining_bill' => $remaining,
-            'payment_method' => $paymentMethod,
-            'payment_date' => $date->toDateString(),
-            'payment_proof_path' => $proofPath,
-            'status' => $remaining <= 0 ? 'Paid' : 'Partial',
-        ]);
+        });
     }
 
     /**
@@ -181,8 +214,19 @@ class PaymentInstallmentService
         return $this->allowsInstallment(
             (bool) $e->private_package_id,
             $e->programPackage?->program?->program_name,
-            $e->student?->currentLevel?->level_name,
+            $this->levelNameFor($e),
         );
+    }
+
+    /**
+     * Nama level menurut PAKET enrollment, bukan level siswa saat ini, supaya
+     * tidak ikut berubah ketika siswa dinaikkan level. Paket tanpa level
+     * (Daily Activity, private) jatuh ke level siswa.
+     */
+    public function levelNameFor(ClassEnrollment $e): ?string
+    {
+        return $e->programPackage?->level?->level_name
+            ?? $e->student?->currentLevel?->level_name;
     }
 
     /**

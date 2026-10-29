@@ -8,6 +8,7 @@ use App\Models\ClassSchedule;
 use App\Models\ClassSession;
 use App\Models\Payment;
 use Carbon\Carbon;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -184,7 +185,8 @@ class ClassSessionService
      * 2. Home Visit.
      *
      * Data pembayaran yang diterima:
-     * payment_date, payment_method, payment_proof_path, amount (opsional).
+     * payment_date, payment_method, payment_proof_path, amount (opsional,
+     * hanya untuk biaya kelas pengganti; Home Visit selalu memakai tarif default).
      */
     public function createReplacement(array $data): ClassSession
     {
@@ -310,7 +312,7 @@ class ClassSessionService
                     $enrollment,
                     Payment::TYPE_HOME_VISIT,
                     $session,
-                    $pay
+                    Arr::except($pay, 'amount')
                 );
             }
 

@@ -48,6 +48,13 @@ class ExtraFeeService
         ClassSession $session,
         array $pay,
     ): Payment {
+        // Biaya tambahan hanya untuk enrollment yang masih aktif.
+        if ($enrollment->status !== 'Active') {
+            throw ValidationException::withMessages([
+                'enrollment_id' => 'Biaya tambahan hanya dapat dicatat untuk enrollment berstatus Active.',
+            ]);
+        }
+
         // Validasi tipe biaya.
         if (! in_array($type, Payment::EXTRA_TYPES, true)) {
             throw ValidationException::withMessages([
