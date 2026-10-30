@@ -9,7 +9,7 @@
         /* Tinggi mengikuti isi, maksimal 90% layar, sisanya scroll di dalam */
         .modal {
             width: 100%;
-            max-width: 860px;          /* ukuran kecil: Edit & Assign Kelas */
+            max-width: 860px;          /* ukuran kecil: Assign Kelas */
             max-height: 90vh;
             display: flex;
             flex-direction: column;
@@ -17,7 +17,7 @@
         }
 
         .modal.modal-lg {
-            max-width: 1000px;          /* ukuran besar: Detail & Lanjut Program */
+            max-width: 1000px;          /* ukuran besar: Detail & Edit Siswa */
         }
 
         /* form membungkus head/body/foot, jadi ikut jadi kolom */
@@ -161,7 +161,6 @@
                     <th>Pertemuan</th>
                     <th>Status</th>
                     <th>Poin</th>
-                    {{-- <th>Tanggal Bergabung</th> --}}
                     <th width="120" style="text-align: center;">Aksi</th>
                 </tr>
             </thead>
@@ -176,19 +175,19 @@
                         $kelasAktifLabel = $isPrivate
                             ? ($activeEnrollment->privatePackage->package_name ?? 'Private')
                             : ($activeEnrollment?->class->class_name ?? ($isWaitingClass ? ' ' : '-'));
-                        
+
                         $programLabel = $isPrivate
                             ? 'Private'
                             : ($activeEnrollment?->class?->programPackage?->program?->program_name
                                 ?? $activeEnrollment?->programPackage?->program?->program_name
                                 ?? '-');
 
-                            $programBadgeClass = match ($programLabel) {
-                                'HSK' => 'badge-warning',
-                                'Daily Activity' => 'badge-cold',
-                                'Private' => 'badge-completed',
-                                default => '',
-                            };
+                        $programBadgeClass = match ($programLabel) {
+                            'HSK' => 'badge-warning',
+                            'Daily Activity' => 'badge-cold',
+                            'Private' => 'badge-completed',
+                            default => '',
+                        };
                     @endphp
                     <tr>
                         <td>
@@ -202,7 +201,7 @@
                                         @if ($isPrivate)
                                             Private
                                         @elseif ($student->currentLevel)
-                                                    {{ $student->currentLevel->category?->category_name ? $student->currentLevel->category->category_name . ' - ' : '' }}{{ $student->currentLevel->level_name }}
+                                            {{ $student->currentLevel->category?->category_name ? $student->currentLevel->category->category_name . ' - ' : '' }}{{ $student->currentLevel->level_name }}
                                         @else
                                             -
                                         @endif
@@ -249,12 +248,10 @@
                                 @if ($totalMeetings > 0)
                                     <div class="meet-bar"><span style="width: {{ $pct }}%"></span></div>
                                 @endif
-
-                                {{-- <div class="cand-sub">dari {{ $held }} pertemuan berjalan</div> --}}
                             @else
                                 <span class="cand-sub">-</span>
                             @endif
-                        </td>                        
+                        </td>
 
                         <td>
                             @php
@@ -279,18 +276,12 @@
 
                         <td>{{ $student->points }}</td>
 
-                        {{-- <td>
-                            {{ $student->join_date ? \Carbon\Carbon::parse($student->join_date)->format('d M Y') : '-' }}
-                        </td> --}}
-
                         {{-- Action --}}
                         <td>
                             <div class="row-actions">
-                                <button type="button" class="icon-btn" title="Edit" onclick="openEditModal({{ $student->id }})">
+                                <button type="button" class="icon-btn" title="Detail & Edit"
+                                        onclick="openStudentModal({{ $student->id }})">
                                     <i class="fa-regular fa-pen-to-square"></i>
-                                </button>
-                                <button type="button" class="icon-btn" title="Detail" onclick="openDetailModal({{ $student->id }})">
-                                    <i class="fa-regular fa-eye"></i>
                                 </button>
 
                                 @if ($isWaitingClass)
@@ -300,8 +291,8 @@
                                     </button>
                                 @else
                                     <a class="icon-btn wa"
-                                    title="{{ ($student->has_outstanding ?? false) ? 'Lanjutkan Pembayaran' : 'Lanjut Program Berikutnya' }}"
-                                    href="{{ route('admin.siswa.continue.program', $student) }}">
+                                       title="{{ ($student->has_outstanding ?? false) ? 'Lanjutkan Pembayaran' : 'Lanjut Program Berikutnya' }}"
+                                       href="{{ route('admin.siswa.continue.program', $student) }}">
                                         <i class="fa-solid fa-forward"></i>
                                     </a>
                                 @endif
@@ -310,7 +301,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="8" style="text-align:center;padding:50px;color:#888;">
+                        <td colspan="7" style="text-align:center;padding:50px;color:#888;">
                             Belum ada data siswa.
                         </td>
                     </tr>
@@ -376,71 +367,141 @@
         </div>
     </div>
 
-    {{-- ========================= MODAL EDIT ========================= --}}
-    <div class="modal-overlay" id="editModalOverlay">
-        <div class="modal">
-            <form id="editForm" method="POST">
+    {{-- ========================= MODAL DETAIL & EDIT ========================= --}}
+    <div class="modal-overlay" id="studentModalOverlay">
+        <div class="modal modal-lg">
+            <form id="studentForm" method="POST">
                 @csrf
                 @method('PUT')
 
                 <div class="modal-head">
                     <div>
-                        <div class="modal-title">Edit Siswa</div>
-                        <div class="modal-sub">Perbarui data siswa ini.</div>
+                        <div class="modal-title">Detail & Edit Siswa</div>
+                        <div class="modal-sub" id="student_modal_sub">-</div>
                     </div>
-                    <button
-                        type="button"
-                        class="modal-close"
-                        onclick="closeEditModal()"
-                        aria-label="Tutup">
+                    <button type="button" class="modal-close" onclick="closeStudentModal()" aria-label="Tutup">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
 
-                <div class="modal-body" id="editModalBody">
+                <div class="modal-body" id="studentModalBody">
 
+                    {{-- ===== Bisa diedit ===== --}}
                     <div class="form-section">
                         <div class="form-section-title"><i class="fa-solid fa-user"></i> Data Siswa</div>
                         <div class="form-grid">
                             <div class="form-field full">
                                 <label>Nama Lengkap *</label>
-                                <input type="text" name="name" id="edit_name" required>
+                                <input type="text" name="name" id="student_name" required>
                             </div>
-                            <div class="form-field">
-                                <label>Tanggal Bergabung</label>
-                                <input type="date" id="edit_join_date" disabled>
-                                <small>Otomatis tercatat dari tanggal pembayaran pertama pada program yang sedang diikuti.</small>
-                            </div>
-                            <div class="form-field">
-                                <label>Poin</label>
-                                <input type="number" name="points" id="edit_points" min="0" value="0">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-section">
-                        <div class="form-section-title"><i class="fa-solid fa-user-check"></i> Status</div>
-                        <div class="form-grid">
                             <div class="form-field">
                                 <label>Status Siswa *</label>
-                                <select name="status" id="edit_status" required>
+                                <select name="status" id="student_status" required>
                                     <option value="Active">Aktif</option>
                                     <option value="Inactive">Cuti</option>
                                     <option value="Graduated">Lulus</option>
                                 </select>
                             </div>
+                            <div class="form-field">
+                                <label>Poin</label>
+                                <input type="number" name="points" id="student_points" min="0" value="0">
+                            </div>
+                            <div class="form-field">
+                                <label>Tanggal Bergabung</label>
+                                <input type="date" id="student_join_date" disabled>
+                                <small>Otomatis tercatat dari tanggal pembayaran pertama pada program yang sedang diikuti.</small>
+                            </div>
+                            <div class="form-field">
+                                <label>No. HP</label>
+                                <div id="student_phone">-</div>
+                            </div>
+                            <div class="form-field">
+                                <label>Usia</label>
+                                <div id="student_age">-</div>
+                            </div>
                         </div>
+                    </div>
+
+                    {{-- ===== Hanya lihat ===== --}}
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-calendar-week"></i> Jadwal Siswa</div>
+                        <table class="table-mini">
+                            <thead>
+                                <tr>
+                                    <th>Hari</th>
+                                    <th>Jam Mulai</th>
+                                    <th>Jam Selesai</th>
+                                </tr>
+                            </thead>
+                            <tbody id="student_schedules">
+                                <tr><td colspan="3">-</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-graduation-cap"></i> Program yang Diikuti</div>
+                        <table class="table-mini">
+                            <thead>
+                                <tr>
+                                    <th>Program</th>
+                                    <th>Kelas</th>
+                                    <th>Tipe</th>
+                                    <th>Status</th>
+                                    <th>Tanggal Daftar</th>
+                                    <th>Kehadiran</th>
+                                </tr>
+                            </thead>
+                            <tbody id="student_programs">
+                                <tr><td colspan="6">-</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-chart-line"></i> Progress Report</div>
+                        <table class="table-mini">
+                            <thead>
+                                <tr>
+                                    <th>Tipe</th>
+                                    <th>Periode</th>
+                                    <th>Status</th>
+                                    <th>Tanggal Upload</th>
+                                </tr>
+                            </thead>
+                            <tbody id="student_progress_reports">
+                                <tr><td colspan="4">-</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-money-bill-wave"></i> Status Pembayaran</div>
+                        <table class="table-mini">
+                            <thead>
+                                <tr>
+                                    <th>Invoice</th>
+                                    <th>Program</th>
+                                    <th>Total Tagihan</th>
+                                    <th>Dibayar</th>
+                                    <th>Sisa</th>
+                                    <th>Status</th>
+                                    <th>Tanggal</th>
+                                    <th>Dokumen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="student_payments">
+                                <tr><td colspan="8">-</td></tr>
+                            </tbody>
+                        </table>
                     </div>
 
                 </div>
 
                 <div class="modal-foot">
                     <div class="modal-foot-right">
-                        <button type="button" class="btn btn-secondary" onclick="closeEditModal()">
-                            Batal
-                        </button>
-
-                        <button type="submit" class="btn btn-primary">
+                        <button type="button" class="btn btn-secondary" onclick="closeStudentModal()">Tutup</button>
+                        <button type="submit" class="btn btn-primary" id="studentSaveBtn" disabled>
                             <i class="fa-solid fa-check"></i>
                             Simpan Perubahan
                         </button>
@@ -449,212 +510,6 @@
             </form>
         </div>
     </div>
-
-    {{-- ========================= MODAL DETAIL ========================= --}}
-    <div class="modal-overlay" id="detailModalOverlay">
-        <div class="modal modal-lg">
-            <div class="modal-head">
-                <div>
-                    <div class="modal-title">Detail Siswa</div>
-                    <div class="modal-sub" id="detail_name">-</div>
-                </div>
-                <button type="button" class="modal-close" onclick="closeDetailModal()" aria-label="Tutup">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <div class="modal-body" id="detailModalBody">
-
-                <div class="form-section">
-                    <div class="form-section-title"><i class="fa-solid fa-user"></i> Info Umum</div>
-                    <div class="form-grid">
-                        <div class="form-field">
-                            <label>No. HP</label>
-                            <div id="detail_phone">-</div>
-                        </div>
-                        <div class="form-field">
-                            <label>Usia</label>
-                            <div id="detail_age">-</div>
-                        </div>
-                        <div class="form-field">
-                            <label>Status</label>
-                            <div id="detail_status">-</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-section">
-                    <div class="form-section-title"><i class="fa-solid fa-calendar-week"></i> Jadwal Siswa</div>
-                    <table class="table-mini">
-                        <thead>
-                            <tr>
-                                <th>Hari</th>
-                                <th>Jam Mulai</th>
-                                <th>Jam Selesai</th>
-                            </tr>
-                        </thead>
-                        <tbody id="detail_schedules">
-                            <tr><td colspan="3">-</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="form-section">
-                    <div class="form-section-title"><i class="fa-solid fa-graduation-cap"></i> Program yang Diikuti</div>
-                    <table class="table-mini">
-                        <thead>
-                            <tr>
-                                <th>Program</th>
-                                <th>Kelas</th>
-                                <th>Tipe</th>
-                                <th>Status</th>
-                                <th>Tanggal Daftar</th>
-                                <th>Kehadiran</th>
-                            </tr>
-                        </thead>
-                        <tbody id="detail_programs">
-                            <tr><td colspan="6">-</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="form-section">
-                    <div class="form-section-title"><i class="fa-solid fa-chart-line"></i> Progress Report</div>
-                    <table class="table-mini">
-                        <thead>
-                            <tr>
-                                <th>Tipe</th>
-                                <th>Periode</th>
-                                <th>Status</th>
-                                <th>Tanggal Upload</th>
-                            </tr>
-                        </thead>
-                        <tbody id="detail_progress_reports">
-                            <tr><td colspan="4">-</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="form-section">
-                    <div class="form-section-title"><i class="fa-solid fa-money-bill-wave"></i> Status Pembayaran</div>
-                    <table class="table-mini">
-                        <thead>
-                            <tr>
-                                <th>Invoice</th>
-                                <th>Program</th>
-                                <th>Total Tagihan</th>
-                                <th>Dibayar</th>
-                                <th>Sisa</th>
-                                <th>Status</th>
-                                <th>Tanggal</th>
-                                <th>Dokumen</th>
-                            </tr>
-                        </thead>
-                        <tbody id="detail_payments">
-                            <tr><td colspan="8">-</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-
-            </div>
-
-            <div class="modal-foot">
-                <div class="modal-foot-right">
-                    <button type="button" class="btn btn-secondary" onclick="closeDetailModal()">Tutup</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {{-- ========================= MODAL LANJUT PROGRAM BERIKUTNYA ========================= --}}
-    {{-- <div class="modal-overlay" id="continueModalOverlay">
-        <div class="modal modal-lg">
-            <form id="continueForm" method="POST">
-                @csrf
-
-                <div class="modal-head">
-                    <div>
-                        <div class="modal-title">Lanjut Program Berikutnya</div>
-                        <div class="modal-sub" id="continue_current_info">-</div>
-                    </div>
-                    <button type="button" class="modal-close" onclick="closeContinueModal()" aria-label="Tutup">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
-                </div>
-
-                @if ($errors->any() && session('continue_student_id'))
-                    <div class="alert-error">
-                        <ul>
-                            @foreach ($errors->all() as $error)
-                                <li>{{ $error }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
-                @endif
-
-                <div class="modal-body" id="continueModalBody">
-
-                    <div class="form-section">
-                        <div id="continue_recommendation_banner" class="recommendation-banner" style="display: none;"></div>
-                    </div>
-
-                    <div class="form-section">
-                        <div class="form-section-title"><i class="fa-solid fa-chalkboard"></i> Program / Kelas Berikutnya</div>
-
-                        <div class="form-field full">
-                            <label>Tipe Program *</label>
-                            <div class="package-type-toggle">
-                                <label class="radio-pill">
-                                    <input type="radio" name="package_type" value="program" id="continue_type_program" checked onchange="onContinuePackageTypeChange()">
-                                    <span>Program Reguler</span>
-                                </label>
-                                <label class="radio-pill">
-                                    <input type="radio" name="package_type" value="private" id="continue_type_private" onchange="onContinuePackageTypeChange()">
-                                    <span>Private</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="form-grid" id="continue-program-block">
-                            <div class="form-field full">
-                                <label>Pilih Kelas *</label>
-                                <select name="class_id" id="continue_class_id" onchange="onContinueClassChange()">
-                                    <option value="">- Pilih Kelas -</option>
-                                </select>
-                            </div>
-                            <input type="hidden" name="program_package_id" id="continue_program_package_id">
-                        </div>
-
-                        <div class="form-grid" id="continue-private-block" style="display: none;">
-                            <div class="form-field full">
-                                <label>Private Package *</label>
-                                <select name="private_package_id" id="continue_private_package_id" onchange="onContinuePrivateChange()">
-                                    <option value="">- Pilih Package -</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="form-field full">
-                            <label>Harga Paket</label>
-                            <div id="continue_price_display">-</div>
-                            <input type="hidden" id="continue_price_raw" value="0">
-                        </div>
-                    </div>
-
-                </div>
-
-                <div class="modal-foot">
-                    <div class="modal-foot-right">
-                        <button type="button" class="btn btn-secondary" onclick="closeContinueModal()">Batal</button>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fa-solid fa-arrow-right"></i>
-                            Lanjut ke Pembayaran
-                        </button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div> --}}
 
     {{-- ========================= MODAL ASSIGN KELAS ========================= --}}
     <div class="modal-overlay" id="assignClassModalOverlay">
@@ -705,12 +560,15 @@
                 </div>
             </form>
         </div>
-    </div>    
+    </div>
 
 @endsection
 
 @push('scripts')
     <script>
+        /* ============================================================
+        PENCARIAN (auto-submit)
+        ============================================================ */
         (function () {
             const searchInput = document.getElementById('searchInput');
             const filterForm = document.getElementById('filterForm');
@@ -733,53 +591,7 @@
         })();
 
         /* ============================================================
-        MODAL: EDIT SISWA
-        ============================================================ */
-        function setSelectValue(id, value) {
-            const el = document.getElementById(id);
-            el.value = value ?? '';
-
-            if (value && el.value !== value) {
-                console.warn(`[Edit Siswa] Nilai "${value}" untuk #${id} tidak ada di pilihan dropdown.`);
-            }
-        }
-
-        function openEditModal(id) {
-            const overlay = document.getElementById('editModalOverlay');
-            const form = document.getElementById('editForm');
-
-            overlay.classList.add('open');
-            form.action = `/admin/siswa/${id}`;
-
-            fetch(`/admin/siswa/${id}/edit`, {
-                headers: { 'Accept': 'application/json' }
-            })
-            .then(response => {
-                if (!response.ok) throw new Error('Gagal memuat data');
-                return response.json();
-            })
-            .then(data => {
-                document.getElementById('edit_name').value = data.name ?? '';
-                document.getElementById('edit_join_date').value = data.join_date ?? '';
-                document.getElementById('edit_points').value = data.points ?? 0;
-                setSelectValue('edit_status', data.status ?? 'Active');
-            })
-            .catch(() => {
-                alert('Gagal memuat data siswa untuk diedit.');
-                closeEditModal();
-            });
-        }
-
-        function closeEditModal() {
-            document.getElementById('editModalOverlay').classList.remove('open');
-        }
-
-        document.getElementById('editModalOverlay').addEventListener('click', function (e) {
-            if (e.target === this) closeEditModal();
-        });
-
-        /* ============================================================
-        MODAL: DETAIL SISWA
+        HELPER
         ============================================================ */
         function renderRows(tbodyId, items, emptyColspan, rowBuilder) {
             const tbody = document.getElementById(tbodyId);
@@ -798,17 +610,7 @@
         }
 
         function formatRupiah(value) {
-            const number = Number(value ?? 0);
-            return 'Rp ' + number.toLocaleString('id-ID');
-        }
-
-        function statusLabel(status) {
-            const labels = {
-                'Active': 'Aktif',
-                'Inactive': 'Cuti',
-                'Graduated': 'Lulus',
-            };
-            return labels[status] ?? (status ?? '-');
+            return 'Rp ' + Number(value ?? 0).toLocaleString('id-ID');
         }
 
         function enrollmentStatusLabel(status) {
@@ -820,8 +622,38 @@
             return labels[status] ?? (status ?? '-');
         }
 
-        function openDetailModal(id) {
-            const overlay = document.getElementById('detailModalOverlay');
+        /* ============================================================
+        MODAL: DETAIL & EDIT SISWA
+        ============================================================ */
+        function resetStudentModal() {
+            document.getElementById('student_modal_sub').textContent = 'Memuat...';
+            document.getElementById('student_name').value = '';
+            document.getElementById('student_points').value = 0;
+            document.getElementById('student_join_date').value = '';
+            document.getElementById('student_status').value = 'Active';
+            document.getElementById('student_phone').textContent = '-';
+            document.getElementById('student_age').textContent = '-';
+
+            [
+                ['student_schedules', 3],
+                ['student_programs', 6],
+                ['student_progress_reports', 4],
+                ['student_payments', 8],
+            ].forEach(([id, cols]) => {
+                document.getElementById(id).innerHTML = `<tr><td colspan="${cols}">-</td></tr>`;
+            });
+
+            document.getElementById('studentModalBody').scrollTop = 0;
+        }
+
+        function openStudentModal(id) {
+            const overlay = document.getElementById('studentModalOverlay');
+            const form = document.getElementById('studentForm');
+            const saveBtn = document.getElementById('studentSaveBtn');
+
+            form.action = `/admin/siswa/${id}`;
+            saveBtn.disabled = true; // jangan bisa simpan sebelum data selesai dimuat
+            resetStudentModal();
             overlay.classList.add('open');
 
             fetch(`/admin/siswa/${id}`, {
@@ -832,18 +664,24 @@
                 return response.json();
             })
             .then(data => {
-                document.getElementById('detail_name').textContent = data.name ?? '-';
-                document.getElementById('detail_phone').textContent = data.phone ?? '-';
-                document.getElementById('detail_age').textContent = data.age ? `${data.age} Tahun` : '-';
-                document.getElementById('detail_status').textContent = statusLabel(data.status);
+                // --- bagian edit ---
+                document.getElementById('student_modal_sub').textContent = data.name ?? '-';
+                document.getElementById('student_name').value = data.name ?? '';
+                document.getElementById('student_points').value = data.points ?? 0;
+                document.getElementById('student_join_date').value = data.join_date ?? '';
+                document.getElementById('student_status').value = data.status ?? 'Active';
 
-                renderRows('detail_schedules', data.schedules, 3, s => `
+                // --- bagian info ---
+                document.getElementById('student_phone').textContent = data.phone ?? '-';
+                document.getElementById('student_age').textContent = data.age ? `${data.age} Tahun` : '-';
+
+                renderRows('student_schedules', data.schedules, 3, s => `
                     <td>${s.day ?? '-'}</td>
                     <td>${s.start_time ?? '-'}</td>
                     <td>${s.end_time ?? '-'}</td>
                 `);
 
-                renderRows('detail_programs', data.programs, 6, p => `
+                renderRows('student_programs', data.programs, 6, p => `
                     <td>${p.program_name ?? '-'}</td>
                     <td>${p.class_name ?? '-'}</td>
                     <td>${p.course_type ?? '-'}</td>
@@ -854,16 +692,23 @@
                         : p.attended + (p.total_meetings ? '/' + p.total_meetings : '') + ' pertemuan'}</td>
                 `);
 
-                renderRows('detail_progress_reports', data.progress_reports, 4, r => `
+                renderRows('student_progress_reports', data.progress_reports, 4, r => `
                     <td>${r.report_type ?? '-'}</td>
                     <td>${r.report_period ?? '-'}</td>
                     <td>${r.status ?? '-'}</td>
                     <td>${r.uploaded_at ?? '-'}</td>
                 `);
-
-                renderRows('detail_payments', data.payments, 8, p => `
+                
+                renderRows('student_payments', data.payments, 8, p => `
                     <td>${p.invoice_number ?? '-'}</td>
-                    <td>${p.program_name ?? '-'}</td>
+                    <td>
+                        ${p.program_name ?? '-'}
+                        <div style="margin-top:4px;">
+                            <span class="badge ${p.payment_type === 'package' ? 'bg-primary' : 'bg-info'}">
+                                ${p.payment_type === 'package' ? 'Paket' : 'Biaya Tambahan'}
+                            </span>
+                        </div>
+                    </td>
                     <td>${formatRupiah(p.total_bill)}</td>
                     <td>${formatRupiah(p.amount_paid)}</td>
                     <td>${formatRupiah(p.remaining_bill)}</td>
@@ -884,19 +729,22 @@
                         </div>
                     </td>
                 `);
+
+
+                saveBtn.disabled = false;
             })
             .catch(() => {
-                alert('Gagal memuat detail siswa.');
-                closeDetailModal();
+                alert('Gagal memuat data siswa.');
+                closeStudentModal();
             });
         }
 
-        function closeDetailModal() {
-            document.getElementById('detailModalOverlay').classList.remove('open');
+        function closeStudentModal() {
+            document.getElementById('studentModalOverlay').classList.remove('open');
         }
 
-        document.getElementById('detailModalOverlay').addEventListener('click', function (e) {
-            if (e.target === this) closeDetailModal();
+        document.getElementById('studentModalOverlay').addEventListener('click', function (e) {
+            if (e.target === this) closeStudentModal();
         });
 
         /* ============================================================
@@ -966,8 +814,7 @@
         document.addEventListener('keydown', function (e) {
             if (e.key !== 'Escape') return;
 
-            closeEditModal();
-            closeDetailModal();
+            closeStudentModal();
             closeAssignClassModal();
         });
     </script>

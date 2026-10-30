@@ -232,6 +232,9 @@ class SiswaController extends Controller
             'enrollments.privatePackage',
             'activeEnrollment.class.schedules',
             'progressReports',
+
+            // Riwayat pembayaran siswa: semua jenis pembayaran
+            'payments.session',
             'payments.enrollment.class.programPackage.program',
             'payments.enrollment.programPackage.program',
             'payments.enrollment.privatePackage',
@@ -246,6 +249,8 @@ class SiswaController extends Controller
             'phone' => $siswa->user->phone ?? $siswa->candidateStudent->phone ?? '-',
             'age' => $siswa->age,
             'status' => $siswa->status,
+            'points' => $siswa->points,
+            'join_date' => optional($siswa->join_date)->format('Y-m-d'),
 
             'schedules' => $siswa->activeEnrollment?->class?->schedules->map(fn ($s) => [
                 'day' => $s->day,
@@ -292,24 +297,35 @@ class SiswaController extends Controller
             ]),
 
             'payments' => $siswa->payments->map(function ($p) {
-                if ($p->enrollment->private_package_id) {
-                    $programName = $p->enrollment->privatePackage->package_name ?? '-';
+                $enrollment = $p->enrollment;
+
+                if ($enrollment?->private_package_id) {
+                    $programName = $enrollment->privatePackage->package_name ?? '-';
+                } elseif ($enrollment) {
+                    $programPackage = $enrollment->programPackage
+                        ?? $enrollment->class?->programPackage;
+
+                    $programName = $programPackage?->program?->program_name ?? '-';
                 } else {
-                    $programPackage = $p->enrollment->programPackage ?? $p->enrollment->class->programPackage ?? null;
-                    $programName = $programPackage->program->program_name ?? '-';
+                    $programName = '-';
                 }
 
                 return [
                     'invoice_number' => $p->invoice_number,
+                    'payment_type' => $p->payment_type,
                     'program_name' => $programName,
+
                     'total_bill' => $p->total_bill,
                     'amount_paid' => $p->amount_paid,
                     'remaining_bill' => $p->remaining_bill,
                     'status' => $p->status,
+
                     'payment_date' => optional($p->payment_date)->format('d M Y'),
+
                     'proof_url' => $p->payment_proof_path
                         ? Storage::url($p->payment_proof_path)
                         : null,
+
                     'invoice_url' => $p->invoice_file_path
                         ? Storage::url($p->invoice_file_path)
                         : route('admin.pembayaran.invoice', $p->id),
@@ -324,7 +340,7 @@ class SiswaController extends Controller
         $hasAttendance = $siswa->attendances()->exists();
         $hasProgressReports = $siswa->progressReports()->exists();
         $hasPayments = $siswa->enrollments()
-            ->whereHas('payments')
+            ->whereHas('packagePayments')
             ->exists();
 
         if ($hasAttendance || $hasProgressReports || $hasPayments) {
@@ -712,7 +728,7 @@ class SiswaController extends Controller
     // Tahap otomatis: bayar penuh = Pelunasan, bayar sebagian = termin berikutnya yang belum terpakai
     private function nextStage(ClassEnrollment $enrollment, float $amount, float $remaining): string
     {
-        $used = $enrollment->payments()->pluck('payment_stage')->all();
+        $used = $enrollment->packagePayments()->pluck('payment_stage')->all();
 
         if (in_array('Pelunasan', $used, true)) {
             throw ValidationException::withMessages([

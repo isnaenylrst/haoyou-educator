@@ -168,6 +168,9 @@
         ['label' => 'Pengajuan', 'items' => [
             ['Cuti / Ganti Kelas', 'fa-plane-departure', '/guru/cuti', 'guru/cuti*'],
         ]],
+        ['label' => 'Komunikasi', 'items' => [
+            ['Surat', 'fa-envelope', '/guru/surat', 'guru/surat*'],
+        ]],
     ];
 
     $authUser  = auth()->user();

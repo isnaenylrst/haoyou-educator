@@ -55,11 +55,25 @@ class Student extends Model
         return $this->hasManyThrough(
             Payment::class,
             ClassEnrollment::class,
-            'student_id',    // FK di class_enrollments ke students
-            'enrollment_id', // FK di payments ke class_enrollments
+            'student_id',
+            'enrollment_id',
             'id',
             'id'
         );
+    }
+
+    public function replacementSessions()
+    {
+        return $this->hasManyThrough(
+            ClassSession::class,
+            ClassEnrollment::class,
+            'student_id',
+            'class_enrollment_id',
+            'id',
+            'id'
+        )
+            ->where('kind', 'Replacement')
+            ->withTrashedParents();
     }
 
     public function attendances()

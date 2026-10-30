@@ -10,36 +10,39 @@ use App\Models\ProgressReport;
 use App\Models\TeacherLeave;
 use App\Models\TeacherMaterial;
 use App\Models\TeachingJournal;
-use Illuminate\Http\Request;
 use App\Services\ProgressReportService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class ReviewPengajuanController extends Controller
 {
-    public function index()
+    private const PER_PAGE = 10;
+    private const TABS     = ['material', 'jurnal', 'report', 'cuti', 'sertifikat'];
+
+    private const DAYS = [
+        'Sunday' => 'Minggu', 'Monday' => 'Senin', 'Tuesday' => 'Selasa',
+        'Wednesday' => 'Rabu', 'Thursday' => 'Kamis', 'Friday' => 'Jumat',
+        'Saturday' => 'Sabtu',
+    ];
+
+    // ------------------------------------------------------------------ HALAMAN
+
+    public function index(Request $request)
     {
-        $today = Carbon::now();
+        $today     = Carbon::today();
+        $todayName = self::DAYS[$today->format('l')];
 
-        $todayName = [
-            'Sunday' => 'Minggu', 'Monday' => 'Senin', 'Tuesday' => 'Selasa',
-            'Wednesday' => 'Rabu', 'Thursday' => 'Kamis', 'Friday' => 'Jumat',
-            'Saturday' => 'Sabtu',
-        ][$today->format('l')];
-
-        /*
-        |--------------------------------------------------------------------------
-        | CARD SESI - JURNAL & ABSENSI HARI INI
-        |--------------------------------------------------------------------------
-        */
-
+        // CARD SESI HARI INI (jurnal dicocokkan lewat tanggal sesi, bukan tanggal dibuat)
         $todaySchedules = ClassSchedule::with([
                 'class.teacher',
                 'class.programPackage.program',
                 'teachingJournals' => function ($q) use ($today) {
-                    $q->whereDate('created_at', $today->toDateString())
+                    $q->whereDate('session_date', $today->toDateString())
                         ->with(['attendances.student', 'material']);
                 },
             ])
@@ -49,8 +52,8 @@ class ReviewPengajuanController extends Controller
             ->get();
 
         $totalSessionToday = $todaySchedules->count();
-        $filledToday = $todaySchedules->filter(fn ($s) => $s->teachingJournals->isNotEmpty())->count();
-        $unfilledToday = $totalSessionToday - $filledToday;
+        $filledToday       = $todaySchedules->filter(fn ($s) => $s->teachingJournals->isNotEmpty())->count();
+        $unfilledToday     = $totalSessionToday - $filledToday;
 
         $teacherNamesToday = $todaySchedules
             ->pluck('class.teacher.name')
@@ -58,144 +61,179 @@ class ReviewPengajuanController extends Controller
             ->unique()
             ->values();
 
-        /*
-        |--------------------------------------------------------------------------
-        | REVIEW DOKUMEN PER KATEGORI
-        |--------------------------------------------------------------------------
-        | Catatan: di database ini, LP & PPT digabung dalam 1 tabel
-        | (teacher_materials) - tidak ada kolom LP terpisah. Jadi tabnya
-        | digabung jadi "LP & PPT".
-        |--------------------------------------------------------------------------
-        */
+        // REVIEW DOKUMEN (antrian terlama lebih dulu, dipecah per halaman)
+        $page = fn ($query, string $name, string $tab) => $query
+            ->paginate(self::PER_PAGE, ['*'], $name)
+            ->withQueryString()
+            ->appends('tab', $tab);
 
-        $materials = TeacherMaterial::with(['teacher', 'material.level'])
-            ->where('status', 'Pending')
-            ->latest()
-            ->get();
+        $materials = $page(
+            TeacherMaterial::with(['teacher', 'material.level', 'consultations'])
+                ->where('status', 'Pending')->oldest(),
+            'material_page', 'material'
+        );
 
-        $journals = TeachingJournal::with(['teacher', 'class', 'classSchedule'])
-            ->where('status', 'Pending')
-            ->latest()
-            ->get();
+        $journals = $page(
+            TeachingJournal::with(['teacher', 'class', 'classSchedule', 'material', 'attendances.student'])
+                ->where('status', 'Pending')->oldest(),
+            'jurnal_page', 'jurnal'
+        );
 
-        $reports = ProgressReport::with(['student', 'teacher', 'enrollment.class'])
-            ->where('status', 'Submitted')
-            ->whereNull('reviewed_at')
-            ->latest()
-            ->get();
+        $reports = $page(
+            ProgressReport::with(['student', 'teacher', 'enrollment.class'])
+                ->where('status', 'Submitted')->whereNull('reviewed_at')->oldest(),
+            'report_page', 'report'
+        );
 
-        $leaves = TeacherLeave::with(['teacher', 'classSchedule.class', 'replacementTeacher'])
-            ->where('status', 'Pending')
-            ->latest()
-            ->get();
+        $leaves = $page(
+            TeacherLeave::with(['teacher', 'classSchedule.class', 'replacementTeacher'])
+                ->where('status', 'Pending')->oldest(),
+            'cuti_page', 'cuti'
+        );
 
-        // Report yang melewati batas H+3 dan belum pernah dikirim guru
+        $certificates = $page(
+            Certificate::with(['student', 'teacher', 'enrollment.class'])->pendingReview()->oldest(),
+            'sertifikat_page', 'sertifikat'
+        );
+
         $lateEnrollments = $this->lateEnrollments();
 
-        // Sertifikat yang dibuat guru dan menunggu ACC
-        $certificates = Certificate::with(['student', 'teacher', 'enrollment.class'])
-            ->pendingReview()
-            ->latest()
-            ->get();
+        $totals = [
+            'material'   => $materials->total(),
+            'jurnal'     => $journals->total(),
+            'report'     => $reports->total() + $lateEnrollments->count(),
+            'cuti'       => $leaves->total(),
+            'sertifikat' => $certificates->total(),
+        ];
 
-        $totalPending = $materials->count() + $journals->count() + $reports->count() + $leaves->count() + $certificates->count();
+        $totalPending = $materials->total() + $journals->total() + $reports->total()
+            + $leaves->total() + $certificates->total();
+
+        // Tab aktif: yang diminta (?tab=), atau tab pertama yang punya antrian
+        $requested = $request->query('tab');
+        $tab = in_array($requested, self::TABS, true)
+            ? $requested
+            : (collect($totals)->filter(fn ($n) => $n > 0)->keys()->first() ?? 'material');
 
         return view('kurikulum.review-pengajuan', compact(
-            'todaySchedules',
-            'totalSessionToday',
-            'filledToday',
-            'unfilledToday',
-            'teacherNamesToday',
-            'materials',
-            'journals',
-            'reports',
-            'leaves',
-            'certificates',
-            'lateEnrollments',
-            'totalPending'
+            'todaySchedules', 'totalSessionToday', 'filledToday', 'unfilledToday', 'teacherNamesToday',
+            'materials', 'journals', 'reports', 'leaves', 'certificates', 'lateEnrollments',
+            'totals', 'totalPending', 'tab'
         ));
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Tandai ACC sesi (dari Card Sesi paling atas)
-    |--------------------------------------------------------------------------
-    */
+    // ------------------------------------------------------------------ BERKAS (aman, butuh login)
+
+    public function file(string $type, int $id)
+    {
+        $path = match ($type) {
+            'lp'     => TeacherMaterial::findOrFail($id)->lp_file_path,
+            'ppt'    => TeacherMaterial::findOrFail($id)->ppt_file_path,
+            'report' => ProgressReport::findOrFail($id)->file_path,
+            'cert'   => Certificate::findOrFail($id)->file_path,
+            'cuti'   => TeacherLeave::findOrFail($id)->supporting_document,
+            default  => abort(404),
+        };
+
+        abort_unless($path && Storage::disk('public')->exists($path), 404, 'Berkas tidak ditemukan.');
+
+        $full = storage_path('app/public/' . $path);
+        $ext  = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+
+        // PDF dan gambar dibuka di browser; dokumen lain (PPT/DOC) diunduh
+        if (in_array($ext, ['pdf', 'jpg', 'jpeg', 'png'], true)) {
+            return response()->file($full);
+        }
+
+        return response()->download($full, Str::slug($type . '-' . $id) . '.' . $ext);
+    }
+
+    // ------------------------------------------------------------------ SESI (card hari ini)
 
     public function ackSession(TeachingJournal $teachingJournal)
     {
-        $teachingJournal->update(['status' => 'Reviewed']);
+        if ($teachingJournal->status !== 'Pending') {
+            return back()->with('error', 'Sesi ini sudah direview.');
+        }
+
+        $teachingJournal->update([
+            'status'      => 'Reviewed',
+            'review_note' => null,
+            'reviewed_by' => Auth::id(),
+            'reviewed_at' => now(),
+        ]);
 
         return back()->with('success', 'Sesi berhasil di-ACC.');
     }
 
-    public function sendReminder(ClassSchedule $classSchedule)
-    {
-        // TODO: integrasikan ke WhatsApp API kalau sudah tersedia.
-        return back()->with('success', 'Reminder berhasil dikirim ke guru (simulasi - WA API belum diintegrasikan).');
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | LP & PPT
-    |--------------------------------------------------------------------------
-    */
+    // ------------------------------------------------------------------ LP & PPT
 
     public function reviewMaterial(Request $request, TeacherMaterial $teacherMaterial)
     {
-        $request->validate([
+        $data = $request->validate([
             'decision' => ['required', Rule::in(['Approved', 'Rejected'])],
-            'note'     => ['nullable', 'string', 'max:1000'],
+            'note'     => ['nullable', 'required_if:decision,Rejected', 'string', 'max:1000'],
+        ], [
+            'note.required_if' => 'Isi alasan saat mengembalikan LP & PPT agar guru tahu apa yang harus diperbaiki.',
         ]);
 
+        if ($teacherMaterial->status !== 'Pending') {
+            return back()->with('error', 'Pengajuan LP & PPT ini sudah direview.');
+        }
+
         $teacherMaterial->update([
-            'status' => $request->decision,
-            'review_note' => $request->decision === 'Rejected' ? $request->note : null,
+            'status'      => $data['decision'],
+            'review_note' => $data['decision'] === 'Rejected' ? $data['note'] : null,
             'approved_by' => Auth::id(),
             'approved_at' => now(),
         ]);
 
-        return back()->with('success', 'LP & PPT berhasil ' . ($request->decision === 'Approved' ? 'di-ACC' : 'dikembalikan ke guru') . '.');
+        return back()->with('success', 'LP & PPT berhasil ' . ($data['decision'] === 'Approved' ? 'di-ACC' : 'dikembalikan ke guru') . '.');
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Jurnal Online
-    |--------------------------------------------------------------------------
-    */
+    // ------------------------------------------------------------------ JURNAL ONLINE
 
     public function reviewJournal(Request $request, TeachingJournal $teachingJournal)
     {
-        $request->validate([
+        $data = $request->validate([
             'decision' => ['required', Rule::in(['Reviewed', 'Revision'])],
+            'note'     => ['nullable', 'required_if:decision,Revision', 'string', 'max:1000'],
+        ], [
+            'note.required_if' => 'Isi alasan saat mengembalikan jurnal agar guru tahu apa yang harus diperbaiki.',
         ]);
 
-        $teachingJournal->update(['status' => $request->decision]);
+        if ($teachingJournal->status !== 'Pending') {
+            return back()->with('error', 'Jurnal ini sudah direview.');
+        }
 
-        return back()->with('success', 'Jurnal berhasil ' . ($request->decision === 'Reviewed' ? 'di-ACC' : 'dikembalikan untuk revisi') . '.');
+        $teachingJournal->update([
+            'status'      => $data['decision'],
+            'review_note' => $data['decision'] === 'Revision' ? $data['note'] : null,
+            'reviewed_by' => Auth::id(),
+            'reviewed_at' => now(),
+        ]);
+
+        return back()->with('success', 'Jurnal berhasil ' . ($data['decision'] === 'Reviewed' ? 'di-ACC' : 'dikembalikan untuk revisi') . '.');
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Progress Report
-    |--------------------------------------------------------------------------
-    | Tidak ada status Approved/Rejected di database ini, jadi:
-    | - ACC   -> tandai reviewed_at (status tetap Submitted)
-    | - Kembalikan -> status balik ke Draft (guru upload ulang)
-    |--------------------------------------------------------------------------
-    */
+    // ------------------------------------------------------------------ PROGRESS REPORT
+    // ACC -> reviewed_at terisi (status tetap Submitted, tampil di siswa)
+    // Kembalikan -> status Draft + alasan, guru punya waktu GRACE_DAYS hari
 
     public function reviewReport(Request $request, ProgressReport $progressReport)
     {
-        $request->validate([
+        $data = $request->validate([
             'decision' => ['required', Rule::in(['Approved', 'Rejected'])],
             'note'     => ['nullable', 'required_if:decision,Rejected', 'string', 'max:1000'],
         ], [
             'note.required_if' => 'Isi alasan saat mengembalikan progress report ke guru.',
         ]);
 
-        if ($request->decision === 'Approved') {
-            // ACC: status tetap Submitted, reviewed_at terisi -> baru tampil di siswa
+        if ($progressReport->status !== 'Submitted' || $progressReport->reviewed_at) {
+            return back()->with('error', 'Progress report ini sudah direview atau sedang diperbaiki guru.');
+        }
+
+        if ($data['decision'] === 'Approved') {
             $progressReport->update([
                 'reviewed_by' => Auth::id(),
                 'reviewed_at' => now(),
@@ -203,28 +241,23 @@ class ReviewPengajuanController extends Controller
                 'returned_at' => null,
             ]);
         } else {
-            // Kembalikan ke guru: guru diberi waktu 3 hari untuk memperbaiki
             $progressReport->update([
                 'status'         => 'Draft',
                 'reviewed_by'    => null,
                 'reviewed_at'    => null,
                 'returned_at'    => now(),
-                'review_note'    => $request->note,
+                'review_note'    => $data['note'],
                 'extended_until' => now()->addDays(ProgressReportService::GRACE_DAYS)->toDateString(),
             ]);
         }
 
-        return back()->with('success', 'Progress report berhasil ' . ($request->decision === 'Approved' ? 'di-ACC dan sekarang tampil di siswa' : 'dikembalikan ke guru (batas perbaikan 3 hari)') . '.');
+        return back()->with('success', 'Progress report berhasil '
+            . ($data['decision'] === 'Approved'
+                ? 'di-ACC dan sekarang tampil di siswa'
+                : 'dikembalikan ke guru (batas perbaikan ' . ProgressReportService::GRACE_DAYS . ' hari)') . '.');
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Buka kembali progress report yang lewat batas H+3
-    |--------------------------------------------------------------------------
-    | Guru terkunci setelah H+3. Kurikulum bisa memberi waktu tambahan 3 hari.
-    |--------------------------------------------------------------------------
-    */
-
+    /** Buka kembali progress report yang lewat batas H+3 (waktu tambahan). */
     public function reopenReport(ClassEnrollment $enrollment)
     {
         $class = $enrollment->class;
@@ -253,8 +286,68 @@ class ReviewPengajuanController extends Controller
         $report->extended_until = now()->addDays(ProgressReportService::GRACE_DAYS)->toDateString();
         $report->save();
 
-        return back()->with('success', 'Progress report dibuka kembali. Guru punya waktu 3 hari untuk mengisi.');
+        return back()->with('success', 'Progress report dibuka kembali. Guru punya waktu ' . ProgressReportService::GRACE_DAYS . ' hari untuk mengisi.');
     }
+
+    // ------------------------------------------------------------------ CUTI / GANTI KELAS
+
+    public function reviewLeave(Request $request, TeacherLeave $teacherLeave)
+    {
+        $data = $request->validate([
+            'decision' => ['required', Rule::in(['Approved', 'Rejected'])],
+            'note'     => ['nullable', 'required_if:decision,Rejected', 'string', 'max:1000'],
+        ], [
+            'note.required_if' => 'Isi alasan saat menolak pengajuan.',
+        ]);
+
+        if ($teacherLeave->status !== 'Pending') {
+            return back()->with('error', 'Pengajuan ini sudah direview.');
+        }
+
+        if ($data['decision'] === 'Approved'
+            && $teacherLeave->replacement_teacher_id
+            && $teacherLeave->replacement_response !== 'Accepted') {
+            return back()->with('error', 'Guru pengganti belum menerima permintaan ini.');
+        }
+
+        $teacherLeave->update([
+            'status'      => $data['decision'],
+            'review_note' => $data['decision'] === 'Rejected' ? $data['note'] : null,
+            'approved_by' => Auth::id(),
+            'approved_at' => now(),
+        ]);
+
+        return back()->with('success', 'Pengajuan berhasil ' . ($data['decision'] === 'Approved' ? 'disetujui' : 'ditolak') . '.');
+    }
+
+    // ------------------------------------------------------------------ SERTIFIKAT
+
+    public function reviewCertificate(Request $request, Certificate $certificate)
+    {
+        $data = $request->validate([
+            'decision' => ['required', Rule::in(['Approved', 'Rejected'])],
+            'note'     => ['nullable', 'required_if:decision,Rejected', 'string', 'max:1000'],
+        ], [
+            'note.required_if' => 'Isi alasan saat menolak sertifikat.',
+        ]);
+
+        if ($certificate->status !== 'Pending') {
+            return back()->with('error', 'Sertifikat ini sudah pernah direview.');
+        }
+
+        $certificate->update([
+            'status'      => $data['decision'],
+            'review_note' => $data['decision'] === 'Rejected' ? $data['note'] : null,
+            'reviewed_by' => Auth::id(),
+            'reviewed_at' => now(),
+        ]);
+
+        return back()->with('success', $data['decision'] === 'Approved'
+            ? 'Sertifikat di-ACC dan sekarang tampil di siswa.'
+            : 'Sertifikat ditolak dan dikembalikan ke guru.');
+    }
+
+    // ------------------------------------------------------------------ HELPER
 
     /** Siswa yang kelasnya selesai > H+3 tapi belum ada report terkirim. */
     private function lateEnrollments()
@@ -273,7 +366,6 @@ class ReviewPengajuanController extends Controller
                 ->addDays(ProgressReportService::GRACE_DAYS)
                 ->endOfDay();
 
-            // hanya yang baru lewat (60 hari terakhir) supaya data lama tidak membanjiri daftar
             if (!$deadline->lt(now()) || $deadline->lt(now()->subDays(60))) {
                 continue;
             }
@@ -297,82 +389,14 @@ class ReviewPengajuanController extends Controller
                     ->latest('id')
                     ->first();
 
-                // sudah dibuka kembali dan masih dalam perpanjangan
                 if ($draft && $draft->extended_until && $draft->extended_until->copy()->endOfDay()->gte(now())) {
                     continue;
                 }
 
-                $late->push([
-                    'enrollment' => $enrollment,
-                    'deadline'   => $deadline,
-                ]);
+                $late->push(['enrollment' => $enrollment, 'deadline' => $deadline]);
             }
         }
 
         return $late;
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Cuti / Pengajuan Kelas
-    |--------------------------------------------------------------------------
-    */
-
-    /*
-    |--------------------------------------------------------------------------
-    | Sertifikat
-    |--------------------------------------------------------------------------
-    | ACC -> status Approved, sertifikat tampil di halaman siswa.
-    | Tolak -> status Rejected + alasan, guru bisa mengajukan ulang.
-    |--------------------------------------------------------------------------
-    */
-
-    public function reviewCertificate(Request $request, Certificate $certificate)
-    {
-        $request->validate([
-            'decision' => ['required', Rule::in(['Approved', 'Rejected'])],
-            'note'     => ['nullable', 'required_if:decision,Rejected', 'string', 'max:1000'],
-        ], [
-            'note.required_if' => 'Isi alasan saat menolak sertifikat.',
-        ]);
-
-        if ($certificate->status !== 'Pending') {
-            return back()->with('error', 'Sertifikat ini sudah pernah direview.');
-        }
-
-        $certificate->update([
-            'status'      => $request->decision,
-            'review_note' => $request->decision === 'Rejected' ? $request->note : null,
-            'reviewed_by' => Auth::id(),
-            'reviewed_at' => now(),
-        ]);
-
-        return back()->with('success', $request->decision === 'Approved'
-            ? 'Sertifikat di-ACC dan sekarang tampil di siswa.'
-            : 'Sertifikat ditolak dan dikembalikan ke guru.');
-    }
-
-    public function reviewLeave(Request $request, TeacherLeave $teacherLeave)
-    {
-        $request->validate([
-            'decision' => ['required', Rule::in(['Approved', 'Rejected'])],
-            'note'     => ['nullable', 'string', 'max:1000'],
-        ]);
-
-        // Kalau ada guru pengganti, dia harus menerima dulu sebelum disetujui
-        if ($request->decision === 'Approved'
-            && $teacherLeave->replacement_teacher_id
-            && $teacherLeave->replacement_response !== 'Accepted') {
-            return back()->with('error', 'Guru pengganti belum menerima permintaan ini.');
-        }
-
-        $teacherLeave->update([
-            'status' => $request->decision,
-            'review_note' => $request->decision === 'Rejected' ? $request->note : null,
-            'approved_by' => Auth::id(),
-            'approved_at' => now(),
-        ]);
-
-        return back()->with('success', 'Pengajuan berhasil ' . ($request->decision === 'Approved' ? 'disetujui' : 'ditolak') . '.');
     }
 }
