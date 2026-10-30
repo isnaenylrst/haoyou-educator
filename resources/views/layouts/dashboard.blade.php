@@ -93,12 +93,12 @@
       <a href="{{ route('kelassaya.index') }}" class="side-link alumni-restricted {{ request()->routeIs('kelassaya.*') ? 'is-active' : '' }}">
         <span class="ico">🎓</span> Kelas Saya
       </a>
-      <a href="{{ route('booking.index') }}" class="side-link alumni-restricted {{ request()->routeIs('booking.*') ? 'is-active' : '' }}">
+      {{-- <a href="{{ route('booking.index') }}" class="side-link alumni-restricted {{ request()->routeIs('booking.*') ? 'is-active' : '' }}">
         <span class="ico">🗓️</span> Booking Kelas
-      </a>
-      <a href="{{ route('video.index') }}" class="side-link alumni-restricted {{ request()->routeIs('video.*') ? 'is-active' : '' }}">
+      </a> --}}
+      {{-- <a href="{{ route('video.index') }}" class="side-link alumni-restricted {{ request()->routeIs('video.*') ? 'is-active' : '' }}">
         <span class="ico">🎬</span> Video
-      </a>
+      </a> --}}
       <a href="{{ route('progresreport.index') }}" class="side-link {{ request()->routeIs('progresreport.*') ? 'is-active' : '' }}">
         <span class="ico">📊</span> Progress Report
       </a>
@@ -170,7 +170,7 @@
               </div>
               <div class="min-w-0">
                   <div class="font-bold text-[15px] leading-tight truncate">{{ $username }}</div>
-                  <div class="text-[13px] text-[#6b6652]">HSK 2 · Hybrid</div>
+                  <div class="text-[13px] text-[#6b6652]">{{ $levelAktif ?? 'Belum ada kelas aktif' }}</div>
                   </div>
             </div>
 
