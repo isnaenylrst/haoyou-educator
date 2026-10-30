@@ -139,11 +139,11 @@ class SiswaLearningController extends Controller
                 ->get()
             : collect();
 
-        return view('siswa.video', [
-            'title'    => 'Video Pembelajaran',
-            'subtitle' => 'Tonton video dari Kurikulum',
-            'videos'   => $videos,
-        ]);
+        // return view('siswa.video', [
+        //     'title'    => 'Video Pembelajaran',
+        //     'subtitle' => 'Tonton video dari Kurikulum',
+        //     'videos'   => $videos,
+        // ]);
     }
 
     /**

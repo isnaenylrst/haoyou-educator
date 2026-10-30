@@ -168,8 +168,8 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
         ->name('sertifikat.download');
 
     // VIDEO
-    Route::get('/video', [SiswaLearningController::class, 'video'])
-        ->name('video.index');
+    // Route::get('/video', [SiswaLearningController::class, 'video'])
+    //     ->name('video.index');
 
     Route::get('/video/{video}/stream', [SiswaLearningController::class, 'streamVideo'])
         ->name('video.stream');

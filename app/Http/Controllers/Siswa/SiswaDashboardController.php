@@ -394,7 +394,7 @@ class SiswaDashboardController extends Controller
         $documents = $this->sertifikatQuery()
             ->with('programLevel.program')
             ->get();
-
+        
         return view(
             'Siswa.sertifikat',
             compact('student', 'documents')
