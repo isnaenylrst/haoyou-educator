@@ -85,4 +85,9 @@ class Teacher extends Model
     {
         return $this->hasMany(Consultation::class);
     }
+
+    public function observations()
+    {
+        return $this->hasMany(TeacherObservation::class, 'teacher_id');
+    }
 }

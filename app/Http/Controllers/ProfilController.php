@@ -132,4 +132,18 @@ class ProfilController extends Controller
 
         return back()->with('success', 'Foto profil dihapus.');
     }
+
+    /** Hapus tanda tangan digital */
+    public function destroySignature(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user->signature_path) {
+            Storage::disk('public')->delete($user->signature_path);
+            $user->signature_path = null;
+            $user->save();
+        }
+
+        return back()->with('success', 'Tanda tangan digital berhasil dihapus.');
+    }
 }

@@ -9,7 +9,19 @@
         'SURAT_LIBUR' => ['bg-warning text-dark', 'Surat Libur'],
         'SURAT_DINAS' => ['bg-primary', 'Surat Dinas'],
         'LOA'         => ['bg-success', 'LoA'],
+        'SP1'         => ['bg-danger text-white', 'Surat Peringatan 1 (SP1)'],
+        'SP2'         => ['bg-danger text-white', 'Surat Peringatan 2 (SP2)'],
+        'SP3'         => ['bg-danger text-white', 'Surat Peringatan 3 (SP3)'],
     ];
+
+    if (isset($letterTypes)) {
+        foreach ($letterTypes as $lt) {
+            if (!isset($typeBadge[$lt->code])) {
+                $isSp = str_starts_with($lt->code, 'SP');
+                $typeBadge[$lt->code] = [$isSp ? 'bg-danger text-white' : 'bg-secondary', $lt->name];
+            }
+        }
+    }
 @endphp
 
 <div class="container-fluid py-3">
@@ -57,9 +69,9 @@
            class="btn btn-sm rounded-pill {{ $status === 'unread' ? 'btn-dark' : 'btn-outline-secondary' }}">
             Belum dibaca ({{ $unreadCount }})
         </a>
-        @foreach (['SURAT_LIBUR' => 'Libur', 'SURAT_DINAS' => 'Dinas', 'LOA' => 'LoA'] as $key => $label)
-            <a href="{{ route('teacher.surat', array_filter(['status' => $status, 'type' => $type === $key ? null : $key])) }}"
-               class="btn btn-sm rounded-pill {{ $type === $key ? 'btn-dark' : 'btn-outline-secondary' }}">{{ $label }}</a>
+        @foreach ($letterTypes ?? [] as $lt)
+            <a href="{{ route('teacher.surat', array_filter(['status' => $status, 'type' => $type === $lt->code ? null : $lt->code])) }}"
+               class="btn btn-sm rounded-pill {{ $type === $lt->code ? 'btn-dark' : 'btn-outline-secondary' }}">{{ $lt->name }}</a>
         @endforeach
     </div>
 

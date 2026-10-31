@@ -139,9 +139,10 @@ class ReviewPengajuanController extends Controller
             'lp'     => TeacherMaterial::findOrFail($id)->lp_file_path,
             'ppt'    => TeacherMaterial::findOrFail($id)->ppt_file_path,
             'report' => ProgressReport::findOrFail($id)->file_path,
-            'cert'   => Certificate::findOrFail($id)->file_path,
-            'cuti'   => TeacherLeave::findOrFail($id)->supporting_document,
-            default  => abort(404),
+            'cert'    => Certificate::findOrFail($id)->file_path,
+            'cuti'    => TeacherLeave::findOrFail($id)->supporting_document,
+            'receipt' => Submission::findOrFail($id)->receipt_path,
+            default   => abort(404),
         };
 
         abort_unless($path && Storage::disk('public')->exists($path), 404, 'Berkas tidak ditemukan.');
@@ -455,6 +456,9 @@ class ReviewPengajuanController extends Controller
                 $late->push(['enrollment' => $enrollment, 'deadline' => $deadline]);
             }
         }
+
+        return $late;
+    }
 
     // ------------------------------------------------------------------ PENGAJUAN (REIMBURSE & PEMBELIAN)
 

@@ -25,6 +25,7 @@ use App\Http\Controllers\Kurikulum\TugasKelasController as KurikulumTugasKelasCo
 use App\Http\Controllers\Kurikulum\KompetensiController;
 use App\Http\Controllers\Kurikulum\KetersediaanGuruController;
 use App\Http\Controllers\Kurikulum\VideoController as KurikulumVideoController;
+use App\Http\Controllers\Kurikulum\TeacherObservationController;
 
 // ===== ADMIN =====
 // Dashboard pakai alias supaya tidak bentrok dengan Kurikulum\DashboardController
@@ -44,6 +45,7 @@ use App\Http\Controllers\Admin\ProgramLevelController;
 use App\Http\Controllers\Admin\Pengaturan\PengaturanController;
 use App\Http\Controllers\Admin\Pengaturan\TemplatePrintController;
 use App\Http\Controllers\Admin\PaymentInvoiceController;
+use App\Http\Controllers\Admin\SubmissionRekapController;
 
 // ===== GURU =====
 use App\Http\Controllers\Guru\NotifikasiController as GuruNotifikasiController;
@@ -60,6 +62,9 @@ use App\Http\Controllers\Guru\TugasKelasController as GuruTugasKelasController;
 use App\Http\Controllers\Guru\AvailabilityController as GuruAvailabilityController;
 use App\Http\Controllers\Guru\CertificateController as GuruCertificateController;
 use App\Http\Controllers\Guru\SuratController as GuruSuratController;
+use App\Http\Controllers\Guru\SubmissionController as GuruSubmissionController;
+use App\Http\Controllers\Guru\VideoController as GuruVideoController;
+use App\Http\Controllers\Guru\ObservationController as GuruObservationController;
 
 // ===== OWNER =====
 use App\Http\Controllers\Owner\DashboardController as OwnerDashboardController;
@@ -234,6 +239,12 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
 
     Route::delete('/profil/foto', [ProfilController::class, 'destroyFoto'])
         ->name('profil.foto.destroy');
+
+    Route::post('/profil/signature', [ProfilController::class, 'updateSignature'])
+        ->name('profil.signature');
+
+    Route::delete('/profil/signature', [ProfilController::class, 'destroySignature'])
+        ->name('profil.signature.destroy');
 });
 
 /*
@@ -393,7 +404,7 @@ Route::middleware(['auth', 'role:Curriculum'])
             ->name('review-pengajuan.leave');
 
           Route::get('/review-pengajuan/berkas/{type}/{id}', [ReviewPengajuanController::class, 'file'])
-            ->whereIn('type', ['lp', 'ppt', 'report', 'cert', 'cuti'])
+            ->whereIn('type', ['lp', 'ppt', 'report', 'cert', 'cuti', 'receipt'])
             ->whereNumber('id')
             ->name('review-pengajuan.file');
 
@@ -404,6 +415,12 @@ Route::middleware(['auth', 'role:Curriculum'])
         // Buka kembali progress report yang lewat batas H+3
         Route::post('/review-pengajuan/enrollment/{enrollment}/reopen-report', [ReviewPengajuanController::class, 'reopenReport'])
             ->name('review-pengajuan.reopen-report');
+
+        // Review Reimburse & Pembelian Bahan Ajar (Poin 5)
+        Route::patch('/review-pengajuan/submission/{submission}', [ReviewPengajuanController::class, 'reviewSubmission'])
+            ->name('review-pengajuan.submission');
+        Route::get('/review-pengajuan/submission/{submission}/cetak', [ReviewPengajuanController::class, 'printSubmission'])
+            ->name('review-pengajuan.print-submission');
 
         /*
         |--------------------------------------------------------------------------
@@ -446,6 +463,12 @@ Route::middleware(['auth', 'role:Curriculum'])
 
         Route::delete('/kompetensi/{competency}', [KompetensiController::class, 'destroy'])
             ->name('kompetensi.destroy');
+
+        // Template Learning Material per Kelas (Poin 6)
+        Route::post('/kompetensi/class-material', [KompetensiController::class, 'storeClassMaterial'])
+            ->name('kompetensi.class-material.store');
+        Route::delete('/kompetensi/class-material/{material}', [KompetensiController::class, 'destroyClassMaterial'])
+            ->name('kompetensi.class-material.destroy');
 
         /*
         |--------------------------------------------------------------------------
@@ -491,6 +514,28 @@ Route::middleware(['auth', 'role:Curriculum'])
 
         Route::get('/video/{video}/stream', [KurikulumVideoController::class, 'stream'])
             ->name('video.stream');
+
+        Route::post('/video/kategori', [KurikulumVideoController::class, 'storeCategory'])
+            ->name('video.category.store');
+
+        Route::delete('/video/kategori/{category}', [KurikulumVideoController::class, 'destroyCategory'])
+            ->name('video.category.destroy');
+
+        /*
+        |--------------------------------------------------------------------------
+        | OBSERVASI GURU & KELAS (Poin 9)
+        |--------------------------------------------------------------------------
+        */
+        Route::get('/observasi', [TeacherObservationController::class, 'index'])
+            ->name('observasi');
+        Route::post('/observasi', [TeacherObservationController::class, 'store'])
+            ->name('observasi.store');
+        Route::put('/observasi/{observation}', [TeacherObservationController::class, 'update'])
+            ->name('observasi.update');
+        Route::delete('/observasi/{observation}', [TeacherObservationController::class, 'destroy'])
+            ->name('observasi.destroy');
+        Route::get('/observasi/teacher/{teacher}/classes', [TeacherObservationController::class, 'getTeacherClasses'])
+            ->name('observasi.teacher-classes');
     });
 
 /*
@@ -605,6 +650,17 @@ Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
         Route::get('/surat/{document}', [GuruSuratController::class, 'show'])->name('surat.show');
         Route::get('/surat/{document}/download', [GuruSuratController::class, 'download'])->name('surat.download');
         Route::patch('/surat/{document}/baca', [GuruSuratController::class, 'read'])->name('surat.read');
+
+        // Video Pembelajaran (Poin 4)
+        Route::get('/video', [GuruVideoController::class, 'index'])->name('video');
+        Route::get('/video/{video}/stream', [GuruVideoController::class, 'stream'])->name('video.stream');
+
+        // Pengajuan Reimburse & Pembelian Bahan Ajar (Poin 5)
+        Route::get('/pengajuan', [GuruSubmissionController::class, 'index'])->name('pengajuan');
+        Route::post('/pengajuan', [GuruSubmissionController::class, 'store'])->name('pengajuan.store');
+
+        // Observasi Mengajar (Poin 9)
+        Route::get('/observasi', [GuruObservationController::class, 'index'])->name('observasi');
     });
 
 /*
@@ -633,6 +689,12 @@ Route::middleware(['auth', 'role:Owner'])
 
         Route::post('/guru/{teacher}/lihat', [OwnerAccessController::class, 'view'])
             ->name('guru.view');
+
+        // Rekap & Approval Pengajuan Bahan Ajar / Reimburse (Poin 5)
+        Route::get('/pengajuan', [SubmissionRekapController::class, 'index'])
+            ->name('pengajuan.index');
+        Route::post('/pengajuan/{submission}/approve', [SubmissionRekapController::class, 'ownerApprove'])
+            ->name('pengajuan.approve');
     });
 
 /*
@@ -932,4 +994,8 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
 
     Route::delete('/dokumen/folder/{folder}', [DokumenController::class, 'destroyFolder'])
         ->name('dokumen.folder.destroy');
+
+    // REKAP PENGAJUAN (Poin 5)
+    Route::get('/pengajuan', [SubmissionRekapController::class, 'index'])
+        ->name('pengajuan.index');
 });

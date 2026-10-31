@@ -54,6 +54,13 @@
                             <div class="text-success small mt-2">
                                 <i class="fa-solid fa-check-circle me-1"></i> Tanda tangan aktif siap digunakan otomatis oleh sistem
                             </div>
+                            <form action="{{ route('profil.signature.destroy') }}" method="POST" class="d-inline mt-2" onsubmit="return confirm('Hapus tanda tangan digital tersimpan?')">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-3 mt-2">
+                                    <i class="fa-solid fa-trash me-1"></i> Hapus Tanda Tangan
+                                </button>
+                            </form>
                         </div>
                     @else
                         <div class="alert alert-warning py-2 px-3 small mb-4">

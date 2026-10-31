@@ -80,4 +80,9 @@ class Student extends Model
     {
         return $this->belongsTo(ProgramLevel::class, 'current_level_id');
     }
+
+    public function learningRequests()
+    {
+        return $this->hasMany(StudentLearningRequest::class, 'student_id');
+    }
 }
