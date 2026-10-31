@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\ClassModel;
 use App\Models\TeacherAvailability;
 use App\Models\TeacherLeave;
+use App\Models\User;
+use App\Notifications\AppNotification;
 use App\Services\TeacherAvailabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class AvailabilityController extends Controller
@@ -96,26 +99,73 @@ class AvailabilityController extends Controller
 
     // ------------------------------------------------------------------ TERIMA / TOLAK KELAS
 
-    /** Guru menerima atau menolak kelas yang diberikan kepadanya (hanya sekali, selama masih menunggu). */
+    /** Guru menerima atau menolak kelas yang diberikan kepadanya atau mengambil kelas broadcast */
     public function respondClass(Request $request, ClassModel $class)
     {
         $teacher = $this->teacher();
 
+        if (!in_array($class->status, ['Open', 'Running'], true)) {
+            return back()->with('error', 'Kelas ini sudah tidak berjalan.');
+        }
+
+        // 1. JIKA KELAS BROADCAST (Terbuka untuk semua guru aktif)
+        if ($class->broadcast_to_all) {
+            $data = $request->validate([
+                'decision' => ['required', Rule::in(['Accepted', 'Rejected'])],
+            ]);
+
+            if ($data['decision'] === 'Accepted') {
+                return DB::transaction(function () use ($class, $teacher) {
+                    $locked = ClassModel::where('id', $class->id)->lockForUpdate()->first();
+
+                    if (!$locked || !$locked->broadcast_to_all || $locked->teacher_id !== null || $locked->teacher_response === 'Accepted') {
+                        return back()->with('error', 'Maaf, tawaran kelas ini sudah diambil oleh guru lain.');
+                    }
+
+                    $locked->load('schedules');
+                    $clash = TeacherAvailabilityService::conflictWith($teacher->id, $locked);
+                    if ($clash) {
+                        return back()->with('error', "Kelas ini bentrok dengan jadwal kelas {$clash} yang sudah Anda miliki.");
+                    }
+
+                    $locked->update([
+                        'teacher_id'            => $teacher->id,
+                        'broadcast_to_all'      => false,
+                        'teacher_response'      => 'Accepted',
+                        'teacher_responded_at'  => now(),
+                    ]);
+
+                    // Notifikasi ke Admin
+                    $admins = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Admin'))->get();
+                    foreach ($admins as $admin) {
+                        $admin->notify(new AppNotification(
+                            title: "Tawaran Kelas Diambil",
+                            message: "Guru {$teacher->name} telah mengambil dan menerima tawaran kelas broadcast '{$locked->class_name}'.",
+                            url: url('/admin/kelas'),
+                            type: 'jadwal',
+                            icon: 'fa-calendar-check'
+                        ));
+                    }
+
+                    return back()->with('success', "Selamat! Anda berhasil mengambil dan mengunci jadwal kelas {$locked->class_name}.");
+                });
+            }
+
+            return back()->with('info', "Anda telah melewati tawaran kelas {$class->class_name}.");
+        }
+
+        // 2. JIKA KELAS DITUGASKAN SPESIFIK KE GURU INI
         abort_if((int) $class->teacher_id !== (int) $teacher->id, 403);
 
         if ($class->teacher_response !== 'Pending') {
-            return back()->with('error', 'Kelas ini sudah Anda jawab. Hubungi Kurikulum jika perlu mengubahnya.');
-        }
-
-        if (!in_array($class->status, ['Open', 'Running'], true)) {
-            return back()->with('error', 'Kelas ini sudah tidak berjalan.');
+            return back()->with('error', 'Kelas ini sudah Anda jawab. Hubungi Kurikulum/Admin jika perlu mengubahnya.');
         }
 
         $data = $request->validate([
             'decision' => ['required', Rule::in(['Accepted', 'Rejected'])],
             'note'     => ['nullable', 'required_if:decision,Rejected', 'string', 'max:1000'],
         ], [
-            'note.required_if' => 'Isi alasan saat menolak kelas.',
+            'note.required_if' => 'Alasan wajib diisi saat menolak jadwal kelas.',
         ]);
 
         $class->load('schedules');
@@ -126,17 +176,46 @@ class AvailabilityController extends Controller
             if ($clash) {
                 return back()->with('error', "Kelas ini bentrok dengan jadwal kelas {$clash} yang sudah Anda terima.");
             }
+
+            $class->update([
+                'teacher_response'     => 'Accepted',
+                'teacher_responded_at' => now(),
+            ]);
+
+            // Notifikasi ke Admin
+            $admins = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Admin'))->get();
+            foreach ($admins as $admin) {
+                $admin->notify(new AppNotification(
+                    title: "Jadwal Kelas Diterima",
+                    message: "Guru {$teacher->name} telah menerima penugasan jadwal kelas {$class->class_name}.",
+                    url: url('/admin/kelas'),
+                    type: 'jadwal',
+                    icon: 'fa-calendar-check'
+                ));
+            }
+
+            return back()->with('success', "Kelas {$class->class_name} diterima.");
         }
 
+        // Jika Ditolak: wajib ada catatan dan kirim notifikasi ke Admin
         $class->update([
-            'teacher_response'      => $data['decision'],
-            'teacher_response_note' => $data['decision'] === 'Rejected' ? $data['note'] : null,
+            'teacher_response'      => 'Rejected',
+            'teacher_response_note' => $data['note'],
             'teacher_responded_at'  => now(),
         ]);
 
-        return back()->with('success', $data['decision'] === 'Accepted'
-            ? "Kelas {$class->class_name} diterima."
-            : "Kelas {$class->class_name} ditolak. Kurikulum akan mencarikan guru lain.");
+        $admins = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Admin'))->get();
+        foreach ($admins as $admin) {
+            $admin->notify(new AppNotification(
+                title: "Jadwal Kelas Ditolak",
+                message: "Guru {$teacher->name} menolak jadwal kelas {$class->class_name}. Alasan: {$data['note']}.",
+                url: url('/admin/kelas'),
+                type: 'jadwal',
+                icon: 'fa-calendar-xmark'
+            ));
+        }
+
+        return back()->with('success', "Kelas {$class->class_name} ditolak. Admin telah menerima pemberitahuan beserta alasan Anda.");
     }
 
     // ------------------------------------------------------------------ GURU PENGGANTI

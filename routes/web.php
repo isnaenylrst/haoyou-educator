@@ -11,6 +11,7 @@ use App\Http\Controllers\Siswa\BookingController;
 use App\Http\Controllers\Siswa\StudentCertificateController;
 use App\Http\Controllers\Siswa\VocabController;
 use App\Http\Controllers\ProfilController;
+use App\Http\Controllers\NotificationController;
 
 // ===== KURIKULUM =====
 use App\Http\Controllers\Kurikulum\DashboardController;
@@ -26,6 +27,9 @@ use App\Http\Controllers\Kurikulum\KompetensiController;
 use App\Http\Controllers\Kurikulum\KetersediaanGuruController;
 use App\Http\Controllers\Kurikulum\VideoController as KurikulumVideoController;
 use App\Http\Controllers\Kurikulum\TeacherObservationController;
+use App\Http\Controllers\Kurikulum\StudentLearningRequestController as KurikulumStudentLearningRequestController;
+use App\Http\Controllers\Kurikulum\TrainingMaterialController as KurikulumTrainingMaterialController;
+use App\Http\Controllers\Kurikulum\ConsultationResultController as KurikulumConsultationResultController;
 
 // ===== ADMIN =====
 // Dashboard pakai alias supaya tidak bentrok dengan Kurikulum\DashboardController
@@ -46,6 +50,7 @@ use App\Http\Controllers\Admin\Pengaturan\PengaturanController;
 use App\Http\Controllers\Admin\Pengaturan\TemplatePrintController;
 use App\Http\Controllers\Admin\PaymentInvoiceController;
 use App\Http\Controllers\Admin\SubmissionRekapController;
+use App\Http\Controllers\Admin\StudentLearningRequestController as AdminStudentLearningRequestController;
 
 // ===== GURU =====
 use App\Http\Controllers\Guru\NotifikasiController as GuruNotifikasiController;
@@ -65,10 +70,13 @@ use App\Http\Controllers\Guru\SuratController as GuruSuratController;
 use App\Http\Controllers\Guru\SubmissionController as GuruSubmissionController;
 use App\Http\Controllers\Guru\VideoController as GuruVideoController;
 use App\Http\Controllers\Guru\ObservationController as GuruObservationController;
+use App\Http\Controllers\Guru\TrainingMaterialController as GuruTrainingMaterialController;
+use App\Http\Controllers\Guru\ConsultationResultController as GuruConsultationResultController;
 
 // ===== OWNER =====
 use App\Http\Controllers\Owner\DashboardController as OwnerDashboardController;
 use App\Http\Controllers\Owner\AccessController as OwnerAccessController;
+use App\Http\Controllers\Owner\TrainingMaterialController as OwnerTrainingMaterialController;
 
 /*
 |--------------------------------------------------------------------------
@@ -107,6 +115,12 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout'])
         ->name('logout');
+
+    // Notifikasi Global (Guru, Kurikulum, Owner, Admin, Siswa)
+    Route::get('/notifications/{id}/read', [NotificationController::class, 'read'])
+        ->name('notifications.read');
+    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead'])
+        ->name('notifications.mark-all-read');
 });
 
 /*
@@ -169,6 +183,9 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
     Route::get('/progress-report', [SiswaLearningController::class, 'progresReport'])
         ->name('progresreport.index');
 
+    Route::get('/progress-report/view', [SiswaLearningController::class, 'progresReport'])
+        ->name('progress-report.index');
+
     Route::get('/progress-report/{report}/download', [SiswaLearningController::class, 'downloadProgressReport'])
         ->name('progresreport.download');
 
@@ -178,6 +195,13 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
 
     Route::get('/sertifikat/{certificate}/download', [SiswaLearningController::class, 'downloadSertifikat'])
         ->name('sertifikat.download');
+
+    // SERTIFIKAT OTOMATIS (HSK)
+    Route::prefix('student/certificates')->name('student.certificates.')->group(function () {
+        Route::get('/', [StudentCertificateController::class, 'index'])->name('index');
+        Route::post('/', [StudentCertificateController::class, 'store'])->name('store');
+        Route::get('/{certificate}/download', [StudentCertificateController::class, 'download'])->name('download');
+    });
 
     // VIDEO
     Route::get('/video', [SiswaLearningController::class, 'video'])
@@ -536,6 +560,34 @@ Route::middleware(['auth', 'role:Curriculum'])
             ->name('observasi.destroy');
         Route::get('/observasi/teacher/{teacher}/classes', [TeacherObservationController::class, 'getTeacherClasses'])
             ->name('observasi.teacher-classes');
+
+        // Request Belajar Siswa (Poin 10)
+        Route::get('/request-belajar', [KurikulumStudentLearningRequestController::class, 'index'])
+            ->name('request-belajar');
+
+        // Materi Training (Poin 12 - Read Only)
+        Route::get('/training', [KurikulumTrainingMaterialController::class, 'index'])
+            ->name('training');
+        Route::get('/training/{id}/download', [KurikulumTrainingMaterialController::class, 'download'])
+            ->name('training.download');
+        Route::get('/training/{id}/stream', [KurikulumTrainingMaterialController::class, 'streamVideo'])
+            ->name('training.stream');
+
+        // Hasil Konsultasi Kurikulum (Poin 13)
+        Route::get('/hasil-konsultasi', [KurikulumConsultationResultController::class, 'index'])
+            ->name('hasil-konsultasi.index');
+        Route::get('/hasil-konsultasi/redirect', fn () => redirect()->route('kurikulum.hasil-konsultasi.index'))
+            ->name('hasil-konsultasi');
+        Route::post('/hasil-konsultasi', [KurikulumConsultationResultController::class, 'store'])
+            ->name('hasil-konsultasi.store');
+        Route::put('/hasil-konsultasi/{id}', [KurikulumConsultationResultController::class, 'update'])
+            ->name('hasil-konsultasi.update');
+        Route::delete('/hasil-konsultasi/{id}', [KurikulumConsultationResultController::class, 'destroy'])
+            ->name('hasil-konsultasi.destroy');
+        Route::get('/hasil-konsultasi/{id}/download', [KurikulumConsultationResultController::class, 'download'])
+            ->name('hasil-konsultasi.download');
+        Route::get('/hasil-konsultasi/teacher/{teacher}/observations', [KurikulumConsultationResultController::class, 'getTeacherObservations'])
+            ->name('hasil-konsultasi.teacher-observations');
     });
 
 /*
@@ -661,6 +713,15 @@ Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
 
         // Observasi Mengajar (Poin 9)
         Route::get('/observasi', [GuruObservationController::class, 'index'])->name('observasi');
+
+        // Materi Training (Poin 12 - Read Only)
+        Route::get('/training', [GuruTrainingMaterialController::class, 'index'])->name('training');
+        Route::get('/training/{id}/download', [GuruTrainingMaterialController::class, 'download'])->name('training.download');
+        Route::get('/training/{id}/stream', [GuruTrainingMaterialController::class, 'streamVideo'])->name('training.stream');
+
+        // Hasil Konsultasi (Poin 13 - Read Only)
+        Route::get('/hasil-konsultasi', [GuruConsultationResultController::class, 'index'])->name('hasil-konsultasi');
+        Route::get('/hasil-konsultasi/{id}/download', [GuruConsultationResultController::class, 'download'])->name('hasil-konsultasi.download');
     });
 
 /*
@@ -695,6 +756,22 @@ Route::middleware(['auth', 'role:Owner'])
             ->name('pengajuan.index');
         Route::post('/pengajuan/{submission}/approve', [SubmissionRekapController::class, 'ownerApprove'])
             ->name('pengajuan.approve');
+
+        // Materi Training Pengajar (Poin 12)
+        Route::get('/training', [OwnerTrainingMaterialController::class, 'index'])
+            ->name('training.index');
+        Route::get('/training/manage', [OwnerTrainingMaterialController::class, 'index'])
+            ->name('training');
+        Route::post('/training', [OwnerTrainingMaterialController::class, 'store'])
+            ->name('training.store');
+        Route::put('/training/{id}', [OwnerTrainingMaterialController::class, 'update'])
+            ->name('training.update');
+        Route::delete('/training/{id}', [OwnerTrainingMaterialController::class, 'destroy'])
+            ->name('training.destroy');
+        Route::get('/training/{id}/download', [OwnerTrainingMaterialController::class, 'download'])
+            ->name('training.download');
+        Route::get('/training/{id}/stream', [OwnerTrainingMaterialController::class, 'streamVideo'])
+            ->name('training.stream');
     });
 
 /*
@@ -998,4 +1075,12 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
     // REKAP PENGAJUAN (Poin 5)
     Route::get('/pengajuan', [SubmissionRekapController::class, 'index'])
         ->name('pengajuan.index');
+
+    // REQUEST BELAJAR SISWA (Poin 10)
+    Route::get('/request-belajar', [AdminStudentLearningRequestController::class, 'index'])
+        ->name('request-belajar.index');
+    Route::post('/request-belajar', [AdminStudentLearningRequestController::class, 'store'])
+        ->name('request-belajar.store');
+    Route::delete('/request-belajar/{studentLearningRequest}', [AdminStudentLearningRequestController::class, 'destroy'])
+        ->name('request-belajar.destroy');
 });

@@ -109,13 +109,22 @@ class ScheduleController extends Controller
         );
         $days = TeacherAvailability::DAYS;
 
-        // Kelas yang diberikan Kurikulum dan menunggu jawaban saya
-        $pendingClasses = ClassModel::with('schedules')
+        // Kelas yang ditugaskan spesifik ke guru ini
+        $assignedClasses = ClassModel::with('schedules')
             ->where('teacher_id', $teacher->id)
             ->where('teacher_response', 'Pending')
             ->whereIn('status', ['Open', 'Running'])
-            ->orderBy('class_name')
-            ->get()
+            ->get();
+
+        // Kelas broadcast yang terbuka untuk semua guru
+        $broadcastClasses = ClassModel::with('schedules')
+            ->where('broadcast_to_all', true)
+            ->whereNull('teacher_id')
+            ->whereIn('status', ['Open', 'Running'])
+            ->get();
+
+        $pendingClasses = $assignedClasses->concat($broadcastClasses)
+            ->sortBy('class_name')
             ->map(function ($c) use ($myAvailabilities, $teacher) {
                 $c->fits     = TeacherAvailabilityService::coversClass($myAvailabilities, $c);
                 $c->conflict = TeacherAvailabilityService::conflictWith($teacher->id, $c);

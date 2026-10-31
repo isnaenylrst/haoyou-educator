@@ -40,6 +40,11 @@ class TeacherObservation extends Model
         return $this->belongsTo(User::class, 'curriculum_user_id');
     }
 
+    public function consultationResults()
+    {
+        return $this->hasMany(ConsultationResult::class, 'observation_id');
+    }
+
     public function getSopBadgeAttribute(): string
     {
         return match ($this->sop_compliance) {

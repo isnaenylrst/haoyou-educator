@@ -90,4 +90,9 @@ class Teacher extends Model
     {
         return $this->hasMany(TeacherObservation::class, 'teacher_id');
     }
+
+    public function consultationResults()
+    {
+        return $this->hasMany(ConsultationResult::class, 'teacher_id');
+    }
 }

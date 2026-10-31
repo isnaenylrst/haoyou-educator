@@ -55,7 +55,7 @@
             'Closed'    => 'badge-cancelled',
         ];
 
-        $hasJadwalRoute = \Illuminate\Support\Facades\Route::has('admin.jadwal');
+        $hasJadwalRoute = \Illuminate\Support\Facades\Route::has('admin.jadwal.index');
         $hasExportRoute = \Illuminate\Support\Facades\Route::has('admin.kelas.export');
     @endphp
 
@@ -199,7 +199,7 @@
                 @forelse ($classes as $kelas)
                     @php
                         $isPrivate = ! is_null($kelas->private_package_id);
-                        $jadwalUrl = $hasJadwalRoute ? route('admin.jadwal', ['class_id' => $kelas->id]) : '#';
+                        $jadwalUrl = $hasJadwalRoute ? route('admin.jadwal.index', ['class_id' => $kelas->id]) : '#';
 
                         $editData = [
                             'id'                 => $kelas->id,
@@ -218,6 +218,9 @@
                             'private_package_id' => $kelas->private_package_id,
                             'level_id'           => $kelas->level_id,
                             'teacher_id'         => $kelas->teacher_id,
+                            'broadcast_to_all'   => (bool) $kelas->broadcast_to_all,
+                            'teacher_response'   => $kelas->teacher_response,
+                            'rejection_note'     => $kelas->rejection_note,
                             'students_count'     => $kelas->students_count,
                             'schedules'          => $kelas->schedules->map(fn ($s) => [
                                 'id'         => $s->id,
@@ -269,8 +272,27 @@
                         </td> --}}
 
                         <td>
-                            @if ($kelas->teacher)
-                                {{ $kelas->teacher->name }}
+                            @if ($kelas->broadcast_to_all && ! $kelas->teacher_id)
+                                <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;">
+                                    <span class="badge" style="background:#e0e7ff;color:#4338ca;font-weight:600;padding:4px 8px;border-radius:6px;font-size:11px;">
+                                        <i class="fa-solid fa-bullhorn mr-1"></i> Broadcast Semua Guru
+                                    </span>
+                                    <span class="badge" style="background:#fef3c7;color:#92400e;font-size:11px;">Menunggu Diambil</span>
+                                </div>
+                            @elseif ($kelas->teacher)
+                                <div style="font-weight:600;color:#1e293b;">{{ $kelas->teacher->name }}</div>
+                                <div style="margin-top:3px;">
+                                    @if ($kelas->teacher_response === 'Accepted')
+                                        <span class="badge" style="background:#dcfce7;color:#166534;font-size:11px;"><i class="fa-solid fa-check mr-1"></i> Diterima</span>
+                                    @elseif ($kelas->teacher_response === 'Rejected')
+                                        <span class="badge" style="background:#fee2e2;color:#991b1b;font-size:11px;" title="{{ $kelas->rejection_note }}"><i class="fa-solid fa-xmark mr-1"></i> Ditolak</span>
+                                        @if($kelas->rejection_note)
+                                            <div style="font-size:11px;color:#dc2626;margin-top:2px;font-style:italic;" title="{{ $kelas->rejection_note }}">"{{ \Illuminate\Support\Str::limit($kelas->rejection_note, 25) }}"</div>
+                                        @endif
+                                    @else
+                                        <span class="badge" style="background:#fef3c7;color:#92400e;font-size:11px;"><i class="fa-solid fa-clock mr-1"></i> Menunggu Konfirmasi</span>
+                                    @endif
+                                </div>
                             @else
                                 <span style="color:#dc2626;font-weight:600;">Belum ada guru</span>
                             @endif
@@ -546,6 +568,16 @@
                                     @endforeach
                                 </select>
                             </div>
+
+                            <div class="form-field full" style="background:#f8fafc;padding:10px 14px;border-radius:8px;border:1px dashed #cbd5e1;">
+                                <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:#1e293b;margin-bottom:2px;">
+                                    <input type="checkbox" name="broadcast_to_all" id="add_broadcast_to_all" value="1" onchange="toggleBroadcastMode('add')">
+                                    <span><i class="fa-solid fa-bullhorn text-primary mr-1"></i> Tawarkan ke Semua Guru (Broadcast)</span>
+                                </label>
+                                <div style="font-size:12px;color:#64748b;margin-left:22px;">
+                                    Bila dicentang, semua guru aktif akan menerima penawaran jadwal. Guru pertama yang mengonfirmasi/menerima akan otomatis mengunci jadwal ini.
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -706,6 +738,16 @@
                                         <option value="{{ $teacher->id }}">{{ $teacher->name }}</option>
                                     @endforeach
                                 </select>
+                            </div>
+
+                            <div class="form-field full" style="background:#f8fafc;padding:10px 14px;border-radius:8px;border:1px dashed #cbd5e1;">
+                                <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:#1e293b;margin-bottom:2px;">
+                                    <input type="checkbox" name="broadcast_to_all" id="edit_broadcast_to_all" value="1" onchange="toggleBroadcastMode('edit')">
+                                    <span><i class="fa-solid fa-bullhorn text-primary mr-1"></i> Tawarkan ke Semua Guru (Broadcast)</span>
+                                </label>
+                                <div style="font-size:12px;color:#64748b;margin-left:22px;">
+                                    Bila dicentang, semua guru aktif akan menerima penawaran jadwal. Guru pertama yang mengonfirmasi/menerima akan otomatis mengunci jadwal ini.
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1134,6 +1176,12 @@ const DAY_ORDER = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu
             addScheduleRow(prefix + '_schedule_rows');
         }
 
+        const bCheck = document.getElementById(prefix + '_broadcast_to_all');
+        if (bCheck) {
+            bCheck.checked = Boolean(data.broadcast_to_all);
+            toggleBroadcastMode(prefix);
+        }
+
         syncRooms(prefix);
         refreshTeacherAvailability(prefix);
 
@@ -1142,6 +1190,20 @@ const DAY_ORDER = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu
             hint.textContent = data.students_count !== undefined
                 ? 'Siswa terdaftar saat ini: ' + data.students_count
                 : '';
+        }
+    }
+
+    function toggleBroadcastMode(prefix) {
+        const isBroadcast = document.getElementById(prefix + '_broadcast_to_all')?.checked;
+        const teacherSelect = document.getElementById(prefix + '_teacher_id');
+        if (teacherSelect) {
+            if (isBroadcast) {
+                teacherSelect.value = '';
+                teacherSelect.disabled = true;
+            } else {
+                teacherSelect.disabled = false;
+            }
+            refreshTeacherAvailability(prefix);
         }
     }
 

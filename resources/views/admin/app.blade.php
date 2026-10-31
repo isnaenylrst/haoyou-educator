@@ -144,7 +144,7 @@
                     <span class="label">Program & Level</span>
                 </a>
 
-                {{-- <a href="{{ route('admin.tamplate-dokumen') }}"class="nav-item {{ request()->routeIs('admin.tamplate-dokumen*') ? 'active' : '' }}">
+                {{-- <a href="{{ route('admin.template-dokumen.index') }}"class="nav-item {{ request()->routeIs('admin.template-dokumen*') ? 'active' : '' }}">
                     <i class="fa-solid fa-print nav-icon" title="Print Dokumen"></i>
                     <span class="label">Print Dokumen</span>
                 </a>                 --}}

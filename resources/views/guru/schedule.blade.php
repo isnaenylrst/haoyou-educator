@@ -179,7 +179,12 @@
                 <div class="border rounded-3 p-3 mb-2">
                     <div class="d-flex justify-content-between flex-wrap gap-2">
                         <div>
-                            <div class="fw-semibold">{{ $pc->class_name }}</div>
+                            <div class="fw-semibold">
+                                {{ $pc->class_name }}
+                                @if($pc->broadcast_to_all)
+                                    <span class="badge bg-info text-dark ms-2"><i class="fa-solid fa-bullhorn me-1"></i> Terbuka Semua Guru</span>
+                                @endif
+                            </div>
                             <div class="small text-muted">
                                 @forelse($pc->schedules as $sc)
                                     {{ $sc->day }} {{ substr($sc->start_time, 0, 5) }}–{{ substr($sc->end_time, 0, 5) }}{{ !$loop->last ? ' · ' : '' }}
@@ -189,21 +194,28 @@
                                 · {{ $pc->delivery_mode }}
                             </div>
                             @if($pc->conflict)
-                                <div class="small text-danger">Bentrok dengan kelas {{ $pc->conflict }}</div>
+                                <div class="small text-danger"><i class="fa-solid fa-triangle-exclamation me-1"></i> Bentrok dengan kelas {{ $pc->conflict }}</div>
                             @elseif($pc->fits)
-                                <div class="small text-success">Sesuai ketersediaan Anda</div>
+                                <div class="small text-success"><i class="fa-solid fa-circle-check me-1"></i> Sesuai ketersediaan Anda</div>
                             @else
-                                <div class="small text-warning">Di luar ketersediaan yang Anda isi</div>
+                                <div class="small text-warning"><i class="fa-solid fa-circle-exclamation me-1"></i> Di luar ketersediaan yang Anda isi</div>
                             @endif
                         </div>
 
                         <form method="POST" action="{{ route('teacher.class.respond', $pc) }}"
                               class="d-flex flex-wrap gap-2 align-items-start">
                             @csrf
-                            <input type="text" name="note" maxlength="1000" class="form-control form-control-sm"
-                                   placeholder="Alasan jika menolak" style="min-width:200px">
-                            <button name="decision" value="Accepted" class="btn btn-success btn-sm">Terima</button>
-                            <button name="decision" value="Rejected" class="btn btn-outline-danger btn-sm">Tolak</button>
+                            @if(!$pc->broadcast_to_all)
+                                <input type="text" name="note" maxlength="1000" class="form-control form-control-sm"
+                                       placeholder="Alasan wajib jika menolak" style="min-width:200px">
+                                <button name="decision" value="Accepted" class="btn btn-success btn-sm">Terima</button>
+                                <button name="decision" value="Rejected" class="btn btn-outline-danger btn-sm">Tolak</button>
+                            @else
+                                <button name="decision" value="Accepted" class="btn btn-success btn-sm fw-semibold">
+                                    <i class="fa-solid fa-lock me-1"></i> Ambil & Kunci Jadwal
+                                </button>
+                                <button name="decision" value="Rejected" class="btn btn-outline-secondary btn-sm">Lewati</button>
+                            @endif
                         </form>
                     </div>
                 </div>

@@ -16,6 +16,8 @@ use App\Models\TeacherLeave;
 use App\Models\TeachingJournal;
 use App\Models\ClassEnrollment;
 use App\Models\Student;
+use App\Models\User;
+use App\Notifications\AppNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -167,22 +169,27 @@ class KelasController extends Controller
     public function store(Request $request)
     {
         $data = $this->validated($request);
+        $broadcast = $request->boolean('broadcast_to_all');
+        $teacherId = $broadcast ? null : ($data['teacher_id'] ?? null);
 
-        DB::transaction(function () use ($data) {
+        $kelas = null;
+        DB::transaction(function () use ($data, $broadcast, $teacherId, &$kelas) {
             $kelas = new ClassModel();
             $kelas->forceFill([
                 'program_package_id' => $data['program_package_id'],
                 'private_package_id' => $data['private_package_id'],
                 'level_id'           => $data['level_id'],
-                'teacher_id'         => $data['teacher_id'],
+                'teacher_id'         => $teacherId,
+                'broadcast_to_all'   => $broadcast,
+                'teacher_response'   => 'Pending',
                 'class_name'         => $data['class_name'],
                 'delivery_mode'      => $data['delivery_mode'],
                 'start_date'         => $data['start_date'],
                 'end_date'           => $data['end_date'],
                 'capacity'           => $data['capacity'],
                 'status'             => 'Open',
-                'zoom_link'     => $data['zoom_link'],
-                'zoom_passcode' => $data['zoom_passcode'],
+                'zoom_link'          => $data['zoom_link'],
+                'zoom_passcode'      => $data['zoom_passcode'],
             ])->save();
 
             foreach ($data['schedules'] as $row) {
@@ -190,7 +197,34 @@ class KelasController extends Controller
             }
         });
 
-        return redirect()->route('admin.kelas')->with('success', 'Kelas berhasil ditambahkan.');
+        // Notifikasi ke guru (Poin 11)
+        if ($broadcast) {
+            $teachers = Teacher::with('user')->where('status', 'Active')->get();
+            foreach ($teachers as $t) {
+                if ($t->user) {
+                    $t->user->notify(new AppNotification(
+                        title: "Tawaran Kelas Baru: {$kelas->class_name}",
+                        message: "Admin membuka penawaran jadwal kelas {$kelas->class_name} untuk semua guru aktif. Guru pertama yang menerima akan mengunci jadwal.",
+                        url: url('/guru/schedule'),
+                        type: 'jadwal',
+                        icon: 'fa-bullhorn'
+                    ));
+                }
+            }
+        } elseif ($teacherId) {
+            $assignedTeacher = Teacher::with('user')->find($teacherId);
+            if ($assignedTeacher?->user) {
+                $assignedTeacher->user->notify(new AppNotification(
+                    title: "Penugasan Jadwal Kelas: {$kelas->class_name}",
+                    message: "Admin menugaskan jadwal kelas {$kelas->class_name} kepada Anda. Silakan buka menu Schedule untuk konfirmasi Terima atau Tolak.",
+                    url: url('/guru/schedule'),
+                    type: 'jadwal',
+                    icon: 'fa-calendar-check'
+                ));
+            }
+        }
+
+        return redirect()->route('admin.kelas')->with('success', 'Kelas berhasil ditambahkan.' . ($broadcast ? ' Tawaran jadwal telah dikirimkan ke semua guru aktif.' : ''));
     }
 
     /* ============================================================
@@ -200,24 +234,63 @@ class KelasController extends Controller
     {
         $kelas = ClassModel::findOrFail($id);
         $data  = $this->validated($request, $kelas);
+        $broadcast = $request->boolean('broadcast_to_all');
+        $teacherId = $broadcast ? null : ($data['teacher_id'] ?? null);
 
-        DB::transaction(function () use ($kelas, $data) {
-            // Tipe & paket sengaja TIDAK diubah setelah kelas dibuat.
-            $kelas->forceFill([
-                'level_id'      => $data['level_id'],
-                'teacher_id'    => $data['teacher_id'],
-                'class_name'    => $data['class_name'],
-                'delivery_mode' => $data['delivery_mode'],
-                'start_date'    => $data['start_date'],
-                'end_date'      => $data['end_date'],
-                'capacity'      => $data['capacity'],
-                'status'        => $data['status'],
-                'zoom_link'     => $data['zoom_link'],
-                'zoom_passcode' => $data['zoom_passcode'],
-            ])->save();
+        $teacherChanged = ($kelas->teacher_id != $teacherId) || ((bool) $kelas->broadcast_to_all !== $broadcast);
 
+        DB::transaction(function () use ($kelas, $data, $broadcast, $teacherId, $teacherChanged) {
+            $updateData = [
+                'level_id'          => $data['level_id'],
+                'teacher_id'        => $teacherId,
+                'broadcast_to_all'  => $broadcast,
+                'class_name'        => $data['class_name'],
+                'delivery_mode'     => $data['delivery_mode'],
+                'start_date'        => $data['start_date'],
+                'end_date'          => $data['end_date'],
+                'capacity'          => $data['capacity'],
+                'status'            => $data['status'],
+                'zoom_link'         => $data['zoom_link'],
+                'zoom_passcode'     => $data['zoom_passcode'],
+            ];
+
+            if ($teacherChanged) {
+                $updateData['teacher_response']      = 'Pending';
+                $updateData['teacher_response_note'] = null;
+                $updateData['teacher_responded_at']  = null;
+            }
+
+            $kelas->forceFill($updateData)->save();
             $this->syncSchedules($kelas, $data['schedules']);
         });
+
+        if ($teacherChanged) {
+            if ($broadcast) {
+                $teachers = Teacher::with('user')->where('status', 'Active')->get();
+                foreach ($teachers as $t) {
+                    if ($t->user) {
+                        $t->user->notify(new AppNotification(
+                            title: "Tawaran Kelas Baru: {$kelas->class_name}",
+                            message: "Admin membuka penawaran jadwal kelas {$kelas->class_name} untuk semua guru aktif. Guru pertama yang menerima akan mengunci jadwal.",
+                            url: url('/guru/schedule'),
+                            type: 'jadwal',
+                            icon: 'fa-bullhorn'
+                        ));
+                    }
+                }
+            } elseif ($teacherId) {
+                $assignedTeacher = Teacher::with('user')->find($teacherId);
+                if ($assignedTeacher?->user) {
+                    $assignedTeacher->user->notify(new AppNotification(
+                        title: "Penugasan Jadwal Kelas: {$kelas->class_name}",
+                        message: "Admin menugaskan jadwal kelas {$kelas->class_name} kepada Anda. Silakan buka menu Schedule untuk konfirmasi Terima atau Tolak.",
+                        url: url('/guru/schedule'),
+                        type: 'jadwal',
+                        icon: 'fa-calendar-check'
+                    ));
+                }
+            }
+        }
 
         return redirect()->route('admin.kelas')->with('success', 'Kelas berhasil diperbarui.');
     }
@@ -246,8 +319,9 @@ class KelasController extends Controller
             'start_date'    => ['required', 'date'],
             'end_date'      => ['nullable', 'date', 'after_or_equal:start_date'],
             'status'        => [$kelas ? 'required' : 'nullable', Rule::in(['Open', 'Running', 'Completed', 'Closed'])],
-            'teacher_id'    => ['nullable', 'exists:teachers,id'],
-            'zoom_link'     => ['nullable', 'url', 'max:255', 'regex:/^https:\/\/([a-z0-9-]+\.)?zoom\.us\//i'],
+            'teacher_id'       => ['nullable', 'exists:teachers,id'],
+            'broadcast_to_all' => ['nullable', 'boolean'],
+            'zoom_link'        => ['nullable', 'url', 'max:255', 'regex:/^https:\/\/([a-z0-9-]+\.)?zoom\.us\//i'],
             'zoom_passcode' => ['nullable', 'string', 'max:50'],
 
             'program_package_id' => [Rule::requiredIf(! $isPrivate), 'nullable', 'exists:program_packages,id'],
