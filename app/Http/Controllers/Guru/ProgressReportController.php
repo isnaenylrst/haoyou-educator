@@ -156,20 +156,22 @@ class ProgressReportController extends Controller
         $achievementChoices = ['Sufficient', 'Proficient', 'Excellent'];
         $levelDescriptions = AchievementLevel::pluck('description', 'level')->all();
 
-        // Nilai yang tersimpan sebelumnya
+        // Nilai yang tersimpan sebelumnya (tanpa data dummy/hardcode)
         $savedMaterials = collect($report->content ?? [])->keyBy('material');
-        $savedAssessments = $report->assessment_data ?? [
-            ['assessment' => 'Speaking & Pronunciation', 'score' => '85', 'grade' => 'A', 'note' => 'Percakapan lancar'],
-            ['assessment' => 'Reading Comprehension',   'score' => '88', 'grade' => 'A', 'note' => 'Memahami teks dengan baik'],
-            ['assessment' => 'Writing (Pinyin / Hanzi)', 'score' => '80', 'grade' => 'B', 'note' => 'Latihan urutan goresan'],
+        $savedAssessments = !empty($report->assessment_data) ? $report->assessment_data : [
+            ['assessment' => 'Speaking & Pronunciation', 'score' => '', 'grade' => '', 'note' => ''],
+            ['assessment' => 'Reading Comprehension',   'score' => '', 'grade' => '', 'note' => ''],
+            ['assessment' => 'Writing (Pinyin / Hanzi)', 'score' => '', 'grade' => '', 'note' => ''],
         ];
+
+        $overallLevel = $report->overall_achievement_level ?? 'Proficient';
 
         $deadline = ProgressReportService::deadline($e->class_id, $report);
         $isLate = $deadline && now()->gt($deadline);
 
         return view('guru.progress-report-form', compact(
             'e', 'report', 'present', 'total', 'replacementCount', 'classMaterials',
-            'achievementChoices', 'levelDescriptions', 'savedMaterials', 'savedAssessments', 'deadline', 'isLate'
+            'achievementChoices', 'levelDescriptions', 'savedMaterials', 'savedAssessments', 'overallLevel', 'deadline', 'isLate'
         ));
     }
 
@@ -197,6 +199,7 @@ class ProgressReportController extends Controller
             'assessments.*.score'     => 'required|numeric|min:0|max:100',
             'assessments.*.grade'     => 'required|string|max:10',
             'assessments.*.note'      => 'nullable|string|max:255',
+            'overall_achievement_level' => ['required', Rule::in(['Sufficient', 'Proficient', 'Excellent'])],
             'suggestion_box'          => 'nullable|string|max:2000',
             'action'                  => 'required|in:draft,submit',
         ]);
@@ -212,6 +215,7 @@ class ProgressReportController extends Controller
             'report_period'           => $data['report_period'],
             'content'                 => $data['materials'],
             'assessment_data'         => $data['assessments'] ?? [],
+            'overall_achievement_level' => $data['overall_achievement_level'],
             'suggestion_box'          => $data['suggestion_box'] ?? null,
             'attendance_present'      => $present,
             'attendance_total'        => $total,

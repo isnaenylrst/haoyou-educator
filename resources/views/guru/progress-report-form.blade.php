@@ -107,10 +107,10 @@
             </div>
         </div>
 
-        {{-- BAGIAN 2: ASSESSMENT --}}
+        {{-- BAGIAN 2: ASSESSMENT & OVERALL ACHIEVEMENT --}}
         <div class="card border-0 shadow-sm rounded-4 mb-4">
             <div class="card-header bg-white py-3 fw-bold border-bottom">
-                <i class="fa-solid fa-list-check text-warning me-2"></i> 2. Assessment & Scoring
+                <i class="fa-solid fa-list-check text-warning me-2"></i> 2. Assessment & Overall Achievement
             </div>
             <div class="card-body p-4">
                 <div class="table-responsive">
@@ -127,33 +127,51 @@
                             @foreach($savedAssessments as $aIdx => $aData)
                                 <tr>
                                     <td>
-                                        <input type="text" name="assessments[{{ $aIdx }}][assessment]" class="form-control" value="{{ old("assessments.$aIdx.assessment", $aData['assessment']) }}" required>
+                                        <input type="text" name="assessments[{{ $aIdx }}][assessment]" class="form-control" value="{{ old("assessments.$aIdx.assessment", $aData['assessment']) }}" placeholder="Nama aspek penilaian" required>
                                     </td>
                                     <td>
-                                        <input type="number" name="assessments[{{ $aIdx }}][score]" class="form-control text-center" min="0" max="100" value="{{ old("assessments.$aIdx.score", $aData['score']) }}" required>
+                                        <input type="number" name="assessments[{{ $aIdx }}][score]" class="form-control text-center" min="0" max="100" value="{{ old("assessments.$aIdx.score", $aData['score']) }}" placeholder="0-100" required>
                                     </td>
                                     <td>
-                                        <input type="text" name="assessments[{{ $aIdx }}][grade]" class="form-control text-center" value="{{ old("assessments.$aIdx.grade", $aData['grade']) }}" required>
+                                        <input type="text" name="assessments[{{ $aIdx }}][grade]" class="form-control text-center" value="{{ old("assessments.$aIdx.grade", $aData['grade']) }}" placeholder="A/B/C" required>
                                     </td>
                                     <td>
-                                        <input type="text" name="assessments[{{ $aIdx }}][note]" class="form-control" value="{{ old("assessments.$aIdx.note", $aData['note']) }}">
+                                        <input type="text" name="assessments[{{ $aIdx }}][note]" class="form-control" value="{{ old("assessments.$aIdx.note", $aData['note']) }}" placeholder="Catatan evaluasi...">
                                     </td>
                                 </tr>
                             @endforeach
                         </tbody>
                     </table>
                 </div>
+
+                {{-- OVERALL ACHIEVEMENT LEVEL (SESUAI SPESIFIKASI POIN 5) --}}
+                <div class="row align-items-center mt-3 pt-3 border-top">
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold mb-0">Overall Achievement Level (Capaian Keseluruhan):</label>
+                        <small class="text-muted d-block">Penilaian level performa belajar siswa secara komprehensif.</small>
+                    </div>
+                    <div class="col-md-7">
+                        <select name="overall_achievement_level" class="form-select fw-semibold" required>
+                            @foreach(['Sufficient', 'Proficient', 'Excellent'] as $lvl)
+                                <option value="{{ $lvl }}" @selected(old('overall_achievement_level', $overallLevel) === $lvl)>{{ $lvl }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
             </div>
         </div>
 
-        {{-- BAGIAN 3: SUGGESTION BOX --}}
+        {{-- BAGIAN 3: SUGGESTION BOX & KELAS PENGGANTI --}}
         <div class="card border-0 shadow-sm rounded-4 mb-4">
-            <div class="card-header bg-white py-3 fw-bold border-bottom">
-                <i class="fa-solid fa-comment-dots text-warning me-2"></i> 3. Suggestion Box (Saran & Masukan Guru)
+            <div class="card-header bg-white py-3 fw-bold border-bottom d-flex justify-content-between align-items-center">
+                <span><i class="fa-solid fa-comment-dots text-warning me-2"></i> 3. Suggestion Box & Catatan Sesi</span>
+                <span class="badge bg-warning-subtle text-dark border border-warning-subtle px-3 py-2">
+                    <i class="fa-solid fa-arrows-rotate me-1"></i> Kelas Pengganti: <strong>{{ $replacementCount }} kali</strong> (Otomatis)
+                </span>
             </div>
             <div class="card-body p-4">
                 <label class="form-label small text-muted">Isikan saran, masukan perkembangan, atau rekomendasi belajar untuk siswa ini:</label>
-                <textarea name="suggestion_box" rows="3" class="form-control" placeholder="Tuliskan saran & masukan perkembangan siswa di sini...">{{ old('suggestion_box', $report->suggestion_box ?? 'Tingkatkan latihan percakapan dan perbanyak pengulangan kosakata baru di rumah.') }}</textarea>
+                <textarea name="suggestion_box" rows="3" class="form-control" placeholder="Tuliskan saran & masukan perkembangan siswa di sini...">{{ old('suggestion_box', $report->suggestion_box ?? '') }}</textarea>
             </div>
         </div>
 

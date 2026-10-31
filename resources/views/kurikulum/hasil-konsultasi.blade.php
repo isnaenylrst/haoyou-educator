@@ -38,6 +38,23 @@
         </div>
     @endif
 
+    {{-- NAV TABS --}}
+    <ul class="nav nav-pills mb-4 gap-2" id="kurikulumConsultationTabs">
+        <li class="nav-item">
+            <a class="nav-link rounded-pill px-4 fw-semibold {{ $activeTab === 'hasil' ? 'active bg-dark text-white' : 'bg-white text-dark shadow-sm' }}"
+               href="{{ route('kurikulum.hasil-konsultasi.index', ['tab' => 'hasil']) }}">
+                <i class="fa-solid fa-clipboard-check me-2"></i> Hasil Konsultasi Kurikulum ({{ $consultations->total() }})
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link rounded-pill px-4 fw-semibold {{ $activeTab === 'revisi' ? 'active bg-dark text-white' : 'bg-white text-dark shadow-sm' }}"
+               href="{{ route('kurikulum.hasil-konsultasi.index', ['tab' => 'revisi']) }}">
+                <i class="fa-solid fa-arrows-rotate me-2"></i> Permintaan Konsultasi Revisi Guru ({{ $revisionConsultations->total() }})
+            </a>
+        </li>
+    </ul>
+
+    @if ($activeTab === 'hasil')
     {{-- FILTER & SEARCH --}}
     <div class="card shadow-sm border-0 mb-4 rounded-4">
         <div class="card-body p-3">
@@ -264,6 +281,135 @@
                 {{ $consultations->links() }}
             </div>
         </div>
+    @endif
+    @else
+        {{-- ==================== TAB 2: PERMINTAAN KONSULTASI REVISI DARI GURU ==================== --}}
+        @if ($revisionConsultations->isEmpty())
+            <div class="card shadow-sm border-0 rounded-4 text-center py-5">
+                <div class="card-body">
+                    <i class="fa-solid fa-arrows-rotate fa-4x text-muted mb-3 opacity-50"></i>
+                    <h5 class="fw-bold text-dark">Belum Ada Permintaan Konsultasi Revisi</h5>
+                    <p class="text-muted">Guru belum mengajukan konsultasi revisi untuk dokumen mengajar.</p>
+                </div>
+            </div>
+        @else
+            <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+                <div class="table-responsive">
+                    <table class="table align-middle table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 5%;">#</th>
+                                <th style="width: 18%;">Guru & Kelas</th>
+                                <th style="width: 15%;">Dokumen</th>
+                                <th style="width: 25%;">Kendala Guru</th>
+                                <th style="width: 12%;">Status</th>
+                                <th style="width: 25%;" class="text-end">Aksi Kurikulum</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($revisionConsultations as $rc)
+                                <tr>
+                                    <td>{{ $loop->iteration }}</td>
+                                    <td>
+                                        <div class="fw-bold text-dark">{{ $rc->teacher->name ?? '-' }}</div>
+                                        <small class="text-muted">
+                                            <i class="fa-solid fa-chalkboard me-1"></i> {{ $rc->class->class_name ?? 'Umum' }}
+                                        </small>
+                                        <small class="text-muted d-block" style="font-size: 11px;">
+                                            {{ $rc->created_at->translatedFormat('d M Y, H:i') }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-primary text-white px-3 py-2 rounded-pill">
+                                            {{ $rc->document_type }}
+                                        </span>
+                                        @if($rc->attachment_path)
+                                            <div class="mt-1">
+                                                <a href="{{ route('kurikulum.hasil-konsultasi.revisi.download', $rc->id) }}" class="small text-decoration-none">
+                                                    <i class="fa-solid fa-paperclip me-1"></i> Unduh Berkas
+                                                </a>
+                                            </div>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        <div class="small text-dark" style="white-space: pre-line;">{{ $rc->obstacle }}</div>
+                                        @if($rc->curriculum_reply)
+                                            <div class="mt-2 p-2 rounded-3 bg-success-subtle small border border-success-subtle">
+                                                <strong><i class="fa-solid fa-reply me-1"></i> Balasan:</strong> {{ $rc->curriculum_reply }}
+                                            </div>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        <span class="badge {{ $rc->status_badge }} px-3 py-2 rounded-pill fw-semibold">
+                                            {{ $rc->status }}
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="d-flex justify-content-end gap-1 flex-wrap">
+                                            @if($rc->status === 'Menunggu')
+                                                <form action="{{ route('kurikulum.hasil-konsultasi.revisi.accept', $rc->id) }}" method="POST">
+                                                    @csrf @method('PATCH')
+                                                    <button type="submit" class="btn btn-sm btn-info text-dark rounded-pill px-3 fw-semibold">
+                                                        <i class="fa-solid fa-check me-1"></i> Terima
+                                                    </button>
+                                                </form>
+                                            @endif
+
+                                            @if($rc->status !== 'Selesai')
+                                                <button type="button" class="btn btn-sm btn-success rounded-pill px-3 fw-semibold"
+                                                        data-bs-toggle="modal" data-bs-target="#modalBalasRevisi{{ $rc->id }}">
+                                                    <i class="fa-solid fa-reply me-1"></i> Balas & Selesai
+                                                </button>
+                                            @else
+                                                <span class="badge bg-light text-muted border py-2 px-3">
+                                                    <i class="fa-solid fa-circle-check text-success me-1"></i> Selesai
+                                                </span>
+                                            @endif
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                {{-- MODAL BALAS REVISI --}}
+                                <div class="modal fade" id="modalBalasRevisi{{ $rc->id }}" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog modal-dialog-centered">
+                                        <form class="modal-content border-0 shadow rounded-4" action="{{ route('kurikulum.hasil-konsultasi.revisi.complete', $rc->id) }}" method="POST">
+                                            @csrf @method('PATCH')
+                                            <div class="modal-header border-bottom">
+                                                <h5 class="modal-title fw-bold">
+                                                    <i class="fa-solid fa-reply text-warning me-2"></i> Balas Konsultasi — {{ $rc->teacher->name }}
+                                                </h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body p-4 text-start">
+                                                <div class="p-3 bg-light rounded-3 border mb-3">
+                                                    <div class="small fw-bold text-muted mb-1">Kendala / Pertanyaan Guru:</div>
+                                                    <div class="small text-dark">{{ $rc->obstacle }}</div>
+                                                </div>
+
+                                                <div class="mb-0">
+                                                    <label class="form-label fw-semibold">Arahan / Solusi Kurikulum <span class="text-danger">*</span></label>
+                                                    <textarea name="curriculum_reply" rows="4" class="form-control" placeholder="Tuliskan arahan perbaikan, solusi materi, atau rekomendasi kurikulum..." required>{{ $rc->curriculum_reply }}</textarea>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer border-top">
+                                                <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Batal</button>
+                                                <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold">
+                                                    <i class="fa-solid fa-paper-plane me-1"></i> Kirim & Tandai Selesai
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="p-3 border-top">
+                    {{ $revisionConsultations->links() }}
+                </div>
+            </div>
+        @endif
     @endif
 
 </div>

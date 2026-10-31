@@ -187,18 +187,50 @@ class ReviewPengajuanController extends Controller
             'note.required_if' => 'Isi alasan saat mengembalikan LP & PPT agar guru tahu apa yang harus diperbaiki.',
         ]);
 
-        if ($teacherMaterial->status !== 'Pending') {
+        if (!in_array($teacherMaterial->status, ['Pending', 'Diajukan'])) {
             return back()->with('error', 'Pengajuan LP & PPT ini sudah direview.');
         }
 
-        $teacherMaterial->update([
-            'status'      => $data['decision'],
-            'review_note' => $data['decision'] === 'Rejected' ? $data['note'] : null,
-            'approved_by' => Auth::id(),
-            'approved_at' => now(),
-        ]);
+        $finalStatus = $data['decision'] === 'Approved' ? 'Disetujui' : 'Perlu Revisi';
 
-        return back()->with('success', 'LP & PPT berhasil ' . ($data['decision'] === 'Approved' ? 'di-ACC' : 'dikembalikan ke guru') . '.');
+        DB::transaction(function () use ($teacherMaterial, $data, $finalStatus) {
+            $teacherMaterial->update([
+                'status'      => $finalStatus,
+                'review_note' => $data['decision'] === 'Rejected' ? $data['note'] : null,
+                'approved_by' => Auth::id(),
+                'approved_at' => now(),
+            ]);
+
+            // Update catatan review pada versi dokumen terbaru
+            $latestVersion = $teacherMaterial->versions()->latest('version_number')->first();
+            if ($latestVersion) {
+                $latestVersion->update([
+                    'status'      => $finalStatus,
+                    'review_note' => $data['decision'] === 'Rejected' ? $data['note'] : null,
+                    'reviewed_by' => Auth::id(),
+                    'reviewed_at' => now(),
+                ]);
+            }
+
+            // Notifikasi dua arah ke Guru bersangkutan
+            $teacher = $teacherMaterial->teacher;
+            if ($teacher?->user) {
+                $className = $teacherMaterial->class?->class_name ?? 'Kelas';
+                $isApproved = $data['decision'] === 'Approved';
+
+                $teacher->user->notify(new AppNotification(
+                    title: $isApproved ? "Dokumen Kelas Disetujui: {$className}" : "Dokumen Kelas Perlu Revisi: {$className}",
+                    message: $isApproved
+                        ? "Kurikulum telah menyetujui Lesson Plan & PPT untuk kelas {$className}."
+                        : "Kurikulum meminta perbaikan LP & PPT kelas {$className}. Catatan: {$data['note']}",
+                    url: url('/guru/kelas'),
+                    type: 'dokumen_kelas',
+                    icon: $isApproved ? 'fa-circle-check' : 'fa-circle-exclamation'
+                ));
+            }
+        });
+
+        return back()->with('success', 'LP & PPT berhasil ' . ($data['decision'] === 'Approved' ? 'di-ACC' : 'dikembalikan ke guru untuk revisi') . '.');
     }
 
     // ------------------------------------------------------------------ JURNAL ONLINE
@@ -533,5 +565,38 @@ class ReviewPengajuanController extends Controller
     public function printSubmission(Submission $submission)
     {
         return view('kurikulum.cetak-pengajuan', compact('submission'));
+    }
+
+    /** Buka kunci pengisian jurnal yang terlambat (> 24 jam) untuk guru */
+    public function unlockJournal(Request $request)
+    {
+        $request->validate([
+            'class_schedule_id' => ['required', 'exists:class_schedules,id'],
+            'session_date'      => ['required', 'date'],
+        ]);
+
+        \App\Models\ScheduleJournalUnlock::updateOrCreate(
+            [
+                'class_schedule_id' => $request->class_schedule_id,
+                'session_date'      => $request->session_date,
+            ],
+            [
+                'unlocked_until'    => now()->addHours(24),
+                'unlocked_by'       => Auth::id(),
+            ]
+        );
+
+        $schedule = \App\Models\ClassSchedule::with('class.teacher.user')->find($request->class_schedule_id);
+        if ($schedule?->class?->teacher?->user) {
+            $schedule->class->teacher->user->notify(new \App\Notifications\AppNotification(
+                title: "Kunci Jurnal Dibuka Kurikulum",
+                message: "Kurikulum telah membuka kunci pengisian jurnal untuk kelas {$schedule->class->class_name} pada tanggal " . \Illuminate\Support\Carbon::parse($request->session_date)->translatedFormat('d M Y') . ". Silakan isi jurnal dalam 24 jam ke depan.",
+                url: url('/guru/attendance?date=' . $request->session_date),
+                type: 'jurnal',
+                icon: 'fa-lock-open'
+            ));
+        }
+
+        return back()->with('success', 'Kunci pengisian jurnal berhasil dibuka untuk 24 jam ke depan, dan guru telah diberi notifikasi.');
     }
 }

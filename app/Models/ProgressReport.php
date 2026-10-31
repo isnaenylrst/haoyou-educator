@@ -50,6 +50,7 @@ class ProgressReport extends Model
         'curriculum_signature_path',
         'owner_signature_path',
         'replacement_class_count',
+        'overall_achievement_level',
         'attendance_present',
         'attendance_total',
         'reviewed_by',

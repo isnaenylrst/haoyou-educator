@@ -91,13 +91,13 @@ class SiswaDashboardController extends Controller
             ])
             ->all();
 
-        $progressReports = ProgressReport::with([
-            'teacher',
-            'enrollment.class',
-        ])
+        $progressReports = ProgressReport::approved()
+            ->with([
+                'teacher',
+                'enrollment.class',
+            ])
             ->where('student_id', $student->id)
-            ->where('status', 'Submitted')
-            ->latest('created_at')
+            ->latest('reviewed_at')
             ->get();
 
         $documents = $this->sertifikatQuery()->get();
@@ -415,13 +415,13 @@ class SiswaDashboardController extends Controller
     {
         $student = $this->student();
 
-        $laporan = ProgressReport::with([
-            'teacher',
-            'enrollment.class.programPackage.program',
-        ])
+        $laporan = ProgressReport::approved()
+            ->with([
+                'teacher',
+                'enrollment.class.programPackage.program',
+            ])
             ->where('student_id', $student->id)
-            ->where('status', 'Submitted')
-            ->orderByDesc('created_at')
+            ->orderByDesc('reviewed_at')
             ->get();
 
         return view(

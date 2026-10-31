@@ -3,10 +3,14 @@
 namespace App\Http\Controllers\Guru;
 
 use App\Http\Controllers\Controller;
+use App\Models\ClassModel;
 use App\Models\Consultation;
 use App\Models\Material;
 use App\Models\ProgramCategory;
 use App\Models\TeacherMaterial;
+use App\Models\TeacherMaterialVersion;
+use App\Models\User;
+use App\Notifications\AppNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +19,7 @@ use Illuminate\Validation\Rule;
 
 class KelasController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $teacher = Auth::user()->teacher;
 
@@ -23,16 +27,28 @@ class KelasController extends Controller
             abort(403, 'Akun Anda belum terhubung dengan data guru.');
         }
 
+        // Daftar kelas yang diampu guru ini
+        $myClasses = ClassModel::where('teacher_id', $teacher->id)
+            ->where('teacher_response', 'Accepted')
+            ->orderBy('class_name')
+            ->get();
+
+        $selectedClassId = $request->query('class_id');
+
         $categories = ProgramCategory::orderBy('category_name')->get();
 
         $materials = Material::forGuru()->with('level.category')
             ->orderBy('title')
             ->get();
 
-        $submissions = TeacherMaterial::with(['material.level.category', 'consultations'])
-            ->where('teacher_id', $teacher->id)
-            ->latest()
-            ->get();
+        $query = TeacherMaterial::with(['material.level.category', 'class', 'versions.reviewer', 'consultations'])
+            ->where('teacher_id', $teacher->id);
+
+        if ($selectedClassId) {
+            $query->where('class_id', $selectedClassId);
+        }
+
+        $submissions = $query->latest()->get();
 
         $activeSubmission = $submissions->firstWhere('status', '!=', 'Approved');
 
@@ -41,6 +57,8 @@ class KelasController extends Controller
             : null;
 
         return view('guru.kelas', compact(
+            'myClasses',
+            'selectedClassId',
             'categories',
             'materials',
             'submissions',
@@ -49,9 +67,8 @@ class KelasController extends Controller
         ));
     }
 
-        private function buildProgressSteps(TeacherMaterial $submission): array
+    private function buildProgressSteps(TeacherMaterial $submission): array
     {
-        // ambil konsultasi TERBARU per jenis (yang lama/dibatalkan tidak menutupi pengajuan ulang)
         $latest = fn (string $type) => $submission->consultations
             ->where('type', $type)
             ->sortByDesc('id')
@@ -73,12 +90,12 @@ class KelasController extends Controller
                 'locked' => !$konsultasiKurikulum || $konsultasiKurikulum->status !== 'Selesai',
             ],
             [
-                'label' => '3. Revisi LP',
-                'status_text' => $submission->status === 'Rejected' ? 'Perlu Revisi' : 'Menunggu',
+                'label' => '3. Revisi LP & Dokumen',
+                'status_text' => in_array($submission->status, ['Rejected', 'Perlu Revisi']) ? 'Perlu Revisi' : 'Menunggu',
             ],
             [
-                'label' => '4. Upload PPT Final',
-                'status_text' => $submission->status === 'Approved' ? 'Selesai' : 'Belum Mulai',
+                'label' => '4. Upload PPT & Finalisasi',
+                'status_text' => in_array($submission->status, ['Approved', 'Disetujui']) ? 'Disetujui' : 'Belum Selesai',
             ],
         ];
     }
@@ -95,11 +112,10 @@ class KelasController extends Controller
             'type' => ['required', Rule::in(['LP_PPT', 'Direktur'])],
         ]);
 
-        if ($teacherMaterial->status === 'Approved') {
+        if (in_array($teacherMaterial->status, ['Approved', 'Disetujui'])) {
             return back()->with('error', 'Pengajuan ini sudah disetujui, tidak perlu konsultasi lagi.');
         }
 
-        // Konsultasi Direktur hanya boleh setelah konsultasi Kurikulum selesai
         if ($request->type === 'Direktur') {
             $kurikulumSelesai = Consultation::where('teacher_material_id', $teacherMaterial->id)
                 ->where('type', 'LP_PPT')
@@ -111,7 +127,6 @@ class KelasController extends Controller
             }
         }
 
-        // Yang sudah dibatalkan Kurikulum boleh diajukan ulang
         $exists = Consultation::where('teacher_material_id', $teacherMaterial->id)
             ->where('type', $request->type)
             ->where('status', '!=', 'Dibatalkan')
@@ -124,6 +139,7 @@ class KelasController extends Controller
         Consultation::create([
             'teacher_id'          => $teacher->id,
             'teacher_material_id' => $teacherMaterial->id,
+            'class_id'            => $teacherMaterial->class_id,
             'type'                => $request->type,
             'status'              => 'Belum Terjadwal',
             'notify_whatsapp'     => true,
@@ -142,37 +158,63 @@ class KelasController extends Controller
         }
 
         $request->validate([
-                        'material_id' => ['required', Rule::exists('materials', 'id')->where('audience', 'Guru')],
-            'lp_file' => ['required', 'file', 'mimes:pdf', 'max:10240'],
-            'ppt_file' => ['required', 'file', 'mimes:pdf,ppt,pptx', 'max:20480'],
+            'class_id'    => ['required', 'exists:classes,id'],
+            'material_id' => ['required', Rule::exists('materials', 'id')->where('audience', 'Guru')],
+            'lp_file'     => ['required', 'file', 'mimes:pdf', 'max:10240'],
+            'ppt_file'    => ['required', 'file', 'mimes:pdf,ppt,pptx', 'max:20480'],
+            'notes'       => ['nullable', 'string', 'max:1000'],
         ]);
 
         try {
             DB::transaction(function () use ($request, $teacher) {
-
-                $lpPath = $request->file('lp_file')->store('teacher_materials/lp', 'public');
+                $lpPath  = $request->file('lp_file')->store('teacher_materials/lp', 'public');
                 $pptPath = $request->file('ppt_file')->store('teacher_materials/ppt', 'public');
 
                 $material = Material::forGuru()->findOrFail($request->material_id);
+                $class    = ClassModel::findOrFail($request->class_id);
 
-                TeacherMaterial::create([
-                    'material_id' => $request->material_id,
-                    'teacher_id' => $teacher->id,
-                    'ppt_title' => $material->title,
-                    'lp_file_path' => $lpPath,
-                    'ppt_file_path' => $pptPath,
-                    'status' => 'Pending',
+                $submission = TeacherMaterial::create([
+                    'material_id'     => $request->material_id,
+                    'teacher_id'      => $teacher->id,
+                    'class_id'        => $class->id,
+                    'ppt_title'       => $material->title,
+                    'lp_file_path'    => $lpPath,
+                    'ppt_file_path'   => $pptPath,
+                    'status'          => 'Diajukan',
+                    'current_version' => 1,
                 ]);
+
+                // Simpan versi 1 ke riwayat versi
+                TeacherMaterialVersion::create([
+                    'teacher_material_id' => $submission->id,
+                    'version_number'      => 1,
+                    'lp_file_path'         => $lpPath,
+                    'ppt_file_path'        => $pptPath,
+                    'notes'                => $request->notes ?? 'Versi awal',
+                    'status'               => 'Diajukan',
+                ]);
+
+                // Notifikasi ke seluruh tim Kurikulum
+                $curriculums = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Curriculum'))->get();
+                foreach ($curriculums as $cUser) {
+                    $cUser->notify(new AppNotification(
+                        title: "Revisi Dokumen Masuk: {$class->class_name}",
+                        message: "Guru {$teacher->name} mengunggah Lesson Plan & PPT (Versi 1) untuk kelas {$class->class_name} ({$material->title}).",
+                        url: url('/kurikulum/review-pengajuan?tab=material'),
+                        type: 'dokumen_kelas',
+                        icon: 'fa-chalkboard'
+                    ));
+                }
             });
 
             return redirect()
                 ->route('teacher.kelas')
-                ->with('success', 'LP & PPT berhasil dikirim untuk direview Kurikulum.');
+                ->with('success', 'Lesson Plan & PPT berhasil dikirim untuk direview Kurikulum (Versi 1).');
 
         } catch (\Exception $e) {
             return back()
                 ->withInput()
-                ->with('error', 'Gagal mengirim LP & PPT: ' . $e->getMessage());
+                ->with('error', 'Gagal mengirim dokumen kelas: ' . $e->getMessage());
         }
     }
 
@@ -180,35 +222,74 @@ class KelasController extends Controller
     {
         $teacher = Auth::user()->teacher;
 
-        if (!$teacher || $teacherMaterial->teacher_id !== $teacher->id) {
+        if (!$teacher || (int) $teacherMaterial->teacher_id !== (int) $teacher->id) {
             abort(403);
         }
 
         $request->validate([
-            'lp_file' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
+            'lp_file'  => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
             'ppt_file' => ['nullable', 'file', 'mimes:pdf,ppt,pptx', 'max:20480'],
+            'notes'    => ['required', 'string', 'max:1000'],
+        ], [
+            'notes.required' => 'Catatan revisi wajib diisi agar Kurikulum mengetahui poin perubahan dokumen.',
         ]);
 
-        $data = ['status' => 'Pending', 'review_note' => null];
-
-        if ($request->hasFile('lp_file')) {
-            if ($teacherMaterial->lp_file_path && Storage::disk('public')->exists($teacherMaterial->lp_file_path)) {
-                Storage::disk('public')->delete($teacherMaterial->lp_file_path);
-            }
-            $data['lp_file_path'] = $request->file('lp_file')->store('teacher_materials/lp', 'public');
+        if (!$request->hasFile('lp_file') && !$request->hasFile('ppt_file')) {
+            return back()->with('error', 'Pilih minimal satu file (LP atau PPT) baru untuk revisi versi baru.');
         }
 
-        if ($request->hasFile('ppt_file')) {
-            if ($teacherMaterial->ppt_file_path && Storage::disk('public')->exists($teacherMaterial->ppt_file_path)) {
-                Storage::disk('public')->delete($teacherMaterial->ppt_file_path);
-            }
-            $data['ppt_file_path'] = $request->file('ppt_file')->store('teacher_materials/ppt', 'public');
+        try {
+            DB::transaction(function () use ($request, $teacherMaterial, $teacher) {
+                $newVersion = ($teacherMaterial->current_version ?: 1) + 1;
+
+                // Jangan hapus file lama; simpan path baru
+                $lpPath  = $request->hasFile('lp_file')
+                    ? $request->file('lp_file')->store('teacher_materials/lp', 'public')
+                    : $teacherMaterial->lp_file_path;
+
+                $pptPath = $request->hasFile('ppt_file')
+                    ? $request->file('ppt_file')->store('teacher_materials/ppt', 'public')
+                    : $teacherMaterial->ppt_file_path;
+
+                // Catat versi baru di riwayat versi
+                TeacherMaterialVersion::create([
+                    'teacher_material_id' => $teacherMaterial->id,
+                    'version_number'      => $newVersion,
+                    'lp_file_path'         => $lpPath,
+                    'ppt_file_path'        => $pptPath,
+                    'notes'                => $request->notes,
+                    'status'               => 'Diajukan',
+                ]);
+
+                // Update induk TeacherMaterial
+                $teacherMaterial->update([
+                    'lp_file_path'    => $lpPath,
+                    'ppt_file_path'   => $pptPath,
+                    'current_version' => $newVersion,
+                    'status'          => 'Diajukan',
+                    'review_note'     => null,
+                ]);
+
+                // Notifikasi ke Kurikulum
+                $className = $teacherMaterial->class?->class_name ?? 'Kelas';
+                $curriculums = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Curriculum'))->get();
+                foreach ($curriculums as $cUser) {
+                    $cUser->notify(new AppNotification(
+                        title: "Revisi Dokumen Baru (Versi {$newVersion}): {$className}",
+                        message: "Guru {$teacher->name} mengunggah revisi versi {$newVersion} untuk kelas {$className}. Catatan guru: {$request->notes}",
+                        url: url('/kurikulum/review-pengajuan?tab=material'),
+                        type: 'dokumen_kelas',
+                        icon: 'fa-chalkboard'
+                    ));
+                }
+            });
+
+            return redirect()
+                ->route('teacher.kelas')
+                ->with('success', 'Revisi dokumen versi baru berhasil diupload dan dikirim kembali ke Kurikulum.');
+
+        } catch (\Exception $e) {
+            return back()->with('error', 'Gagal mengupload revisi: ' . $e->getMessage());
         }
-
-        $teacherMaterial->update($data);
-
-        return redirect()
-            ->route('teacher.kelas')
-            ->with('success', 'LP & PPT berhasil diupload ulang dan dikirim kembali untuk direview.');
     }
 }

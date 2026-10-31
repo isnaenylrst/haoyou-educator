@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Kurikulum;
 
 use App\Http\Controllers\Controller;
 use App\Models\ConsultationResult;
+use App\Models\RevisionConsultation;
 use App\Models\Teacher;
 use App\Models\TeacherObservation;
 use App\Notifications\AppNotification;
@@ -47,7 +48,14 @@ class ConsultationResultController extends Controller
         $teachers = Teacher::orderBy('name')->get();
         $observations = TeacherObservation::with(['teacher', 'class'])->latest('observation_date')->get();
 
-        return view('kurikulum.hasil-konsultasi', compact('consultations', 'teachers', 'observations'));
+        $revisionConsultations = RevisionConsultation::with(['teacher.user', 'class', 'curriculum'])
+            ->latest()
+            ->paginate(10, ['*'], 'revisi_page')
+            ->withQueryString();
+
+        $activeTab = $request->query('tab', 'hasil');
+
+        return view('kurikulum.hasil-konsultasi', compact('consultations', 'teachers', 'observations', 'revisionConsultations', 'activeTab'));
     }
 
     /**
@@ -195,6 +203,74 @@ class ConsultationResultController extends Controller
             ]);
 
         return response()->json($observations);
+    }
+
+    /**
+     * Kurikulum menerima konsultasi revisi dari guru
+     */
+    public function acceptRevision(RevisionConsultation $revisionConsultation)
+    {
+        $revisionConsultation->update([
+            'status'         => 'Diterima',
+            'curriculum_id'  => Auth::id(),
+            'accepted_at'    => now(),
+        ]);
+
+        if ($revisionConsultation->teacher?->user) {
+            $revisionConsultation->teacher->user->notify(new AppNotification(
+                title: "Konsultasi Revisi Diterima Kurikulum",
+                message: "Permintaan konsultasi revisi {$revisionConsultation->document_type} Anda telah diterima Kurikulum dan sedang diproses.",
+                url: url('/guru/hasil-konsultasi?tab=revisi'),
+                type: 'konsultasi_revisi',
+                icon: 'fa-comments'
+            ));
+        }
+
+        return back()->with('success', 'Permintaan konsultasi revisi telah diterima.');
+    }
+
+    /**
+     * Kurikulum memberikan balasan / solusi dan menandai konsultasi revisi selesai
+     */
+    public function completeRevision(Request $request, RevisionConsultation $revisionConsultation)
+    {
+        $request->validate([
+            'curriculum_reply' => ['required', 'string', 'max:3000'],
+        ], [
+            'curriculum_reply.required' => 'Balasan arahan / solusi dari Kurikulum wajib diisi.',
+        ]);
+
+        $revisionConsultation->update([
+            'status'           => 'Selesai',
+            'curriculum_id'    => Auth::id(),
+            'curriculum_reply' => $request->curriculum_reply,
+            'completed_at'     => now(),
+        ]);
+
+        if ($revisionConsultation->teacher?->user) {
+            $revisionConsultation->teacher->user->notify(new AppNotification(
+                title: "Konsultasi Revisi Selesai: {$revisionConsultation->document_type}",
+                message: "Kurikulum telah memberikan balasan & solusi untuk konsultasi revisi {$revisionConsultation->document_type}. Klik untuk membaca arahan.",
+                url: url('/guru/hasil-konsultasi?tab=revisi'),
+                type: 'konsultasi_revisi',
+                icon: 'fa-circle-check'
+            ));
+        }
+
+        return back()->with('success', 'Konsultasi revisi berhasil diselesaikan dan balasan telah terkirim ke Guru.');
+    }
+
+    /**
+     * Unduh lampiran dari pengajuan konsultasi revisi guru
+     */
+    public function downloadRevision(RevisionConsultation $revisionConsultation)
+    {
+        abort_unless($revisionConsultation->attachment_path && Storage::disk('public')->exists($revisionConsultation->attachment_path), 404, 'File lampiran tidak ditemukan.');
+
+        return Storage::disk('public')->download(
+            $revisionConsultation->attachment_path,
+            $revisionConsultation->attachment_name ?: basename($revisionConsultation->attachment_path)
+        );
     }
 }
 

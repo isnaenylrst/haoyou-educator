@@ -24,7 +24,7 @@ class ProgressReportController extends Controller
         $fu = null;
     }
 
-    $base = ProgressReport::where('status', ProgressReport::SUBMITTED);
+    $base = ProgressReport::whereIn('status', [ProgressReport::SUBMITTED, 'Published'])->whereNotNull('reviewed_at');
 
     $stats = [
         'terbit' => (clone $base)->count(),
@@ -41,7 +41,8 @@ class ProgressReportController extends Controller
             'enrollment.programPackage.program',
             'enrollment.privatePackage',
         ])
-        ->where('status', ProgressReport::SUBMITTED)
+        ->whereIn('status', [ProgressReport::SUBMITTED, 'Published'])
+        ->whereNotNull('reviewed_at')
         ->when($search !== '', fn ($q) => $q->where(function ($w) use ($search) {
             $w->where('report_period', 'like', "%{$search}%")
               ->orWhereHas('student', fn ($s) => $s->where('name', 'like', "%{$search}%"));

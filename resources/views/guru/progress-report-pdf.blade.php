@@ -113,35 +113,33 @@
                     <td>{{ $aRow['note'] ?? '-' }}</td>
                 </tr>
             @empty
-                <tr>
-                    <td class="center">1</td>
-                    <td>Speaking & Pronunciation</td>
-                    <td class="center">{{ $report->listening_score ?? 85 }}</td>
-                    <td class="center">A</td>
-                    <td>Good pronunciation and confidence</td>
-                </tr>
-                <tr>
-                    <td class="center">2</td>
-                    <td>Reading Comprehension</td>
-                    <td class="center">{{ $report->reading_score ?? 88 }}</td>
-                    <td class="center">A</td>
-                    <td>Understands sentences clearly</td>
-                </tr>
-                <tr>
-                    <td class="center">3</td>
-                    <td>Writing (Hanyu Pinyin / Hanzi)</td>
-                    <td class="center">{{ $report->writing_score ?? 82 }}</td>
-                    <td class="center">B</td>
-                    <td>Keep practicing stroke orders</td>
-                </tr>
+                <tr><td colspan="5" class="center text-muted">Belum ada data assessment.</td></tr>
             @endforelse
         </tbody>
+    </table>
+
+    {{-- OVERALL ACHIEVEMENT LEVEL & KELAS PENGGANTI --}}
+    <table style="width: 100%; margin-top: 10px; margin-bottom: 12px; font-size: 11px;">
+        <tr>
+            <td style="width: 50%; padding: 6px 10px; background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px;">
+                <strong>OVERALL ACHIEVEMENT LEVEL:</strong>
+                <span style="font-weight: bold; margin-left: 6px; font-size: 12px; color: {{ ($report->overall_achievement_level ?? '') === 'Excellent' ? '#16a34a' : (($report->overall_achievement_level ?? '') === 'Proficient' ? '#2563eb' : '#d97706') }};">
+                    {{ $report->overall_achievement_level ?? 'Proficient' }}
+                </span>
+            </td>
+            <td style="width: 50%; padding: 6px 10px; background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px;">
+                <strong>KELAS PENGGANTI:</strong>
+                <span style="font-weight: bold; margin-left: 6px; font-size: 12px; color: #1e293b;">
+                    {{ $report->replacement_class_count ?? 0 }} kali
+                </span>
+            </td>
+        </tr>
     </table>
 
     {{-- BAGIAN 3: SUGGESTION BOX --}}
     <div class="section-title">3. SUGGESTION BOX & FEEDBACK</div>
     <div class="suggestion-box">
-        {{ $report->suggestion_box ?: 'Pertahankan semangat belajar dan tingkatkan latihan percakapan Mandarin secara aktif di rumah!' }}
+        {{ $report->suggestion_box ?: 'Belum ada catatan saran/masukan.' }}
     </div>
 
     {{-- BAGIAN 4: TANDA TANGAN --}}

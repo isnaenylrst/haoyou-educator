@@ -440,6 +440,10 @@ Route::middleware(['auth', 'role:Curriculum'])
         Route::post('/review-pengajuan/enrollment/{enrollment}/reopen-report', [ReviewPengajuanController::class, 'reopenReport'])
             ->name('review-pengajuan.reopen-report');
 
+        // Buka kunci jurnal yang lewat batas 24 jam
+        Route::post('/review-pengajuan/unlock-journal', [ReviewPengajuanController::class, 'unlockJournal'])
+            ->name('review-pengajuan.unlock-journal');
+
         // Review Reimburse & Pembelian Bahan Ajar (Poin 5)
         Route::patch('/review-pengajuan/submission/{submission}', [ReviewPengajuanController::class, 'reviewSubmission'])
             ->name('review-pengajuan.submission');
@@ -588,6 +592,14 @@ Route::middleware(['auth', 'role:Curriculum'])
             ->name('hasil-konsultasi.download');
         Route::get('/hasil-konsultasi/teacher/{teacher}/observations', [KurikulumConsultationResultController::class, 'getTeacherObservations'])
             ->name('hasil-konsultasi.teacher-observations');
+
+        // Konsultasi Revisi dari Guru (Poin 2)
+        Route::patch('/hasil-konsultasi/revisi/{revisionConsultation}/accept', [KurikulumConsultationResultController::class, 'acceptRevision'])
+            ->name('hasil-konsultasi.revisi.accept');
+        Route::patch('/hasil-konsultasi/revisi/{revisionConsultation}/complete', [KurikulumConsultationResultController::class, 'completeRevision'])
+            ->name('hasil-konsultasi.revisi.complete');
+        Route::get('/hasil-konsultasi/revisi/{revisionConsultation}/download', [KurikulumConsultationResultController::class, 'downloadRevision'])
+            ->name('hasil-konsultasi.revisi.download');
     });
 
 /*
@@ -719,9 +731,11 @@ Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
         Route::get('/training/{id}/download', [GuruTrainingMaterialController::class, 'download'])->name('training.download');
         Route::get('/training/{id}/stream', [GuruTrainingMaterialController::class, 'streamVideo'])->name('training.stream');
 
-        // Hasil Konsultasi (Poin 13 - Read Only)
+        // Hasil Konsultasi & Konsultasi Revisi (Poin 2 & 13)
         Route::get('/hasil-konsultasi', [GuruConsultationResultController::class, 'index'])->name('hasil-konsultasi');
+        Route::post('/hasil-konsultasi/revisi', [GuruConsultationResultController::class, 'storeRevision'])->name('hasil-konsultasi.revisi.store');
         Route::get('/hasil-konsultasi/{id}/download', [GuruConsultationResultController::class, 'download'])->name('hasil-konsultasi.download');
+        Route::get('/hasil-konsultasi/revisi/{id}/download', [GuruConsultationResultController::class, 'downloadRevisionAttachment'])->name('hasil-konsultasi.revisi.download');
     });
 
 /*

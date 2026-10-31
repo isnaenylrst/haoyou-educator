@@ -20,10 +20,12 @@ class Submission extends Model
     public const STATUSES = [
         'Diajukan',
         'Review Kurikulum',
+        'Verifikasi Admin',
         'Review Owner',
         'Disetujui',
-        'Ditolak',
+        'Dibayar',
         'Selesai',
+        'Ditolak',
     ];
 
     protected $fillable = [
@@ -31,15 +33,20 @@ class Submission extends Model
         'created_by',
         'type',
         'item_name',
+        'items',
         'amount',
         'date',
         'description',
         'receipt_path',
+        'photo_path',
         'status',
         'curriculum_id',
         'curriculum_note',
         'curriculum_approved_at',
         'curriculum_signature_path',
+        'admin_id',
+        'admin_verified_at',
+        'admin_note',
         'owner_id',
         'owner_note',
         'owner_approved_at',
@@ -48,7 +55,9 @@ class Submission extends Model
 
     protected $casts = [
         'date'                   => 'date',
+        'items'                  => 'array',
         'curriculum_approved_at' => 'datetime',
+        'admin_verified_at'      => 'datetime',
         'owner_approved_at'      => 'datetime',
         'amount'                 => 'decimal:2',
     ];
@@ -68,6 +77,11 @@ class Submission extends Model
         return $this->belongsTo(User::class, 'curriculum_id');
     }
 
+    public function admin()
+    {
+        return $this->belongsTo(User::class, 'admin_id');
+    }
+
     public function owner()
     {
         return $this->belongsTo(User::class, 'owner_id');
@@ -81,12 +95,13 @@ class Submission extends Model
     public function getStatusBadgeAttribute(): string
     {
         return match ($this->status) {
-            'Diajukan'         => 'bg-warning text-dark',
-            'Review Kurikulum' => 'bg-info text-dark',
-            'Review Owner'     => 'bg-primary text-white',
-            'Disetujui', 'Selesai' => 'bg-success text-white',
-            'Ditolak'          => 'bg-danger text-white',
-            default            => 'bg-secondary text-white',
+            'Diajukan'                           => 'bg-warning text-dark',
+            'Review Kurikulum'                   => 'bg-info text-dark',
+            'Verifikasi Admin'                   => 'bg-secondary text-white',
+            'Review Owner'                       => 'bg-primary text-white',
+            'Disetujui', 'Dibayar', 'Selesai'    => 'bg-success text-white',
+            'Ditolak'                            => 'bg-danger text-white',
+            default                              => 'bg-secondary text-white',
         };
     }
 }
