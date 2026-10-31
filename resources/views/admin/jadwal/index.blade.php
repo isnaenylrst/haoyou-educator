@@ -1,4 +1,3 @@
-```blade
 @extends('admin.app')
 
 @section('title', 'Jadwal | Pembelajaran')
@@ -6,6 +5,114 @@
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin/jadwal.css') }}">
+    <style>
+        /* Kontrol zoom kalender kelas */
+        .zoom-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; flex-wrap: wrap; padding: 0 0 12px;
+        }
+        .zoom-bar-title { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+        .zoom-bar-title i { color: #2563eb; }
+        .zoom-controls { display: flex; align-items: center; gap: 6px; }
+        .zoom-btn {
+            min-width: 30px; height: 30px; padding: 0 9px; cursor: pointer;
+            border: 1px solid rgba(0, 0, 0, .15); border-radius: 8px;
+            background: transparent; color: inherit; font-size: 13px;
+        }
+        .zoom-btn:hover { background: rgba(0, 0, 0, .06); }
+        .zoom-btn:disabled { opacity: .35; cursor: not-allowed; }
+        .zoom-value { min-width: 52px; text-align: center; font-weight: 600; font-size: 13px; }
+        .zoom-hint { font-size: 12px; opacity: .6; margin-right: 6px; }
+
+        /* Card jadwal available guru (di bawah kalender kelas) */
+        .avail-card { margin-top: 20px; padding: 0; overflow: hidden; }
+        .avail-head {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; flex-wrap: wrap;
+            padding: 14px 18px; border-bottom: 1px solid rgba(0, 0, 0, .08);
+        }
+        .avail-title { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+        .avail-title i { color: #16a34a; }
+        .avail-sub { font-size: 12.5px; opacity: .7; margin-top: 2px; }
+        .avail-scroll { overflow-x: auto; }
+        .avail-table { width: 100%; border-collapse: collapse; min-width: 760px; }
+        .avail-table th, .avail-table td {
+            padding: 10px 14px; text-align: left; vertical-align: top;
+            border-bottom: 1px solid rgba(0, 0, 0, .06);
+            border-right: 1px solid rgba(0, 0, 0, .04);
+            font-size: 13px;
+        }
+        .avail-table th { font-weight: 600; font-size: 11px; background: rgba(0, 0, 0, .025); white-space: nowrap; }
+        .avail-table th small { display: block; font-weight: 400; opacity: .6; }
+        .avail-table th.is-today { color: #16a34a; }
+        .avail-table .avail-teacher { font-weight: 600; white-space: nowrap; min-width: 150px; font-size: 13px}
+        .avail-table tr:last-child td { border-bottom: 0; }
+        .avail-chip {
+            display: inline-block; margin: 0 4px 4px 0; padding: 4px 10px;
+            border-radius: 999px; font-size: 11px; white-space: nowrap;
+            background: rgba(34, 197, 94, .14); border: 1px solid rgba(34, 197, 94, .5);
+            color: #15803d;
+        }
+        .avail-empty { opacity: .35; }
+        .avail-none { padding: 28px 20px; text-align: center; opacity: .7; font-size: 13.5px; }
+
+        /* ===== Card jadwal kelas ===== */
+
+        /* Tinggi tiap slot 30 menit (card jadi lebih panjang). Ubah angkanya untuk
+           memanjang/memendekkan semua card sekaligus. */
+        .week-grid { --slot-h: 46px; }
+        .week-grid .wg-col,
+        .week-grid .wg-time-body { min-height: calc(var(--slot-count) * var(--slot-h)); }
+
+        /* Card pas dengan kotak grid: jarak 1px yang sama di keempat sisi */
+        .week-grid .sess {
+            box-sizing: border-box;
+            display: flex; flex-direction: column; justify-content: flex-start; gap: 2px;
+            padding: 5px 8px; overflow: hidden; border-radius: 8px;
+            border-left-width: 4px; border-left-style: solid;
+            line-height: 1.25;
+        }
+        .week-grid .sess .sess-title {
+            font-size: 12.5px; font-weight: 700;
+            display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+            overflow: hidden; word-break: break-word;
+        }
+        .week-grid .sess .sess-meta {
+            font-size: 11.5px; margin: 0;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .week-grid .sess.is-short { justify-content: center; padding-top: 3px; padding-bottom: 3px; }
+        .week-grid .sess.is-short .sess-title { -webkit-line-clamp: 1; }
+        .week-grid .sess.is-short .sess-time { display: none; }
+
+        /* Warna berbeda tiap kelas (Daily Activity & HSK). Private tetap 1 warna. */
+        .week-grid .sess.is-class-color {
+            background: var(--c-bg); border-color: var(--c-bd); color: var(--c-tx);
+        }
+        .week-grid .sess.is-class-color .sess-meta { color: var(--c-tx); opacity: .8; }
+
+        /* Pertemuan terakhir kelas: merah */
+        .week-grid .sess.is-last-session {
+            background: #fee2e2; border-color: #dc2626; color: #7f1d1d;
+        }
+        .week-grid .sess.is-last-session .sess-meta { color: #7f1d1d; opacity: .85; }
+
+        .class-legend {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
+            padding: 0 0 12px; font-size: 12px;
+        }
+        .class-legend-label { font-weight: 600; opacity: .7; margin-right: 2px; }
+        .class-legend-chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600;
+            background: var(--c-bg); color: var(--c-tx); border: 1px solid var(--c-bd);
+        }
+        .class-legend-chip::before {
+            content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--c-bd);
+        }
+        .legend-dot.dot-last { background: #dc2626; }
+        #detail_meeting.is-last { color: #dc2626; }
+    </style>
 @endpush
 
 @section('content')
@@ -20,6 +127,18 @@
             'Daily Activity' => 'kind-daily',
             'Replacement'    => 'kind-private',
         ];
+
+        // Warna kartu per kategori program (Maochong, Jianer, Hudie, Feixiang,
+        // HSK Class, HSK Preparation). Private punya warna sendiri lewat CSS.
+        $categoryColor = function (?string $category) {
+            $hue = \App\Http\Controllers\Admin\JadwalController::CATEGORY_HUES[$category] ?? null;
+
+            if ($hue === null) {
+                return '--c-bg: hsl(215 14% 92%); --c-bd: hsl(215 12% 55%); --c-tx: hsl(215 20% 20%);';
+            }
+
+            return "--c-bg: hsl({$hue} 85% 90%); --c-bd: hsl({$hue} 60% 48%); --c-tx: hsl({$hue} 55% 17%);";
+        };
 
         $hasTrials = collect($trials)->flatten(1)->isNotEmpty();
 
@@ -92,7 +211,8 @@
             </a>
 
             {{-- FILTER GURU --}}
-            <select name="teacher_id" class="select-chip" onchange="this.form.submit()">
+            <select name="teacher_id" class="select-chip" onchange="this.form.submit()"
+                    title="Filter jadwal kelas dan jadwal available berdasarkan guru">
                 <option value="">Semua Guru</option>
                 @foreach ($teachers as $teacher)
                     <option value="{{ $teacher->id }}"
@@ -134,16 +254,6 @@
             {{-- LEGENDA --}}
             <div class="legend">
                 <span class="legend-item">
-                    <span class="legend-dot dot-daily"></span>
-                    Daily Activity
-                </span>
-
-                <span class="legend-item">
-                    <span class="legend-dot dot-hsk"></span>
-                    HSK
-                </span>
-
-                <span class="legend-item">
                     <span class="legend-dot dot-private"></span>
                     Private
                 </span>
@@ -152,6 +262,7 @@
                     <span class="legend-dot dot-trial"></span>
                     Trial
                 </span>
+
             </div>
         </div>
     </form>
@@ -206,6 +317,59 @@
                 $colWidths
             ));
         @endphp
+
+        <div class="zoom-bar">
+            <div class="zoom-bar-title">
+                <i class="fa-solid fa-calendar-days"></i>
+                Jadwal Kelas
+            </div>
+
+            <div class="zoom-controls">
+                <span class="zoom-hint">Ctrl + scroll untuk zoom</span>
+                <button type="button" class="zoom-btn" id="zoomOut" title="Zoom out" onclick="changeZoom(-0.1)">
+                    <i class="fa-solid fa-magnifying-glass-minus"></i>
+                </button>
+                <span class="zoom-value" id="zoomValue">95%</span>
+                <button type="button" class="zoom-btn" id="zoomIn" title="Zoom in" onclick="changeZoom(0.1)">
+                    <i class="fa-solid fa-magnifying-glass-plus"></i>
+                </button>
+                <button type="button" class="zoom-btn" title="Kembali ke ukuran awal" onclick="resetZoom()">
+                    Reset
+                </button>
+            </div>
+        </div>
+
+        @php
+            $categoryOrder = array_merge(
+                array_keys(\App\Http\Controllers\Admin\JadwalController::CATEGORY_HUES),
+                ['Lainnya']
+            );
+
+            $legendCategories = collect($sessions)
+                ->flatten(1)
+                ->pluck('category')
+                ->filter()
+                ->unique()
+                ->sortBy(fn ($category) => array_search($category, $categoryOrder, true))
+                ->values();
+        @endphp
+
+        @if ($legendCategories->isNotEmpty())
+            <div class="class-legend">
+                <span class="class-legend-label">Warna kategori:</span>
+
+                @foreach ($legendCategories as $legendCategory)
+                    <span class="class-legend-chip" style="{{ $categoryColor($legendCategory) }}">
+                        {{ $legendCategory }}
+                    </span>
+                @endforeach
+
+                <span class="class-legend-chip"
+                      style="--c-bg: #fee2e2; --c-bd: #dc2626; --c-tx: #7f1d1d;">
+                    Pertemuan terakhir
+                </span>
+            </div>
+        @endif
 
         <div class="week-scroll" id="weekGrid">
             <div class="week-grid"
@@ -307,18 +471,26 @@
                                     $height = $duration / $totalMin * 100;
                                     $left = $session['lane'] / $session['lanes'] * 100;
                                     $width = 100 / $session['lanes'];
+
+                                    $isLast = ! empty($session['is_last_session']);
+                                    $useClassColor = ! $isLast
+                                        && in_array($session['kind'], ['HSK', 'Daily Activity'], true)
+                                        && ! empty($session['category']);
                                 @endphp
 
                                 <div class="sess
                                             {{ $kindClass[$session['kind']] ?? 'kind-daily' }}
+                                            {{ $useClassColor ? 'is-class-color' : '' }}
+                                            {{ $isLast ? 'is-last-session' : '' }}
                                             {{ $duration <= 30 ? 'is-short' : '' }}
                                             {{ $session['has_conflict'] ? 'has-conflict' : '' }}
                                             {{ $session['status_key'] === 'Cancelled' ? 'is-cancelled' : '' }}"
                                      style="top: calc({{ round($top, 3) }}% + 1px);
                                             height: calc({{ round($height, 3) }}% - 2px);
-                                            left: calc({{ round($left, 3) }}% + 2px);
-                                            width: calc({{ round($width, 3) }}% - 4px);"
-                                     title="{{ $session['title'] }} · {{ $teacherLabel }} · {{ $session['start_time'] }}–{{ $session['end_time'] }}"
+                                            left: calc({{ round($left, 3) }}% + 1px);
+                                            width: calc({{ round($width, 3) }}% - 2px);
+                                            {{ $useClassColor ? $categoryColor($session['category']) : '' }}"
+                                     title="{{ $session['title'] }} · {{ $teacherLabel }} · {{ $session['start_time'] }}–{{ $session['end_time'] }}{{ $isLast ? ' · Pertemuan terakhir' : '' }}"
                                      data-session="{{ json_encode($session) }}"
                                      onclick="openSessionDetail(this)">
 
@@ -349,6 +521,71 @@
 
             </div>
         </div>
+    </div>
+
+    {{-- JADWAL AVAILABLE GURU (card terpisah, di bawah jadwal kelas) --}}
+    <div class="card avail-card">
+        <div class="avail-head">
+            <div>
+                <div class="avail-title">
+                    <i class="fa-solid fa-user-clock"></i>
+                    Jadwal Available Guru
+                </div>
+                <div class="avail-sub">
+                    @if ($selectedTeacher)
+                        Jam tersedia {{ $selectedTeacher->name }} setiap minggu.
+                    @else
+                        Jam tersedia semua guru setiap minggu. Pilih guru di filter untuk melihat satu guru saja.
+                    @endif
+                </div>
+            </div>
+        </div>
+
+        @if (empty($availabilityRows))
+            <div class="avail-none">
+                @if ($selectedTeacher)
+                    {{ $selectedTeacher->name }} belum punya jam tersedia.
+                @else
+                    Belum ada guru yang mengisi jam tersedia.
+                @endif
+            </div>
+        @else
+            <div class="avail-scroll">
+                <table class="avail-table">
+                    <thead>
+                        <tr>
+                            <th>Guru</th>
+                            @foreach ($availDays as $dayName)
+                                @php
+                                    $di = array_search($dayName, ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'], true);
+                                    $dDate = $weekStart->copy()->addDays($di);
+                                @endphp
+                                <th class="{{ $dDate->isToday() ? 'is-today' : '' }}">
+                                    {{ $dayName }}
+                                    <small>{{ $dDate->format('d M') }}</small>
+                                </th>
+                            @endforeach
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($availabilityRows as $row)
+                            <tr>
+                                <td class="avail-teacher">{{ $row['name'] }}</td>
+                                @foreach ($availDays as $dayName)
+                                    <td>
+                                        @forelse ($row['days'][$dayName] ?? [] as $slot)
+                                            <span class="avail-chip">{{ $slot['label'] }}</span>
+                                        @empty
+                                            <span class="avail-empty">–</span>
+                                        @endforelse
+                                    </td>
+                                @endforeach
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
     </div>
 
     {{-- MODAL DETAIL SESI --}}
@@ -390,7 +627,7 @@
                 </div>
 
                 <div class="detail-row">
-                    <span>Waktu</span>
+                    <span>Jam</span>
                     <strong id="detail_time">-</strong>
                 </div>
 
@@ -402,6 +639,16 @@
                 <div class="detail-row">
                     <span>Status Sesi</span>
                     <strong id="detail_status">-</strong>
+                </div>
+
+                <div class="detail-row">
+                    <span id="detail_students_label">Jumlah Siswa</span>
+                    <strong id="detail_students">-</strong>
+                </div>
+
+                <div class="detail-row" id="detail_meeting_row">
+                    <span>Pertemuan</span>
+                    <strong id="detail_meeting">-</strong>
                 </div>
 
                 <div class="detail-row" id="detail_moved_row" style="display: none;">
@@ -422,10 +669,6 @@
                 {{-- KETERANGAN PEMBAYARAN DARI PAYMENTS --}}
                 <div id="detail_fees" style="margin-top: 8px;"></div>
 
-                <div class="detail-row">
-                    <span id="detail_students_label">Siswa Terdaftar</span>
-                    <strong id="detail_students">-</strong>
-                </div>
             </div>
 
             <div class="modal-foot">
@@ -452,6 +695,57 @@
         if (today) {
             wrap.scrollLeft = Math.max(0, today.offsetLeft - 90);
         }
+    });
+
+    /**
+     * Zoom kalender kelas. Nilai disimpan di browser supaya tetap sama
+     * saat pindah minggu atau mengganti filter.
+     */
+    const ZOOM_KEY = 'jadwalZoom95';
+    const ZOOM_MIN = 0.6;
+    const ZOOM_MAX = 2;
+    const ZOOM_DEFAULT = 0.95;
+    let currentZoom = ZOOM_DEFAULT;
+
+    function applyZoom(value) {
+        currentZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 100) / 100));
+
+        const grid = document.querySelector('#weekGrid .week-grid');
+        if (grid) {
+            grid.style.zoom = currentZoom;
+        }
+
+        document.getElementById('zoomValue').textContent = Math.round(currentZoom * 100) + '%';
+        document.getElementById('zoomOut').disabled = currentZoom <= ZOOM_MIN;
+        document.getElementById('zoomIn').disabled = currentZoom >= ZOOM_MAX;
+
+        try { localStorage.setItem(ZOOM_KEY, currentZoom); } catch (e) {}
+    }
+
+    function changeZoom(delta) {
+        applyZoom(currentZoom + delta);
+    }
+
+    function resetZoom() {
+        applyZoom(ZOOM_DEFAULT);
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        let saved = ZOOM_DEFAULT;
+
+        try {
+            const stored = parseFloat(localStorage.getItem(ZOOM_KEY));
+            if (!isNaN(stored)) saved = stored;
+        } catch (e) {}
+
+        applyZoom(saved);
+
+        // Ctrl + scroll (atau pinch di trackpad) untuk zoom kalender.
+        document.getElementById('weekGrid').addEventListener('wheel', function (event) {
+            if (!event.ctrlKey) return;
+            event.preventDefault();
+            changeZoom(event.deltaY < 0 ? 0.1 : -0.1);
+        }, { passive: false });
     });
 
     /**
@@ -596,11 +890,21 @@
         document.getElementById('detail_status').textContent =
             data.status_label ?? '-';
 
-        document.getElementById('detail_students_label').textContent =
-            data.student_name ? 'Siswa' : 'Siswa Terdaftar';
+        const hasCount = data.students_count !== null && data.students_count !== undefined;
 
-        document.getElementById('detail_students').textContent =
-            data.student_name ?? data.students_count ?? '-';
+        document.getElementById('detail_students_label').textContent =
+            hasCount || !data.student_name ? 'Jumlah Siswa' : 'Siswa';
+
+        document.getElementById('detail_students').textContent = hasCount
+            ? data.students_count + ' siswa' + (data.student_name ? ' (' + data.student_name + ')' : '')
+            : (data.student_name ?? '-');
+
+        const meetingRow = document.getElementById('detail_meeting_row');
+        const meeting = document.getElementById('detail_meeting');
+
+        meetingRow.style.display = data.kind === 'Trial' ? 'none' : '';
+        meeting.textContent = data.meeting_label ?? '-';
+        meeting.classList.toggle('is-last', !!data.is_last_session);
 
         document.getElementById('detail_moved_row').style.display =
             data.moved_from ? '' : 'none';
@@ -638,4 +942,3 @@
         });
 </script>
 @endpush
-```

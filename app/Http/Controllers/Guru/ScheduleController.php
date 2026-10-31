@@ -110,9 +110,11 @@ class ScheduleController extends Controller
 
         // Kelas yang diberikan Kurikulum dan menunggu jawaban saya
         $pendingClasses = ClassModel::with('schedules')
-            ->where('teacher_id', $teacher->id)
-            ->where('teacher_response', 'Pending')
             ->whereIn('status', ['Open', 'Running'])
+            ->where(function ($q) use ($teacher) {
+                $q->where(fn ($q) => $q->where('teacher_id', $teacher->id)->where('teacher_response', 'Pending'))
+                ->orWhereHas('teacherOffers', fn ($o) => $o->where('teacher_id', $teacher->id)->where('status', 'Pending'));
+            })
             ->orderBy('class_name')
             ->get()
             ->map(function ($c) use ($myAvailabilities, $teacher) {

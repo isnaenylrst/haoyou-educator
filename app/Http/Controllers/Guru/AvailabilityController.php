@@ -77,7 +77,11 @@ class AvailabilityController extends Controller
     public function respondClass(Request $request, ClassModel $class)
     {
         $teacher = $this->teacher();
-        abort_if((int) $class->teacher_id !== (int) $teacher->id, 403);
+
+        $isOffer = \App\Models\ClassTeacherOffer::where('class_id', $class->id)
+            ->where('teacher_id', $teacher->id)->where('status', 'Pending')->exists();
+
+        abort_if(! $isOffer && (int) $class->teacher_id !== (int) $teacher->id, 403);
 
         $data = $request->validate([
             'decision' => ['required', Rule::in(['Accepted', 'Rejected'])],
@@ -85,6 +89,20 @@ class AvailabilityController extends Controller
         ], [
             'note.required_if' => 'Isi alasan saat menolak kelas.',
         ]);
+
+        if ($isOffer) {
+            try {
+                $data['decision'] === 'Accepted'
+                    ? app(\App\Services\ClassOfferService::class)->accept($class, $teacher)
+                    : app(\App\Services\ClassOfferService::class)->reject($class, $teacher, $data['note']);
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                return back()->with('error', collect($e->errors())->flatten()->first());
+            }
+
+            return back()->with('success', $data['decision'] === 'Accepted'
+                ? "Kelas {$class->class_name} diterima."
+                : "Pengajuan kelas {$class->class_name} ditolak.");
+        }
 
         $class->load('schedules');
 

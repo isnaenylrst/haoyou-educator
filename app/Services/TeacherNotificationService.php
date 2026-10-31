@@ -298,15 +298,19 @@ class TeacherNotificationService
                 ]);
             });
 
-        // 8. Kelas baru menunggu konfirmasi
-        ClassModel::where('teacher_id', $t->id)->where('teacher_response', 'Pending')
-            ->whereIn('status', ['Open', 'Running'])->get()
-            ->each(fn ($c) => $push([
-                'key' => "class-{$c->id}", 'type' => 'class_assign',
-                'title' => "Kelas {$c->class_name} diberikan kepada Anda, mohon konfirmasi",
-                'category' => 'Penugasan Kelas', 'time' => $c->updated_at, 'actionable' => true,
-                'action' => ['kind' => 'link', 'label' => 'Terima / Tolak', 'url' => route('teacher.schedule')],
-            ]));
+        // 8. Kelas menunggu konfirmasi: diberikan langsung kepada saya, atau diajukan admin ke beberapa guru
+        ClassModel::whereIn('status', ['Open', 'Running'])
+        ->where(function ($q) use ($t) {
+            $q->where(fn ($q) => $q->where('teacher_id', $t->id)->where('teacher_response', 'Pending'))
+            ->orWhereHas('teacherOffers', fn ($o) => $o->where('teacher_id', $t->id)->where('status', 'Pending'));
+        })->get()
+        ->each(fn ($c) => $push([
+            'key' => "class-{$c->id}", 'type' => 'class_assign',
+            'title' => (int) $c->teacher_id === (int) $t->id
+                ? "Kelas {$c->class_name} diberikan kepada Anda, mohon konfirmasi"
+                : "Kelas {$c->class_name} diajukan kepada Anda, mohon konfirmasi",
+            // category, time, actionable, action: tetap seperti sebelumnya
+        ]));
 
         // 9. Permintaan dari guru lain agar saya menggantikan kelasnya
         TeacherLeave::with(['teacher', 'classSchedule.class'])

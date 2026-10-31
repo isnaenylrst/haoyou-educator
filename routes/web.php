@@ -734,16 +734,41 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
     Route::prefix('kelas')->group(function () {
         Route::get('/', [KelasController::class, 'index'])
             ->name('kelas');
+        Route::get('/create', [KelasController::class, 'create'])
+            ->name('kelas.create');
         Route::post('/', [KelasController::class, 'store'])
             ->name('kelas.store');
+
+        // BARU: halaman penuh Edit Kelas (+ kelola siswa) dan Ubah Jadwal
+        Route::get('/{id}/edit', [KelasController::class, 'edit'])
+            ->name('kelas.edit');
+        Route::get('/{id}/ubah-jadwal', [KelasController::class, 'ubahJadwal'])
+            ->name('kelas.ubah-jadwal');
+
         Route::put('/{id}', [KelasController::class, 'update'])
             ->name('kelas.update');
+
+        // Siswa kelas
         Route::get('/{id}/siswa', [KelasController::class, 'students'])
             ->name('kelas.students');
         Route::get('/{id}/siswa/cari', [KelasController::class, 'searchStudents'])
             ->name('kelas.students.search');
         Route::post('/{id}/siswa', [KelasController::class, 'enrollStudent'])
             ->name('kelas.students.store');
+
+        // Pertemuan kelas (class_sessions)
+        Route::get('/{id}/pertemuan', [KelasController::class, 'sessions'])
+            ->name('kelas.sessions');
+        Route::put('/pertemuan/{classSession}/jadwal', [KelasController::class, 'rescheduleSession'])
+            ->name('kelas.sessions.reschedule');
+        Route::post('/pertemuan/{classSession}/selesai', [KelasController::class, 'completeSession'])
+            ->name('kelas.sessions.complete');
+        Route::post('/{id}/home-visit', [KelasController::class, 'makeHomeVisit'])
+            ->name('kelas.home-visit');
+        
+        // Ajukan kelas
+        Route::post('/{id}/ajukan', [KelasController::class, 'storeOffer'])
+            ->name('kelas.offer.store');
     });
 
     // PROGRAM & LEVEL

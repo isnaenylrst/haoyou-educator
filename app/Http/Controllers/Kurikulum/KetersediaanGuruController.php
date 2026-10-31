@@ -131,6 +131,8 @@ class KetersediaanGuruController extends Controller
             'teacher_responded_at'  => null,
         ]);
 
+        app(\App\Services\ClassOfferService::class)->closeOffers($class);
+
         return back()->with('success', "Kelas {$class->class_name} dikirim ke guru untuk dikonfirmasi.");
     }
 }

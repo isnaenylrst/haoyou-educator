@@ -148,4 +148,10 @@ class ClassModel extends Model
     {
         return max($this->minStudents() - $this->enrolledCount(), 0);
     }
+
+    // Tabel menyimpan assign guru ke jadwal
+    public function teacherOffers()
+    {
+        return $this->hasMany(ClassTeacherOffer::class, 'class_id');
+    }
 }
