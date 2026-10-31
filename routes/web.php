@@ -72,6 +72,7 @@ use App\Http\Controllers\Guru\VideoController as GuruVideoController;
 use App\Http\Controllers\Guru\ObservationController as GuruObservationController;
 use App\Http\Controllers\Guru\TrainingMaterialController as GuruTrainingMaterialController;
 use App\Http\Controllers\Guru\ConsultationResultController as GuruConsultationResultController;
+use App\Http\Controllers\Guru\RequestBelajarController as GuruRequestBelajarController;
 
 // ===== OWNER =====
 use App\Http\Controllers\Owner\DashboardController as OwnerDashboardController;
@@ -264,7 +265,7 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
     Route::delete('/profil/foto', [ProfilController::class, 'destroyFoto'])
         ->name('profil.foto.destroy');
 
-    Route::post('/profil/signature', [ProfilController::class, 'updateSignature'])
+    Route::match(['post', 'put'], '/profil/signature', [ProfilController::class, 'updateSignature'])
         ->name('profil.signature');
 
     Route::delete('/profil/signature', [ProfilController::class, 'destroySignature'])
@@ -691,6 +692,9 @@ Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
         Route::get('/cuti', [GuruCutiController::class, 'index'])->name('cuti');
         Route::post('/cuti', [GuruCutiController::class, 'store'])->name('cuti.store');
 
+        // Request Belajar Siswa (Poin 9)
+        Route::get('/request-belajar', [GuruRequestBelajarController::class, 'index'])->name('request-belajar');
+
         // Dashboard
         Route::get('/dashboard', [GuruDashboardController::class, 'index'])->name('dashboard');
 
@@ -911,6 +915,8 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
     Route::prefix('kelas')->group(function () {
         Route::get('/', [KelasController::class, 'index'])
             ->name('kelas');
+        Route::get('/export', [KelasController::class, 'export'])
+            ->name('kelas.export');
         Route::post('/', [KelasController::class, 'store'])
             ->name('kelas.store');
         Route::put('/{id}', [KelasController::class, 'update'])
@@ -1089,6 +1095,8 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
     // REKAP PENGAJUAN (Poin 5)
     Route::get('/pengajuan', [SubmissionRekapController::class, 'index'])
         ->name('pengajuan.index');
+    Route::post('/pengajuan/{submission}/verify', [SubmissionRekapController::class, 'adminVerify'])
+        ->name('pengajuan.verify');
 
     // REQUEST BELAJAR SISWA (Poin 10)
     Route::get('/request-belajar', [AdminStudentLearningRequestController::class, 'index'])

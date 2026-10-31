@@ -166,6 +166,7 @@
             ['Sertifikat',           'fa-certificate',   '/guru/sertifikat',      'guru/sertifikat*'],
             ['Schedule',             'fa-calendar-days', '/guru/schedule',        'guru/schedule*'],
             ['Teaching Log',         'fa-clipboard-list','/guru/teaching-log',    'guru/teaching-log*'],
+            ['Request Belajar',      'fa-book-open-reader', '/guru/request-belajar', 'guru/request-belajar*'],
         ]],
         ['label' => 'Pengajuan & Evaluasi', 'items' => [
             ['Pengajuan Reimburse & Bahan', 'fa-receipt', '/guru/pengajuan', 'guru/pengajuan*'],
@@ -175,6 +176,9 @@
         ]],
         ['label' => 'Komunikasi', 'items' => [
             ['Surat', 'fa-envelope', '/guru/surat', 'guru/surat*'],
+        ]],
+        ['label' => 'Akun', 'items' => [
+            ['Profil Saya', 'fa-user-gear', '/profil', 'profil*'],
         ]],
     ];
 
@@ -234,11 +238,13 @@
     </nav>
 
     <div class="sidebar-user">
-        <div class="avatar">{{ $initials }}</div>
-        <div class="user-meta">
-            <div class="n">{{ $userName }}</div>
-            <div class="r">{{ $roleLabel }}</div>
-        </div>
+        <a href="{{ $profileUrl }}" class="d-flex align-items-center gap-2 text-decoration-none text-reset flex-fill overflow-hidden" title="Lihat & Edit Profil">
+            <div class="avatar">{{ $initials }}</div>
+            <div class="user-meta">
+                <div class="n">{{ $userName }}</div>
+                <div class="r">{{ $roleLabel }} <i class="fa-solid fa-pen-to-square ms-1" style="font-size:10px;"></i></div>
+            </div>
+        </a>
         <button type="button" class="collapse-btn" id="collapseBtn" title="Ciutkan sidebar">
             <i class="fa-solid fa-chevron-left" style="font-size:12px"></i>
         </button>

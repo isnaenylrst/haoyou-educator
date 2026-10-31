@@ -31,29 +31,26 @@ class MonitoringController extends Controller
 
         /*
         |--------------------------------------------------------------------------
-        | RANKING: GURU PALING AKTIF MENGAJAR (Poin 7)
+        | RANKING: GURU PALING AKTIF MENGAJAR (Poin 7) - Dioptimalkan Bebas N+1
         |--------------------------------------------------------------------------
-        | Berdasarkan jumlah pertemuan yang benar-benar diajar (Conducted)
-        | dengan filter periode (minggu/bulan/semester).
         */
         $allTeachers = Teacher::with(['classes'])->where('status', 'Active')->get();
 
-        $activeRankings = $allTeachers->map(function ($teacher) use ($startDate, $endDate) {
-            // Jumlah pertemuan yang benar-benar diajar
-            $pertemuanDiajar = TeachingJournal::where('teacher_id', $teacher->id)
-                ->where('class_status', 'Conducted')
-                ->whereBetween('session_date', [$startDate, $endDate])
-                ->count();
+        // Eager aggregation untuk mencegah N+1 query
+        $journalsSummary = TeachingJournal::query()
+            ->whereIn('teacher_id', $allTeachers->pluck('id'))
+            ->whereBetween('session_date', [$startDate, $endDate])
+            ->selectRaw('teacher_id, count(*) as total, sum(case when class_status = "Conducted" then 1 else 0 end) as conducted')
+            ->groupBy('teacher_id')
+            ->get()
+            ->keyBy('teacher_id');
 
-            // Total sesi/jadwal yang seharusnya diajar pada periode ini
-            $totalSesiJadwal = TeachingJournal::where('teacher_id', $teacher->id)
-                ->whereBetween('session_date', [$startDate, $endDate])
-                ->count();
+        $activeRankings = $allTeachers->map(function ($teacher) use ($journalsSummary) {
+            $summary = $journalsSummary->get($teacher->id);
+            $pertemuanDiajar = (int) ($summary?->conducted ?? 0);
+            $totalSesiJadwal = (int) ($summary?->total ?? 0);
+            $kelasDiampu     = $teacher->classes->count(); // Menggunakan collection loaded, bukan query ulang
 
-            // Jumlah kelas yang diampu
-            $kelasDiampu = $teacher->classes()->count();
-
-            // Persentase kehadiran mengajar
             $denominator = max($totalSesiJadwal, $pertemuanDiajar, 1);
             $persentase = round(($pertemuanDiajar / $denominator) * 100, 1);
             if ($pertemuanDiajar > 0 && $persentase < 1) {

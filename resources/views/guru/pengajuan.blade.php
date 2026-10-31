@@ -65,6 +65,11 @@
                             </td>
                             <td>
                                 <div class="fw-bold text-dark">{{ $sub->item_name }}</div>
+                                @if(!empty($sub->items) && is_array($sub->items))
+                                    <span class="badge bg-light text-dark border me-1">
+                                        <i class="fa-solid fa-boxes-stacked me-1"></i> {{ count($sub->items) }} Item
+                                    </span>
+                                @endif
                                 <small class="text-muted">{{ Str::limit($sub->description, 60) ?: '-' }}</small>
                             </td>
                             <td>
@@ -72,25 +77,41 @@
                             </td>
                             <td>{{ $sub->date->translatedFormat('d M Y') }}</td>
                             <td>
-                                @if($sub->receipt_path)
-                                    <a href="{{ asset('storage/' . $sub->receipt_path) }}" target="_blank" class="small text-primary text-decoration-none">
-                                        <i class="fa-solid fa-paperclip me-1"></i> Lihat Nota
-                                    </a>
-                                @else
-                                    <span class="small text-muted">-</span>
-                                @endif
+                                <div class="d-flex flex-column gap-1">
+                                    @if($sub->receipt_path)
+                                        <a href="{{ asset('storage/' . $sub->receipt_path) }}" target="_blank" class="small text-primary text-decoration-none">
+                                            <i class="fa-solid fa-receipt me-1"></i> Nota
+                                        </a>
+                                    @endif
+                                    @if($sub->photo_path)
+                                        <a href="{{ asset('storage/' . $sub->photo_path) }}" target="_blank" class="small text-success text-decoration-none">
+                                            <i class="fa-solid fa-image me-1"></i> Foto Bahan
+                                        </a>
+                                    @endif
+                                    @if(!$sub->receipt_path && !$sub->photo_path)
+                                        <span class="small text-muted">-</span>
+                                    @endif
+                                </div>
                             </td>
                             <td>
                                 <span class="badge {{ $sub->status_badge }}">{{ $sub->status }}</span>
+                                @if($sub->status === 'Review Admin')
+                                    <div class="small text-info mt-1"><i class="fa-solid fa-user-check me-1"></i> ACC Kurikulum</div>
+                                @elseif($sub->status === 'Review Owner')
+                                    <div class="small text-primary mt-1"><i class="fa-solid fa-building-circle-check me-1"></i> Verifikasi Admin</div>
+                                @endif
                             </td>
                             <td>
                                 @if($sub->curriculum_note)
                                     <div class="small text-dark"><strong>Kurikulum:</strong> {{ $sub->curriculum_note }}</div>
                                 @endif
+                                @if($sub->admin_note)
+                                    <div class="small text-dark"><strong>Admin:</strong> {{ $sub->admin_note }}</div>
+                                @endif
                                 @if($sub->owner_note)
                                     <div class="small text-dark"><strong>Owner:</strong> {{ $sub->owner_note }}</div>
                                 @endif
-                                @if(!$sub->curriculum_note && !$sub->owner_note)
+                                @if(!$sub->curriculum_note && !$sub->admin_note && !$sub->owner_note)
                                     <span class="small text-muted">-</span>
                                 @endif
                             </td>
@@ -146,26 +167,62 @@
                     </div>
 
                     <div class="row">
-                        <div class="col-md-7 mb-3">
-                            <label class="form-label fw-semibold">Nama Barang / Keperluan <span class="text-danger">*</span></label>
-                            <input type="text" name="item_name" class="form-control" placeholder="Contoh: Kertas flashcard, spidol whiteboard, blanko sertifikat" required>
-                        </div>
-
-                        <div class="col-md-5 mb-3">
-                            <label class="form-label fw-semibold">Nominal Total (Rp) <span class="text-danger">*</span></label>
-                            <input type="number" name="amount" class="form-control" placeholder="Contoh: 150000" min="1" required>
+                        <div class="col-md-12 mb-3">
+                            <label class="form-label fw-semibold">Nama Pengajuan / Keperluan Utama <span class="text-danger">*</span></label>
+                            <input type="text" name="item_name" class="form-control" placeholder="Contoh: Pembelian Perlengkapan Modul Kelas Mandarin A" required>
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Upload Nota / Bukti Pembayaran (Wajib untuk Reimburse)</label>
-                        <input type="file" name="receipt_file" class="form-control" accept="image/*,application/pdf">
-                        <small class="text-muted">Format PDF, JPG, PNG, WEBP (maksimal 5 MB)</small>
+                    {{-- BAGIAN MULTI-ITEM BARANG --}}
+                    <div class="card border rounded-3 p-3 bg-light mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label fw-bold mb-0 text-dark">
+                                <i class="fa-solid fa-list-check text-warning me-1"></i> Rincian Barang (Multi-Item)
+                            </label>
+                            <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" id="btnAddItem">
+                                <i class="fa-solid fa-plus me-1"></i> Tambah Item
+                            </button>
+                        </div>
+                        <p class="small text-muted mb-2">Masukkan setiap nama barang dan nominal harganya sesuai bukti nota.</p>
+                        
+                        <div id="itemsContainer">
+                            <div class="row g-2 align-items-center mb-2 item-row">
+                                <div class="col-7">
+                                    <input type="text" name="items[0][name]" class="form-control form-control-sm item-name-input" placeholder="Nama item (contoh: Kertas Origami)" required>
+                                </div>
+                                <div class="col-4">
+                                    <input type="number" name="items[0][amount]" class="form-control form-control-sm item-amount-input" placeholder="Harga (Rp)" min="1" required oninput="calculateTotal()">
+                                </div>
+                                <div class="col-1 text-center">
+                                    <button type="button" class="btn btn-sm text-danger btn-remove-item" onclick="removeItemRow(this)" title="Hapus"><i class="fa-solid fa-trash-can"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center border-top pt-2 mt-2">
+                            <span class="fw-bold text-dark">Total Nominal:</span>
+                            <span class="fs-5 fw-bold text-success" id="displayTotalAmount">Rp 0</span>
+                        </div>
+                        <input type="hidden" name="amount" id="inputTotalAmount" value="0">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Upload Nota / Kuitansi Pembayaran <span class="text-danger">*</span></label>
+                            <input type="file" name="receipt_file" class="form-control" accept="image/*,application/pdf" required>
+                            <small class="text-muted">Format PDF, JPG, PNG, WEBP (maksimal 10 MB)</small>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Upload Foto Bahan Ajar (Bukti Fisik Barang)</label>
+                            <input type="file" name="photo_file" class="form-control" accept="image/*">
+                            <small class="text-muted">Foto barang fisik yang telah dibeli (maksimal 10 MB)</small>
+                        </div>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Keterangan Tambahan / Alasan Kebutuhan</label>
-                        <textarea name="description" rows="3" class="form-control" placeholder="Jelaskan kebutuhan bahan ajar untuk kelas yang bersangkutan..."></textarea>
+                        <textarea name="description" rows="2" class="form-control" placeholder="Jelaskan kebutuhan bahan ajar untuk kelas yang bersangkutan..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer border-top">
@@ -178,5 +235,50 @@
         </div>
     </div>
 </div>
+@push('scripts')
+<script>
+let itemIndex = 1;
+
+document.getElementById('btnAddItem')?.addEventListener('click', function() {
+    const container = document.getElementById('itemsContainer');
+    const newRow = document.createElement('div');
+    newRow.className = 'row g-2 align-items-center mb-2 item-row';
+    newRow.innerHTML = `
+        <div class="col-7">
+            <input type="text" name="items[${itemIndex}][name]" class="form-control form-control-sm item-name-input" placeholder="Nama item (contoh: Spidol Warna)" required>
+        </div>
+        <div class="col-4">
+            <input type="number" name="items[${itemIndex}][amount]" class="form-control form-control-sm item-amount-input" placeholder="Harga (Rp)" min="1" required oninput="calculateTotal()">
+        </div>
+        <div class="col-1 text-center">
+            <button type="button" class="btn btn-sm text-danger btn-remove-item" onclick="removeItemRow(this)" title="Hapus"><i class="fa-solid fa-trash-can"></i></button>
+        </div>
+    `;
+    container.appendChild(newRow);
+    itemIndex++;
+    calculateTotal();
+});
+
+function removeItemRow(btn) {
+    const rows = document.querySelectorAll('.item-row');
+    if (rows.length > 1) {
+        btn.closest('.item-row').remove();
+        calculateTotal();
+    } else {
+        alert('Minimal harus ada 1 item barang yang diisi.');
+    }
+}
+
+function calculateTotal() {
+    let total = 0;
+    document.querySelectorAll('.item-amount-input').forEach(input => {
+        const val = parseFloat(input.value) || 0;
+        total += val;
+    });
+    document.getElementById('displayTotalAmount').innerText = 'Rp ' + total.toLocaleString('id-ID');
+    document.getElementById('inputTotalAmount').value = total;
+}
+</script>
+@endpush
 @endsection
 

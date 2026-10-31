@@ -156,6 +156,9 @@
         ['label' => 'Komunikasi', 'items' => [
             ['Pemberitahuan Surat', 'fa-envelope', '/kurikulum/surat', 'kurikulum/surat*'],
         ]],
+        ['label' => 'Akun', 'items' => [
+            ['Profil & Tanda Tangan', 'fa-signature', '/profil', 'profil*'],
+        ]],
     ];
 
     $authUser  = auth()->user();
@@ -209,11 +212,13 @@
     </nav>
 
     <div class="sidebar-user">
-        <div class="avatar">{{ $initials }}</div>
-        <div class="user-meta">
-            <div class="n">{{ $userName }}</div>
-            <div class="r">{{ $roleLabel }}</div>
-        </div>
+        <a href="{{ route('profil.index') }}" class="d-flex align-items-center gap-2 text-decoration-none text-reset flex-fill overflow-hidden" title="Lihat & Edit Profil">
+            <div class="avatar">{{ $initials }}</div>
+            <div class="user-meta">
+                <div class="n">{{ $userName }}</div>
+                <div class="r">{{ $roleLabel }} <i class="fa-solid fa-signature ms-1" style="font-size:10px;"></i></div>
+            </div>
+        </a>
         <button type="button" class="collapse-btn" id="collapseBtn" title="Ciutkan sidebar">
             <i class="fa-solid fa-chevron-left" style="font-size:12px"></i>
         </button>

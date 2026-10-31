@@ -35,6 +35,42 @@ class KelasController extends Controller
     /* ============================================================
        INDEX
     ============================================================ */
+    public function export(Request $request)
+    {
+        $classes = ClassModel::query()
+            ->with(['teacher', 'programPackage.program', 'level'])
+            ->orderBy('class_name')
+            ->get();
+
+        $headers = [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="data-kelas-' . date('Ymd-His') . '.csv"',
+        ];
+
+        $callback = function () use ($classes) {
+            $handle = fopen('php://output', 'w');
+            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF)); // BOM UTF-8
+            fputcsv($handle, ['ID', 'Nama Kelas', 'Tipe', 'Program / Level', 'Guru Pengajar', 'Mode', 'Kapasitas', 'Status', 'Tanggal Mulai']);
+
+            foreach ($classes as $c) {
+                fputcsv($handle, [
+                    $c->id,
+                    $c->class_name,
+                    $c->private_package_id ? 'Private' : 'Reguler',
+                    $c->programPackage?->program?->program_name ?? $c->level?->level_name ?? '-',
+                    $c->teacher?->name ?? 'Belum Ditugaskan',
+                    $c->delivery_mode,
+                    $c->capacity,
+                    $c->status,
+                    $c->start_date ? $c->start_date->format('Y-m-d') : '-',
+                ]);
+            }
+            fclose($handle);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
     public function index(Request $request)
     {
         $classes = ClassModel::query()

@@ -261,13 +261,32 @@ class AvailabilityController extends Controller
                 }
             }
 
+            $curriculumAccepted = ($leave->curriculum_response === 'Accepted');
+            $finalStatus = $curriculumAccepted ? 'Approved' : 'Pending';
+
             $leave->update([
                 'replacement_response'      => 'Accepted',
                 'replacement_response_note' => null,
                 'replacement_responded_at'  => now(),
+                'status'                    => $finalStatus,
             ]);
 
-            return back()->with('success', "Anda menerima menggantikan {$className}. Menunggu persetujuan Kurikulum.");
+            // Notifikasi ke guru pemohon
+            if ($leave->teacher?->user) {
+                $msg = $curriculumAccepted
+                    ? "Guru pengganti {$teacher->name} telah menerima permintaan menggantikan {$className}. Seluruh persetujuan selesai (Approved)."
+                    : "Guru pengganti {$teacher->name} telah bersedia menggantikan {$className}. Menunggu persetujuan dari Kurikulum.";
+
+                $leave->teacher->user->notify(new AppNotification(
+                    title: "Guru Pengganti Bersedia: {$className}",
+                    message: $msg,
+                    url: url('/guru/cuti'),
+                    type: 'cuti',
+                    icon: 'fa-user-check'
+                ));
+            }
+
+            return back()->with('success', "Anda bersedia menggantikan {$className}." . ($curriculumAccepted ? " Pengajuan telah disetujui penuh." : " Menunggu konfirmasi Kurikulum."));
         }
 
         $leave->update([
@@ -278,6 +297,17 @@ class AvailabilityController extends Controller
             'review_note'               => "Guru pengganti {$teacher->name} menolak: {$data['note']}",
         ]);
 
-        return back()->with('success', 'Permintaan menggantikan ditolak. Pengaju akan diberi tahu.');
+        // Notifikasi penolakan ke guru pemohon
+        if ($leave->teacher?->user) {
+            $leave->teacher->user->notify(new AppNotification(
+                title: "Permintaan Pengganti Ditolak: {$className}",
+                message: "Guru {$teacher->name} tidak dapat menggantikan kelas {$className}. Alasan: {$data['note']}",
+                url: url('/guru/cuti'),
+                type: 'cuti',
+                icon: 'fa-user-xmark'
+            ));
+        }
+
+        return back()->with('success', 'Permintaan menggantikan ditolak. Guru pemohon telah diberi notifikasi.');
     }
 }

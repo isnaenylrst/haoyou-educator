@@ -179,12 +179,77 @@
                                         <i class="fa-solid fa-file-invoice"></i> Dokumen
                                     </a>
 
+                                    {{-- VERIFIKASI ADMIN --}}
+                                    @if(!$isOwner && $sub->status === 'Review Admin')
+                                        <button type="button" class="btn btn-sm btn-warning rounded-pill px-2 text-dark fw-semibold" data-bs-toggle="modal" data-bs-target="#modalAdminVerify{{ $sub->id }}">
+                                            <i class="fa-solid fa-clipboard-check me-1"></i> Verifikasi Admin
+                                        </button>
+                                    @endif
+
+                                    {{-- PERSETUJUAN OWNER --}}
                                     @if($isOwner && $sub->status === 'Review Owner')
                                         <button type="button" class="btn btn-sm btn-primary rounded-pill px-2 text-white fw-semibold" data-bs-toggle="modal" data-bs-target="#modalOwnerApprove{{ $sub->id }}">
                                             <i class="fa-solid fa-signature me-1"></i> Approve Owner
                                         </button>
                                     @endif
                                 </div>
+
+                                {{-- MODAL ADMIN VERIFY --}}
+                                @if(!$isOwner && $sub->status === 'Review Admin')
+                                    <div class="modal fade" id="modalAdminVerify{{ $sub->id }}" tabindex="-1" aria-hidden="true">
+                                        <div class="modal-dialog text-start">
+                                            <div class="modal-content rounded-4 border-0">
+                                                <form action="{{ route('admin.pengajuan.verify', $sub->id) }}" method="POST">
+                                                    @csrf
+                                                    <div class="modal-header border-bottom bg-light">
+                                                        <h5 class="modal-title fw-bold">Verifikasi Dokumen Reimburse</h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                    </div>
+                                                    <div class="modal-body p-4">
+                                                        <div class="p-3 bg-light rounded-3 mb-3 border">
+                                                            <div><strong>Keperluan:</strong> {{ $sub->item_name }}</div>
+                                                            <div><strong>Nominal:</strong> <span class="text-success fw-bold">{{ $sub->formatted_amount }}</span></div>
+                                                            <div><strong>Guru:</strong> {{ $sub->teacher->name ?? '-' }}</div>
+                                                            <div><strong>ACC Kurikulum:</strong> {{ $sub->curriculum_approved_at?->translatedFormat('d M Y H:i') }} ({{ $sub->curriculum->display_name ?? 'OK' }})</div>
+                                                        </div>
+
+                                                        <div class="d-flex gap-2 mb-3">
+                                                            @if($sub->receipt_path)
+                                                                <a href="{{ asset('storage/' . $sub->receipt_path) }}" target="_blank" class="btn btn-sm btn-outline-primary flex-fill">
+                                                                    <i class="fa-solid fa-receipt me-1"></i> Cek Nota Pembelian
+                                                                </a>
+                                                            @endif
+                                                            @if($sub->photo_path)
+                                                                <a href="{{ asset('storage/' . $sub->photo_path) }}" target="_blank" class="btn btn-sm btn-outline-success flex-fill">
+                                                                    <i class="fa-solid fa-image me-1"></i> Cek Foto Fisik Barang
+                                                                </a>
+                                                            @endif
+                                                        </div>
+
+                                                        <div class="mb-3">
+                                                            <label class="form-label fw-semibold">Keputusan Verifikasi Administrasi</label>
+                                                            <select name="decision" class="form-select" required>
+                                                                <option value="Approved">Verifikasi Sesuai & Teruskan ke Owner</option>
+                                                                <option value="Rejected">Tolak / Dokumen Tidak Lengkap</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div class="mb-0">
+                                                            <label class="form-label small fw-semibold">Catatan Verifikasi Admin (opsional)</label>
+                                                            <textarea name="note" rows="2" class="form-control" placeholder="Contoh: Nota dan foto barang fisik telah dicek lengkap dan sesuai."></textarea>
+                                                        </div>
+                                                    </div>
+                                                    <div class="modal-footer border-top bg-light">
+                                                        <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Batal</button>
+                                                        <button type="submit" class="btn btn-warning rounded-pill fw-semibold px-4 text-dark">
+                                                            Kirim Hasil Verifikasi
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endif
 
                                 {{-- MODAL OWNER APPROVAL --}}
                                 @if($isOwner && $sub->status === 'Review Owner')

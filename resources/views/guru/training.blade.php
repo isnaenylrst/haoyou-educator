@@ -3,7 +3,21 @@
 @section('title', 'Materi Training Guru')
 
 @section('content')
-<div class="container-fluid">
+<div class="container-fluid py-3">
+
+    {{-- NAV TABS TERPADU: SOP & MATERI TRAINING --}}
+    <ul class="nav nav-pills mb-4 border-bottom pb-2">
+        <li class="nav-item">
+            <a class="nav-link rounded-pill fw-semibold px-4 me-2 text-secondary" href="{{ route('teacher.sop') }}">
+                <i class="fa-solid fa-book-bookmark me-1"></i> SOP & Standar Mengajar
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link active rounded-pill fw-bold px-4 bg-warning text-dark" href="{{ route('teacher.training') }}">
+                <i class="fa-solid fa-graduation-cap me-1"></i> Materi & Video Training
+            </a>
+        </li>
+    </ul>
 
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
         <div>

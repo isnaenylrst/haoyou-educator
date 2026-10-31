@@ -70,7 +70,6 @@
 
                     <form action="{{ route('profil.signature') }}" method="POST" enctype="multipart/form-data" id="sigForm">
                         @csrf
-                        @method('PUT')
                         <input type="hidden" name="signature_base64" id="signature_base64">
 
                         <div class="mb-3">

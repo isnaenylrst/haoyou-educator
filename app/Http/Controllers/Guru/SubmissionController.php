@@ -43,20 +43,31 @@ class SubmissionController extends Controller
             $receiptPath = $request->file('receipt_file')->store('submission-receipts', 'public');
         }
 
-        DB::transaction(function () use ($teacher, $data, $receiptPath) {
+        $photoPath = null;
+        if ($request->hasFile('photo_file')) {
+            $photoPath = $request->file('photo_file')->store('submission-photos', 'public');
+        }
+
+        // Hitung total nominal jika multi-item
+        $items = !empty($data['items']) ? array_values(array_filter($data['items'], fn ($it) => !empty($it['name']) && !empty($it['amount']))) : null;
+        $totalAmount = $items ? array_sum(array_column($items, 'amount')) : ($data['amount'] ?? 0);
+
+        DB::transaction(function () use ($teacher, $data, $items, $totalAmount, $receiptPath, $photoPath) {
             $submission = Submission::create([
                 'teacher_id'   => $teacher->id,
                 'created_by'   => Auth::id(),
                 'type'         => $data['type'],
                 'item_name'    => $data['item_name'],
-                'amount'       => $data['amount'],
+                'items'        => $items,
+                'amount'       => $totalAmount,
                 'date'         => $data['date'],
                 'description'  => $data['description'] ?? null,
                 'receipt_path' => $receiptPath,
+                'photo_path'   => $photoPath,
                 'status'       => 'Diajukan',
             ]);
 
-            // Kirim notifikasi database ke Kurikulum
+            // Kirim notifikasi database ke seluruh tim Kurikulum
             $curriculumUsers = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Curriculum'))->get();
             foreach ($curriculumUsers as $currUser) {
                 $currUser->notify(new AppNotification(
@@ -69,7 +80,7 @@ class SubmissionController extends Controller
             }
         });
 
-        return back()->with('success', 'Pengajuan berhasil dikirimkan ke Kurikulum untuk direview.');
+        return back()->with('success', 'Pengajuan reimburse / pembelian bahan berhasil dikirimkan ke Kurikulum untuk direview.');
     }
 }
 

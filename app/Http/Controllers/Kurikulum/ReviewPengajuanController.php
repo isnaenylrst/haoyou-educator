@@ -393,23 +393,63 @@ class ReviewPengajuanController extends Controller
         ]);
 
         if ($teacherLeave->status !== 'Pending') {
-            return back()->with('error', 'Pengajuan ini sudah direview.');
+            return back()->with('error', 'Pengajuan ini sudah direview secara final.');
         }
 
-        if ($data['decision'] === 'Approved'
-            && $teacherLeave->replacement_teacher_id
-            && $teacherLeave->replacement_response !== 'Accepted') {
-            return back()->with('error', 'Guru pengganti belum menerima permintaan ini.');
+        $teacherLeave->load(['teacher.user', 'replacementTeacher.user', 'classSchedule.class']);
+        $className = $teacherLeave->classSchedule?->class?->class_name ?? 'Kelas';
+        $currUser = Auth::user();
+
+        if ($data['decision'] === 'Approved') {
+            $repAccepted = empty($teacherLeave->replacement_teacher_id) || $teacherLeave->replacement_response === 'Accepted';
+            $finalStatus = $repAccepted ? 'Approved' : 'Pending';
+
+            $teacherLeave->update([
+                'curriculum_response' => 'Accepted',
+                'status'              => $finalStatus,
+                'review_note'         => $data['note'] ?? null,
+                'approved_by'         => $currUser->id,
+                'approved_at'         => now(),
+            ]);
+
+            // Notifikasi ke guru pemohon
+            if ($teacherLeave->teacher?->user) {
+                $msg = $repAccepted
+                    ? "Pengajuan {$teacherLeave->request_type} untuk {$className} telah disetujui penuh."
+                    : "Kurikulum telah menyetujui pengajuan {$teacherLeave->request_type} untuk {$className}. Menunggu konfirmasi penerimaan dari guru pengganti.";
+
+                $teacherLeave->teacher->user->notify(new AppNotification(
+                    title: "Persetujuan {$teacherLeave->request_type}: {$className}",
+                    message: $msg,
+                    url: url('/guru/cuti'),
+                    type: 'cuti',
+                    icon: 'fa-circle-check'
+                ));
+            }
+
+            return back()->with('success', 'Persetujuan Kurikulum berhasil disimpan.' . ($repAccepted ? ' Pengajuan telah disetujui penuh.' : ' Menunggu konfirmasi dari guru pengganti.'));
         }
 
+        // Jika Ditolak Kurikulum
         $teacherLeave->update([
-            'status'      => $data['decision'],
-            'review_note' => $data['decision'] === 'Rejected' ? $data['note'] : null,
-            'approved_by' => Auth::id(),
-            'approved_at' => now(),
+            'curriculum_response' => 'Rejected',
+            'status'              => 'Rejected',
+            'review_note'         => $data['note'] ?? 'Ditolak oleh Kurikulum',
+            'approved_by'         => $currUser->id,
+            'approved_at'         => now(),
         ]);
 
-        return back()->with('success', 'Pengajuan berhasil ' . ($data['decision'] === 'Approved' ? 'disetujui' : 'ditolak') . '.');
+        if ($teacherLeave->teacher?->user) {
+            $teacherLeave->teacher->user->notify(new AppNotification(
+                title: "Pengajuan {$teacherLeave->request_type} Ditolak",
+                message: "Pengajuan {$teacherLeave->request_type} untuk {$className} ditolak Kurikulum. Alasan: " . ($data['note'] ?? '-'),
+                url: url('/guru/cuti'),
+                type: 'cuti',
+                icon: 'fa-circle-xmark'
+            ));
+        }
+
+        return back()->with('success', 'Pengajuan berhasil ditolak oleh Kurikulum.');
     }
 
     // ------------------------------------------------------------------ SERTIFIKAT
@@ -497,19 +537,16 @@ class ReviewPengajuanController extends Controller
     public function reviewSubmission(Request $request, Submission $submission)
     {
         $data = $request->validate([
-            'decision'         => ['required', Rule::in(['Approved', 'Rejected'])],
-            'note'             => ['nullable', 'string', 'max:1000'],
-            'forward_to_owner' => ['nullable'],
+            'decision' => ['required', Rule::in(['Approved', 'Rejected'])],
+            'note'     => ['nullable', 'string', 'max:1000'],
         ]);
 
         $user = Auth::user();
 
         if ($data['decision'] === 'Approved') {
-            $forwardToOwner = $request->boolean('forward_to_owner');
-            $nextStatus = $forwardToOwner ? 'Review Owner' : 'Disetujui';
-
+            // Sesuai alur Poin 4: Kurikulum + TTD -> diteruskan ke Admin untuk verifikasi
             $submission->update([
-                'status'                    => $nextStatus,
+                'status'                    => 'Review Admin',
                 'curriculum_id'             => $user->id,
                 'curriculum_note'           => $data['note'] ?? null,
                 'curriculum_approved_at'    => now(),
@@ -518,28 +555,27 @@ class ReviewPengajuanController extends Controller
 
             if ($submission->teacher?->user) {
                 $submission->teacher->user->notify(new AppNotification(
-                    title: "Pengajuan {$submission->type} Disetujui",
-                    message: "Pengajuan {$submission->item_name} telah disetujui Kurikulum." . ($forwardToOwner ? ' Diteruskan ke Owner untuk verifikasi.' : ' TTD Kurikulum telah ditempel.'),
+                    title: "Pengajuan {$submission->type} Disetujui Kurikulum",
+                    message: "Pengajuan {$submission->item_name} telah disetujui Kurikulum (+ TTD) dan diteruskan ke Admin untuk verifikasi pembayaran.",
                     url: url('/guru/pengajuan'),
                     type: 'pengajuan',
                     icon: 'fa-circle-check'
                 ));
             }
 
-            if ($forwardToOwner) {
-                $owners = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Owner'))->get();
-                foreach ($owners as $owner) {
-                    $owner->notify(new AppNotification(
-                        title: "Pengajuan Memerlukan Persetujuan Owner",
-                        message: "Pengajuan {$submission->item_name} ({$submission->type}) dari {$submission->teacher?->name} memerlukan persetujuan Owner.",
-                        url: url('/owner/pengajuan'),
-                        type: 'pengajuan',
-                        icon: 'fa-receipt'
-                    ));
-                }
+            // Notifikasi ke seluruh tim Admin
+            $admins = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Admin'))->get();
+            foreach ($admins as $admin) {
+                $admin->notify(new AppNotification(
+                    title: "Verifikasi Pengajuan Reimburse: {$submission->item_name}",
+                    message: "Kurikulum telah menyetujui pengajuan {$submission->type} dari {$submission->teacher?->name} sebesar {$submission->formatted_amount}. Silakan diverifikasi.",
+                    url: url('/admin/pengajuan'),
+                    type: 'pengajuan',
+                    icon: 'fa-receipt'
+                ));
             }
 
-            return back()->with('success', 'Pengajuan berhasil disetujui' . ($forwardToOwner ? ' dan diteruskan ke Owner.' : '. TTD Kurikulum otomatis ditempel pada dokumen pengajuan.'));
+            return back()->with('success', 'Pengajuan berhasil disetujui Kurikulum, TTD telah ditempel, dan berkas diteruskan ke Admin untuk verifikasi.');
         }
 
         $submission->update([

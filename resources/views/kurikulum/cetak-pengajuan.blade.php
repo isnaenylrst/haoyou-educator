@@ -108,15 +108,57 @@
         </tbody>
     </table>
 
-    {{-- BUKTI NOTA JIKA ADA --}}
-    @if($submission->receipt_path)
-        <div class="mb-4 p-3 border rounded">
-            <div class="fw-bold small text-muted mb-2"><i class="fa-solid fa-paperclip me-1"></i> Lampiran Nota / Bukti Pembelian:</div>
-            <div class="text-center">
-                <img src="{{ asset('storage/' . $submission->receipt_path) }}" alt="Nota Bukti" style="max-height: 250px; max-width: 100%; object-fit: contain;" class="border p-1 bg-white rounded">
-            </div>
-        </div>
+    {{-- TABEL RINCIAN MULTI-ITEM JIKA ADA --}}
+    @if(!empty($submission->items) && is_array($submission->items))
+        <h6 class="fw-bold mb-2 text-dark"><i class="fa-solid fa-list-check me-1"></i> Rincian Barang / Komponen Pembelian:</h6>
+        <table class="table table-bordered mb-4">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 8%;" class="text-center">No</th>
+                    <th>Nama Item Barang</th>
+                    <th style="width: 30%;" class="text-end">Nominal</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($submission->items as $idx => $it)
+                    <tr>
+                        <td class="text-center">{{ $idx + 1 }}</td>
+                        <td>{{ $it['name'] ?? '-' }}</td>
+                        <td class="text-end fw-bold">Rp {{ number_format($it['amount'] ?? 0, 0, ',', '.') }}</td>
+                    </tr>
+                @endforeach
+                <tr class="table-light">
+                    <td colspan="2" class="text-end fw-bold">TOTAL PENGAJUAN:</td>
+                    <td class="text-end fw-bold text-success fs-6">{{ $submission->formatted_amount }}</td>
+                </tr>
+            </tbody>
+        </table>
     @endif
+
+    {{-- BUKTI NOTA & FOTO BAHAN AJAR JIKA ADA --}}
+    <div class="row g-3 mb-4">
+        @if($submission->receipt_path)
+            <div class="{{ $submission->photo_path ? 'col-6' : 'col-12' }}">
+                <div class="p-3 border rounded h-100">
+                    <div class="fw-bold small text-muted mb-2"><i class="fa-solid fa-receipt me-1"></i> Lampiran Nota / Bukti Pembelian:</div>
+                    <div class="text-center">
+                        <img src="{{ asset('storage/' . $submission->receipt_path) }}" alt="Nota Bukti" style="max-height: 220px; max-width: 100%; object-fit: contain;" class="border p-1 bg-white rounded">
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        @if($submission->photo_path)
+            <div class="{{ $submission->receipt_path ? 'col-6' : 'col-12' }}">
+                <div class="p-3 border rounded h-100">
+                    <div class="fw-bold small text-muted mb-2"><i class="fa-solid fa-camera me-1"></i> Foto Bahan Ajar / Fisik Barang:</div>
+                    <div class="text-center">
+                        <img src="{{ asset('storage/' . $submission->photo_path) }}" alt="Foto Bahan Ajar" style="max-height: 220px; max-width: 100%; object-fit: contain;" class="border p-1 bg-white rounded">
+                    </div>
+                </div>
+            </div>
+        @endif
+    </div>
 
     {{-- TANDA TANGAN OTOMATIS --}}
     <div class="row mt-5 text-center">
