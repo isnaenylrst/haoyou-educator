@@ -119,6 +119,7 @@
           <a href="{{ route('student.vocab.list') }}"  class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.list') ? 'is-active' : '' }}"><span>📖</span> Vocab List</a>
           <a href="{{ route('student.vocab.test') }}"  class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.test*') ? 'is-active' : '' }}"><span>✍️</span> Test</a>
           <a href="{{ route('student.vocab.traps') }}" class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.traps*') ? 'is-active' : '' }}"><span>⚠️</span> Vocab Traps</a>
+                    <a href="{{ route('student.vocab.materi') }}" class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.materi*') ? 'is-active' : '' }}"><span>🌸</span> Materi Huahua</a>
         </div>
       </div>
     </nav>

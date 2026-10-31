@@ -7,6 +7,7 @@ use App\Models\ClassModel;
 use App\Models\ClassTask;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class TugasKelasController extends Controller
@@ -21,13 +22,37 @@ class TugasKelasController extends Controller
     */
 
     private const MESSAGES = [
-        'class_id.required'       => 'Pilih kelas terlebih dahulu.',
-        'class_id.exists'         => 'Kelas tidak ditemukan.',
-        'title.required'          => 'Judul tugas wajib diisi.',
-        'due_date.date'           => 'Format batas waktu tidak valid.',
-        'due_date.after_or_equal' => 'Batas waktu tidak boleh sebelum hari ini.',
-        'reason.required'         => 'Alasan membuka kembali tugas wajib diisi.',
+        'class_id.required'        => 'Pilih kelas terlebih dahulu.',
+        'class_id.exists'          => 'Kelas tidak ditemukan.',
+        'title.required'           => 'Judul tugas wajib diisi.',
+        'due_date.date'            => 'Format batas waktu tidak valid.',
+        'due_date.after_or_equal'  => 'Batas waktu tidak boleh sebelum hari ini.',
+        'reason.required'          => 'Alasan membuka kembali tugas wajib diisi.',
+        'attachment.file'          => 'Lampiran harus berupa file.',
+        'attachment.max'           => 'Ukuran lampiran maksimal 10 MB.',
+        'attachment.mimes'         => 'Format lampiran yang diizinkan: PDF, Word, JPG, PNG.',
     ];
+
+    /** Simpan file lampiran ke storage dan kembalikan [$path, $name]. */
+    private function storeAttachment(Request $request): array
+    {
+        if (!$request->hasFile('attachment') || !$request->file('attachment')->isValid()) {
+            return [null, null];
+        }
+
+        $file = $request->file('attachment');
+        $path = $file->store('class-task-attachments', 'public');
+
+        return [$path, $file->getClientOriginalName()];
+    }
+
+    /** Hapus file lampiran lama dari storage jika ada. */
+    private function deleteAttachment(?string $path): void
+    {
+        if ($path && Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
+    }
 
     // ------------------------------------------------------------------ LIST
 
@@ -85,6 +110,7 @@ class TugasKelasController extends Controller
             'title'       => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'due_date'    => ['nullable', 'date', 'after_or_equal:today'],
+            'attachment'  => ['nullable', 'file', 'max:10240', 'mimes:pdf,doc,docx,jpg,jpeg,png'],
         ], self::MESSAGES);
 
         $class = ClassModel::with('teacher')->findOrFail($data['class_id']);
@@ -107,17 +133,23 @@ class TugasKelasController extends Controller
             ]);
         }
 
+        [$attachPath, $attachName] = $this->storeAttachment($request);
+
         try {
             ClassTask::create([
-                'class_id'    => $class->id,
-                'teacher_id'  => $class->teacher_id,
-                'title'       => trim($data['title']),
-                'description' => $data['description'] ?? null,
-                'due_date'    => $data['due_date'] ?? null,
-                'status'      => 'Open',
-                'created_by'  => Auth::id(),
+                'class_id'        => $class->id,
+                'teacher_id'      => $class->teacher_id,
+                'title'           => trim($data['title']),
+                'description'     => $data['description'] ?? null,
+                'due_date'        => $data['due_date'] ?? null,
+                'status'          => 'Open',
+                'created_by'      => Auth::id(),
+                'attachment_path' => $attachPath,
+                'attachment_name' => $attachName,
             ]);
         } catch (\Throwable $e) {
+            // Hapus file yang baru diupload jika create gagal
+            $this->deleteAttachment($attachPath);
             report($e);
 
             return back()->withInput()->with('error', 'Gagal mengirim tugas. Silakan coba lagi.');
@@ -143,6 +175,7 @@ class TugasKelasController extends Controller
             'title'       => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'due_date'    => ['nullable', 'date'],
+            'attachment'  => ['nullable', 'file', 'max:10240', 'mimes:pdf,doc,docx,jpg,jpeg,png'],
         ];
 
         if ($isOpen) {
@@ -203,6 +236,12 @@ class TugasKelasController extends Controller
             }
         }
 
+        // Jika ada file baru diupload, ganti lampiran lama
+        if ($request->hasFile('attachment') && $request->file('attachment')->isValid()) {
+            $this->deleteAttachment($classTask->attachment_path);
+            [$attrs['attachment_path'], $attrs['attachment_name']] = $this->storeAttachment($request);
+        }
+
         try {
             $classTask->update($attrs);
         } catch (\Throwable $e) {
@@ -253,6 +292,9 @@ class TugasKelasController extends Controller
 
     public function destroy(ClassTask $classTask)
     {
+        // Hapus file lampiran dari storage sebelum record dihapus
+        $this->deleteAttachment($classTask->attachment_path);
+
         $classTask->delete();
 
         return redirect()

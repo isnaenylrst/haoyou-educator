@@ -106,6 +106,11 @@ class ClassModel extends Model
         return $this->hasMany(Material::class, 'class_id');
     }
 
+    public function learningMaterials(): HasMany
+    {
+        return $this->hasMany(ClassLearningMaterial::class, 'class_id')->orderBy('sort_order');
+    }
+
     /* ---------------------------------------------------------- */
     /*  Kapasitas & kuorum (dari min_students / max_students paket) */
     /* ---------------------------------------------------------- */

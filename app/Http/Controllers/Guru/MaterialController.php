@@ -15,7 +15,7 @@ class MaterialController extends Controller
 
     public function index()
     {
-        $materials = Material::with([
+        $materials = Material::forGuru()->with([
                 'level.category',
                 'level.program',
                 'uploader',
@@ -36,6 +36,7 @@ class MaterialController extends Controller
 
     public function show(Material $material)
     {
+                abort_unless($material->audience === 'Guru', 404);
         abort_unless($material->file_exists, 404, 'File tidak ditemukan di server.');
 
         // PDF dibuka di browser; Word/PowerPoint otomatis diunduh
@@ -51,6 +52,7 @@ class MaterialController extends Controller
 
     public function download(Material $material)
     {
+        abort_unless($material->audience === 'Guru', 404);
         if (!$material->file_exists) {
             return back()->with('error', 'File tidak ditemukan.');
         }

@@ -7,9 +7,12 @@ use App\Models\Certificate;
 use App\Models\ClassEnrollment;
 use App\Models\ClassSchedule;
 use App\Models\ProgressReport;
+use App\Models\Submission;
 use App\Models\TeacherLeave;
 use App\Models\TeacherMaterial;
 use App\Models\TeachingJournal;
+use App\Models\User;
+use App\Notifications\AppNotification;
 use App\Services\ProgressReportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -22,7 +25,7 @@ use Illuminate\Validation\Rule;
 class ReviewPengajuanController extends Controller
 {
     private const PER_PAGE = 10;
-    private const TABS     = ['material', 'jurnal', 'report', 'cuti', 'sertifikat'];
+    private const TABS     = ['material', 'jurnal', 'report', 'cuti', 'sertifikat', 'pengajuan'];
 
     private const DAYS = [
         'Sunday' => 'Minggu', 'Monday' => 'Senin', 'Tuesday' => 'Selasa',
@@ -96,6 +99,11 @@ class ReviewPengajuanController extends Controller
             'sertifikat_page', 'sertifikat'
         );
 
+        $submissions = $page(
+            Submission::with(['teacher', 'creator'])->whereIn('status', ['Diajukan', 'Review Kurikulum'])->oldest(),
+            'submission_page', 'pengajuan'
+        );
+
         $lateEnrollments = $this->lateEnrollments();
 
         $totals = [
@@ -104,10 +112,11 @@ class ReviewPengajuanController extends Controller
             'report'     => $reports->total() + $lateEnrollments->count(),
             'cuti'       => $leaves->total(),
             'sertifikat' => $certificates->total(),
+            'pengajuan'  => $submissions->total(),
         ];
 
         $totalPending = $materials->total() + $journals->total() + $reports->total()
-            + $leaves->total() + $certificates->total();
+            + $leaves->total() + $certificates->total() + $submissions->total();
 
         // Tab aktif: yang diminta (?tab=), atau tab pertama yang punya antrian
         $requested = $request->query('tab');
@@ -117,7 +126,7 @@ class ReviewPengajuanController extends Controller
 
         return view('kurikulum.review-pengajuan', compact(
             'todaySchedules', 'totalSessionToday', 'filledToday', 'unfilledToday', 'teacherNamesToday',
-            'materials', 'journals', 'reports', 'leaves', 'certificates', 'lateEnrollments',
+            'materials', 'journals', 'reports', 'leaves', 'certificates', 'submissions', 'lateEnrollments',
             'totals', 'totalPending', 'tab'
         ));
     }
@@ -234,12 +243,62 @@ class ReviewPengajuanController extends Controller
         }
 
         if ($data['decision'] === 'Approved') {
+            $user = Auth::user();
+            $ownerSig = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Owner'))
+                ->whereNotNull('signature_path')
+                ->value('signature_path');
+
             $progressReport->update([
-                'reviewed_by' => Auth::id(),
-                'reviewed_at' => now(),
-                'review_note' => null,
-                'returned_at' => null,
+                'status'                    => 'Published',
+                'reviewed_by'               => $user->id,
+                'reviewed_at'               => now(),
+                'published_at'              => now(),
+                'curriculum_signature_path' => $user->signature_path,
+                'owner_signature_path'      => $ownerSig,
+                'review_note'               => null,
+                'returned_at'               => null,
             ]);
+
+            // Regenerate PDF dengan TTD Kurikulum & Owner serta tanggal terbit
+            try {
+                $e = (object) [
+                    'student_name' => $progressReport->student?->name,
+                    'class_name'   => $progressReport->enrollment?->class?->class_name,
+                ];
+                $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('guru.progress-report-pdf', [
+                    'report'  => $progressReport,
+                    'teacher' => $progressReport->teacher,
+                    'e'       => $e,
+                ])->setPaper('a4');
+
+                $path = "progress-reports/report-{$progressReport->id}.pdf";
+                Storage::disk('public')->put($path, $pdf->output());
+                $progressReport->update(['file_path' => $path]);
+            } catch (\Throwable $err) {
+                report($err);
+            }
+
+            // Notifikasi ke Siswa
+            if ($progressReport->student?->user) {
+                $progressReport->student->user->notify(new AppNotification(
+                    title: "Progress Report Telah Terbit",
+                    message: "Laporan perkembangan belajar Anda untuk kelas " . ($progressReport->enrollment?->class?->class_name ?? '') . " telah resmi diterbitkan oleh Kurikulum.",
+                    url: url('/progress-report'),
+                    type: 'progress_report',
+                    icon: 'fa-chart-column'
+                ));
+            }
+
+            // Notifikasi ke Guru
+            if ($progressReport->teacher?->user) {
+                $progressReport->teacher->user->notify(new AppNotification(
+                    title: "Progress Report Di-ACC",
+                    message: "Progress Report untuk siswa " . ($progressReport->student?->name ?? '') . " telah di-ACC dan terbit.",
+                    url: url('/guru/progress-report'),
+                    type: 'progress_report',
+                    icon: 'fa-circle-check'
+                ));
+            }
         } else {
             $progressReport->update([
                 'status'         => 'Draft',
@@ -397,6 +456,78 @@ class ReviewPengajuanController extends Controller
             }
         }
 
-        return $late;
+    // ------------------------------------------------------------------ PENGAJUAN (REIMBURSE & PEMBELIAN)
+
+    public function reviewSubmission(Request $request, Submission $submission)
+    {
+        $data = $request->validate([
+            'decision'         => ['required', Rule::in(['Approved', 'Rejected'])],
+            'note'             => ['nullable', 'string', 'max:1000'],
+            'forward_to_owner' => ['nullable'],
+        ]);
+
+        $user = Auth::user();
+
+        if ($data['decision'] === 'Approved') {
+            $forwardToOwner = $request->boolean('forward_to_owner');
+            $nextStatus = $forwardToOwner ? 'Review Owner' : 'Disetujui';
+
+            $submission->update([
+                'status'                    => $nextStatus,
+                'curriculum_id'             => $user->id,
+                'curriculum_note'           => $data['note'] ?? null,
+                'curriculum_approved_at'    => now(),
+                'curriculum_signature_path' => $user->signature_path,
+            ]);
+
+            if ($submission->teacher?->user) {
+                $submission->teacher->user->notify(new AppNotification(
+                    title: "Pengajuan {$submission->type} Disetujui",
+                    message: "Pengajuan {$submission->item_name} telah disetujui Kurikulum." . ($forwardToOwner ? ' Diteruskan ke Owner untuk verifikasi.' : ' TTD Kurikulum telah ditempel.'),
+                    url: url('/guru/pengajuan'),
+                    type: 'pengajuan',
+                    icon: 'fa-circle-check'
+                ));
+            }
+
+            if ($forwardToOwner) {
+                $owners = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Owner'))->get();
+                foreach ($owners as $owner) {
+                    $owner->notify(new AppNotification(
+                        title: "Pengajuan Memerlukan Persetujuan Owner",
+                        message: "Pengajuan {$submission->item_name} ({$submission->type}) dari {$submission->teacher?->name} memerlukan persetujuan Owner.",
+                        url: url('/owner/pengajuan'),
+                        type: 'pengajuan',
+                        icon: 'fa-receipt'
+                    ));
+                }
+            }
+
+            return back()->with('success', 'Pengajuan berhasil disetujui' . ($forwardToOwner ? ' dan diteruskan ke Owner.' : '. TTD Kurikulum otomatis ditempel pada dokumen pengajuan.'));
+        }
+
+        $submission->update([
+            'status'          => 'Ditolak',
+            'curriculum_id'   => $user->id,
+            'curriculum_note' => $data['note'] ?? 'Pengajuan ditolak oleh Kurikulum',
+        ]);
+
+        if ($submission->teacher?->user) {
+            $submission->teacher->user->notify(new AppNotification(
+                title: "Pengajuan {$submission->type} Ditolak",
+                message: "Pengajuan {$submission->item_name} ditolak Kurikulum. Catatan: " . ($data['note'] ?? '-'),
+                url: url('/guru/pengajuan'),
+                type: 'pengajuan',
+                icon: 'fa-circle-xmark'
+            ));
+        }
+
+        return back()->with('success', 'Pengajuan telah ditolak.');
+    }
+
+    /** Cetak / preview dokumen pengajuan dengan TTD Kurikulum & Owner */
+    public function printSubmission(Submission $submission)
+    {
+        return view('kurikulum.cetak-pengajuan', compact('submission'));
     }
 }

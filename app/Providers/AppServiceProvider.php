@@ -6,6 +6,7 @@ use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -20,6 +21,17 @@ class AppServiceProvider extends ServiceProvider
         Carbon::setLocale('id');
 
         Paginator::useBootstrapFive();
+
+        // Share unread notifications to all views
+        View::composer('*', function ($view) {
+            if (Auth::check()) {
+                $authUser = Auth::user();
+                $unreadNotifications = $authUser->unreadNotifications()->take(10)->get();
+                $unreadCount = $authUser->unreadNotifications()->count();
+                $view->with('unreadNotifications', $unreadNotifications);
+                $view->with('unreadNotificationsCount', $unreadCount);
+            }
+        });
 
         RedirectIfAuthenticated::redirectUsing(function ($request) {
             $user = $request->user();

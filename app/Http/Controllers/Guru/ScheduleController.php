@@ -34,6 +34,7 @@ class ScheduleController extends Controller
     public function index(Request $request)
     {
         $teacher = Auth::user()->teacher;
+                abort_if(!$teacher, 403, 'Akun Anda belum terhubung dengan data guru.');
 
         try {
             $weekStart = $request->filled('week')

@@ -144,6 +144,12 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
     Route::get('/program-belajar', [SiswaDashboardController::class, 'program'])
         ->name('program.index');
 
+    Route::get('/program-belajar/materi/{material}/lihat', [SiswaDashboardController::class, 'materiLihat'])
+        ->name('program.materi.lihat');
+
+    Route::get('/program-belajar/materi/{material}/unduh', [SiswaDashboardController::class, 'materiUnduh'])
+        ->name('program.materi.unduh');
+
     Route::get('/kelas-saya', [SiswaDashboardController::class, 'kelasSaya'])
         ->name('kelassaya.index');
 
@@ -191,6 +197,10 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
 
         Route::get('vocab-traps', [VocabController::class, 'traps'])->name('traps');
         Route::post('vocab-traps/{word}/paham', [VocabController::class, 'understood'])->name('traps.understood');
+
+        Route::get('materi', [VocabController::class, 'materi'])->name('materi');
+        Route::get('materi/{material}/lihat', [VocabController::class, 'materiLihat'])->name('materi.lihat');
+        Route::get('materi/{material}/unduh', [VocabController::class, 'materiUnduh'])->name('materi.unduh');
     });
 
     // BOOKING KELAS
@@ -451,6 +461,9 @@ Route::middleware(['auth', 'role:Curriculum'])
 
         Route::patch('/ketersediaan-guru/kelas/{class}/assign', [KetersediaanGuruController::class, 'assign'])
             ->name('ketersediaan.assign');
+
+        Route::patch('/ketersediaan-guru/kelas/{class}/batalkan', [KetersediaanGuruController::class, 'unassign'])
+            ->name('ketersediaan.unassign');
 
         Route::put('/ketersediaan-guru/{availability}', [KetersediaanGuruController::class, 'update'])
             ->name('ketersediaan.update');

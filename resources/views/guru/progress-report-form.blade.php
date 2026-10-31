@@ -1,126 +1,193 @@
 @extends('layouts.guru')
-@section('title', 'Buat Progress Report')
+@section('title', 'Form Progress Report - ' . $e->student_name)
 
 @section('content')
-<div class="container-fluid">
+<div class="container-fluid py-3">
 
-<h2 class="fw-bold">Progress Report: {{ $e->student_name }}</h2>
-<p class="text-muted">
-    Kelas {{ $e->class_name }} · Kehadiran otomatis: <strong>{{ $present }}/{{ $total }}</strong>
-</p>
-
-@if(session('error'))
-    <div class="alert alert-danger">{{ session('error') }}</div>
-@endif
-
-@if($errors->any())
-    <div class="alert alert-danger">
-        @foreach($errors->all() as $err) <div>{{ $err }}</div> @endforeach
-    </div>
-@endif
-
-{{-- Dikembalikan Kurikulum --}}
-@if($report && $report->returned_at)
-    <div class="alert alert-warning">
-        <strong>Dikembalikan Kurikulum.</strong>
-        {{ $report->review_note ?: 'Silakan perbaiki lalu kirim ulang.' }}
-    </div>
-@endif
-
-{{-- Batas H+3 --}}
-@if($deadline)
-    <div class="alert {{ $isLate ? 'alert-danger' : 'alert-info' }}">
-        @if($isLate)
-            Batas pengisian sudah lewat ({{ $deadline->translatedFormat('d M Y') }}).
-            Hubungi Kurikulum untuk membuka kembali.
-        @else
-            Batas pengisian: <strong>{{ $deadline->translatedFormat('l, d M Y') }}</strong>
-            (maksimal H+3 setelah pertemuan terakhir).
-        @endif
-    </div>
-@endif
-
-@if($competencies->isEmpty())
-    <div class="alert alert-warning">
-        Kurikulum belum menetapkan kompetensi untuk level kelas ini, jadi progress report belum bisa diisi.
-    </div>
-    <a href="{{ route('teacher.progress-report', ['class_id' => $e->class_id]) }}" class="btn btn-outline-secondary">Kembali</a>
-@else
-
-<form method="POST" action="{{ route('teacher.progress-report.store', $e->id) }}">
-    @csrf
-
-    <div class="row">
-        <div class="col-md-6 mb-3">
-            <label class="form-label fw-semibold">Jenis Report</label>
-            <input name="report_type" class="form-control"
-                   value="{{ old('report_type', $report->report_type ?? 'Trimester Academic Progress Report') }}">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3 class="fw-bold mb-1">Pengisian Progress Report: {{ $e->student_name }}</h3>
+            <p class="text-muted mb-0">
+                Kelas <strong>{{ $e->class_name }}</strong> · Kehadiran: <strong>{{ $present }}/{{ $total }}</strong> · 
+                <span class="badge bg-warning text-dark"><i class="fa-solid fa-clock-rotate-left me-1"></i> Kelas Pengganti: {{ $replacementCount }} kali</span>
+            </p>
         </div>
-        <div class="col-md-6 mb-3">
-            <label class="form-label fw-semibold">Periode</label>
-            <input name="report_period" class="form-control" placeholder="mis. Siklus 3 Bulan · Jul–Sep 2026"
-                   value="{{ old('report_period', $report->report_period ?? '') }}">
-        </div>
+        <a href="{{ route('teacher.progress-report', ['class_id' => $e->class_id]) }}" class="btn btn-outline-secondary rounded-pill">
+            <i class="fa-solid fa-arrow-left me-1"></i> Kembali
+        </a>
     </div>
 
-    <div class="table-responsive">
-        <table class="table table-bordered align-middle">
-            <thead class="table-light">
-                <tr>
-                    <th style="width:50px">NO</th>
-                    <th>Kompetensi</th>
-                    <th style="width:220px">Achievement Level</th>
-                    <th style="width:140px">Nilai Latihan</th>
-                </tr>
-            </thead>
-            <tbody>
-            @foreach($competencies as $i => $comp)
-                @php
-                    $prev = $saved->get($comp->id);
-                    $levelVal = old("rows.$i.level", $prev['level'] ?? '');
-                    $scoreVal = old("rows.$i.score", $prev['score'] ?? '');
-                @endphp
-                <tr>
-                    <td class="text-center">{{ $loop->iteration }}</td>
-                    <td>
-                        <strong>{{ $comp->name }}</strong>
-                        <input type="hidden" name="rows[{{ $i }}][competency_id]" value="{{ $comp->id }}">
-                    </td>
-                    <td>
-                        <select name="rows[{{ $i }}][level]" class="form-select" required>
-                            <option value="">— pilih —</option>
-                            @foreach($levels as $lv)
-                                <option value="{{ $lv->level }}" title="{{ $lv->description }}"
-                                        @selected($levelVal === $lv->level)>{{ $lv->level }}</option>
+    @if(session('error'))
+        <div class="alert alert-danger">{{ session('error') }}</div>
+    @endif
+
+    @if($errors->any())
+        <div class="alert alert-danger">
+            <strong class="d-block mb-1">Periksa kembali isian:</strong>
+            <ul class="mb-0">
+                @foreach($errors->all() as $err) <li>{{ $err }}</li> @endforeach
+            </ul>
+        </div>
+    @endif
+
+    {{-- Dikembalikan Kurikulum --}}
+    @if($report && $report->returned_at)
+        <div class="alert alert-warning border-warning">
+            <i class="fa-solid fa-triangle-exclamation me-1"></i>
+            <strong>Dikembalikan Kurikulum untuk diperbaiki:</strong>
+            {{ $report->review_note ?: 'Silakan perbaiki isian lalu kirim ulang.' }}
+        </div>
+    @endif
+
+    <form method="POST" action="{{ route('teacher.progress-report.store', $e->id) }}">
+        @csrf
+
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-body p-4">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-semibold">Judul / Jenis Report</label>
+                        <input name="report_type" class="form-control"
+                               value="{{ old('report_type', $report->report_type ?? 'Trimester Academic Progress Report') }}" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-semibold">Periode Pembelajaran</label>
+                        <input name="report_period" class="form-control" placeholder="Contoh: Siklus 3 Bulan (Juli - September 2026)"
+                               value="{{ old('report_period', $report->report_period ?? '') }}" required>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- BAGIAN 1: LEARNING MATERIALS --}}
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-header bg-white py-3 fw-bold border-bottom">
+                <i class="fa-solid fa-book text-warning me-2"></i> 1. Learning Materials & Achievement Level
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 50px;" class="text-center">No</th>
+                                <th style="width: 30%;">Learning Materials</th>
+                                <th style="width: 25%;">Achievement Level</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($classMaterials as $i => $mat)
+                                @php
+                                    $matName = $mat->material_name;
+                                    $prevRow = $savedMaterials->get($matName);
+                                    $currLevel = old("materials.$i.level", $prevRow['level'] ?? 'Proficient');
+                                    $currDesc = old("materials.$i.description", $prevRow['description'] ?? ($levelDescriptions[$currLevel] ?? 'Demonstrates a solid understanding of the material.'));
+                                @endphp
+                                <tr>
+                                    <td class="text-center">{{ $loop->iteration }}</td>
+                                    <td>
+                                        <div class="fw-bold text-dark">{{ $matName }}</div>
+                                        <input type="hidden" name="materials[{{ $i }}][material]" value="{{ $matName }}">
+                                    </td>
+                                    <td>
+                                        <select name="materials[{{ $i }}][level]" class="form-select ach-select" data-index="{{ $i }}" required>
+                                            @foreach($achievementChoices as $choice)
+                                                <option value="{{ $choice }}" @selected($currLevel === $choice)>{{ $choice }}</option>
+                                            @endforeach
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <textarea name="materials[{{ $i }}][description]" id="desc_{{ $i }}" rows="2" class="form-control form-control-sm" required>{{ $currDesc }}</textarea>
+                                    </td>
+                                </tr>
                             @endforeach
-                        </select>
-                    </td>
-                    <td>
-                        <input type="number" name="rows[{{ $i }}][score]" class="form-control"
-                               min="0" max="100" step="0.1" value="{{ $scoreVal }}" required>
-                    </td>
-                </tr>
-            @endforeach
-            </tbody>
-        </table>
-    </div>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
 
-    <p class="text-muted small">
-        Deskripsi untuk tiap Achievement Level sudah baku dan otomatis tercantum di PDF.
-    </p>
+        {{-- BAGIAN 2: ASSESSMENT --}}
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-header bg-white py-3 fw-bold border-bottom">
+                <i class="fa-solid fa-list-check text-warning me-2"></i> 2. Assessment & Scoring
+            </div>
+            <div class="card-body p-4">
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 35%;">Assessment</th>
+                                <th style="width: 15%;" class="text-center">Score (0-100)</th>
+                                <th style="width: 15%;" class="text-center">Grade</th>
+                                <th>Note</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($savedAssessments as $aIdx => $aData)
+                                <tr>
+                                    <td>
+                                        <input type="text" name="assessments[{{ $aIdx }}][assessment]" class="form-control" value="{{ old("assessments.$aIdx.assessment", $aData['assessment']) }}" required>
+                                    </td>
+                                    <td>
+                                        <input type="number" name="assessments[{{ $aIdx }}][score]" class="form-control text-center" min="0" max="100" value="{{ old("assessments.$aIdx.score", $aData['score']) }}" required>
+                                    </td>
+                                    <td>
+                                        <input type="text" name="assessments[{{ $aIdx }}][grade]" class="form-control text-center" value="{{ old("assessments.$aIdx.grade", $aData['grade']) }}" required>
+                                    </td>
+                                    <td>
+                                        <input type="text" name="assessments[{{ $aIdx }}][note]" class="form-control" value="{{ old("assessments.$aIdx.note", $aData['note']) }}">
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
 
-    <div class="mt-3 d-flex gap-2 flex-wrap">
-        <button type="submit" name="action" value="draft" class="btn btn-outline-primary" @disabled($isLate)>
-            Simpan Draft & Buat PDF
-        </button>
-        <button type="submit" name="action" value="submit" class="btn btn-primary" @disabled($isLate)>
-            Kirim ke Kurikulum
-        </button>
-        <a href="{{ route('teacher.progress-report', ['class_id' => $e->class_id]) }}" class="btn btn-link">Batal</a>
-    </div>
-</form>
+        {{-- BAGIAN 3: SUGGESTION BOX --}}
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-header bg-white py-3 fw-bold border-bottom">
+                <i class="fa-solid fa-comment-dots text-warning me-2"></i> 3. Suggestion Box (Saran & Masukan Guru)
+            </div>
+            <div class="card-body p-4">
+                <label class="form-label small text-muted">Isikan saran, masukan perkembangan, atau rekomendasi belajar untuk siswa ini:</label>
+                <textarea name="suggestion_box" rows="3" class="form-control" placeholder="Tuliskan saran & masukan perkembangan siswa di sini...">{{ old('suggestion_box', $report->suggestion_box ?? 'Tingkatkan latihan percakapan dan perbanyak pengulangan kosakata baru di rumah.') }}</textarea>
+            </div>
+        </div>
 
-@endif
+        <div class="d-flex justify-content-between align-items-center mb-5">
+            <a href="{{ route('teacher.progress-report', ['class_id' => $e->class_id]) }}" class="btn btn-outline-secondary rounded-pill px-4">
+                Batal
+            </a>
+            <div class="d-flex gap-2">
+                <button type="submit" name="action" value="draft" class="btn btn-outline-dark rounded-pill px-4 fw-semibold">
+                    <i class="fa-solid fa-floppy-disk me-1"></i> Simpan Draft
+                </button>
+                <button type="submit" name="action" value="submit" class="btn btn-warning rounded-pill px-5 fw-bold text-dark"
+                        onclick="return confirm('Kirimkan progress report ini ke Kurikulum untuk di-ACC?')">
+                    <i class="fa-solid fa-paper-plane me-1"></i> Ajukan ke Kurikulum
+                </button>
+            </div>
+        </div>
 
+    </form>
 </div>
+
+@push('scripts')
+<script>
+const defaultDescriptions = @json($levelDescriptions);
+
+document.querySelectorAll('.ach-select').forEach(sel => {
+    sel.addEventListener('change', function () {
+        const idx = this.dataset.index;
+        const targetTextarea = document.getElementById('desc_' + idx);
+        if (targetTextarea && defaultDescriptions[this.value]) {
+            targetTextarea.value = defaultDescriptions[this.value];
+        }
+    });
+});
+</script>
+@endpush
 @endsection

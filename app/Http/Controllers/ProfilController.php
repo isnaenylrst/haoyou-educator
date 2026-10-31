@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 
 class ProfilController extends Controller
@@ -12,9 +14,21 @@ class ProfilController extends Controller
     /** Lihat profil + form edit */
     public function index()
     {
+        $user = Auth::user();
+        $role = $user->level?->nama_level;
+
+        // View selection based on role or universal profile
+        if (in_array($role, ['Curriculum', 'Owner', 'Teacher', 'Admin'])) {
+            return view('profil.staff', [
+                'title' => 'Profil & Tanda Tangan Saya',
+                'user'  => $user,
+                'role'  => $role,
+            ]);
+        }
+
         return view('profil.index', [
             'title' => 'Profil Saya',
-            'user'  => auth()->user(),
+            'user'  => $user,
         ]);
     }
 
@@ -23,8 +37,6 @@ class ProfilController extends Controller
     {
         $user = $request->user();
 
-        // Form Edit profil sekarang hanya berisi foto,
-        // jadi nama_lengkap tidak lagi divalidasi / disimpan.
         $request->validate([
             'foto' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ], [
@@ -34,16 +46,59 @@ class ProfilController extends Controller
             'foto.max'      => 'Ukuran foto maksimal 2 MB.',
         ]);
 
-        // Hapus foto lama
         if ($user->foto) {
             Storage::disk('public')->delete($user->foto);
         }
 
-        // Simpan foto baru
         $user->foto = $request->file('foto')->store('foto-profil', 'public');
         $user->save();
 
         return back()->with('success', 'Foto profil berhasil diperbarui.');
+    }
+
+    /** Simpan tanda tangan digital (file upload atau gambar kanvas) */
+    public function updateSignature(Request $request)
+    {
+        $user = $request->user();
+
+        $request->validate([
+            'signature_file'   => ['nullable', 'image', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
+            'signature_base64' => ['nullable', 'string'],
+        ]);
+
+        $path = null;
+
+        if ($request->hasFile('signature_file')) {
+            if ($user->signature_path) {
+                Storage::disk('public')->delete($user->signature_path);
+            }
+            $path = $request->file('signature_file')->store('signatures', 'public');
+        } elseif ($request->filled('signature_base64')) {
+            $base64Data = $request->input('signature_base64');
+            if (preg_match('/^data:image\/(\w+);base64,/', $base64Data, $type)) {
+                $base64Data = substr($base64Data, strpos($base64Data, ',') + 1);
+                $type = strtolower($type[1]); // png, jpg, etc.
+                $decoded = base64_decode($base64Data);
+
+                if ($decoded !== false) {
+                    if ($user->signature_path) {
+                        Storage::disk('public')->delete($user->signature_path);
+                    }
+                    $fileName = 'signatures/sig_' . $user->id . '_' . Str::random(10) . '.' . $type;
+                    Storage::disk('public')->put($fileName, $decoded);
+                    $path = $fileName;
+                }
+            }
+        }
+
+        if (!$path) {
+            return back()->with('error', 'Silakan upload file tanda tangan atau buat tanda tangan pada kanvas.');
+        }
+
+        $user->signature_path = $path;
+        $user->save();
+
+        return back()->with('success', 'Tanda tangan digital berhasil disimpan sekali untuk keperluan dokumen otomatis.');
     }
 
     /** Ganti password */
@@ -71,7 +126,6 @@ class ProfilController extends Controller
 
         if ($user->foto) {
             Storage::disk('public')->delete($user->foto);
-
             $user->foto = null;
             $user->save();
         }

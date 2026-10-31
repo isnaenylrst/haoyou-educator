@@ -25,7 +25,7 @@ class KelasController extends Controller
 
         $categories = ProgramCategory::orderBy('category_name')->get();
 
-        $materials = Material::with('level.category')
+        $materials = Material::forGuru()->with('level.category')
             ->orderBy('title')
             ->get();
 
@@ -142,7 +142,7 @@ class KelasController extends Controller
         }
 
         $request->validate([
-            'material_id' => ['required', 'exists:materials,id'],
+                        'material_id' => ['required', Rule::exists('materials', 'id')->where('audience', 'Guru')],
             'lp_file' => ['required', 'file', 'mimes:pdf', 'max:10240'],
             'ppt_file' => ['required', 'file', 'mimes:pdf,ppt,pptx', 'max:20480'],
         ]);
@@ -153,7 +153,7 @@ class KelasController extends Controller
                 $lpPath = $request->file('lp_file')->store('teacher_materials/lp', 'public');
                 $pptPath = $request->file('ppt_file')->store('teacher_materials/ppt', 'public');
 
-                $material = Material::findOrFail($request->material_id);
+                $material = Material::forGuru()->findOrFail($request->material_id);
 
                 TeacherMaterial::create([
                     'material_id' => $request->material_id,

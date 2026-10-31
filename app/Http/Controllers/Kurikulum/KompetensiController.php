@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Kurikulum;
 
 use App\Http\Controllers\Controller;
 use App\Models\AchievementLevel;
+use App\Models\ClassLearningMaterial;
+use App\Models\ClassModel;
 use App\Models\ProgramLevel;
 use App\Models\ReportCompetency;
 use Illuminate\Http\Request;
@@ -12,21 +14,27 @@ class KompetensiController extends Controller
 {
     /*
     |--------------------------------------------------------------------------
-    | Kompetensi Progress Report
+    | Kompetensi & Learning Materials Progress Report
     |--------------------------------------------------------------------------
-    | Kurikulum menetapkan kompetensi apa saja yang dinilai pada progress
-    | report, per level (atau semua level). Guru hanya mengisi nilai:
-    | Achievement Level + nilai latihan. Deskripsi tiap Achievement Level
-    | bersifat baku dan diatur di halaman ini.
+    | Kurikulum menetapkan Learning Materials per kelas (contoh Kelas Feixiang 1A)
+    | atau kompetensi per level. Guru tinggal mengisi:
+    | Achievement Level (Sufficient, Proficient, Excellent) + deskripsi,
+    | serta bagian Assessment (Score, Grade, Note).
     |--------------------------------------------------------------------------
     */
 
     public function index(Request $request)
     {
         $levelFilter = $request->get('level');
+        $classFilter = $request->get('class_id');
 
         $levels = ProgramLevel::with(['program', 'category'])
             ->orderBy('level_name')
+            ->get();
+
+        $classes = ClassModel::with(['level.program', 'learningMaterials'])
+            ->whereIn('status', ['Open', 'Running'])
+            ->orderBy('class_name')
             ->get();
 
         $competencies = ReportCompetency::with('level')
@@ -37,13 +45,22 @@ class KompetensiController extends Controller
             ->orderBy('id')
             ->get();
 
+        $classMaterials = ClassLearningMaterial::with('class')
+            ->when($classFilter, fn ($q) => $q->where('class_id', $classFilter))
+            ->orderBy('class_id')
+            ->orderBy('sort_order')
+            ->get();
+
         $achievementLevels = AchievementLevel::orderBy('sort_order')->get();
 
         return view('kurikulum.kompetensi', compact(
             'levels',
+            'classes',
             'competencies',
+            'classMaterials',
             'achievementLevels',
-            'levelFilter'
+            'levelFilter',
+            'classFilter'
         ));
     }
 
@@ -56,7 +73,6 @@ class KompetensiController extends Controller
         ]);
 
         $levelId = $data['program_level_id'] ?? null;
-
         $nextOrder = $data['sort_order']
             ?? (ReportCompetency::where('program_level_id', $levelId)->max('sort_order') + 1);
 
@@ -67,7 +83,7 @@ class KompetensiController extends Controller
             'is_active'        => true,
         ]);
 
-        return back()->with('success', 'Kompetensi ditambahkan.');
+        return back()->with('success', 'Kompetensi berhasil ditambahkan.');
     }
 
     public function update(Request $request, ReportCompetency $competency)
@@ -82,7 +98,7 @@ class KompetensiController extends Controller
             'program_level_id' => $data['program_level_id'] ?? null,
             'name'             => $data['name'],
             'sort_order'       => $data['sort_order'] ?? $competency->sort_order,
-            'is_active'        => $request->boolean('is_active'),
+            'is_active'        => $request->boolean('is_active', true),
         ]);
 
         return back()->with('success', 'Kompetensi diperbarui.');
@@ -90,24 +106,44 @@ class KompetensiController extends Controller
 
     public function destroy(ReportCompetency $competency)
     {
-        // Report lama menyimpan salinan nama kompetensi di isinya,
-        // jadi menghapus kompetensi tidak merusak report yang sudah dibuat.
         $competency->delete();
 
         return back()->with('success', 'Kompetensi dihapus.');
     }
 
-    public function updateDescriptions(Request $request)
+    /** Simpan template Learning Material per Kelas */
+    public function storeClassMaterial(Request $request)
     {
         $data = $request->validate([
-            'descriptions'   => ['required', 'array'],
-            'descriptions.*' => ['required', 'string', 'max:1000'],
+            'class_id'      => ['required', 'exists:classes,id'],
+            'material_name' => ['required', 'string', 'max:255'],
+            'sort_order'    => ['nullable', 'integer', 'min:0'],
         ]);
 
-        foreach (AchievementLevel::all() as $level) {
-            if (isset($data['descriptions'][$level->id])) {
-                $level->update(['description' => $data['descriptions'][$level->id]]);
-            }
+        $nextOrder = $data['sort_order'] ?? (ClassLearningMaterial::where('class_id', $data['class_id'])->max('sort_order') + 1);
+
+        ClassLearningMaterial::create([
+            'class_id'      => $data['class_id'],
+            'material_name' => $data['material_name'],
+            'sort_order'    => $nextOrder,
+        ]);
+
+        return back()->with('success', 'Learning Material untuk kelas berhasil ditambahkan.');
+    }
+
+    public function destroyClassMaterial(ClassLearningMaterial $material)
+    {
+        $material->delete();
+
+        return back()->with('success', 'Learning Material kelas dihapus.');
+    }
+
+    public function updateDescriptions(Request $request)
+    {
+        $descriptions = $request->input('descriptions', []);
+
+        foreach ($descriptions as $id => $desc) {
+            AchievementLevel::whereKey($id)->update(['description' => $desc]);
         }
 
         return back()->with('success', 'Deskripsi Achievement Level diperbarui.');

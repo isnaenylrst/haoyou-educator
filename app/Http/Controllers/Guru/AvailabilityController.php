@@ -13,6 +13,17 @@ use Illuminate\Validation\Rule;
 
 class AvailabilityController extends Controller
 {
+    private const MESSAGES = [
+        'days.required'          => 'Pilih minimal satu hari.',
+        'days.min'               => 'Pilih minimal satu hari.',
+        'day.required'           => 'Pilih hari.',
+        'start_time.required'    => 'Jam mulai wajib diisi.',
+        'start_time.date_format' => 'Format jam mulai tidak valid.',
+        'end_time.required'      => 'Jam selesai wajib diisi.',
+        'end_time.date_format'   => 'Format jam selesai tidak valid.',
+        'end_time.after'         => 'Jam selesai harus setelah jam mulai.',
+    ];
+
     private function teacher()
     {
         $teacher = Auth::user()->teacher;
@@ -21,31 +32,36 @@ class AvailabilityController extends Controller
         return $teacher;
     }
 
-    private function rules(): array
-    {
-        return [
-            'day'        => ['required', Rule::in(TeacherAvailability::DAYS)],
-            'start_time' => ['required', 'date_format:H:i'],
-            'end_time'   => ['required', 'date_format:H:i', 'after:start_time'],
-            'note'       => ['nullable', 'string', 'max:255'],
-        ];
-    }
+    // ------------------------------------------------------------------ KETERSEDIAAN SAYA
 
+    /** Tambah ketersediaan untuk satu atau beberapa hari sekaligus. */
     public function store(Request $request)
     {
         $teacher = $this->teacher();
-        $data = $request->validate($this->rules());
 
-        if (TeacherAvailabilityService::overlaps($teacher->id, $data['day'], $data['start_time'], $data['end_time'])) {
-            return back()->withInput()->with('error', 'Slot ini bertumpuk dengan ketersediaan lain di hari yang sama.');
+        $data = $request->validate([
+            'days'       => ['required', 'array', 'min:1'],
+            'days.*'     => ['required', Rule::in(TeacherAvailability::DAYS)],
+            'start_time' => ['required', 'date_format:H:i'],
+            'end_time'   => ['required', 'date_format:H:i', 'after:start_time'],
+            'note'       => ['nullable', 'string', 'max:255'],
+        ], self::MESSAGES);
+
+        [$created, $skipped] = TeacherAvailabilityService::addSlots(
+            $teacher->id, $data['days'], $data['start_time'], $data['end_time'],
+            $data['note'] ?? null, Auth::id()
+        );
+
+        if (!$created) {
+            return back()->withInput()->with('error', 'Semua hari yang dipilih bertumpuk dengan ketersediaan Anda yang sudah ada.');
         }
 
-        TeacherAvailability::create($data + [
-            'teacher_id' => $teacher->id,
-            'created_by' => Auth::id(),
-        ]);
+        $message = count($created) . ' slot ketersediaan ditambahkan (' . implode(', ', $created) . ').';
+        if ($skipped) {
+            $message .= ' Dilewati karena bertumpuk: ' . implode(', ', $skipped) . '.';
+        }
 
-        return back()->with('success', 'Ketersediaan ditambahkan.');
+        return back()->with('success', $message);
     }
 
     public function update(Request $request, TeacherAvailability $availability)
@@ -53,7 +69,12 @@ class AvailabilityController extends Controller
         $teacher = $this->teacher();
         abort_if((int) $availability->teacher_id !== (int) $teacher->id, 403);
 
-        $data = $request->validate($this->rules());
+        $data = $request->validate([
+            'day'        => ['required', Rule::in(TeacherAvailability::DAYS)],
+            'start_time' => ['required', 'date_format:H:i'],
+            'end_time'   => ['required', 'date_format:H:i', 'after:start_time'],
+            'note'       => ['nullable', 'string', 'max:255'],
+        ], self::MESSAGES);
 
         if (TeacherAvailabilityService::overlaps($teacher->id, $data['day'], $data['start_time'], $data['end_time'], $availability->id)) {
             return back()->withInput()->with('error', 'Slot ini bertumpuk dengan ketersediaan lain di hari yang sama.');
@@ -73,11 +94,22 @@ class AvailabilityController extends Controller
         return back()->with('success', 'Ketersediaan dihapus.');
     }
 
-    /** Guru menerima atau menolak kelas yang diberikan kepadanya. */
+    // ------------------------------------------------------------------ TERIMA / TOLAK KELAS
+
+    /** Guru menerima atau menolak kelas yang diberikan kepadanya (hanya sekali, selama masih menunggu). */
     public function respondClass(Request $request, ClassModel $class)
     {
         $teacher = $this->teacher();
+
         abort_if((int) $class->teacher_id !== (int) $teacher->id, 403);
+
+        if ($class->teacher_response !== 'Pending') {
+            return back()->with('error', 'Kelas ini sudah Anda jawab. Hubungi Kurikulum jika perlu mengubahnya.');
+        }
+
+        if (!in_array($class->status, ['Open', 'Running'], true)) {
+            return back()->with('error', 'Kelas ini sudah tidak berjalan.');
+        }
 
         $data = $request->validate([
             'decision' => ['required', Rule::in(['Accepted', 'Rejected'])],
@@ -107,6 +139,8 @@ class AvailabilityController extends Controller
             : "Kelas {$class->class_name} ditolak. Kurikulum akan mencarikan guru lain.");
     }
 
+    // ------------------------------------------------------------------ GURU PENGGANTI
+
     /**
      * Guru pengganti menerima / menolak permintaan menggantikan kelas guru lain.
      * Diterima  -> menunggu persetujuan Kurikulum.
@@ -115,6 +149,7 @@ class AvailabilityController extends Controller
     public function respondReplacement(Request $request, TeacherLeave $leave)
     {
         $teacher = $this->teacher();
+
         abort_if((int) $leave->replacement_teacher_id !== (int) $teacher->id, 403);
 
         if ($leave->status !== 'Pending' || $leave->replacement_response !== 'Pending') {
@@ -129,6 +164,7 @@ class AvailabilityController extends Controller
         ]);
 
         $leave->load(['classSchedule.class', 'teacher']);
+
         $schedule  = $leave->classSchedule;
         $className = optional(optional($schedule)->class)->class_name ?? 'kelas';
 

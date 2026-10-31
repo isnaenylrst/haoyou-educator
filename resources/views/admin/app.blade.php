@@ -56,10 +56,10 @@
                     <span class="label">Calon Siswa</span>
                 </a>
 
-                {{-- <a href="#" class="nav-item">
-                    <i class="fa-solid fa-comments nav-icon" title="Follow Up"></i>
-                    <span class="label">Follow Up</span>
-                </a> --}}
+                <a href="{{ route('admin.request-belajar.index') }}" class="nav-item {{ request()->routeIs('admin.request-belajar.*') ? 'active' : '' }}">
+                    <i class="fa-solid fa-book-open-reader nav-icon" title="Request Belajar Siswa"></i>
+                    <span class="label">Request Belajar</span>
+                </a>
             </div>
 
             {{-- AKADEMIK --}}
@@ -111,6 +111,12 @@
                     <i class="fa-solid fa-wallet nav-icon" title="Pembayaran"></i>
                     <span class="label">Pembayaran</span>
                 </a>
+
+                <a href="{{ route('admin.pengajuan.index') }}"
+                class="nav-item {{ request()->routeIs('admin.pengajuan*') ? 'active' : '' }}">
+                    <i class="fa-solid fa-receipt nav-icon" title="Rekap Pengajuan"></i>
+                    <span class="label">Rekap Pengajuan</span>
+                </a>
             </div>
 
             {{-- LAPORAN --}}
@@ -155,11 +161,11 @@
         {{-- SIDEBAR FOOTER --}}
         <div class="sidebar-footer">
             <div class="user-chip">
-                <div class="avatar">IE</div>
+                <div class="avatar">{{ strtoupper(substr(auth()->user()->username ?? 'AD', 0, 2)) }}</div>
 
                 <div class="user-meta">
-                    <div class="name">Isnaeny</div>
-                    <div class="role">Admin</div>
+                    <div class="name">{{ auth()->user()->display_name }}</div>
+                    <div class="role">{{ auth()->user()->level->nama_level ?? 'Admin' }}</div>
                 </div>
 
                 <button type="button" class="collapse-btn" id="sidebarCollapse">‹</button>
@@ -181,30 +187,74 @@
                 <small>⌘K</small>
             </div>
 
-            <div class="topbar-actions">
-                {{-- Kalender --}}
-                <button class="topbar-button" title="Kalender">
-                    <i class="fa-solid fa-calendar-check topbar-icon"></i>
-                </button>
+            <div class="topbar-actions d-flex align-items-center gap-2">
+                {{-- Notifikasi (Laravel Database Notification) --}}
+                <div class="dropdown">
+                    <button class="topbar-button notification position-relative" data-bs-toggle="dropdown" aria-expanded="false" title="Notifikasi">
+                        <i class="fa-regular fa-bell topbar-icon"></i>
+                        @if(($unreadNotificationsCount ?? 0) > 0)
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:10px;">
+                                {{ $unreadNotificationsCount }}
+                            </span>
+                        @endif
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end p-0 shadow rounded-4" style="width:340px; max-height:450px; overflow-y:auto;">
+                        <div class="px-3 py-2 fw-bold border-bottom d-flex justify-content-between align-items-center bg-light">
+                            <span>Notifikasi @if(($unreadNotificationsCount ?? 0) > 0)<span class="badge bg-warning text-dark ms-1">{{ $unreadNotificationsCount }}</span>@endif</span>
+                            @if(($unreadNotificationsCount ?? 0) > 0)
+                                <form action="{{ route('notifications.mark-all-read') }}" method="POST" class="m-0">
+                                    @csrf
+                                    <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none text-muted" style="font-size:11px;">Tandai semua dibaca</button>
+                                </form>
+                            @endif
+                        </div>
 
-                {{-- Reminder / Tugas --}}
-                <button class="topbar-button notification" title="Reminder">
-                    <i class="fa-solid fa-list-check topbar-icon"></i>
-                </button>
-
-                {{-- Notifikasi --}}
-                <button class="topbar-button notification" title="Notifikasi">
-                    <i class="fa-regular fa-bell topbar-icon"></i>
-                </button>
+                        @if(!empty($unreadNotifications) && $unreadNotifications->count() > 0)
+                            @foreach($unreadNotifications as $notif)
+                                <a class="notif-item border-bottom d-flex align-items-start gap-2 text-decoration-none text-dark p-2" href="{{ route('notifications.read', $notif->id) }}">
+                                    <div class="badge-num mt-1"><i class="fa-solid {{ $notif->data['icon'] ?? 'fa-bell' }}"></i></div>
+                                    <div class="flex-grow-1">
+                                        <div class="fw-semibold small">{{ $notif->data['title'] ?? 'Pemberitahuan' }}</div>
+                                        <div class="text-muted" style="font-size:12px; line-height:1.2;">{{ Str::limit($notif->data['message'] ?? '', 75) }}</div>
+                                        <div class="text-secondary" style="font-size:10px;">{{ $notif->created_at->diffForHumans() }}</div>
+                                    </div>
+                                </a>
+                            @endforeach
+                        @else
+                            <div class="p-4 text-center text-muted small">
+                                <i class="fa-regular fa-bell-slash fs-4 d-block mb-2 text-secondary"></i>
+                                Tidak ada notifikasi baru 🎉
+                            </div>
+                        @endif
+                    </div>
+                </div>
 
                 <div class="topbar-divider"></div>
 
-                <div class="topbar-profile">
-                    <div class="profile-avatar">IE</div>
-                    <div class="profile-info">
-                        <strong>Isnaeny</strong>
-                        <span>Administrator</span>
+                <div class="dropdown">
+                    <div class="topbar-profile d-flex align-items-center gap-2 cursor-pointer" data-bs-toggle="dropdown" aria-expanded="false" style="cursor:pointer;">
+                        <div class="profile-avatar">{{ strtoupper(substr(auth()->user()->username ?? 'AD', 0, 2)) }}</div>
+                        <div class="profile-info">
+                            <strong>{{ auth()->user()->display_name }}</strong>
+                            <span>{{ auth()->user()->level->nama_level ?? 'Administrator' }}</span>
+                        </div>
                     </div>
+                    <ul class="dropdown-menu dropdown-menu-end p-2" style="min-width:200px;">
+                        <li>
+                            <a href="{{ route('profil.index') }}" class="dropdown-item rounded-2 fw-semibold">
+                                <i class="fa-solid fa-signature me-2 text-warning"></i> Profil & Tanda Tangan
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <form method="POST" action="{{ route('logout') }}">
+                                @csrf
+                                <button type="submit" class="dropdown-item rounded-2 text-danger fw-semibold">
+                                    <i class="fa-solid fa-right-from-bracket me-2"></i> Keluar
+                                </button>
+                            </form>
+                        </li>
+                    </ul>
                 </div>
             </div>
         </header>

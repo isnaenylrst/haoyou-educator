@@ -12,9 +12,11 @@ use App\Models\ProgressReport;
 use App\Models\ProgramLevel;
 use App\Models\ProgramVideo;
 use App\Models\Student;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class SiswaDashboardController extends Controller
 {
@@ -222,7 +224,10 @@ class SiswaDashboardController extends Controller
 
         $levelIds = $this->resolveLevelIds($student, $enrollments);
 
-        $materials = Material::with(['level.program', 'vocabs'])
+        // Hanya materi bertujuan Siswa (materi Guru & Huahua tidak ikut tampil)
+        $materials = Material::query()
+            ->where('audience', 'Siswa')
+            ->with(['level.program', 'vocabs'])
             ->whereIn('level_id', $levelIds)
             ->orderBy('level_id')
             ->orderBy('meeting_number')
@@ -253,6 +258,50 @@ class SiswaDashboardController extends Controller
             'cultureVideos' => $cultureVideos,
             'replayVideo' => $replayVideo,
         ]);
+    }
+
+    /** Siswa hanya boleh membuka materi bertujuan Siswa untuk level kelasnya. */
+    private function authorizeStudentMaterial(Material $material): void
+    {
+        abort_unless($material->audience === 'Siswa', 404);
+
+        $student = $this->student();
+
+        $enrollments = ClassEnrollment::with('class.programPackage')
+            ->where('student_id', $student->id)
+            ->whereIn('status', ['Active', 'Completed', 'Waiting Class'])
+            ->get();
+
+        abort_unless(
+            $this->resolveLevelIds($student, $enrollments)->contains($material->level_id),
+            403,
+            'Materi ini bukan untuk level kelasmu.'
+        );
+
+        abort_unless($material->file_exists, 404, 'File materi tidak ditemukan.');
+    }
+
+    public function materiLihat(Material $material)
+    {
+        $this->authorizeStudentMaterial($material);
+
+        if (!$material->is_pdf) {
+            return $this->materiUnduh($material);
+        }
+
+        return response()->file(
+            storage_path('app/public/' . $material->material_file_path),
+            ['Content-Type' => 'application/pdf']
+        );
+    }
+
+    public function materiUnduh(Material $material)
+    {
+        $this->authorizeStudentMaterial($material);
+
+        $name = (Str::slug($material->title) ?: 'materi-' . $material->id) . '.' . $material->file_extension;
+
+        return response()->download(storage_path('app/public/' . $material->material_file_path), $name);
     }
 
     /**
@@ -311,7 +360,9 @@ class SiswaDashboardController extends Controller
 
         abort_unless($allowed, 403);
 
-        $path = Storage::disk('local')->path($video->video_path);
+        /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+        $disk = Storage::disk('local');
+        $path = $disk->path($video->video_path);
 
         abort_unless(is_file($path), 404);
 
@@ -417,6 +468,7 @@ class SiswaDashboardController extends Controller
 
     public function notifikasi()
     {
+        /** @var User $user */
         $user = Auth::user();
 
         $map = fn ($notification) => [
@@ -446,7 +498,10 @@ class SiswaDashboardController extends Controller
 
     public function notifikasiTandaiDibaca()
     {
-        Auth::user()->unreadNotifications->markAsRead();
+        /** @var User $user */
+        $user = Auth::user();
+
+        $user->unreadNotifications->markAsRead();
 
         return redirect()->route('notifikasi.index');
     }

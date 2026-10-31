@@ -8,9 +8,29 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * @property int $id
+ * @property int $level_id
+ * @property string $audience
+ * @property int $meeting_number
+ * @property string $title
+ * @property string|null $description
+ * @property string|null $material_file_path
+ * @property-read bool $file_exists
+ * @property-read bool $is_pdf
+ * @property-read string $file_extension
+ * @property-read string $file_size_label
+ *
+ * @method static \Illuminate\Database\Eloquent\Builder|Material forGuru()
+ * @method static \Illuminate\Database\Eloquent\Builder|Material forSiswa()
+ * @method static \Illuminate\Database\Eloquent\Builder|Material forHuahua()
+ */
+
 class Material extends Model
 {
     use HasFactory;
+
+        public const AUDIENCES = ['Guru', 'Siswa', 'Huahua'];
 
     protected $fillable = [
         'level_id',
@@ -24,6 +44,8 @@ class Material extends Model
         'box_code',
         'equipment_list',
         'material_file_path',
+        'audience',
+        'description',
     ];
 
     public function level(): BelongsTo
@@ -57,6 +79,27 @@ class Material extends Model
     public function teachingJournals(): HasMany
     {
         return $this->hasMany(TeachingJournal::class, 'material_id');
+    }
+
+        public function scopeForGuru($query)
+    {
+        return $query->where('audience', 'Guru');
+    }
+
+    public function scopeForSiswa($query)
+    {
+        return $query->where('audience', 'Siswa');
+    }
+
+    public function scopeForHuahua($query)
+    {
+        return $query->where('audience', 'Huahua');
+    }
+
+    /** Kata di bank Huahua yang berasal dari materi ini. */
+    public function huahuaWords(): HasMany
+    {
+        return $this->hasMany(VocabWord::class, 'material_id')->orderBy('order_number');
     }
 
     // Informasi file materi.

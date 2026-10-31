@@ -46,6 +46,7 @@
         'report'     => ['Progress Report', $totals['report']],
         'cuti'       => ['Cuti / Pengajuan Kelas', $totals['cuti']],
         'sertifikat' => ['Sertifikat', $totals['sertifikat']],
+        'pengajuan'  => ['Reimburse & Bahan', $totals['pengajuan']],
     ];
 @endphp
 
@@ -526,6 +527,11 @@
             {{-- ===== TAB SERTIFIKAT ===== --}}
             <div class="doc-tab {{ $tab === 'sertifikat' ? '' : 'd-none' }}" data-tab="sertifikat">
                 @include('kurikulum.partials.review-sertifikat')
+            </div>
+
+            {{-- ===== TAB PENGAJUAN (REIMBURSE & PEMBELIAN) ===== --}}
+            <div class="doc-tab {{ $tab === 'pengajuan' ? '' : 'd-none' }}" data-tab="pengajuan">
+                @include('kurikulum.partials.review-submission')
             </div>
 
         </div>

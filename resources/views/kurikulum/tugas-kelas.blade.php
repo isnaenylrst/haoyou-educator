@@ -56,6 +56,7 @@
         <div class="card-header bg-white fw-bold">Buat Tugas Baru</div>
         <div class="card-body">
             <form action="{{ route('kurikulum.tugas-kelas.store') }}" method="POST"
+                  enctype="multipart/form-data"
                   onsubmit="return lockSubmit(this, 'Mengirim...')">
                 @csrf
 
@@ -103,6 +104,17 @@
                     <label class="form-label fw-semibold">Yang Perlu Diperbaiki</label>
                     <textarea name="description" rows="4" maxlength="2000" class="form-control"
                               placeholder="Jelaskan bagian kelas yang perlu diperbaiki">{{ $editId === '' ? old('description') : '' }}</textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Lampiran (opsional)</label>
+                    <input type="file" name="attachment"
+                           class="form-control {{ $addErr('attachment') ? 'is-invalid' : '' }}"
+                           accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+                    @if ($addErr('attachment'))
+                        <div class="invalid-feedback">{{ $addErr('attachment') }}</div>
+                    @endif
+                    <small class="text-muted">Format: PDF, Word, JPG, PNG — maks. 10 MB.</small>
                 </div>
 
                 <button type="submit" class="btn btn-primary">Kirim ke Guru</button>
@@ -172,6 +184,15 @@
                                 <div class="small mt-2">{!! nl2br(e($t->description)) !!}</div>
                             @endif
 
+                            @if ($t->attachment_path)
+                                <div class="small mt-2">
+                                    <i class="bi bi-paperclip me-1"></i>
+                                    <a href="{{ Storage::url($t->attachment_path) }}" target="_blank" class="text-decoration-none">
+                                        {{ $t->attachment_name ?? 'Lihat Lampiran' }}
+                                    </a>
+                                </div>
+                            @endif
+
                             @if ($t->status === 'Done' && $t->teacher_note)
                                 <div class="small mt-2 text-success">
                                     Catatan guru: {{ $t->teacher_note }}
@@ -236,6 +257,7 @@
         <div class="modal fade" id="editTask{{ $t->id }}" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog">
                 <form action="{{ route('kurikulum.tugas-kelas.update', $t) }}" method="POST" class="modal-content"
+                      enctype="multipart/form-data"
                       onsubmit="return lockSubmit(this, 'Menyimpan...')">
                     @csrf @method('PUT')
                     <input type="hidden" name="_edit_id" value="{{ $t->id }}">
@@ -313,6 +335,27 @@
                             <small class="text-muted">
                                 Perubahan langsung terlihat oleh guru di halaman Notifikasi.
                             </small>
+                        </div>
+
+                        {{-- Lampiran --}}
+                        <div class="mb-1 mt-3">
+                            <label class="form-label fw-semibold">Ganti Lampiran (opsional)</label>
+
+                            @if ($t->attachment_path)
+                                <div class="mb-2 d-flex align-items-center gap-2">
+                                    <i class="bi bi-paperclip text-muted"></i>
+                                    <a href="{{ Storage::url($t->attachment_path) }}" target="_blank"
+                                       class="small text-decoration-none">
+                                        {{ $t->attachment_name ?? 'Lampiran saat ini' }}
+                                    </a>
+                                    <span class="text-muted small">(akan diganti jika upload file baru)</span>
+                                </div>
+                            @endif
+
+                            <input type="file" name="attachment"
+                                   class="form-control"
+                                   accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+                            <small class="text-muted">Format: PDF, Word, JPG, PNG — maks. 10 MB. Kosongkan jika tidak ingin mengganti.</small>
                         </div>
                     </div>
 

@@ -250,7 +250,8 @@
     </div>
     @endif
 
-    {{-- KETERSEDIAAN SAYA --}}
+        {{-- KETERSEDIAAN SAYA --}}
+    @php $addOld = old('_form') === 'add'; @endphp
     <div class="card shadow-sm border-0 rounded-4 mb-3">
         <div class="card-body">
             <h5 class="fw-bold mb-1">Ketersediaan Saya</h5>
@@ -299,30 +300,51 @@
             @endif
 
             <hr>
-            <form method="POST" action="{{ route('teacher.availability.store') }}" class="row g-2 align-items-end">
+            <h6 class="fw-bold">Tambah Ketersediaan</h6>
+
+            <form method="POST" action="{{ route('teacher.availability.store') }}">
                 @csrf
-                <div class="col-md-2">
-                    <label class="form-label small fw-semibold mb-1">Hari</label>
-                    <select name="day" class="form-select form-select-sm" required>
+                <input type="hidden" name="_form" value="add">
+
+                <div class="mb-2">
+                    <label class="form-label small fw-semibold mb-1">Hari <span class="text-muted fw-normal">(boleh lebih dari satu)</span></label>
+                    <div class="d-flex flex-wrap gap-3 mb-2">
                         @foreach($days as $d)
-                            <option @selected(old('day') === $d)>{{ $d }}</option>
+                            <label class="d-flex align-items-center gap-1 small">
+                                <input type="checkbox" class="myday-check" name="days[]" value="{{ $d }}"
+                                       @checked($addOld && in_array($d, (array) old('days', [])))> {{ $d }}
+                            </label>
                         @endforeach
-                    </select>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                onclick="document.querySelectorAll('.myday-check').forEach(c => c.checked = ['Senin','Selasa','Rabu','Kamis','Jumat'].includes(c.value))">Senin–Jumat</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                onclick="document.querySelectorAll('.myday-check').forEach(c => c.checked = true)">Semua hari</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                onclick="document.querySelectorAll('.myday-check').forEach(c => c.checked = false)">Kosongkan</button>
+                    </div>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label small fw-semibold mb-1">Mulai</label>
-                    <input type="time" name="start_time" class="form-control form-control-sm" value="{{ old('start_time') }}" required>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small fw-semibold mb-1">Selesai</label>
-                    <input type="time" name="end_time" class="form-control form-control-sm" value="{{ old('end_time') }}" required>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label small fw-semibold mb-1">Catatan</label>
-                    <input type="text" name="note" maxlength="255" class="form-control form-control-sm" value="{{ old('note') }}">
-                </div>
-                <div class="col-md-2 d-grid">
-                    <button class="btn btn-dark btn-sm">+ Tambah</button>
+
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold mb-1">Mulai</label>
+                        <input type="time" name="start_time" class="form-control form-control-sm"
+                               value="{{ $addOld ? old('start_time') : '' }}" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold mb-1">Selesai</label>
+                        <input type="time" name="end_time" class="form-control form-control-sm"
+                               value="{{ $addOld ? old('end_time') : '' }}" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold mb-1">Catatan</label>
+                        <input type="text" name="note" maxlength="255" class="form-control form-control-sm"
+                               value="{{ $addOld ? old('note') : '' }}">
+                    </div>
+                    <div class="col-md-2 d-grid">
+                        <button class="btn btn-dark btn-sm">+ Tambah</button>
+                    </div>
                 </div>
             </form>
         </div>

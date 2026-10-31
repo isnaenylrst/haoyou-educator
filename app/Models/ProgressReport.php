@@ -45,6 +45,11 @@ class ProgressReport extends Model
 
         // Konten dan review Kurikulum
         'content',
+        'suggestion_box',
+        'assessment_data',
+        'curriculum_signature_path',
+        'owner_signature_path',
+        'replacement_class_count',
         'attendance_present',
         'attendance_total',
         'reviewed_by',
@@ -56,15 +61,16 @@ class ProgressReport extends Model
     ];
 
     protected $casts = [
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
-        'published_at' => 'datetime',
-        'followed_up_at' => 'datetime',
-        'content' => 'array',
-        'reviewed_at' => 'datetime',
-        'returned_at' => 'datetime',
-        'submitted_at' => 'datetime',
-        'extended_until' => 'date',
+        'created_at'      => 'datetime',
+        'updated_at'      => 'datetime',
+        'published_at'    => 'datetime',
+        'followed_up_at'  => 'datetime',
+        'content'         => 'array',
+        'assessment_data' => 'array',
+        'reviewed_at'     => 'datetime',
+        'returned_at'     => 'datetime',
+        'submitted_at'    => 'datetime',
+        'extended_until'  => 'date',
     ];
 
     public function student()
@@ -87,10 +93,10 @@ class ProgressReport extends Model
         return $this->belongsTo(User::class, 'uploaded_by');
     }
 
-    /** Sudah di-ACC Kurikulum (baru boleh tampil ke siswa). */
+    /** Sudah di-ACC Kurikulum (baru boleh tampil ke siswa dan admin). */
     public function getIsApprovedAttribute(): bool
     {
-        return $this->status === self::SUBMITTED
+        return in_array($this->status, [self::SUBMITTED, 'Published'], true)
             && $this->reviewed_at !== null;
     }
 
@@ -108,11 +114,11 @@ class ProgressReport extends Model
             && $this->returned_at !== null;
     }
 
-    /** Hanya report yang sudah di-ACC. */
+    /** Hanya report yang sudah di-ACC / Terbit. */
     public function scopeApproved($query)
     {
         return $query
-            ->where('status', self::SUBMITTED)
+            ->whereIn('status', [self::SUBMITTED, 'Published'])
             ->whereNotNull('reviewed_at');
     }
 
