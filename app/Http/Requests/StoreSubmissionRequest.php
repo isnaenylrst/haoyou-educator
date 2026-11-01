@@ -25,7 +25,9 @@ class StoreSubmissionRequest extends FormRequest
             'photo_file'      => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
             'items'           => ['nullable', 'array', 'min:1'],
             'items.*.name'    => ['required_with:items', 'string', 'max:255'],
-            'items.*.amount'  => ['required_with:items', 'numeric', 'min:1'],
+            'items.*.qty'     => ['nullable', 'numeric', 'min:1'],
+            'items.*.price'   => ['nullable', 'numeric', 'min:0'],
+            'items.*.amount'  => ['nullable', 'numeric', 'min:0'],
         ];
     }
 
@@ -40,7 +42,8 @@ class StoreSubmissionRequest extends FormRequest
             'photo_file.mimes'      => 'Format foto bahan ajar harus JPG, PNG, atau WEBP.',
             'photo_file.max'        => 'Ukuran foto bahan ajar maksimal 10 MB.',
             'items.*.name.required' => 'Nama item pada rincian multi-item wajib diisi.',
-            'items.*.amount.min'    => 'Nominal per item minimal Rp 1.',
+            'items.*.qty.min'       => 'Jumlah item minimal 1.',
+            'items.*.price.min'     => 'Harga satuan minimal Rp 0.',
         ];
     }
 }

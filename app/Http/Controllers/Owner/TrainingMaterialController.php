@@ -3,11 +3,15 @@
 namespace App\Http\Controllers\Owner;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreTrainingMaterialRequest;
+use App\Http\Requests\UpdateTrainingMaterialRequest;
 use App\Models\TrainingMaterial;
 use App\Models\User;
 use App\Notifications\AppNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -28,6 +32,8 @@ class TrainingMaterialController extends Controller
      */
     public function index(Request $request)
     {
+        Gate::authorize('viewAny', TrainingMaterial::class);
+
         $query = TrainingMaterial::with('uploader')->latest();
 
         if ($request->filled('category')) {
@@ -63,62 +69,55 @@ class TrainingMaterialController extends Controller
     /**
      * Simpan materi training baru oleh Owner
      */
-    public function store(Request $request)
+    public function store(StoreTrainingMaterialRequest $request)
     {
-        $validated = $request->validate([
-            'title'       => ['required', 'string', 'max:255'],
-            'category'    => ['required', 'string', 'max:100'],
-            'description' => ['nullable', 'string'],
-            'file'        => ['nullable', 'file', 'mimes:pdf,doc,docx,ppt,pptx,xls,xlsx,zip,rar', 'max:51200'],
-            'video_file'  => ['nullable', 'file', 'mimes:mp4,mov,avi,webm', 'max:102400'],
-            'video_url'   => ['nullable', 'url', 'max:255'],
-        ], [
-            'title.required'    => 'Judul materi training wajib diisi.',
-            'category.required' => 'Kategori materi wajib dipilih/diisi.',
-            'file.max'          => 'Ukuran file dokumen maksimal 50 MB.',
-            'video_file.max'    => 'Ukuran file video maksimal 100 MB.',
-            'video_url.url'     => 'Format link video harus berupa URL valid.',
-        ]);
+        Gate::authorize('create', TrainingMaterial::class);
 
-        $filePath = null;
-        if ($request->hasFile('file')) {
-            $filePath = $request->file('file')->store('training-materials/docs', 'public');
-        }
+        $validated = $request->validated();
 
-        $videoPath = null;
-        if ($request->hasFile('video_file')) {
-            $videoPath = $request->file('video_file')->store('training-materials/videos', 'public');
-        }
+        $material = DB::transaction(function () use ($request, $validated) {
+            $filePath = null;
+            if ($request->hasFile('file')) {
+                $filePath = $request->file('file')->store('training-materials/docs', 'public');
+            }
 
-        $material = TrainingMaterial::create([
-            'title'       => trim($validated['title']),
-            'category'    => trim($validated['category']),
-            'description' => $validated['description'] ?? null,
-            'file_path'   => $filePath,
-            'video_url'   => $validated['video_url'] ? trim($validated['video_url']) : null,
-            'video_path'  => $videoPath,
-            'uploaded_by' => Auth::id(),
-        ]);
+            $videoPath = null;
+            if ($request->hasFile('video_file')) {
+                $videoPath = $request->file('video_file')->store('training-materials/videos', 'public');
+            }
 
-        // Notifikasi ke seluruh Guru dan Kurikulum
-        $recipients = User::query()
-            ->whereHas('level', function ($q) {
-                $q->whereIn('nama_level', ['Teacher', 'Curriculum', 'Guru', 'Kurikulum']);
-            })
-            ->get();
+            $mat = TrainingMaterial::create([
+                'title'       => trim($validated['title']),
+                'category'    => trim($validated['category']),
+                'description' => $validated['description'] ?? null,
+                'file_path'   => $filePath,
+                'video_url'   => !empty($validated['video_url']) ? trim($validated['video_url']) : null,
+                'video_path'  => $videoPath,
+                'uploaded_by' => Auth::id(),
+            ]);
 
-        foreach ($recipients as $recipient) {
-            $isKurikulum = in_array($recipient->level?->nama_level, ['Curriculum', 'Kurikulum']);
-            $targetUrl = $isKurikulum ? url('/kurikulum/training') : url('/guru/training');
+            // Notifikasi ke seluruh Guru dan Kurikulum
+            $recipients = User::query()
+                ->whereHas('level', function ($q) {
+                    $q->whereIn('nama_level', ['Teacher', 'Curriculum', 'Guru', 'Kurikulum']);
+                })
+                ->get();
 
-            $recipient->notify(new AppNotification(
-                title: 'Materi Training Baru: ' . $material->title,
-                message: 'Owner mengunggah materi training baru: "' . $material->title . '" (' . $material->category . '). Silakan pelajari materi.',
-                url: $targetUrl,
-                type: 'training',
-                icon: 'fa-graduation-cap'
-            ));
-        }
+            foreach ($recipients as $recipient) {
+                $isKurikulum = in_array($recipient->level?->nama_level, ['Curriculum', 'Kurikulum']);
+                $targetUrl = $isKurikulum ? url('/kurikulum/training') : url('/guru/training');
+
+                $recipient->notify(new AppNotification(
+                    title: 'Materi Training Baru: ' . $mat->title,
+                    message: 'Owner mengunggah materi training baru: "' . $mat->title . '" (' . $mat->category . '). Silakan pelajari materi.',
+                    url: $targetUrl,
+                    type: 'training',
+                    icon: 'fa-graduation-cap'
+                ));
+            }
+
+            return $mat;
+        });
 
         return redirect()->route('owner.training.index')->with('success', 'Materi training berhasil diunggah dan notifikasi telah dikirim ke Guru & Kurikulum.');
     }
@@ -126,41 +125,37 @@ class TrainingMaterialController extends Controller
     /**
      * Perbarui materi training oleh Owner
      */
-    public function update(Request $request, $id)
+    public function update(UpdateTrainingMaterialRequest $request, $id)
     {
         $material = TrainingMaterial::findOrFail($id);
+        Gate::authorize('update', $material);
 
-        $validated = $request->validate([
-            'title'       => ['required', 'string', 'max:255'],
-            'category'    => ['required', 'string', 'max:100'],
-            'description' => ['nullable', 'string'],
-            'file'        => ['nullable', 'file', 'mimes:pdf,doc,docx,ppt,pptx,xls,xlsx,zip,rar', 'max:51200'],
-            'video_file'  => ['nullable', 'file', 'mimes:mp4,mov,avi,webm', 'max:102400'],
-            'video_url'   => ['nullable', 'url', 'max:255'],
-        ]);
+        $validated = $request->validated();
 
-        $data = [
-            'title'       => trim($validated['title']),
-            'category'    => trim($validated['category']),
-            'description' => $validated['description'] ?? null,
-            'video_url'   => $validated['video_url'] ? trim($validated['video_url']) : null,
-        ];
+        DB::transaction(function () use ($request, $validated, $material) {
+            $data = [
+                'title'       => trim($validated['title']),
+                'category'    => trim($validated['category']),
+                'description' => $validated['description'] ?? null,
+                'video_url'   => !empty($validated['video_url']) ? trim($validated['video_url']) : null,
+            ];
 
-        if ($request->hasFile('file')) {
-            if ($material->file_path && Storage::disk('public')->exists($material->file_path)) {
-                Storage::disk('public')->delete($material->file_path);
+            if ($request->hasFile('file')) {
+                if ($material->file_path && Storage::disk('public')->exists($material->file_path)) {
+                    Storage::disk('public')->delete($material->file_path);
+                }
+                $data['file_path'] = $request->file('file')->store('training-materials/docs', 'public');
             }
-            $data['file_path'] = $request->file('file')->store('training-materials/docs', 'public');
-        }
 
-        if ($request->hasFile('video_file')) {
-            if ($material->video_path && Storage::disk('public')->exists($material->video_path)) {
-                Storage::disk('public')->delete($material->video_path);
+            if ($request->hasFile('video_file')) {
+                if ($material->video_path && Storage::disk('public')->exists($material->video_path)) {
+                    Storage::disk('public')->delete($material->video_path);
+                }
+                $data['video_path'] = $request->file('video_file')->store('training-materials/videos', 'public');
             }
-            $data['video_path'] = $request->file('video_file')->store('training-materials/videos', 'public');
-        }
 
-        $material->update($data);
+            $material->update($data);
+        });
 
         return redirect()->route('owner.training.index')->with('success', 'Materi training berhasil diperbarui.');
     }
@@ -171,16 +166,19 @@ class TrainingMaterialController extends Controller
     public function destroy($id)
     {
         $material = TrainingMaterial::findOrFail($id);
+        Gate::authorize('delete', $material);
 
-        if ($material->file_path && Storage::disk('public')->exists($material->file_path)) {
-            Storage::disk('public')->delete($material->file_path);
-        }
+        DB::transaction(function () use ($material) {
+            if ($material->file_path && Storage::disk('public')->exists($material->file_path)) {
+                Storage::disk('public')->delete($material->file_path);
+            }
 
-        if ($material->video_path && Storage::disk('public')->exists($material->video_path)) {
-            Storage::disk('public')->delete($material->video_path);
-        }
+            if ($material->video_path && Storage::disk('public')->exists($material->video_path)) {
+                Storage::disk('public')->delete($material->video_path);
+            }
 
-        $material->delete();
+            $material->delete();
+        });
 
         return redirect()->route('owner.training.index')->with('success', 'Materi training berhasil dihapus.');
     }
@@ -191,6 +189,7 @@ class TrainingMaterialController extends Controller
     public function download($id)
     {
         $material = TrainingMaterial::findOrFail($id);
+        Gate::authorize('view', $material);
 
         abort_unless($material->file_path && Storage::disk('public')->exists($material->file_path), 404, 'File lampiran tidak ditemukan.');
 
@@ -203,6 +202,7 @@ class TrainingMaterialController extends Controller
     public function streamVideo($id)
     {
         $material = TrainingMaterial::findOrFail($id);
+        Gate::authorize('view', $material);
 
         if ($material->video_path && Storage::disk('public')->exists($material->video_path)) {
             $fullPath = Storage::disk('public')->path($material->video_path);
@@ -218,4 +218,3 @@ class TrainingMaterialController extends Controller
         abort(404, 'Video tidak ditemukan.');
     }
 }
-

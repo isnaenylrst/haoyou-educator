@@ -48,9 +48,21 @@ class SubmissionController extends Controller
             $photoPath = $request->file('photo_file')->store('submission-photos', 'public');
         }
 
-        // Hitung total nominal jika multi-item
-        $items = !empty($data['items']) ? array_values(array_filter($data['items'], fn ($it) => !empty($it['name']) && !empty($it['amount']))) : null;
-        $totalAmount = $items ? array_sum(array_column($items, 'amount')) : ($data['amount'] ?? 0);
+        // Hitung total nominal jika multi-item (nama, qty, harga, total otomatis)
+        $items = !empty($data['items']) ? array_values(array_filter($data['items'], fn ($it) => !empty($it['name']))) : null;
+        if ($items) {
+            foreach ($items as &$it) {
+                $qty = !empty($it['qty']) ? (float) $it['qty'] : 1;
+                $price = isset($it['price']) && $it['price'] !== '' ? (float) $it['price'] : (!empty($it['amount']) ? (float) $it['amount'] : 0);
+                $it['qty'] = $qty;
+                $it['price'] = $price;
+                $it['amount'] = $qty * $price;
+            }
+            unset($it);
+            $totalAmount = array_sum(array_column($items, 'amount'));
+        } else {
+            $totalAmount = $data['amount'] ?? 0;
+        }
 
         DB::transaction(function () use ($teacher, $data, $items, $totalAmount, $receiptPath, $photoPath) {
             $submission = Submission::create([

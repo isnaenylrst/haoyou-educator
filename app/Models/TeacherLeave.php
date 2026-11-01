@@ -27,6 +27,7 @@ class TeacherLeave extends Model
         'replacement_response',
         'replacement_response_note',
         'replacement_responded_at',
+        'curriculum_response',
     ];
 
     protected $casts = [

@@ -74,7 +74,7 @@ class StudentLearningRequestController extends Controller
             $class->teacher->user->notify(new AppNotification(
                 title: $notifTitle,
                 message: $notifMessage,
-                url: url('/guru/kelas'),
+                url: url('/guru/request-belajar'),
                 type: 'request_belajar',
                 icon: 'fa-book-open-reader'
             ));

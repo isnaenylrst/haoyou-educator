@@ -94,11 +94,17 @@
                                 </div>
                             </td>
                             <td>
-                                <span class="badge {{ $sub->status_badge }}">{{ $sub->status }}</span>
-                                @if($sub->status === 'Review Admin')
-                                    <div class="small text-info mt-1"><i class="fa-solid fa-user-check me-1"></i> ACC Kurikulum</div>
+                                <span class="badge {{ $sub->status_badge }} mb-1">{{ $sub->status }}</span>
+                                @if($sub->status === 'Diajukan')
+                                    <div class="small text-secondary" style="font-size:11px;"><i class="fa-regular fa-clock me-1"></i> Menunggu Kurikulum</div>
+                                @elseif($sub->status === 'Review Admin')
+                                    <div class="small text-info" style="font-size:11px;"><i class="fa-solid fa-signature me-1"></i> ACC Kurikulum & TTD &rarr; Admin</div>
                                 @elseif($sub->status === 'Review Owner')
-                                    <div class="small text-primary mt-1"><i class="fa-solid fa-building-circle-check me-1"></i> Verifikasi Admin</div>
+                                    <div class="small text-primary" style="font-size:11px;"><i class="fa-solid fa-building-circle-check me-1"></i> Verifikasi Admin &rarr; Owner</div>
+                                @elseif($sub->status === 'Disetujui')
+                                    <div class="small text-success" style="font-size:11px;"><i class="fa-solid fa-check-double me-1"></i> Selesai disetujui Owner</div>
+                                @elseif($sub->status === 'Ditolak')
+                                    <div class="small text-danger" style="font-size:11px;"><i class="fa-solid fa-circle-xmark me-1"></i> Pengajuan ditolak</div>
                                 @endif
                             </td>
                             <td>
@@ -183,24 +189,38 @@
                                 <i class="fa-solid fa-plus me-1"></i> Tambah Item
                             </button>
                         </div>
-                        <p class="small text-muted mb-2">Masukkan setiap nama barang dan nominal harganya sesuai bukti nota.</p>
+                        <p class="small text-muted mb-2">Masukkan nama item, jumlah (qty), dan harga satuan. Total nominal akan dihitung otomatis.</p>
                         
+                        <div class="row g-2 fw-semibold small text-muted mb-1 px-1 d-none d-md-flex">
+                            <div class="col-md-5">Nama Barang</div>
+                            <div class="col-md-2">Qty</div>
+                            <div class="col-md-2">Harga Satuan</div>
+                            <div class="col-md-2">Subtotal</div>
+                            <div class="col-md-1 text-center">Aksi</div>
+                        </div>
+
                         <div id="itemsContainer">
                             <div class="row g-2 align-items-center mb-2 item-row">
-                                <div class="col-7">
+                                <div class="col-md-5">
                                     <input type="text" name="items[0][name]" class="form-control form-control-sm item-name-input" placeholder="Nama item (contoh: Kertas Origami)" required>
                                 </div>
-                                <div class="col-4">
-                                    <input type="number" name="items[0][amount]" class="form-control form-control-sm item-amount-input" placeholder="Harga (Rp)" min="1" required oninput="calculateTotal()">
+                                <div class="col-md-2">
+                                    <input type="number" name="items[0][qty]" class="form-control form-control-sm item-qty-input" placeholder="Qty" value="1" min="1" required oninput="calculateRow(this)">
                                 </div>
-                                <div class="col-1 text-center">
+                                <div class="col-md-2">
+                                    <input type="number" name="items[0][price]" class="form-control form-control-sm item-price-input" placeholder="Harga (Rp)" min="0" required oninput="calculateRow(this)">
+                                </div>
+                                <div class="col-md-2">
+                                    <input type="number" name="items[0][amount]" class="form-control form-control-sm item-amount-input bg-white" placeholder="Subtotal" readonly>
+                                </div>
+                                <div class="col-md-1 text-center">
                                     <button type="button" class="btn btn-sm text-danger btn-remove-item" onclick="removeItemRow(this)" title="Hapus"><i class="fa-solid fa-trash-can"></i></button>
                                 </div>
                             </div>
                         </div>
 
                         <div class="d-flex justify-content-between align-items-center border-top pt-2 mt-2">
-                            <span class="fw-bold text-dark">Total Nominal:</span>
+                            <span class="fw-bold text-dark">Total Nominal Keseluruhan:</span>
                             <span class="fs-5 fw-bold text-success" id="displayTotalAmount">Rp 0</span>
                         </div>
                         <input type="hidden" name="amount" id="inputTotalAmount" value="0">
@@ -244,13 +264,19 @@ document.getElementById('btnAddItem')?.addEventListener('click', function() {
     const newRow = document.createElement('div');
     newRow.className = 'row g-2 align-items-center mb-2 item-row';
     newRow.innerHTML = `
-        <div class="col-7">
-            <input type="text" name="items[${itemIndex}][name]" class="form-control form-control-sm item-name-input" placeholder="Nama item (contoh: Spidol Warna)" required>
+        <div class="col-md-5">
+            <input type="text" name="items[${itemIndex}][name]" class="form-control form-control-sm item-name-input" placeholder="Nama item" required>
         </div>
-        <div class="col-4">
-            <input type="number" name="items[${itemIndex}][amount]" class="form-control form-control-sm item-amount-input" placeholder="Harga (Rp)" min="1" required oninput="calculateTotal()">
+        <div class="col-md-2">
+            <input type="number" name="items[${itemIndex}][qty]" class="form-control form-control-sm item-qty-input" placeholder="Qty" value="1" min="1" required oninput="calculateRow(this)">
         </div>
-        <div class="col-1 text-center">
+        <div class="col-md-2">
+            <input type="number" name="items[${itemIndex}][price]" class="form-control form-control-sm item-price-input" placeholder="Harga (Rp)" min="0" required oninput="calculateRow(this)">
+        </div>
+        <div class="col-md-2">
+            <input type="number" name="items[${itemIndex}][amount]" class="form-control form-control-sm item-amount-input bg-white" placeholder="Subtotal" readonly>
+        </div>
+        <div class="col-md-1 text-center">
             <button type="button" class="btn btn-sm text-danger btn-remove-item" onclick="removeItemRow(this)" title="Hapus"><i class="fa-solid fa-trash-can"></i></button>
         </div>
     `;
@@ -258,6 +284,17 @@ document.getElementById('btnAddItem')?.addEventListener('click', function() {
     itemIndex++;
     calculateTotal();
 });
+
+function calculateRow(el) {
+    const row = el.closest('.item-row');
+    const qty = parseFloat(row.querySelector('.item-qty-input')?.value) || 0;
+    const price = parseFloat(row.querySelector('.item-price-input')?.value) || 0;
+    const amountInput = row.querySelector('.item-amount-input');
+    if (amountInput) {
+        amountInput.value = Math.round(qty * price);
+    }
+    calculateTotal();
+}
 
 function removeItemRow(btn) {
     const rows = document.querySelectorAll('.item-row');
@@ -271,12 +308,18 @@ function removeItemRow(btn) {
 
 function calculateTotal() {
     let total = 0;
-    document.querySelectorAll('.item-amount-input').forEach(input => {
-        const val = parseFloat(input.value) || 0;
-        total += val;
+    document.querySelectorAll('.item-row').forEach(row => {
+        const qty = parseFloat(row.querySelector('.item-qty-input')?.value) || 0;
+        const price = parseFloat(row.querySelector('.item-price-input')?.value) || 0;
+        const subtotal = qty * price;
+        const amountInput = row.querySelector('.item-amount-input');
+        if (amountInput && !amountInput.value) {
+            amountInput.value = Math.round(subtotal);
+        }
+        total += subtotal > 0 ? subtotal : (parseFloat(amountInput?.value) || 0);
     });
-    document.getElementById('displayTotalAmount').innerText = 'Rp ' + total.toLocaleString('id-ID');
-    document.getElementById('inputTotalAmount').value = total;
+    document.getElementById('displayTotalAmount').innerText = 'Rp ' + Math.round(total).toLocaleString('id-ID');
+    document.getElementById('inputTotalAmount').value = Math.round(total);
 }
 </script>
 @endpush

@@ -600,6 +600,8 @@ class ReviewPengajuanController extends Controller
     /** Cetak / preview dokumen pengajuan dengan TTD Kurikulum & Owner */
     public function printSubmission(Submission $submission)
     {
+        \Illuminate\Support\Facades\Gate::authorize('view', $submission);
+
         return view('kurikulum.cetak-pengajuan', compact('submission'));
     }
 

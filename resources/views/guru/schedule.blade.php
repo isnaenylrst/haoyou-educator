@@ -130,7 +130,14 @@
                                         @if($c->is_mine)
                                             <a href="{{ route('teacher.attendance', ['date' => $c->date]) }}">
                                         @endif
-                                        <strong>{{ $c->class_name }}</strong>
+                                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-1">
+                                            <strong>{{ $c->class_name }}</strong>
+                                            @if(!empty($c->is_replacement))
+                                                <span class="badge bg-primary text-white" style="font-size:10px;"><i class="fa-solid fa-user-clock me-1"></i> Pengganti</span>
+                                            @elseif(!empty($c->is_on_leave))
+                                                <span class="badge bg-secondary text-white" style="font-size:10px;"><i class="fa-solid fa-plane-departure me-1"></i> Cuti</span>
+                                            @endif
+                                        </div>
                                         <small>
                                             {{ $c->teacher_name ?? 'Belum ada guru' }} · {{ $c->students }} siswa · {{ $c->delivery_mode }}
                                         </small>

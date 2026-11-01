@@ -122,6 +122,20 @@ Route::middleware('auth')->group(function () {
         ->name('notifications.read');
     Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead'])
         ->name('notifications.mark-all-read');
+
+    // PROFIL (Bisa diakses semua role: Guru, Kurikulum, Owner, Admin, Siswa)
+    Route::get('/profil', [ProfilController::class, 'index'])
+        ->name('profil.index');
+    Route::put('/profil', [ProfilController::class, 'update'])
+        ->name('profil.update');
+    Route::put('/profil/password', [ProfilController::class, 'updatePassword'])
+        ->name('profil.password');
+    Route::delete('/profil/foto', [ProfilController::class, 'destroyFoto'])
+        ->name('profil.foto.destroy');
+    Route::match(['post', 'put'], '/profil/signature', [ProfilController::class, 'updateSignature'])
+        ->name('profil.signature');
+    Route::delete('/profil/signature', [ProfilController::class, 'destroySignature'])
+        ->name('profil.signature.destroy');
 });
 
 /*
@@ -251,25 +265,6 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
 
     Route::post('/booking/request-reguler', [BookingController::class, 'requestReguler'])
         ->name('booking.request.reguler');
-
-    // PROFIL
-    Route::get('/profil', [ProfilController::class, 'index'])
-        ->name('profil.index');
-
-    Route::put('/profil', [ProfilController::class, 'update'])
-        ->name('profil.update');
-
-    Route::put('/profil/password', [ProfilController::class, 'updatePassword'])
-        ->name('profil.password');
-
-    Route::delete('/profil/foto', [ProfilController::class, 'destroyFoto'])
-        ->name('profil.foto.destroy');
-
-    Route::match(['post', 'put'], '/profil/signature', [ProfilController::class, 'updateSignature'])
-        ->name('profil.signature');
-
-    Route::delete('/profil/signature', [ProfilController::class, 'destroySignature'])
-        ->name('profil.signature.destroy');
 });
 
 /*
@@ -448,8 +443,6 @@ Route::middleware(['auth', 'role:Curriculum'])
         // Review Reimburse & Pembelian Bahan Ajar (Poin 5)
         Route::patch('/review-pengajuan/submission/{submission}', [ReviewPengajuanController::class, 'reviewSubmission'])
             ->name('review-pengajuan.submission');
-        Route::get('/review-pengajuan/submission/{submission}/cetak', [ReviewPengajuanController::class, 'printSubmission'])
-            ->name('review-pengajuan.print-submission');
 
         /*
         |--------------------------------------------------------------------------
@@ -602,6 +595,11 @@ Route::middleware(['auth', 'role:Curriculum'])
         Route::get('/hasil-konsultasi/revisi/{revisionConsultation}/download', [KurikulumConsultationResultController::class, 'downloadRevision'])
             ->name('hasil-konsultasi.revisi.download');
     });
+
+    // Cetak Lembar Pengajuan (Dapat diakses Kurikulum, Admin, Owner, dan Guru Pengaju)
+    Route::middleware(['auth', 'role:Curriculum,Admin,Owner,Teacher'])
+        ->get('/kurikulum/review-pengajuan/submission/{submission}/cetak', [ReviewPengajuanController::class, 'printSubmission'])
+        ->name('kurikulum.review-pengajuan.print-submission');
 
 /*
 |--------------------------------------------------------------------------
@@ -774,6 +772,8 @@ Route::middleware(['auth', 'role:Owner'])
             ->name('pengajuan.index');
         Route::post('/pengajuan/{submission}/approve', [SubmissionRekapController::class, 'ownerApprove'])
             ->name('pengajuan.approve');
+        Route::get('/pengajuan/{submission}/cetak', [SubmissionRekapController::class, 'printSubmission'])
+            ->name('pengajuan.print');
 
         // Materi Training Pengajar (Poin 12)
         Route::get('/training', [OwnerTrainingMaterialController::class, 'index'])
@@ -1097,6 +1097,8 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
         ->name('pengajuan.index');
     Route::post('/pengajuan/{submission}/verify', [SubmissionRekapController::class, 'adminVerify'])
         ->name('pengajuan.verify');
+    Route::get('/pengajuan/{submission}/cetak', [SubmissionRekapController::class, 'printSubmission'])
+        ->name('pengajuan.print');
 
     // REQUEST BELAJAR SISWA (Poin 10)
     Route::get('/request-belajar', [AdminStudentLearningRequestController::class, 'index'])

@@ -155,7 +155,9 @@ class AvailabilityController extends Controller
         }
 
         // 2. JIKA KELAS DITUGASKAN SPESIFIK KE GURU INI
-        abort_if((int) $class->teacher_id !== (int) $teacher->id, 403);
+        if ((int) $class->teacher_id !== (int) $teacher->id) {
+            return back()->with('error', 'Maaf, tawaran kelas ini sudah diambil oleh guru lain atau tidak ditugaskan kepada Anda.');
+        }
 
         if ($class->teacher_response !== 'Pending') {
             return back()->with('error', 'Kelas ini sudah Anda jawab. Hubungi Kurikulum/Admin jika perlu mengubahnya.');

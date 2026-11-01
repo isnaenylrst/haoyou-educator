@@ -26,6 +26,7 @@ class ClassModel extends Model
         'teacher_response',
         'teacher_response_note',
         'teacher_responded_at',
+        'broadcast_to_all',
     ];
 
     protected $casts = [
@@ -33,6 +34,7 @@ class ClassModel extends Model
         'end_date'             => 'date',
         'capacity'             => 'integer',
         'teacher_responded_at' => 'datetime',
+        'broadcast_to_all'     => 'boolean',
     ];
 
     /** Status enrollment yang memakai kursi di kelas ini. */

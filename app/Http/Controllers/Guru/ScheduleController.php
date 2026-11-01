@@ -61,11 +61,32 @@ class ScheduleController extends Controller
 
         $q = clone $base;
         if ($scope === 'mine') {
-            $q->where('c.teacher_id', $teacher->id)->where('c.teacher_response', 'Accepted');
+            $repScheduleIds = DB::table('teacher_leaves')
+                ->where('replacement_teacher_id', $teacher->id)
+                ->where('status', 'Approved')
+                ->whereBetween('leave_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+                ->pluck('class_schedule_id')
+                ->all();
+
+            $q->where(function ($sub) use ($teacher, $repScheduleIds) {
+                $sub->where(function ($own) use ($teacher) {
+                    $own->where('c.teacher_id', $teacher->id)->where('c.teacher_response', 'Accepted');
+                });
+                if (!empty($repScheduleIds)) {
+                    $sub->orWhereIn('cs.id', $repScheduleIds);
+                }
+            });
         } elseif ($teacherFilterId) {
             $q->where('c.teacher_id', $teacherFilterId);
         }
         $rows = $q->orderBy('cs.start_time')->get();
+
+        // Cek data cuti & guru pengganti minggu ini
+        $leavesThisWeek = DB::table('teacher_leaves')
+            ->where('status', 'Approved')
+            ->whereBetween('leave_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+            ->get()
+            ->keyBy(fn ($l) => $l->class_schedule_id . '|' . Carbon::parse($l->leave_date)->toDateString());
 
         // jurnal yang sudah diisi minggu ini (untuk tanda "terisi")
         $filled = DB::table('teaching_journals')
@@ -84,11 +105,26 @@ class ScheduleController extends Controller
         foreach ($rows as $r) {
             if (!isset(self::DAYS[$r->day])) continue;
             $date = $weekStart->copy()->addDays(self::DAYS[$r->day]);
+            $dateStr = $date->toDateString();
+            $leave = $leavesThisWeek->get($r->id . '|' . $dateStr);
 
-            $r->color    = $this->colorFor($r->class_name);
-            $r->is_mine  = (int) $r->teacher_id === (int) $teacher->id && $r->teacher_response === 'Accepted';
-            $r->date     = $date->toDateString();
-            $r->time     = substr($r->start_time, 0, 5) . ' – ' . substr($r->end_time, 0, 5);
+            $r->color          = $this->colorFor($r->class_name);
+            $r->is_replacement = false;
+            $r->is_on_leave     = false;
+
+            if ($leave) {
+                if ((int) $leave->replacement_teacher_id === (int) $teacher->id) {
+                    $r->is_replacement = true;
+                    $r->is_mine        = true;
+                } elseif ((int) $r->teacher_id === (int) $teacher->id) {
+                    $r->is_on_leave = true;
+                }
+            } else {
+                $r->is_mine = (int) $r->teacher_id === (int) $teacher->id && $r->teacher_response === 'Accepted';
+            }
+
+            $r->date      = $dateStr;
+            $r->time      = substr($r->start_time, 0, 5) . ' – ' . substr($r->end_time, 0, 5);
             $r->is_filled = isset($filled[$r->id . '|' . $r->date]);
 
             $cells[substr($r->start_time, 0, 5)][$r->day][] = $r;

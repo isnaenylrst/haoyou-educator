@@ -261,6 +261,7 @@
 
         {{-- PAGE CONTENT --}}
         <section class="page-content">
+            @include('partials.owner-bar')
             @yield('content')
         </section>
 
