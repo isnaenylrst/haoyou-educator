@@ -33,6 +33,7 @@ class Material extends Model
         public const AUDIENCES = ['Guru', 'Siswa', 'Huahua'];
 
     protected $fillable = [
+        'program_id',
         'level_id',
         'uploaded_by',
         'meeting_number',
@@ -47,6 +48,16 @@ class Material extends Model
         'audience',
         'description',
     ];
+
+    public function program(): BelongsTo
+    {
+        return $this->belongsTo(ProgramCategory::class, 'program_id');
+    }
+
+    public function getProgramNameAttribute(): string
+    {
+        return $this->program?->category_name ?? 'Umum';
+    }
 
     public function level(): BelongsTo
     {

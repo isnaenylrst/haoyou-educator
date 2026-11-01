@@ -3,10 +3,15 @@
 namespace App\Http\Controllers\Kurikulum;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreMaterialRequest;
+use App\Http\Requests\UpdateMaterialRequest;
 use App\Models\Material;
 use App\Models\MaterialVocab;
+use App\Models\ProgramCategory;
 use App\Models\ProgramLevel;
+use App\Models\User;
 use App\Models\VocabWord;
+use App\Notifications\AppNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -50,16 +55,25 @@ class MaterialController extends Controller
     public function index(Request $request)
     {
         $request->validate([
-            'audience' => ['nullable', Rule::in(Material::AUDIENCES)],
-            'level_id' => ['nullable', 'integer'],
-            'q'        => ['nullable', 'string', 'max:100'],
+            'audience'   => ['nullable', Rule::in(Material::AUDIENCES)],
+            'program_id' => ['nullable', 'string'],
+            'level_id'   => ['nullable', 'integer'],
+            'q'          => ['nullable', 'string', 'max:100'],
         ]);
 
         $audience = $request->query('audience');
+        $selectedProgram = $request->query('program_id');
 
-        $materials = Material::with(['level.program', 'uploader', 'vocabularies', 'huahuaWords'])
+        $materials = Material::with(['program', 'level.program', 'level.category', 'uploader', 'vocabularies', 'huahuaWords'])
             ->withCount(['teacherMaterials', 'teachingJournals', 'huahuaWords'])
             ->when($audience, fn ($q) => $q->where('audience', $audience))
+            ->when($selectedProgram !== null && $selectedProgram !== '', function ($q) use ($selectedProgram) {
+                if ($selectedProgram === 'umum') {
+                    $q->whereNull('program_id');
+                } else {
+                    $q->where('program_id', $selectedProgram);
+                }
+            })
             ->when($request->filled('level_id'), fn ($q) => $q->where('level_id', $request->level_id))
             ->when($request->filled('q'), function ($q) use ($request) {
                 $term = trim($request->q);
@@ -75,6 +89,7 @@ class MaterialController extends Controller
                     }
                 });
             })
+            ->orderByRaw('program_id IS NULL DESC, program_id ASC')
             ->orderBy('level_id')
             ->orderBy('meeting_number')
             ->paginate(10)
@@ -84,38 +99,10 @@ class MaterialController extends Controller
             ->groupBy('audience')
             ->pluck('total', 'audience');
 
+        $programs = ProgramCategory::with('program')->orderBy('category_name')->get();
         $levels = ProgramLevel::with(['program', 'category'])->orderBy('level_name')->get();
 
-        return view('kurikulum.materi', compact('materials', 'levels', 'audience', 'counts'));
-    }
-
-    // ------------------------------------------------------------ VALIDASI
-
-    private function rules(Request $request, ?Material $material = null): array
-    {
-        // Tujuan hanya dipilih saat membuat; saat mengubah, tujuan tetap
-        $audience = $material?->audience ?? $request->input('audience');
-
-        return [
-            'audience' => $material ? ['nullable'] : ['required', Rule::in(Material::AUDIENCES)],
-            'level_id' => ['required', 'exists:program_levels,id'],
-            'meeting_number' => [
-                'required', 'integer', 'min:1', 'max:255',
-                Rule::unique('materials', 'meeting_number')
-                    ->where(fn ($q) => $q->where('level_id', $request->level_id)->where('audience', $audience))
-                    ->ignore($material?->id),
-            ],
-            'title'          => ['required', 'string', 'max:255'],
-            'syllabus'       => ['nullable', 'string'],
-            'description'    => ['nullable', 'string', 'max:5000'],
-            'cco'            => ['nullable', 'string'],
-            'lesson_plan'    => ['nullable', 'string'],
-            'activity'       => ['nullable', 'string'],
-            'box_code'       => ['nullable', 'string', 'max:50'],
-            'equipment_list' => ['nullable', 'string'],
-            'material_file'  => [$material ? 'nullable' : 'required', 'file', 'mimes:pdf,doc,docx,ppt,pptx', 'max:10240'],
-            'vocabularies'   => ['nullable', 'string', 'max:100000'],
-        ];
+        return view('kurikulum.materi', compact('materials', 'programs', 'levels', 'audience', 'counts', 'selectedProgram'));
     }
 
     /** Kolom khusus Guru dikosongkan untuk materi Siswa/Huahua (dan sebaliknya). */
@@ -124,7 +111,8 @@ class MaterialController extends Controller
         $isGuru = $audience === 'Guru';
 
         return [
-            'level_id'       => $request->level_id,
+            'program_id'     => $request->program_id ?: null,
+            'level_id'       => $request->level_id ?: null,
             'meeting_number' => $request->meeting_number,
             'title'          => trim($request->title),
             'syllabus'       => $isGuru ? $request->syllabus : null,
@@ -139,10 +127,8 @@ class MaterialController extends Controller
 
     // ------------------------------------------------------------ SIMPAN
 
-    public function store(Request $request)
+    public function store(StoreMaterialRequest $request)
     {
-        $request->validate($this->rules($request), self::MESSAGES, self::ATTRIBUTES);
-
         $audience = $request->audience;
         $path     = $request->file('material_file')->store('materials', 'public');
         $summary  = ['skipped' => 0, 'imported' => 0, 'updated' => 0];
@@ -167,13 +153,13 @@ class MaterialController extends Controller
             return back()->withInput()->with('error', 'Gagal menambahkan materi. Silakan coba lagi.');
         }
 
+        $this->sendNewMaterialNotification($material);
+
         return $this->done('Materi berhasil ditambahkan untuk ' . $audience . '.', $summary, $material);
     }
 
-    public function update(Request $request, Material $material)
+    public function update(UpdateMaterialRequest $request, Material $material)
     {
-        $request->validate($this->rules($request, $material), self::MESSAGES, self::ATTRIBUTES);
-
         $oldPath = $material->material_file_path;
         $newPath = $request->hasFile('material_file')
             ? $request->file('material_file')->store('materials', 'public')
@@ -267,10 +253,103 @@ class MaterialController extends Controller
 
     // ------------------------------------------------------------ HELPER
 
+    protected function sendNewMaterialNotification(Material $material): void
+    {
+        try {
+            $material->loadMissing(['program', 'level']);
+            $programName = $material->program?->category_name ?? 'Umum';
+            $levelLabel  = $material->level ? ' - Level ' . $material->level->level_name : '';
+            $fullLabel   = $programName . $levelLabel;
+
+            // 1. Target Guru: yang mengajar program & level ini, atau semua guru jika umum
+            $guruUserIds = collect();
+            if ($material->audience === 'Guru' || $material->audience === 'Siswa') {
+                $guruQuery = User::whereHas('teacher');
+                if ($material->level_id) {
+                    $guruQuery->whereHas('teacher.classes', function ($q) use ($material) {
+                        $q->where('level_id', $material->level_id);
+                    });
+                } elseif ($material->program_id) {
+                    $guruQuery->whereHas('teacher.classes', function ($q) use ($material) {
+                        $q->where(function ($sub) use ($material) {
+                            $sub->whereHas('level', fn ($l) => $l->where('category_id', $material->program_id))
+                                ->orWhereHas('programPackage', fn ($p) => $p->where('category_id', $material->program_id));
+                        });
+                    });
+                }
+                $guruUserIds = $guruQuery->pluck('id');
+            }
+
+            // 2. Target Siswa: yang ada di program & level ini, atau semua siswa jika umum
+            $siswaUserIds = collect();
+            if ($material->audience === 'Siswa' || $material->audience === 'Huahua') {
+                $siswaQuery = User::whereHas('student');
+                if ($material->level_id) {
+                    $siswaQuery->whereHas('student', function ($sq) use ($material) {
+                        $sq->where(function ($sub) use ($material) {
+                            $sub->whereHas('enrollments', function ($eq) use ($material) {
+                                $eq->whereIn('status', ['Active', 'Waiting Class', 'Completed'])
+                                    ->where(function ($cq) use ($material) {
+                                        $cq->whereHas('class', fn ($c) => $c->where('level_id', $material->level_id))
+                                            ->orWhereHas('programPackage', fn ($p) => $p->where('level_id', $material->level_id));
+                                    });
+                            })->orWhere('current_level_id', $material->level_id);
+                        });
+                    });
+                } elseif ($material->program_id) {
+                    $siswaQuery->whereHas('student', function ($sq) use ($material) {
+                        $sq->where(function ($sub) use ($material) {
+                            $sub->whereHas('enrollments', function ($eq) use ($material) {
+                                $eq->whereIn('status', ['Active', 'Waiting Class', 'Completed'])
+                                    ->where(function ($cq) use ($material) {
+                                        $cq->whereHas('class.level', fn ($l) => $l->where('category_id', $material->program_id))
+                                            ->orWhereHas('class.programPackage', fn ($p) => $p->where('category_id', $material->program_id))
+                                            ->orWhereHas('programPackage', fn ($p) => $p->where('category_id', $material->program_id));
+                                    });
+                            })->orWhereHas('currentLevel', fn ($l) => $l->where('category_id', $material->program_id));
+                        });
+                    });
+                }
+                $siswaUserIds = $siswaQuery->pluck('id');
+            }
+
+            // Kirim notifikasi ke Guru
+            foreach (User::whereIn('id', $guruUserIds)->get() as $guru) {
+                $guru->notify(new AppNotification(
+                    title: 'Materi Baru: ' . $material->title,
+                    message: 'Materi baru "' . $material->title . '" (' . $fullLabel . ') telah diunggah oleh Kurikulum.',
+                    url: url('/guru/materi'),
+                    type: 'materi',
+                    icon: 'fa-book-open',
+                    actionLabel: 'Buka Materi'
+                ));
+            }
+
+            // Kirim notifikasi ke Siswa
+            foreach (User::whereIn('id', $siswaUserIds)->get() as $siswa) {
+                $targetUrl = $material->audience === 'Huahua' ? url('/student/belajar-vocab/materi') : url('/program-belajar');
+                $siswa->notify(new AppNotification(
+                    title: 'Materi Belajar Baru: ' . $material->title,
+                    message: 'Materi baru "' . $material->title . '" (' . $fullLabel . ') telah diunggah.',
+                    url: $targetUrl,
+                    type: 'materi',
+                    icon: 'fa-book-reader',
+                    actionLabel: 'Buka Materi'
+                ));
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
     private function done(string $message, array $summary, Material $material)
     {
         $redirect = redirect()
-            ->route('kurikulum.materi', ['audience' => $material->audience, 'level_id' => $material->level_id])
+            ->route('kurikulum.materi', array_filter([
+                'audience'   => $material->audience,
+                'program_id' => $material->program_id,
+                'level_id'   => $material->level_id,
+            ]))
             ->with('success', $message);
 
         if ($material->audience === 'Huahua' && ($summary['imported'] + $summary['updated']) > 0) {

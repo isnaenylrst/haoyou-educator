@@ -77,7 +77,7 @@
                   class="mt-4" data-audience-form onsubmit="return lockSubmit(this, 'Mengunggah... jangan tutup halaman')">
                 @csrf
 
-                @include('kurikulum.partials.materi-fields', ['m' => null, 'levels' => $levels])
+                @include('kurikulum.partials.materi-fields', ['m' => null, 'levels' => $levels, 'programs' => $programs])
 
                 <div class="text-end">
                     <button type="submit" class="btn btn-success">
@@ -107,25 +107,38 @@
                     <input type="hidden" name="audience" value="{{ $audience }}">
                 @endif
 
-                <div class="col-md-4">
-                    <label class="form-label fw-semibold mb-1">Level</label>
-                    <select name="level_id" class="form-select">
-                        <option value="">Semua level</option>
-                        @foreach ($levels as $level)
-                            <option value="{{ $level->id }}" @selected((string) request('level_id') === (string) $level->id)>
-                                {{ $level->program?->program_name ?? '-' }} - {{ $level->level_name }}
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold mb-1">Program</label>
+                    <select name="program_id" class="form-select">
+                        <option value="">Semua Program</option>
+                        <option value="umum" @selected(request('program_id') === 'umum')>Umum</option>
+                        @foreach ($programs as $prog)
+                            <option value="{{ $prog->id }}" @selected((string) request('program_id') === (string) $prog->id)>
+                                {{ $prog->category_name }}
                             </option>
                         @endforeach
                     </select>
                 </div>
 
-                <div class="col-md-5">
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold mb-1">Level</label>
+                    <select name="level_id" class="form-select">
+                        <option value="">Semua level</option>
+                        @foreach ($levels as $level)
+                            <option value="{{ $level->id }}" @selected((string) request('level_id') === (string) $level->id)>
+                                {{ $level->category?->category_name ?? $level->program?->program_name ?? '-' }} - Level {{ $level->level_name }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="col-md-4">
                     <label class="form-label fw-semibold mb-1">Cari</label>
                     <input type="text" name="q" value="{{ request('q') }}" maxlength="100" class="form-control"
                            placeholder="Judul, silabus, deskripsi, kode box, atau nomor pertemuan">
                 </div>
 
-                <div class="col-md-3 d-flex gap-2">
+                <div class="col-md-2 d-flex gap-2">
                     <button type="submit" class="btn btn-primary flex-fill">
                         <i class="fa-solid fa-magnifying-glass me-1"></i> Terapkan
                     </button>
@@ -161,6 +174,7 @@
 
                                 <div class="mb-2">
                                     <span class="badge {{ $audClass }}">{{ $audIcon }} {{ $material->audience }}</span>
+                                    <span class="badge bg-warning text-dark"><i class="fa-solid fa-layer-group me-1"></i> {{ $material->program_name }}</span>
                                     <span class="badge bg-primary">Pertemuan {{ $material->meeting_number }}</span>
 
                                     @if ($inUse > 0)
@@ -173,8 +187,8 @@
                                     @endunless
                                 </div>
 
-                                <div class="text-muted mb-1"><strong>Level :</strong> {{ $material->level?->level_name ?? '-' }}</div>
-                                <div class="text-muted mb-1"><strong>Program :</strong> {{ $material->level?->program?->program_name ?? '-' }}</div>
+                                <div class="text-muted mb-1"><strong>Program :</strong> {{ $material->program_name }} {{ $material->level?->program ? '(' . $material->level->program->program_name . ')' : '' }}</div>
+                                <div class="text-muted mb-1"><strong>Level / Kelas :</strong> {{ $material->level?->level_name ?? 'Umum (Tanpa Level)' }}</div>
                                 <div class="text-muted mb-1"><strong>Uploader :</strong> {{ $material->uploader?->username ?? '-' }}</div>
                                 <div class="text-muted mb-3"><strong>Tanggal Upload :</strong> {{ $material->created_at?->format('d M Y H:i') }}</div>
 
@@ -333,7 +347,7 @@
                     </div>
 
                     <div class="modal-body">
-                        @include('kurikulum.partials.materi-fields', ['m' => $material, 'levels' => $levels])
+                        @include('kurikulum.partials.materi-fields', ['m' => $material, 'levels' => $levels, 'programs' => $programs])
                     </div>
 
                     <div class="modal-footer">
@@ -349,6 +363,25 @@
 @endforeach
 
 <script>
+    function filterLevelsByProgram(selectEl, id) {
+        const progId = selectEl.value;
+        const levelSelect = document.getElementById('levelSelect' + id);
+        if (!levelSelect) return;
+        const options = levelSelect.querySelectorAll('option');
+        options.forEach(opt => {
+            if (!opt.value) {
+                opt.style.display = '';
+                return;
+            }
+            const catId = opt.dataset.categoryId;
+            if (!progId || catId === progId) {
+                opt.style.display = '';
+            } else {
+                opt.style.display = 'none';
+            }
+        });
+    }
+
     function lockSubmit(form, text) {
         const btn = form.querySelector('button[type=submit]');
         if (btn) { btn.disabled = true; btn.innerText = text; }

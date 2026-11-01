@@ -54,9 +54,12 @@
                             Pertemuan
                             {{ $material->meeting_number ?? '-' }}
 
+                            @if ($material->program)
+                                · {{ $material->program->category_name }}
+                            @endif
+
                             @if ($material->level)
-                                · {{ $material->level->program?->program_name }}
-                                {{ $material->level->level_name }}
+                                · {{ $material->level->level_name }}
                             @endif
 
                             @if ($material->vocabs->isNotEmpty())

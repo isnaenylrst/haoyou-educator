@@ -214,21 +214,40 @@ class SiswaDashboardController extends Controller
         $student = $this->student();
 
         $enrollments = ClassEnrollment::with([
-            'class.level',
+            'class.level.category',
             'class.programPackage.program',
             'class.programPackage.level',
+            'class.programPackage.category',
         ])
             ->where('student_id', $student->id)
             ->whereIn('status', ['Active', 'Completed', 'Waiting Class'])
             ->get();
 
         $levelIds = $this->resolveLevelIds($student, $enrollments);
+        $categoryIds = $this->resolveCategoryIds($student, $enrollments);
 
-        // Hanya materi bertujuan Siswa (materi Guru & Huahua tidak ikut tampil)
+        // Hanya materi bertujuan Siswa untuk program/kelas milik siswa
         $materials = Material::query()
             ->where('audience', 'Siswa')
-            ->with(['level.program', 'vocabs'])
-            ->whereIn('level_id', $levelIds)
+            ->with(['level.program', 'program', 'vocabs'])
+            ->where(function ($q) use ($levelIds, $categoryIds) {
+                $hasFilter = false;
+                if ($categoryIds->isNotEmpty()) {
+                    $q->whereIn('program_id', $categoryIds);
+                    $hasFilter = true;
+                }
+                if ($levelIds->isNotEmpty()) {
+                    if ($hasFilter) {
+                        $q->orWhereIn('level_id', $levelIds);
+                    } else {
+                        $q->whereIn('level_id', $levelIds);
+                    }
+                    $hasFilter = true;
+                }
+                if (!$hasFilter) {
+                    $q->whereRaw('1 = 0'); // Jika siswa belum terdaftar program/kelas apapun
+                }
+            })
             ->orderBy('level_id')
             ->orderBy('meeting_number')
             ->get();
@@ -260,22 +279,33 @@ class SiswaDashboardController extends Controller
         ]);
     }
 
-    /** Siswa hanya boleh membuka materi bertujuan Siswa untuk level kelasnya. */
+    /** Siswa hanya boleh membuka materi bertujuan Siswa untuk level/program kelasnya. */
     private function authorizeStudentMaterial(Material $material): void
     {
         abort_unless($material->audience === 'Siswa', 404);
 
         $student = $this->student();
 
-        $enrollments = ClassEnrollment::with('class.programPackage')
+        $enrollments = ClassEnrollment::with(['class.programPackage.category', 'class.level.category'])
             ->where('student_id', $student->id)
             ->whereIn('status', ['Active', 'Completed', 'Waiting Class'])
             ->get();
 
+        $levelIds = $this->resolveLevelIds($student, $enrollments);
+        $categoryIds = $this->resolveCategoryIds($student, $enrollments);
+
+        $isAllowed = false;
+        if ($material->level_id && $levelIds->contains($material->level_id)) {
+            $isAllowed = true;
+        }
+        if ($material->program_id && $categoryIds->contains($material->program_id)) {
+            $isAllowed = true;
+        }
+
         abort_unless(
-            $this->resolveLevelIds($student, $enrollments)->contains($material->level_id),
+            $isAllowed,
             403,
-            'Materi ini bukan untuk level kelasmu.'
+            'Materi ini bukan untuk program atau level kelasmu.'
         );
 
         abort_unless($material->file_exists, 404, 'File materi tidak ditemukan.');
@@ -316,6 +346,23 @@ class SiswaDashboardController extends Controller
                 $enrollment->programPackage?->level_id,
             ])
             ->push($student->current_level_id)
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * Mengambil program/kategori yang terkait dengan siswa.
+     */
+    private function resolveCategoryIds(Student $student, $enrollments)
+    {
+        return $enrollments
+            ->flatMap(fn ($enrollment) => [
+                $enrollment->class?->level?->category_id,
+                $enrollment->class?->programPackage?->category_id,
+                $enrollment->programPackage?->category_id,
+            ])
+            ->push($student->currentLevel?->category_id)
             ->filter()
             ->unique()
             ->values();

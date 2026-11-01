@@ -69,15 +69,28 @@
 @endif
 
 <div class="row">
-    <div class="col-md-8 mb-3">
-        <label class="form-label fw-semibold">Pilih Level</label>
-        <select name="level_id" class="form-select {{ $err('level_id') ? 'is-invalid' : '' }}" required>
-            @if (!$m)
-                <option value="">-- Pilih Level --</option>
-            @endif
+    <div class="col-md-4 mb-3">
+        <label class="form-label fw-semibold">Program</label>
+        <select name="program_id" id="programSelect{{ $m?->id ?? 'New' }}" class="form-select {{ $err('program_id') ? 'is-invalid' : '' }}" onchange="filterLevelsByProgram(this, '{{ $m?->id ?? 'New' }}')">
+            <option value="">-- Umum (Semua Program) --</option>
+            @foreach ($programs as $prog)
+                <option value="{{ $prog->id }}" @selected((string) $val('program_id') === (string) $prog->id)>
+                    {{ $prog->category_name }}{{ $prog->program ? ' — ' . $prog->program->program_name : '' }}
+                </option>
+            @endforeach
+        </select>
+        {!! $fb('program_id') !!}
+    </div>
+
+    <div class="col-md-4 mb-3">
+        <label class="form-label fw-semibold">Level / Kelas <small class="text-muted fw-normal">(Opsional)</small></label>
+        <select name="level_id" id="levelSelect{{ $m?->id ?? 'New' }}" class="form-select {{ $err('level_id') ? 'is-invalid' : '' }}">
+            <option value="">-- Tanpa Level / Umum --</option>
             @foreach ($levels as $level)
-                <option value="{{ $level->id }}" @selected((string) $val('level_id') === (string) $level->id)>
-                    {{ $level->program?->program_name ?? '-' }} - {{ $level->level_name }}
+                <option value="{{ $level->id }}"
+                        data-category-id="{{ $level->category_id }}"
+                        @selected((string) $val('level_id') === (string) $level->id)>
+                    {{ $level->category?->category_name ?? $level->program?->program_name ?? '-' }} - Level {{ $level->level_name }}
                 </option>
             @endforeach
         </select>
