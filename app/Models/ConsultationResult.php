@@ -14,6 +14,7 @@ class ConsultationResult extends Model
 
     protected $fillable = [
         'teacher_id',
+        'participant_names',
         'curriculum_user_id',
         'observation_id',
         'consultation_date',

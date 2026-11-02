@@ -78,6 +78,7 @@ use App\Http\Controllers\Guru\RequestBelajarController as GuruRequestBelajarCont
 use App\Http\Controllers\Owner\DashboardController as OwnerDashboardController;
 use App\Http\Controllers\Owner\AccessController as OwnerAccessController;
 use App\Http\Controllers\Owner\TrainingMaterialController as OwnerTrainingMaterialController;
+use App\Http\Controllers\Owner\ConsultationController as OwnerConsultationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -766,6 +767,24 @@ Route::middleware(['auth', 'role:Owner'])
 
         Route::post('/guru/{teacher}/lihat', [OwnerAccessController::class, 'view'])
             ->name('guru.view');
+
+        // Konsultasi Owner (Hasil, Jadwal, dan Revisi)
+        Route::get('/konsultasi', [OwnerConsultationController::class, 'index'])
+            ->name('konsultasi.index');
+        Route::post('/konsultasi', [OwnerConsultationController::class, 'store'])
+            ->name('konsultasi.store');
+        Route::put('/konsultasi/{id}', [OwnerConsultationController::class, 'update'])
+            ->name('konsultasi.update');
+        Route::delete('/konsultasi/{id}', [OwnerConsultationController::class, 'destroy'])
+            ->name('konsultasi.destroy');
+        Route::get('/konsultasi/{id}/download', [OwnerConsultationController::class, 'download'])
+            ->name('konsultasi.download');
+        Route::patch('/konsultasi/revisi/{revisionConsultation}/accept', [OwnerConsultationController::class, 'acceptRevision'])
+            ->name('konsultasi.revisi.accept');
+        Route::patch('/konsultasi/revisi/{revisionConsultation}/complete', [OwnerConsultationController::class, 'completeRevision'])
+            ->name('konsultasi.revisi.complete');
+        Route::get('/konsultasi/revisi/{revisionConsultation}/download', [OwnerConsultationController::class, 'downloadRevision'])
+            ->name('konsultasi.revisi.download');
 
         // Rekap & Approval Pengajuan Bahan Ajar / Reimburse (Poin 5)
         Route::get('/pengajuan', [SubmissionRekapController::class, 'index'])

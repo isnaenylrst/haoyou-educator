@@ -23,6 +23,8 @@ class OwnerMenu
                 'items' => [
                     ['Dashboard Owner', 'fa-house', '/owner/dashboard', 'Keuangan, siswa, kelas, kinerja guru'],
                     ['Materi Training', 'fa-graduation-cap', '/owner/training', 'Upload dan kelola modul materi training pengajar'],
+                    ['Konsultasi', 'fa-comments', '/owner/konsultasi', 'Hasil evaluasi, jadwal, dan konsultasi revisi'],
+                    ['Antrean TTD', 'fa-signature', '/owner/ttd', 'Tanda tangan digital progress report & sertifikat'],
                     ['Rekap Pengajuan', 'fa-receipt', '/owner/pengajuan', 'Rekap dan persetujuan pengajuan reimburse & pembelian'],
                 ],
             ],
@@ -38,6 +40,8 @@ class OwnerMenu
                     ['Kelas',             'fa-users',         '/admin/kelas',         'Kelola kelas, guru, dan kapasitas'],
                     ['Jadwal',            'fa-calendar-days', '/admin/jadwal',        'Jadwal kelas mingguan'],
                     ['Program & Level',   'fa-layer-group',   '/admin/program-level', 'Struktur program, level, paket, harga'],
+                    ['Materi Training',   'fa-graduation-cap','/admin/training',      'Akses materi training dan SOP admin'],
+                    ['Rekap Pengajuan',   'fa-receipt',       '/admin/pengajuan',     'Verifikasi berkas reimbursement guru'],
                 ],
             ],
             [
