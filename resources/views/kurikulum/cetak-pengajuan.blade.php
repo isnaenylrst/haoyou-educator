@@ -205,7 +205,7 @@
                     <div class="text-muted small fst-italic">{{ $submission->status === 'Review Owner' ? 'Menunggu Review' : '-' }}</div>
                 @endif
             </div>
-            <div class="fw-bold text-decoration-underline">{{ $submission->owner->display_name ?? 'Direktur / Owner' }}</div>
+            <div class="fw-bold text-decoration-underline">{{ $submission->owner?->name ?? ($submission->owner?->display_name ?? 'Joy Limmunandar') }}</div>
             <div class="small text-muted">
                 Tanggal: {{ $submission->owner_approved_at ? $submission->owner_approved_at->translatedFormat('d/m/Y') : '-' }}
             </div>

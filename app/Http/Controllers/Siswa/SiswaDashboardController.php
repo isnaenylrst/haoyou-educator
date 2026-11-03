@@ -226,29 +226,21 @@ class SiswaDashboardController extends Controller
         $levelIds = $this->resolveLevelIds($student, $enrollments);
         $categoryIds = $this->resolveCategoryIds($student, $enrollments);
 
-        // Hanya materi bertujuan Siswa untuk program/kelas milik siswa
+        // Hanya materi bertujuan Siswa untuk program/kelas milik siswa + materi Umum
         $materials = Material::query()
             ->where('audience', 'Siswa')
             ->with(['level.program', 'program', 'vocabs'])
             ->where(function ($q) use ($levelIds, $categoryIds) {
-                $hasFilter = false;
                 if ($categoryIds->isNotEmpty()) {
                     $q->whereIn('program_id', $categoryIds);
-                    $hasFilter = true;
                 }
                 if ($levelIds->isNotEmpty()) {
-                    if ($hasFilter) {
-                        $q->orWhereIn('level_id', $levelIds);
-                    } else {
-                        $q->whereIn('level_id', $levelIds);
-                    }
-                    $hasFilter = true;
+                    $q->orWhereIn('level_id', $levelIds);
                 }
-                if (!$hasFilter) {
-                    $q->whereRaw('1 = 0'); // Jika siswa belum terdaftar program/kelas apapun
-                }
+                // Materi lama berlabel "Umum" tetap bisa diakses
+                $q->orWhereNull('program_id');
             })
-            ->orderBy('level_id')
+            ->orderByRaw('program_id IS NULL DESC, program_id ASC')
             ->orderBy('meeting_number')
             ->get();
 

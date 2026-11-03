@@ -87,7 +87,7 @@ class KelasController extends Controller
             ->when($request->type === 'Private', fn ($q) => $q->whereNotNull('private_package_id'))
             ->when($request->filled('teacher_id'), fn ($q) => $q->where('teacher_id', $request->teacher_id))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
-            ->orderByRaw("FIELD(status, 'Running', 'Open', 'Completed', 'Closed')")
+            ->orderByRaw(DB::getDriverName() === 'mysql' ? "FIELD(status, 'Running', 'Open', 'Completed', 'Closed')" : "CASE status WHEN 'Running' THEN 1 WHEN 'Open' THEN 2 WHEN 'Completed' THEN 3 WHEN 'Closed' THEN 4 ELSE 5 END")
             ->orderBy('class_name')
             ->paginate(10)
             ->withQueryString();

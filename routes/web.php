@@ -51,6 +51,7 @@ use App\Http\Controllers\Admin\Pengaturan\TemplatePrintController;
 use App\Http\Controllers\Admin\PaymentInvoiceController;
 use App\Http\Controllers\Admin\SubmissionRekapController;
 use App\Http\Controllers\Admin\StudentLearningRequestController as AdminStudentLearningRequestController;
+use App\Http\Controllers\Admin\TrainingMaterialController as AdminTrainingMaterialController;
 
 // ===== GURU =====
 use App\Http\Controllers\Guru\NotifikasiController as GuruNotifikasiController;
@@ -79,6 +80,7 @@ use App\Http\Controllers\Owner\DashboardController as OwnerDashboardController;
 use App\Http\Controllers\Owner\AccessController as OwnerAccessController;
 use App\Http\Controllers\Owner\TrainingMaterialController as OwnerTrainingMaterialController;
 use App\Http\Controllers\Owner\ConsultationController as OwnerConsultationController;
+use App\Http\Controllers\Owner\SignatureQueueController as OwnerSignatureQueueController;
 
 /*
 |--------------------------------------------------------------------------
@@ -786,11 +788,27 @@ Route::middleware(['auth', 'role:Owner'])
         Route::get('/konsultasi/revisi/{revisionConsultation}/download', [OwnerConsultationController::class, 'downloadRevision'])
             ->name('konsultasi.revisi.download');
 
+        // Antrean TTD Owner (Progress Report, Sertifikat & Pengajuan)
+        Route::get('/ttd', [OwnerSignatureQueueController::class, 'index'])
+            ->name('ttd.index');
+        Route::post('/ttd/report/{report}', [OwnerSignatureQueueController::class, 'signReport'])
+            ->name('ttd.report');
+        Route::post('/ttd/report-bulk', [OwnerSignatureQueueController::class, 'signReportBulk'])
+            ->name('ttd.report.bulk');
+        Route::post('/ttd/certificate/{certificate}', [OwnerSignatureQueueController::class, 'signCertificate'])
+            ->name('ttd.certificate');
+        Route::post('/ttd/certificate-bulk', [OwnerSignatureQueueController::class, 'signCertificateBulk'])
+            ->name('ttd.certificate.bulk');
+        Route::post('/ttd/submission/{submission}', [OwnerSignatureQueueController::class, 'signSubmission'])
+            ->name('ttd.submission');
+
         // Rekap & Approval Pengajuan Bahan Ajar / Reimburse (Poin 5)
         Route::get('/pengajuan', [SubmissionRekapController::class, 'index'])
             ->name('pengajuan.index');
         Route::post('/pengajuan/{submission}/approve', [SubmissionRekapController::class, 'ownerApprove'])
             ->name('pengajuan.approve');
+        Route::post('/pengajuan/{submission}/mark-paid', [SubmissionRekapController::class, 'ownerMarkPaid'])
+            ->name('pengajuan.mark-paid');
         Route::get('/pengajuan/{submission}/cetak', [SubmissionRekapController::class, 'printSubmission'])
             ->name('pengajuan.print');
 
@@ -1126,4 +1144,12 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
         ->name('request-belajar.store');
     Route::delete('/request-belajar/{studentLearningRequest}', [AdminStudentLearningRequestController::class, 'destroy'])
         ->name('request-belajar.destroy');
+
+    // MATERI TRAINING & SOP ADMIN (Poin 12 - Read Only)
+    Route::get('/training', [AdminTrainingMaterialController::class, 'index'])
+        ->name('training.index');
+    Route::get('/training/{id}/download', [AdminTrainingMaterialController::class, 'download'])
+        ->name('training.download');
+    Route::get('/training/{id}/stream', [AdminTrainingMaterialController::class, 'streamVideo'])
+        ->name('training.stream');
 });

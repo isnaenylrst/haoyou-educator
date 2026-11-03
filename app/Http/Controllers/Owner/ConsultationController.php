@@ -129,7 +129,7 @@ class ConsultationController extends Controller
                 'teacher_id'         => $validated['teacher_id'],
                 'participant_names'  => !empty($validated['participant_names']) ? trim($validated['participant_names']) : null,
                 'curriculum_user_id' => Auth::id(), // ID Owner
-                'observation_id'     => $validated['observation_id'] ?: null,
+                'observation_id'     => !empty($validated['observation_id']) ? $validated['observation_id'] : null,
                 'consultation_date'  => $validated['consultation_date'],
                 'topic'              => trim($validated['topic']),
                 'improvement_points' => $cleanedPoints,
@@ -183,7 +183,7 @@ class ConsultationController extends Controller
             $data = [
                 'teacher_id'         => $validated['teacher_id'],
                 'participant_names'  => !empty($validated['participant_names']) ? trim($validated['participant_names']) : null,
-                'observation_id'     => $validated['observation_id'] ?: null,
+                'observation_id'     => !empty($validated['observation_id']) ? $validated['observation_id'] : null,
                 'consultation_date'  => $validated['consultation_date'],
                 'topic'              => trim($validated['topic']),
                 'improvement_points' => array_values(array_filter(array_map('trim', $validated['improvement_points']))),

@@ -7,6 +7,7 @@ use App\Models\ClassModel;
 use App\Models\ClassTask;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -77,7 +78,7 @@ class TugasKelasController extends Controller
                         ->orWhereHas('teacher', fn ($t) => $t->where('name', 'like', "%{$q}%"));
                 });
             })
-            ->orderByRaw("FIELD(status,'Open','Done')")
+            ->orderByRaw(DB::getDriverName() === 'mysql' ? "FIELD(status,'Open','Done')" : "CASE status WHEN 'Open' THEN 1 WHEN 'Done' THEN 2 ELSE 3 END")
             ->orderByRaw('due_date IS NULL')   // tanpa batas waktu di bawah
             ->orderBy('due_date')
             ->orderByDesc('id')

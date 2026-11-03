@@ -49,6 +49,8 @@ class ProgressReport extends Model
         'assessment_data',
         'curriculum_signature_path',
         'owner_signature_path',
+        'owner_signed_by',
+        'owner_signed_at',
         'replacement_class_count',
         'overall_achievement_level',
         'attendance_present',
@@ -71,6 +73,7 @@ class ProgressReport extends Model
         'reviewed_at'     => 'datetime',
         'returned_at'     => 'datetime',
         'submitted_at'    => 'datetime',
+        'owner_signed_at' => 'datetime',
         'extended_until'  => 'date',
     ];
 
@@ -92,6 +95,16 @@ class ProgressReport extends Model
     public function uploader()
     {
         return $this->belongsTo(User::class, 'uploaded_by');
+    }
+
+    public function reviewer()
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function ownerSigner()
+    {
+        return $this->belongsTo(User::class, 'owner_signed_by');
     }
 
     /** Sudah di-ACC Kurikulum (baru boleh tampil ke siswa dan admin). */

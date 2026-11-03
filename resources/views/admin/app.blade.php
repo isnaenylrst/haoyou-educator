@@ -132,6 +132,11 @@
                 <i class="fa-solid fa-file-lines nav-icon" title="Dokumen"></i>
                 <span class="label">Dokumen</span>
                 </a>
+
+                <a href="{{ route('admin.training.index') }}" class="nav-item {{ request()->routeIs('admin.training*') ? 'active' : '' }}">
+                    <i class="fa-solid fa-graduation-cap nav-icon" title="Materi Training"></i>
+                    <span class="label">Materi Training</span>
+                </a>
             </div>
 
             {{-- PENGATURAN --}}

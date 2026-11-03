@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class JadwalKonsultasiController extends Controller
@@ -56,7 +57,7 @@ class JadwalKonsultasiController extends Controller
             ->when($tab === 'terlambat', fn ($q) => $q->overdue())
             ->when($tab === 'selesai', fn ($q) => $q->where('status', 'Selesai'))
             ->when($tab === 'dibatalkan', fn ($q) => $q->where('status', 'Dibatalkan'))
-            ->orderByRaw("FIELD(status,'Belum Terjadwal','Terjadwal','Selesai','Dibatalkan')")
+            ->orderByRaw(DB::getDriverName() === 'mysql' ? "FIELD(status,'Belum Terjadwal','Terjadwal','Selesai','Dibatalkan')" : "CASE status WHEN 'Belum Terjadwal' THEN 1 WHEN 'Terjadwal' THEN 2 WHEN 'Selesai' THEN 3 WHEN 'Dibatalkan' THEN 4 ELSE 5 END")
             ->orderByRaw('deadline_at IS NULL')   // yang punya deadline lebih dulu
             ->orderBy('deadline_at')
             ->orderBy('scheduled_at')

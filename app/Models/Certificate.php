@@ -41,18 +41,23 @@ class Certificate extends Model
         // File sertifikat
         'certificate_number',
         'file_path',
+        'curriculum_signature_path',
+        'owner_signature_path',
+        'owner_signed_by',
+        'owner_signed_at',
     ];
 
     protected $casts = [
-        'scores'      => 'array',
-        'issued_at'   => 'datetime',
-        'start_date'  => 'date',
-        'end_date'    => 'date',
-        'score'       => 'float',
-        'total_score' => 'float',
-        'max_total'   => 'float',
-        'passing_score' => 'float',
-        'reviewed_at' => 'datetime',
+        'scores'          => 'array',
+        'issued_at'       => 'datetime',
+        'start_date'      => 'date',
+        'end_date'        => 'date',
+        'score'           => 'float',
+        'total_score'     => 'float',
+        'max_total'       => 'float',
+        'passing_score'   => 'float',
+        'reviewed_at'     => 'datetime',
+        'owner_signed_at' => 'datetime',
     ];
 
     /*

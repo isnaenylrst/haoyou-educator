@@ -59,11 +59,23 @@ class SubmissionPolicy
     }
 
     /**
-     * Owner berhak menyetujui tahap akhir pengajuan.
+     * Owner berhak menyetujui tahap akhir pengajuan jika sudah di-ACC Kurikulum.
      */
     public function approveOwner(User $user, Submission $submission): bool
     {
-        return $user->level?->nama_level === 'Owner';
+        if ($user->level?->nama_level !== 'Owner') {
+            return false;
+        }
+
+        return !empty($submission->curriculum_approved_at) || in_array($submission->status, ['Review Owner', 'Review Admin']);
+    }
+
+    /**
+     * Owner berhak menandai pengajuan sebagai Dibayar.
+     */
+    public function markPaidOwner(User $user, Submission $submission): bool
+    {
+        return $user->level?->nama_level === 'Owner' && in_array($submission->status, ['Disetujui', 'Review Owner']);
     }
 }
 

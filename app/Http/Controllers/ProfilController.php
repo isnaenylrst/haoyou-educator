@@ -32,28 +32,34 @@ class ProfilController extends Controller
         ]);
     }
 
-    /** Simpan foto profil */
+    /** Simpan foto dan nama profil */
     public function update(Request $request)
     {
         $user = $request->user();
 
         $request->validate([
-            'foto' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'name' => ['nullable', 'string', 'max:255'],
+            'foto' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ], [
-            'foto.required' => 'Pilih foto terlebih dahulu.',
             'foto.image'    => 'File harus berupa gambar.',
             'foto.mimes'    => 'Format foto harus JPG, PNG, atau WEBP.',
             'foto.max'      => 'Ukuran foto maksimal 2 MB.',
         ]);
 
-        if ($user->foto) {
-            Storage::disk('public')->delete($user->foto);
+        if ($request->has('name')) {
+            $user->name = $request->input('name') ?: null;
         }
 
-        $user->foto = $request->file('foto')->store('foto-profil', 'public');
+        if ($request->hasFile('foto')) {
+            if ($user->foto) {
+                Storage::disk('public')->delete($user->foto);
+            }
+            $user->foto = $request->file('foto')->store('foto-profil', 'public');
+        }
+
         $user->save();
 
-        return back()->with('success', 'Foto profil berhasil diperbarui.');
+        return back()->with('success', 'Profil berhasil diperbarui.');
     }
 
     /** Simpan tanda tangan digital (file upload atau gambar kanvas) */

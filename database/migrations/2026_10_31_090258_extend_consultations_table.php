@@ -27,9 +27,11 @@ return new class extends Migration
         });
 
         // 3) Isi nama guru untuk data lama
-        DB::table('consultations')
-            ->join('teachers', 'teachers.id', '=', 'consultations.teacher_id')
-            ->update(['consultations.teacher_name' => DB::raw('teachers.name')]);
+        if (DB::getDriverName() === 'mysql') {
+            DB::table('consultations')
+                ->join('teachers', 'teachers.id', '=', 'consultations.teacher_id')
+                ->update(['consultations.teacher_name' => DB::raw('teachers.name')]);
+        }
     }
 
     public function down(): void

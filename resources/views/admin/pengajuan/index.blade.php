@@ -37,6 +37,56 @@
         </div>
     @endif
 
+    {{-- STATS KEUANGAN: PEMASUKAN, PENGELUARAN & SALDO --}}
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-start border-4 border-success">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small fw-semibold text-uppercase">Total Pemasukan</div>
+                        <div class="fs-4 fw-bold text-success mt-1">Rp {{ number_format($totalPemasukan ?? 0, 0, ',', '.') }}</div>
+                        <small class="text-muted" style="font-size:11px;">Dari total pembayaran les siswa</small>
+                    </div>
+                    <div class="rounded-3 bg-success-subtle p-3 text-success">
+                        <i class="fa-solid fa-arrow-trend-up fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-start border-4 border-danger">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small fw-semibold text-uppercase">Total Pengeluaran</div>
+                        <div class="fs-4 fw-bold text-danger mt-1">Rp {{ number_format($totalPengeluaran ?? 0, 0, ',', '.') }}</div>
+                        <small class="text-muted" style="font-size:11px;">Reimburse & pengadaan bahan disetujui</small>
+                    </div>
+                    <div class="rounded-3 bg-danger-subtle p-3 text-danger">
+                        <i class="fa-solid fa-arrow-trend-down fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white border-start border-4 {{ ($saldo ?? 0) >= 0 ? 'border-primary' : 'border-warning' }}">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small fw-semibold text-uppercase">Saldo</div>
+                        <div class="fs-4 fw-bold {{ ($saldo ?? 0) >= 0 ? 'text-primary' : 'text-danger' }} mt-1">
+                            Rp {{ number_format($saldo ?? 0, 0, ',', '.') }}
+                        </div>
+                        <small class="text-muted" style="font-size:11px;">Selisih pemasukan dan pengeluaran</small>
+                    </div>
+                    <div class="rounded-3 {{ ($saldo ?? 0) >= 0 ? 'bg-primary-subtle text-primary' : 'bg-danger-subtle text-danger' }} p-3">
+                        <i class="fa-solid fa-wallet fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {{-- STATS CARDS --}}
     <div class="row g-3 mb-4">
         <div class="col-sm-6 col-xl-3">
@@ -206,10 +256,20 @@
                                     @endif
 
                                     {{-- PERSETUJUAN OWNER --}}
-                                    @if($isOwner && $sub->status === 'Review Owner')
-                                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-2 text-white fw-semibold" data-bs-toggle="modal" data-bs-target="#modalOwnerApprove{{ $sub->id }}">
-                                            <i class="fa-solid fa-signature me-1"></i> Approve Owner
+                                    @if($isOwner && in_array($sub->status, ['Review Owner', 'Review Admin']))
+                                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-2 text-dark fw-semibold" data-bs-toggle="modal" data-bs-target="#modalOwnerApprove{{ $sub->id }}">
+                                            <i class="fa-solid fa-signature me-1"></i> Approve & TTD
                                         </button>
+                                    @endif
+
+                                    {{-- TANDAI DIBAYAR OLEH OWNER --}}
+                                    @if($isOwner && $sub->status === 'Disetujui')
+                                        <form action="{{ route('owner.pengajuan.mark-paid', $sub->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Tandai pengajuan {{ $sub->item_name }} telah dibayar?')">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-success rounded-pill px-2 text-white fw-semibold">
+                                                <i class="fa-solid fa-money-bill-wave me-1"></i> Tandai Dibayar
+                                            </button>
+                                        </form>
                                     @endif
                                 </div>
 
@@ -271,7 +331,7 @@
                                 @endif
 
                                 {{-- MODAL OWNER APPROVAL --}}
-                                @if($isOwner && $sub->status === 'Review Owner')
+                                @if($isOwner && in_array($sub->status, ['Review Owner', 'Review Admin']))
                                     <div class="modal fade" id="modalOwnerApprove{{ $sub->id }}" tabindex="-1" aria-hidden="true">
                                         <div class="modal-dialog text-start">
                                             <div class="modal-content rounded-4 border-0">

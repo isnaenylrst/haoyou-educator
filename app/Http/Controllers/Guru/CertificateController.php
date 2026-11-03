@@ -86,16 +86,19 @@ class CertificateController extends Controller
 
     private function render(Certificate $certificate, object $e): void
     {
+        $owner = \App\Models\User::whereHas('level', fn ($q) => $q->where('nama_level', 'Owner'))->first();
+
         $pdf = Pdf::loadView('guru.certificate-pdf', [
-            'e'       => $e,
-            'teacher' => $this->teacher(),
-            'cert'    => [
+            'e'              => $e,
+            'teacher'        => $this->teacher(),
+            'ownerSignature' => $certificate->owner_signature_path ?? $owner?->signature_path,
+            'cert'           => [
                 'start'  => $certificate->start_date,
                 'end'    => $certificate->end_date,
                 'score'  => $certificate->score,
                 'course' => $certificate->course_name,
             ],
-            'number'  => $certificate->certificate_number,
+            'number'         => $certificate->certificate_number,
         ])->setPaper('a4', 'landscape');
 
         $path = "certificates/certificate-{$certificate->id}.pdf";

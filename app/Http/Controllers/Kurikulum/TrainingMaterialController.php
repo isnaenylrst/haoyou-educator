@@ -14,24 +14,46 @@ class TrainingMaterialController extends Controller
      */
     public function index(Request $request)
     {
-        $query = TrainingMaterial::with('uploader')->latest();
+        $type     = $request->query('type', 'all');
+        $level    = $request->query('level');
+        $category = $request->query('category');
+        $q        = trim($request->query('q', ''));
 
-        if ($request->filled('category')) {
-            $query->where('category', $request->category);
+        // Kurikulum hanya melihat materi untuk Curriculum atau All
+        $query = TrainingMaterial::with('uploader')
+            ->whereIn('target_role', ['Curriculum', 'Kurikulum', 'All'])
+            ->latest();
+
+        if ($type && in_array($type, ['document', 'video'])) {
+            $query->where('type', $type);
         }
 
-        if ($request->filled('q')) {
-            $search = '%' . trim($request->q) . '%';
-            $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', $search)
-                  ->orWhere('description', 'like', $search);
+        if ($level && in_array($level, ['Umum', 'Dasar', 'Menengah', 'Lanjutan'])) {
+            $query->where('level', $level);
+        }
+
+        if ($category) {
+            $query->where('category', $category);
+        }
+
+        if ($q !== '') {
+            $search = '%' . $q . '%';
+            $query->where(function ($sub) use ($search) {
+                $sub->where('title', 'like', $search)
+                    ->orWhere('description', 'like', $search)
+                    ->orWhere('category', 'like', $search);
             });
         }
 
         $materials = $query->paginate(12)->withQueryString();
-        $categories = TrainingMaterial::distinct()->pluck('category')->filter()->values()->toArray();
+        $categories = TrainingMaterial::whereIn('target_role', ['Curriculum', 'Kurikulum', 'All'])
+            ->distinct()
+            ->pluck('category')
+            ->filter()
+            ->values()
+            ->toArray();
 
-        return view('kurikulum.training', compact('materials', 'categories'));
+        return view('kurikulum.training', compact('materials', 'categories', 'type', 'level', 'category', 'q'));
     }
 
     /**

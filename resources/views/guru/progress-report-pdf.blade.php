@@ -156,7 +156,7 @@
                         <div style="margin-top: 20px; color: #999;">-</div>
                     @endif
                 </div>
-                <div style="font-weight: bold; text-decoration: underline;">BAGIAN KURIKULUM</div>
+                <div style="font-weight: bold; text-decoration: underline;">{{ $report->reviewer?->name ?? 'BAGIAN KURIKULUM' }}</div>
                 <div style="font-size: 10px; color: #666;">Haoyou Mandarin Educator</div>
             </td>
             <td>
@@ -170,7 +170,7 @@
                         <div style="margin-top: 20px; color: #999;">-</div>
                     @endif
                 </div>
-                <div style="font-weight: bold; text-decoration: underline;">DIREKTUR / OWNER</div>
+                <div style="font-weight: bold; text-decoration: underline;">{{ $report->ownerSigner?->name ?? 'Joy Limmunandar' }}</div>
                 <div style="font-size: 10px; color: #666;">Haoyou Mandarin Educator</div>
             </td>
         </tr>

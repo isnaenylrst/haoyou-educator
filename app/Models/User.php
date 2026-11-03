@@ -14,6 +14,7 @@ class User extends Authenticatable
     protected $table = 'users';
 
     protected $fillable = [
+        'name',
         'level_id',
         'username',
         'password',
@@ -87,10 +88,11 @@ class User extends Authenticatable
 
     public function getDisplayNameAttribute(): string
     {
-        return $this->student?->name
+        return $this->name
+            ?? $this->student?->name
             ?? $this->teacher?->name
             ?? $this->username
-            ?? 'Siswa';
+            ?? 'User';
     }
 
     /*
@@ -103,6 +105,7 @@ class User extends Authenticatable
     {
         return match ($this->level?->nama_level) {
             'Owner'      => 'owner.dashboard',
+            'Admin'      => 'admin.dashboard',
             'Curriculum' => 'kurikulum.dashboard',
             'Teacher'    => 'teacher.dashboard',
             'Student'    => 'dashboard',

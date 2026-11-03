@@ -13,7 +13,9 @@ return new class extends Migration
     public function up(): void
     {
         // Perbarui enum status di progress_reports agar mencakup 'Published' (setelah di-ACC Kurikulum)
-        DB::statement("ALTER TABLE progress_reports MODIFY COLUMN status ENUM('Draft', 'Submitted', 'Published') NOT NULL DEFAULT 'Draft'");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE progress_reports MODIFY COLUMN status ENUM('Draft', 'Submitted', 'Published') NOT NULL DEFAULT 'Draft'");
+        }
     }
 
     /**
@@ -21,7 +23,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        DB::statement("ALTER TABLE progress_reports MODIFY COLUMN status ENUM('Draft', 'Submitted') NOT NULL DEFAULT 'Draft'");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE progress_reports MODIFY COLUMN status ENUM('Draft', 'Submitted') NOT NULL DEFAULT 'Draft'");
+        }
     }
 };
 

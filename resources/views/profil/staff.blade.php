@@ -125,11 +125,16 @@
                         @csrf
                         @method('PUT')
                         <div class="mb-3">
+                            <label class="form-label small fw-semibold">Nama Lengkap (Tampil di bawah TTD Dokumen)</label>
+                            <input type="text" name="name" class="form-control form-control-sm" value="{{ old('name', $user->name ?? ($role === 'Owner' ? 'Joy Limmunandar' : '')) }}" placeholder="Contoh: Joy Limmunandar">
+                            <small class="text-muted" style="font-size:11px;">Nama ini dicetak di bawah tanda tangan pada sertifikat dan dokumen resmi.</small>
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label small fw-semibold">Ganti Foto Profil</label>
-                            <input type="file" name="foto" class="form-control form-control-sm" accept="image/*" required>
+                            <input type="file" name="foto" class="form-control form-control-sm" accept="image/*">
                         </div>
                         <button type="submit" class="btn btn-outline-warning text-dark btn-sm w-100 rounded-pill fw-semibold">
-                            Upload Foto Baru
+                            Simpan Perubahan Profil
                         </button>
                     </form>
                 </div>
