@@ -48,9 +48,9 @@
  
   .hy-btn{ display:inline-block; padding:13px 26px; border-radius:999px; font:800 15px 'Nunito',sans-serif; border:2px solid var(--deep); transition:transform .15s; cursor:pointer; }
   .hy-btn:hover{ transform:translateY(-2px); }
-  .hy-btn.fill{ background:var(--yellow); color:var(--deep); border-color:var(--deep); box-shadow:0 5px 0 var(--deep); }
+  .hy-btn.fill{ background:var(--sun); color:var(--deep); border-color:var(--deep); box-shadow:0 5px 0 var(--deep); }
   .hy-btn.line{ color:var(--deep); border-color:var(--deep); background:transparent; }
-  .hy-btn.line:hover{ background:var(--yellow); }
+  .hy-btn.line:hover{ background:var(--sun); }
   .hy-btn.sm{ padding:10px 20px; font-size:14px; }
   /* tombol di header */
   .hy-header .hy-btn.fill{ background:var(--deep); color:var(--yellow); border-color:var(--deep); box-shadow:0 4px 0 var(--ink); }
@@ -65,7 +65,7 @@
   .hy-quote{ display:inline-block; border-left:6px solid var(--ink); padding:4px 0 4px 18px; font:500 21px/1.35 'Bricolage Grotesque',sans-serif; color:var(--deep); margin:0 0 34px; }
   .hy-cta{ display:flex; gap:14px; flex-wrap:wrap; }
   .hy-cta .hy-btn.fill{ background:var(--deep); color:var(--cream); border-color:var(--deep); box-shadow:0 5px 0 var(--ink); }
-  .hy-cta .hy-btn.line{ background:var(--yellow); color:var(--deep); border-color:var(--deep); }
+  .hy-cta .hy-btn.line{ background:var(--sun); color:var(--deep); border-color:var(--deep); }
   .hy-cta .hy-btn.line:hover{ background:var(--cream); }
   .hy-pics{ position:relative; max-width:470px; width:100%; justify-self:center; }
   .hy-pics::before{ content:""; position:absolute; inset:26px -22px -22px 26px; background:var(--yellow); border-radius:200px 200px 28px 28px; }
@@ -77,7 +77,7 @@
   .hy-big img{ width:100%; height:100%; object-fit:contain; border-radius:50%; }
  
   /* strip (opsional) — warna dipertahankan */
-  .hy-strip{ background:var(--yellow); color:var(--deep); padding:34px 0; }
+  .hy-strip{ background:var(--sun); color:var(--deep); padding:34px 0; }
   .hy-strip .hy-wrap{ display:grid; grid-template-columns:repeat(3,1fr); gap:28px; }
   .hy-it{ display:flex; gap:14px; align-items:flex-start; }
   .hy-ico{ flex:none; width:46px; height:46px; border-radius:14px; display:grid; place-items:center; font-size:22px; border:2px solid var(--deep); }
@@ -204,7 +204,7 @@
     .hy-burger{ display:block; margin-left:auto; }
     .hy-actions .hy-btn.line{ display:none; }
     .hy-actions{ margin-left:0; }
-    .hy-links{ display:none; position:absolute; top:100%; left:-24px; right:-24px; flex-direction:column; gap:0; background:var(--soft); padding:8px 24px 20px; border-top:1px solid #6E9A80; box-shadow:0 20px 30px rgba(47,75,59,.3); }
+    .hy-links{ display:none; position:absolute; top:100%; left:-24px; right:-24px; flex-direction:column; gap:0; background:var(--lav); padding:8px 24px 20px; border-top:1px solid #6E9A80; box-shadow:0 20px 30px rgba(47,75,59,.3); }
     .hy-links.open{ display:flex; }
     .hy-links a{ display:block; padding:12px 0; font-size:17px; }
     .hy-m-only{ display:block; }

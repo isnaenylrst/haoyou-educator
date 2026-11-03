@@ -58,7 +58,7 @@
                     {{-- Header accordion --}}
                     <button
                         type="button"
-                        class="group-toggle w-full flex items-center justify-between px-4 py-3 bg-pale text-left"
+                        class="group-toggle w-full flex items-center justify-between px-4 py-3  bg-[#d5dfcc] text-left"
                     >
                         <div class="flex items-center gap-2">
                             <span class="text-sm font-semibold text-black">{{ $levelName }}</span>
@@ -81,7 +81,7 @@
 
                                 <div class="flex items-center gap-3">
 
-                                    <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg shrink-0">
+                                  <div class="w-11 h-11 rounded-xl bg-[#ffe135] flex items-center justify-center text-lg shrink-0">
                                         📖
                                     </div>
 

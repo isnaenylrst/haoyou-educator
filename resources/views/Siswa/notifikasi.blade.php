@@ -2,7 +2,7 @@
 
 @section('dashboard-content')
 
-<div class="bg-pale rounded-xl px-4 py-3 text-xs text-oliveDark mb-5">
+<div class="bg-[#d5dfcc] rounded-xl px-4 py-3 text-xs text-oliveDark mb-5">
   Sistem mengirim notifikasi otomatis setiap kali ada jadwal kelas (online/offline) yang akan segera dimulai.
 </div>
 
@@ -23,8 +23,7 @@
   @forelse ($belumDibaca as $n)
     <div class="flex items-center justify-between py-3 border-b border-line last:border-0">
       <div class="flex items-center gap-3">
-        <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg">🔔</div>
-        <div>
+       <div class="w-11 h-11 rounded-xl bg-[#ffe135] flex items-center justify-center text-lg">🔔</div>
           <div class="text-sm font-medium">
             @if ($n['url'])
               <a href="{{ $n['url'] }}" class="hover:underline">{{ $n['judul'] }}</a>
@@ -49,7 +48,7 @@
   @forelse ($sudahDibaca as $n)
     <div class="flex items-center justify-between py-3 border-b border-line last:border-0">
       <div class="flex items-center gap-3">
-        <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg">✅</div>
+       <div class="w-11 h-11 rounded-xl bg-[#ffe135] flex items-center justify-center text-lg">✅</div>
         <div>
           <div class="text-sm font-medium">{{ $n['judul'] }}</div>
           <div class="text-xs text-gray-500">{{ $n['ket'] }}</div>

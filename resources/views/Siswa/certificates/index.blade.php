@@ -61,7 +61,7 @@
 
     <div class="flex items-center justify-between gap-3 py-3 border-b border-line last:border-0">
       <div class="flex items-center gap-3">
-        <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg">🏅</div>
+       <div class="w-11 h-11 rounded-xl bg-[#ffe135] flex items-center justify-center text-lg">🏅</div>
         <div>
           <div class="text-sm font-medium">Sertifikat {{ $level->level_name }}</div>
 
@@ -124,7 +124,7 @@
   @foreach ($documents as $doc)
     <div class="flex items-center justify-between gap-3 py-3 border-b border-line last:border-0">
       <div class="flex items-center gap-3">
-        <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg">🏅</div>
+        <div class="w-11 h-11 rounded-xl bg-[#ffe135] flex items-center justify-center text-lg">🏅</div>
         <div>
           <div class="text-sm font-medium">{{ $doc->title }}</div>
           <div class="text-xs text-gray-500">
@@ -182,7 +182,7 @@
         $fin = !$m['soon'] && $m['total'] > 0 && $m['done'] >= $m['total'];
     @endphp
     <div class="flex items-center gap-3 py-3 border-b border-line last:border-0 {{ $m['soon'] ? 'opacity-60' : '' }}">
-      <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg flex-shrink-0">{{ $m['icon'] }}</div>
+    <div class="w-11 h-11 rounded-xl bg-[#ffe135] flex items-center justify-center text-lg flex-shrink-0">{{ $m['icon'] }}</div>
       <div class="flex-1 min-w-0">
         <div class="flex items-center justify-between gap-2">
           <div class="text-sm font-medium">{{ $m['label'] }}</div>
@@ -209,7 +209,7 @@
 <div class="bg-white border border-line rounded-2xl p-5 mb-5">
   <div class="flex items-center justify-between gap-3">
     <div class="flex items-center gap-3">
-      <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg">🏅</div>
+      <div class="w-11 h-11 rounded-xl bg-[#ffe135] flex items-center justify-center text-lg">🏅</div>
       <div>
         <div class="text-sm font-medium">Sertifikat Belajar Mandiri</div>
         <div class="text-xs text-gray-500">
