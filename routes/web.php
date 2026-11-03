@@ -2,6 +2,8 @@
 
 use Illuminate\Support\Facades\Route;
 
+
+// ===== siswa =====
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\CalonSiswa\PendaftaranController;
@@ -11,6 +13,8 @@ use App\Http\Controllers\Siswa\BookingController;
 use App\Http\Controllers\Siswa\StudentCertificateController;
 use App\Http\Controllers\Siswa\VocabController;
 use App\Http\Controllers\ProfilController;
+use App\Http\Controllers\VocabGuideVideoController;
+use App\Http\Controllers\Siswa\GrammarController;
 
 // ===== KURIKULUM =====
 use App\Http\Controllers\Kurikulum\DashboardController;
@@ -178,6 +182,8 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
     // BELAJAR VOCAB
     Route::prefix('student/belajar-vocab')->name('student.vocab.')->group(function () {
 
+        Route::get('panduan', [VocabController::class, 'guide'])->name('guide');
+
         Route::get('study-plan', [VocabController::class, 'plan'])->name('plan');
         Route::post('study-plan', [VocabController::class, 'planSave'])->name('plan.save');
 
@@ -192,6 +198,18 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
         Route::get('vocab-traps', [VocabController::class, 'traps'])->name('traps');
         Route::post('vocab-traps/{word}/paham', [VocabController::class, 'understood'])->name('traps.understood');
     });
+
+    //BELAJAR GRAMMAR
+    Route::prefix('student/grammar')->name('student.grammar.')->group(function () {
+    Route::get('/guide', [GrammarController::class, 'guide'])->name('guide');
+    Route::get('/list',  [GrammarController::class, 'list'])->name('list');
+    Route::post('/list/{no}/toggle', [GrammarController::class, 'toggle'])->name('toggle');
+
+    Route::get('/traps', [GrammarController::class, 'traps'])->name('traps');
+
+    Route::get('/test',  [GrammarController::class, 'test'])->name('test');
+    Route::post('/test/{no}/answer', [GrammarController::class, 'answer'])->name('test.answer');
+});
 
     // BOOKING KELAS
     Route::get('/booking', [BookingController::class, 'index'])
@@ -478,6 +496,9 @@ Route::middleware(['auth', 'role:Curriculum'])
 
         Route::get('/video/{video}/stream', [KurikulumVideoController::class, 'stream'])
             ->name('video.stream');
+        
+        Route::get('/video-panduan', [VocabGuideVideoController::class, 'edit'])->name('video-panduan');
+        Route::post('/video-panduan', [VocabGuideVideoController::class, 'save'])->name('video-panduan.save');
     });
 
 /*
@@ -620,6 +641,9 @@ Route::middleware(['auth', 'role:Owner'])
 
         Route::post('/guru/{teacher}/lihat', [OwnerAccessController::class, 'view'])
             ->name('guru.view');
+
+        Route::get('/video-panduan', [VocabGuideVideoController::class, 'edit'])->name('video-panduan');
+        Route::post('/video-panduan', [VocabGuideVideoController::class, 'save'])->name('video-panduan.save');
     });
 
 /*
@@ -870,7 +894,7 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
 
     Route::get('/kurikulum-materi/{material}/unduh', [KurikulumMateriController::class, 'unduh'])
         ->name('kurikulum-materi.unduh');
-
+    
     // PROGRESS REPORT
     Route::get('/progress-report', [ProgressReportController::class, 'index'])
         ->name('progress-report');

@@ -1,7 +1,7 @@
 @extends('layouts.app')
-
+ 
 @section('title', 'Haoyou Educator — Les Mandarin Terbaik | Game Based Learning Chinese Course')
-
+ 
 @push('styles')
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Nunito:wght@400;600;800&display=swap" rel="stylesheet">
@@ -9,154 +9,192 @@
   /* Semua class diawali "hy-" dan di-scope di .hy supaya tidak bentrok dengan Tailwind / layout */
   html{ scroll-behavior:smooth; scroll-padding-top:90px; }
   .hy{
-    --ink:#1E1B4B; --ink2:#2E2A6B; --sun:#FFD43B; --pink:#FF5C8A; --mint:#7BE0B5;
-    --lav:#F1F0FF; --text:#E9E7FF; --muted:#B9B5E8; --dark:#14122F;
-    background:var(--ink); color:var(--text); font-family:'Nunito',system-ui,sans-serif; line-height:1.65; overflow-x:hidden;
+    /* ===== PALET BARU =====
+       Base  : cream  #FFFAF2  +  yellow #FFD84D
+       Aksen : sage   #D5DFCC  +  hijau tua #2F4B3B  */
+    --cream:#FFFAF2; --yellow:#FFD84D; --ink:#D5DFCC; --deep:#2F4B3B;
+    --soft:color-mix(in srgb,#FFD84D 30%,#FFFAF2); /* kuning pucat untuk latar section */
+ 
+    /* ===== Warna lama (DIPERTAHANKAN untuk strip, Program Kursus, Pilihan Kelas & Kelompok Umur) ===== */
+    --sun:#FBF0BE; --pink:#EE9F8F; --mint:#A9D8B8; --lav:#F6F1E3;
+    --sky:#9CC9D6; --tan:#E2BC95;
+ 
+    /* ===== Pendukung ===== */
+    --ink2:#3F6B52; --text:#FFFBF0; --muted:#DCEBD9; --dark:#335A45;
+ 
+    background:var(--cream); color:var(--deep); font-family:'Nunito',system-ui,sans-serif; line-height:1.65; overflow-x:hidden;
   }
   .hy *, .hy *::before, .hy *::after{ box-sizing:border-box; }
   .hy h1,.hy h2,.hy h3,.hy .hy-f{ font-family:'Bricolage Grotesque',sans-serif; }
   .hy a{ text-decoration:none; }
   .hy img{ max-width:100%; }
   .hy-wrap{ max-width:1180px; margin:0 auto; padding:0 24px; }
-  .hy a:focus-visible,.hy button:focus-visible{ outline:3px solid var(--sun); outline-offset:3px; }
-
+  .hy a:focus-visible,.hy button:focus-visible{ outline:3px solid var(--deep); outline-offset:3px; }
+  .hy-footer a:focus-visible{ outline-color:var(--cream); }
+ 
   /* ---------- Header ---------- */
-  .hy-header{ position:sticky; top:0; z-index:30; background:var(--ink); }
+  .hy-header{ position:sticky; top:0; z-index:30; background:var(--cream); }
   .hy-nav{ display:flex; align-items:center; gap:24px; padding:12px 0; position:relative; }
-  .hy-logo{ display:flex; align-items:center; gap:12px; color:#fff; }
+  .hy-logo{ display:flex; align-items:center; gap:12px; color:var(--deep); }
   .hy-logo img{ width:52px; height:52px; object-fit:contain; background:#fff; border-radius:50%; padding:4px; }
   .hy-logo b{ display:block; font:800 18px/1.1 'Bricolage Grotesque',sans-serif; }
-  .hy-logo small{ font-size:11px; color:var(--muted); }
+  .hy-logo small{ font-size:11px; color:var(--deep); opacity:.75; }
   .hy-links{ display:flex; gap:24px; list-style:none; margin:0 auto 0 auto; padding:0; }
-  .hy-links a{ color:var(--text); font-weight:600; font-size:15px; }
-  .hy-links a:hover{ color:var(--sun); }
+  .hy-links a{ color:var(--deep); font-weight:600; font-size:15px; }
+  .hy-links a:hover{ color:var(--deep); text-decoration:underline; }
   .hy-m-only{ display:none; }
   .hy-actions{ display:flex; gap:10px; }
-  .hy-burger{ display:none; background:none; border:2px solid #6C68B8; color:#fff; border-radius:12px; width:44px; height:44px; font-size:22px; cursor:pointer; }
-
-  .hy-btn{ display:inline-block; padding:13px 26px; border-radius:999px; font:800 15px 'Nunito',sans-serif; border:2px solid var(--sun); transition:transform .15s; cursor:pointer; }
+  .hy-burger{ display:none; background:none; border:2px solid var(--deep); color:var(--deep); border-radius:12px; width:44px; height:44px; font-size:22px; cursor:pointer; }
+ 
+  .hy-btn{ display:inline-block; padding:13px 26px; border-radius:999px; font:800 15px 'Nunito',sans-serif; border:2px solid var(--deep); transition:transform .15s; cursor:pointer; }
   .hy-btn:hover{ transform:translateY(-2px); }
-  .hy-btn.fill{ background:var(--sun); color:var(--ink); box-shadow:0 5px 0 #C9A000; }
-  .hy-btn.line{ color:#fff; border-color:#6C68B8; background:transparent; }
-  .hy-btn.line:hover{ border-color:#fff; }
+  .hy-btn.fill{ background:var(--yellow); color:var(--deep); border-color:var(--deep); box-shadow:0 5px 0 var(--deep); }
+  .hy-btn.line{ color:var(--deep); border-color:var(--deep); background:transparent; }
+  .hy-btn.line:hover{ background:var(--yellow); }
   .hy-btn.sm{ padding:10px 20px; font-size:14px; }
-
+  /* tombol di header */
+  .hy-header .hy-btn.fill{ background:var(--deep); color:var(--yellow); border-color:var(--deep); box-shadow:0 4px 0 var(--ink); }
+ 
   /* ---------- Hero ---------- */
+  .hy-herobg{ background:var(--cream); }
   .hy-hero{ display:grid; grid-template-columns:1.1fr .9fr; gap:56px; align-items:center; padding:56px 0 96px; }
-  .hy-tag{ display:inline-flex; gap:8px; background:var(--ink2); border-radius:999px; padding:7px 16px; font-weight:800; font-size:13px; color:var(--mint); margin-bottom:22px; }
-  .hy-hero h1{ font:800 clamp(36px,5.4vw,66px)/1.06 'Bricolage Grotesque',sans-serif; color:#fff; letter-spacing:-.02em; margin:0; }
-  .hy mark{ background:linear-gradient(transparent 55%,var(--pink) 55%); color:var(--sun); padding:0 4px; }
+  .hy-tag{ display:inline-flex; gap:8px; background:var(--ink); border-radius:999px; padding:7px 16px; font-weight:800; font-size:13px; color:var(--deep); margin-bottom:22px; }
+  .hy-hero h1{ font:800 clamp(36px,5.4vw,66px)/1.06 'Bricolage Grotesque',sans-serif; color:var(--deep); letter-spacing:-.02em; margin:0; }
+  .hy mark{ background:var(--yellow); color:var(--deep); padding:0 8px; }
   .hy-lead{ max-width:520px; margin:26px 0 22px; font-size:18px; }
-  .hy-quote{ display:inline-block; border-left:4px solid var(--sun); padding:4px 0 4px 16px; font:500 21px/1.35 'Bricolage Grotesque',sans-serif; color:var(--sun); margin:0 0 34px; }
+  .hy-quote{ display:inline-block; border-left:6px solid var(--ink); padding:4px 0 4px 18px; font:500 21px/1.35 'Bricolage Grotesque',sans-serif; color:var(--deep); margin:0 0 34px; }
   .hy-cta{ display:flex; gap:14px; flex-wrap:wrap; }
+  .hy-cta .hy-btn.fill{ background:var(--deep); color:var(--cream); border-color:var(--deep); box-shadow:0 5px 0 var(--ink); }
+  .hy-cta .hy-btn.line{ background:var(--yellow); color:var(--deep); border-color:var(--deep); }
+  .hy-cta .hy-btn.line:hover{ background:var(--cream); }
   .hy-pics{ position:relative; max-width:470px; width:100%; justify-self:center; }
-  .hy-pics::before{ content:""; position:absolute; inset:26px -22px -22px 26px; background:var(--sun); border-radius:200px 200px 28px 28px; }
-  .hy-pics > img{ position:relative; display:block; width:100%; aspect-ratio:4/4.6; object-fit:cover; border-radius:200px 200px 28px 28px; border:6px solid var(--ink); }
-  .hy-chip{ position:absolute; z-index:2; background:#fff; color:var(--ink); border-radius:18px; padding:10px 16px; font-weight:800; font-size:14px; box-shadow:0 10px 24px rgba(0,0,0,.28); display:flex; gap:10px; align-items:center; }
-  .hy-chip em{ font:normal 800 22px 'Bricolage Grotesque',serif; color:var(--pink); }
-  .hy-c1{ left:-46px; top:22%; } .hy-c2{ right:-34px; bottom:14%; } .hy-c3{ left:-26px; bottom:-18px; }
-  .hy-big{ position:absolute; right:-24px; top:-30px; z-index:2; width:96px; height:96px; border-radius:50%; background:#fff; border:4px solid var(--sun); box-shadow:0 10px 24px rgba(0,0,0,.28); display:grid; place-items:center; padding:6px; transform:rotate(10deg); }
+  .hy-pics::before{ content:""; position:absolute; inset:26px -22px -22px 26px; background:var(--yellow); border-radius:200px 200px 28px 28px; }
+  .hy-pics > img{ position:relative; display:block; width:100%; aspect-ratio:4/4.6; object-fit:cover; border-radius:200px 200px 28px 28px; border:6px solid var(--deep); }
+  .hy-chip{ position:absolute; z-index:2; background:var(--cream); color:var(--deep); border:2px solid var(--deep); border-radius:999px; padding:10px 18px; font-weight:800; font-size:14px; display:flex; gap:10px; align-items:center; }
+  .hy-chip em{ font:normal 800 22px 'Bricolage Grotesque',serif; color:var(--deep); }
+  .hy-c1{ left:-46px; top:22%; } .hy-c2{ right:-34px; bottom:14%; background:var(--deep); color:var(--cream); } .hy-c3{ left:-26px; bottom:-18px; }
+  .hy-big{ position:absolute; right:-24px; top:-30px; z-index:2; width:96px; height:96px; border-radius:50%; background:#fff; border:4px solid var(--yellow); box-shadow:0 10px 24px rgba(47,75,59,.22); display:grid; place-items:center; padding:6px; transform:rotate(10deg); }
   .hy-big img{ width:100%; height:100%; object-fit:contain; border-radius:50%; }
-
-  /* strip (opsional) */
-  .hy-strip{ background:#fff; color:var(--ink); padding:34px 0; }
+ 
+  /* strip (opsional) — warna dipertahankan */
+  .hy-strip{ background:var(--yellow); color:var(--deep); padding:34px 0; }
   .hy-strip .hy-wrap{ display:grid; grid-template-columns:repeat(3,1fr); gap:28px; }
   .hy-it{ display:flex; gap:14px; align-items:flex-start; }
-  .hy-ico{ flex:none; width:46px; height:46px; border-radius:14px; display:grid; place-items:center; font-size:22px; }
-  .hy-it:nth-child(1) .hy-ico{ background:var(--sun); } .hy-it:nth-child(2) .hy-ico{ background:var(--mint); } .hy-it:nth-child(3) .hy-ico{ background:#FFC2D4; }
+  .hy-ico{ flex:none; width:46px; height:46px; border-radius:14px; display:grid; place-items:center; font-size:22px; border:2px solid var(--deep); }
+  .hy-it:nth-child(1) .hy-ico{ background:var(--cream); }
   .hy-it b{ display:block; font:800 17px 'Bricolage Grotesque',sans-serif; }
-  .hy-it p{ margin:0; font-size:14px; color:#55527F; }
-
+  .hy-it p{ margin:0; font-size:14px; color:var(--deep); }
+ 
   /* ---------- Umum section ---------- */
   .hy-s{ padding:88px 0; }
-  .hy-light{ background:#fff; color:var(--ink); }
-  .hy-lavs{ background:var(--lav); color:var(--ink); }
+  .hy-light{ background:var(--cream); color:var(--deep); }
+  .hy-lavs{ background:var(--soft); color:var(--deep); }
+  #program{ --ac:var(--sun); }
+  #ourservice{ --ac:var(--cream); background:var(--yellow); }
+  #reward{ --ac:var(--ink); }
+  #event{ --ac:var(--ink); }
+  #testimoni{ --ac:var(--yellow); background:var(--ink); }
+  #tentang{ --ac:var(--ink); }
   .hy-head{ text-align:center; max-width:620px; margin:0 auto 48px; }
-  .hy-pill{ display:inline-block; font-weight:800; font-size:13px; padding:5px 14px; border-radius:999px; background:var(--sun); color:var(--ink); margin-bottom:14px; }
-  .hy-light .hy-pill, .hy-lavs .hy-pill{ background:var(--ink); color:var(--sun); }
+  .hy-pill{ display:inline-block; font-weight:800; font-size:13px; padding:5px 14px; border-radius:999px; background:var(--ac,var(--sun)); color:var(--deep); margin-bottom:14px; }
   .hy-head h2{ font-size:clamp(30px,4vw,48px); line-height:1.1; letter-spacing:-.02em; margin:0; }
   .hy-head p{ margin:14px 0 0; font-size:17px; opacity:.85; }
-  .hy-white{ color:#fff; }
-
-  /* Program */
+  .hy-white{ color:var(--deep); }
+ 
+  /* Warna bergantian untuk kartu Program & Kelompok Umur (DIPERTAHANKAN: sun, mint, pink, sky, tan) */
+  .hy-prog > div:nth-child(1), .hy-umur-card:nth-child(1){ --c:var(--sun); }
+  .hy-prog > div:nth-child(2), .hy-umur-card:nth-child(2){ --c:var(--mint); }
+  .hy-prog > div:nth-child(3), .hy-umur-card:nth-child(3){ --c:var(--pink); }
+  .hy-prog > div:nth-child(4), .hy-umur-card:nth-child(4){ --c:var(--sky); }
+  .hy-prog > div:nth-child(5){ --c:var(--tan); }
+  /* Warna bergantian untuk Reward & Service (palet baru) */
+  .hy-rw figure:nth-child(odd){ --c:var(--yellow); }
+  .hy-rw figure:nth-child(even){ --c:var(--ink); }
+ 
+  /* Program (warna dipertahankan) */
   .hy-prog{ display:grid; grid-template-columns:repeat(6,1fr); gap:18px; }
-  .hy-prog > div{ grid-column:span 2; background:var(--lav); border-radius:24px; padding:26px; font-weight:600; }
+  .hy-prog > div{ grid-column:span 2; background:color-mix(in srgb,var(--c,var(--sun)) 38%,#FFFAF2); color:var(--deep); border-radius:24px; padding:26px; font-weight:600; }
   .hy-prog > div:nth-child(4){ grid-column:2/4; } .hy-prog > div:nth-child(5){ grid-column:4/6; }
-  .hy-prog b{ display:grid; place-items:center; width:42px; height:42px; border-radius:50%; background:var(--ink); color:var(--sun); font:800 17px 'Bricolage Grotesque',sans-serif; margin-bottom:14px; }
+  .hy-prog b{ display:grid; place-items:center; width:42px; height:42px; border-radius:50%; background:var(--deep); color:var(--c,var(--sun)); font:800 17px 'Bricolage Grotesque',sans-serif; margin-bottom:14px; }
   .hy-prog p{ margin:0; }
-  .hy-kelas{ margin-top:56px; background:var(--sun); border-radius:36px; padding:52px 28px; text-align:center; }
+  .hy-kelas{ margin-top:56px; background:var(--sun); color:var(--deep); border-radius:36px; padding:52px 28px; text-align:center; }
+  .hy-kelas .hy-pill{ background:var(--deep); color:var(--sun); }
   .hy-kelas h3{ font-size:34px; margin:0 0 26px; }
   .hy-chips{ display:flex; flex-wrap:wrap; gap:12px; justify-content:center; max-width:760px; margin:0 auto; }
-  .hy-chips span{ background:#fff; padding:12px 22px; border-radius:999px; font-weight:800; box-shadow:0 4px 0 var(--ink); }
+  .hy-chips span{ background:var(--cream); padding:12px 22px; border-radius:999px; font-weight:800; box-shadow:0 4px 0 var(--ink); }
+  .hy-chips span:nth-child(3n+1){ box-shadow:0 4px 0 var(--mint); }
+  .hy-chips span:nth-child(3n+2){ box-shadow:0 4px 0 var(--pink); }
+  .hy-chips span:nth-child(3n){ box-shadow:0 4px 0 var(--sky); }
   .hy-umur{ display:grid; grid-template-columns:repeat(4,1fr); gap:22px; }
   .hy-umur-card{ text-align:center; }
-  .hy-umur-card .ph{ aspect-ratio:1; border-radius:28px; background:var(--lav); overflow:hidden; border:4px solid var(--ink); box-shadow:0 8px 0 var(--sun); transition:transform .2s; }
+  .hy-umur-card .ph{ aspect-ratio:1; border-radius:28px; background:var(--lav); overflow:hidden; border:4px solid var(--deep); box-shadow:0 8px 0 var(--c,var(--sun)); transition:transform .2s; }
   .hy-umur-card:hover .ph{ transform:translateY(-6px) rotate(-1.5deg); }
   .hy-umur-card .ph img{ width:100%; height:100%; object-fit:cover; display:block; }
   .hy-umur-card h3{ font-size:19px; margin:18px 0 0; }
   .hy-umur-card p{ margin:0; font-size:14px; opacity:.75; }
-
+ 
   /* Service */
   .hy-svc{ max-width:760px; margin:0 auto; display:grid; gap:14px; }
-  .hy-svc > div{ display:flex; align-items:center; gap:18px; background:var(--ink2); border-radius:22px; padding:16px 22px; font:800 19px 'Bricolage Grotesque',sans-serif; color:#fff; transition:transform .2s; }
+  .hy-svc > div{ display:flex; align-items:center; gap:18px; background:var(--cream); border-radius:22px; padding:16px 22px; font:800 19px 'Bricolage Grotesque',sans-serif; color:var(--deep); transition:transform .2s; }
   .hy-svc > div:hover{ transform:translateX(6px); }
-  .hy-svc span{ flex:none; width:52px; height:52px; border-radius:50%; background:var(--sun); display:grid; place-items:center; font-size:24px; }
-
+  .hy-svc span{ flex:none; width:52px; height:52px; border-radius:50%; background:var(--yellow); border:2px solid var(--deep); display:grid; place-items:center; font-size:24px; }
+ 
   /* Reward */
   .hy-flow{ display:flex; justify-content:center; align-items:center; gap:18px; margin-bottom:48px; flex-wrap:wrap; }
   .hy-flow > div{ text-align:center; font-weight:800; }
-  .hy-flow span{ display:grid; place-items:center; width:68px; height:68px; border-radius:50%; background:var(--ink); font-size:28px; margin:0 auto 6px; }
-  .hy-flow i{ font:800 26px 'Bricolage Grotesque'; font-style:normal; color:var(--pink); }
+  .hy-flow span{ display:grid; place-items:center; width:68px; height:68px; border-radius:50%; background:var(--yellow); border:2px solid var(--deep); font-size:28px; margin:0 auto 6px; }
+  .hy-flow i{ font:800 26px 'Bricolage Grotesque'; font-style:normal; color:var(--deep); }
   .hy-rw{ display:grid; grid-template-columns:repeat(5,1fr); gap:16px; }
-  .hy-rw figure{ margin:0; background:#fff; border-radius:24px; padding:14px 14px 18px; text-align:center; box-shadow:0 8px 0 var(--sun); border:2px solid var(--ink); transition:transform .2s; }
+  .hy-rw figure{ margin:0; background:var(--cream); border-radius:24px; padding:14px 14px 18px; text-align:center; box-shadow:0 8px 0 var(--c,var(--yellow)); border:2px solid var(--deep); transition:transform .2s; }
   .hy-rw figure:hover{ transform:translateY(-6px); }
   .hy-rw img{ width:100%; aspect-ratio:1; object-fit:contain; border-radius:14px; display:block; }
-  .hy-rw figcaption{ margin-top:10px; font:800 14px/1.3 'Nunito',sans-serif; }
-
+  .hy-rw figcaption{ margin-top:10px; font:800 14px/1.3 'Nunito',sans-serif; color:var(--deep); }
+ 
   /* Event */
   .hy-ev{ display:grid; grid-template-columns:.9fr 1.1fr; gap:48px; align-items:center; }
   .hy-ev p{ font-size:17px; margin:0 0 14px; }
-  .hy-ev h3{ display:inline-flex; gap:10px; align-items:center; background:var(--ink); color:var(--sun); padding:8px 18px; border-radius:999px; font-size:17px; margin:0 0 14px; }
-  .hy-hint{ font-weight:800; font-size:14px; color:var(--ink2); }
+  .hy-ev h3{ display:inline-flex; gap:10px; align-items:center; background:var(--cream); color:var(--deep); padding:8px 18px; border-radius:999px; font-size:17px; margin:0 0 14px; }
+  .hy-hint{ font-weight:800; font-size:14px; color:var(--deep); }
   .hy-bento{ display:grid; grid-template-columns:1.15fr 1fr 1fr; grid-template-rows:repeat(2,minmax(150px,1fr)); gap:14px; }
-  .hy-bento > img{ grid-row:1/3; width:100%; height:100%; min-height:320px; object-fit:cover; border-radius:28px; border:5px solid #fff; box-shadow:8px 8px 0 var(--pink); }
-  .hy-tile{ border:3px solid var(--ink); border-radius:24px; background:#fff; color:var(--ink); cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:10px; font:800 14px 'Nunito',sans-serif; transition:transform .2s,box-shadow .2s,background .2s; overflow:hidden; }
+  .hy-bento > img{ grid-row:1/3; width:100%; height:100%; min-height:320px; object-fit:cover; border-radius:28px; border:5px solid var(--cream); box-shadow:8px 8px 0 var(--ink); }
+  .hy-tile{ border:3px solid var(--cream); border-radius:24px; background:var(--cream); color:var(--deep); cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:10px; font:800 14px 'Nunito',sans-serif; transition:transform .2s,box-shadow .2s,background .2s; overflow:hidden; }
   .hy-tile span{ font-size:clamp(34px,5vw,52px); line-height:1; transition:transform .25s; }
   .hy-tile img{ width:100%; height:80px; object-fit:cover; border-radius:12px; }
   .hy-tile:hover{ transform:translateY(-4px); box-shadow:0 6px 0 var(--ink); }
   .hy-tile:hover span{ transform:rotate(-8deg) scale(1.12); }
-  .hy-tile.on{ background:var(--sun); box-shadow:0 6px 0 var(--ink); }
-  .hy-cap{ grid-column:1/4; background:var(--ink); color:#fff; border-radius:20px; padding:14px 20px; display:flex; gap:14px; align-items:center; font-weight:600; }
-  .hy-cap b{ font:800 20px 'Bricolage Grotesque'; color:var(--sun); }
+  .hy-tile.on{ background:var(--yellow); border-color:var(--cream); box-shadow:0 6px 0 var(--ink); }
+  .hy .hy-tile:focus-visible{ outline:3px solid var(--deep); outline-offset:3px; }
+  .hy-cap{ grid-column:1/4; background:var(--cream); color:var(--deep); border-radius:20px; padding:14px 20px; display:flex; gap:14px; align-items:center; font-weight:600; }
+  .hy-cap b{ font:800 20px 'Bricolage Grotesque'; color:var(--deep); }
   .hy-cap em{ font-style:normal; font-size:30px; }
   .hy-pop{ animation:hyPop .35s; } @keyframes hyPop{ 0%{ transform:scale(.9); opacity:.3; } 100%{ transform:none; opacity:1; } }
-
+ 
   /* Testimoni */
-  .hy-stars{ color:var(--sun); font-size:26px; letter-spacing:4px; margin-top:8px; }
+  .hy-stars{ color:var(--deep); font-size:26px; letter-spacing:4px; margin-top:8px; }
   .hy-tm{ display:grid; grid-template-columns:repeat(4,1fr); gap:18px; }
-  .hy-tm img{ width:100%; aspect-ratio:4/5; object-fit:contain; object-position:center; background:#fff; padding:10px; display:block; border-radius:24px; box-shadow:0 8px 0 var(--sun); cursor:zoom-in; transition:transform .2s; }
+  .hy-tm img{ width:100%; aspect-ratio:4/5; object-fit:contain; object-position:center; background:#fff; padding:10px; display:block; border-radius:24px; box-shadow:0 8px 0 var(--yellow); cursor:zoom-in; transition:transform .2s; }
   .hy-tm img:hover{ transform:translateY(-6px); }
-  .hy-swipe{ display:none; text-align:center; color:var(--muted); font-weight:800; font-size:13px; margin:12px 0 0; }
-  .hy-lb{ position:fixed; inset:0; background:rgba(20,18,47,.92); display:none; place-items:center; z-index:60; padding:20px; cursor:zoom-out; }
+  .hy-swipe{ display:none; text-align:center; color:var(--deep); font-weight:800; font-size:13px; margin:12px 0 0; }
+  .hy-lb{ position:fixed; inset:0; background:rgba(47,75,59,.92); display:none; place-items:center; z-index:60; padding:20px; cursor:zoom-out; }
   .hy-lb.on{ display:grid; } .hy-lb img{ max-width:min(92vw,460px); max-height:88vh; border-radius:18px; }
-
+ 
   /* Tentang + harga */
   .hy-about{ text-align:center; }
-  .hy-price{ margin:46px auto 0; max-width:520px; background:var(--sun); color:var(--ink); border-radius:40px; padding:44px 24px; box-shadow:0 10px 0 var(--pink); }
+  .hy-price{ margin:46px auto 0; max-width:520px; background:var(--cream); color:var(--deep); border-radius:40px; padding:44px 24px; border:4px solid var(--yellow); box-shadow:0 10px 0 var(--yellow); }
   .hy-price small{ font-weight:800; }
   .hy-price .n{ font:800 clamp(56px,10vw,96px)/1.05 'Bricolage Grotesque'; letter-spacing:-.03em; }
-  .hy-price .hy-btn{ background:var(--ink); color:var(--sun); border-color:var(--ink); margin-top:20px; }
-
+  .hy-price .hy-btn{ background:var(--deep); color:var(--yellow); border-color:var(--deep); margin-top:20px; }
+ 
   /* Footer */
-  .hy-footer{ background:var(--dark); padding:56px 0 28px; }
-  .hy-footer h3{ text-align:center; font-size:22px; color:#fff; margin:0 0 28px; }
+  .hy-footer{ background:var(--ink); color:var(--deep); padding:56px 0 28px; border-top:6px solid var(--deep); }
+  .hy-footer h3{ text-align:center; font-size:22px; color:var(--deep); margin:0 0 28px; }
   .hy-ct{ display:grid; grid-template-columns:repeat(4,1fr); gap:20px; }
-  .hy-ct > a, .hy-ct > div{ display:flex; gap:12px; align-items:center; background:var(--ink); border-radius:18px; padding:16px; color:#fff; transition:transform .2s; }
+  .hy-ct > a, .hy-ct > div{ display:flex; gap:12px; align-items:center; background:var(--cream); border-radius:18px; padding:16px; color:var(--deep); box-shadow:0 5px 0 var(--yellow); transition:transform .2s; }
   .hy-ct > a:hover{ transform:translateY(-4px); }
-  .hy-ct small{ display:block; font-size:12px; color:var(--muted); letter-spacing:.08em; }
-  .hy-ct b{ font-size:15px; line-height:1.3; display:block; }
-  .hy-copy{ margin:32px 0 0; border-top:1px solid #3A3680; padding-top:20px; text-align:center; font-size:13px; color:var(--muted); }
-
+  .hy-ct small{ display:block; font-size:12px; color:var(--deep); opacity:.7; letter-spacing:.08em; }
+  .hy-ct b{ font-size:15px; line-height:1.3; display:block; color:var(--deep); }
+  .hy-copy{ margin:32px 0 0; border-top:1px solid rgba(47,75,59,.3); padding-top:20px; text-align:center; font-size:13px; color:var(--deep); opacity:.8; }
+ 
   /* ---------- Responsive ---------- */
   @media(max-width:1000px){
     .hy-ct{ grid-template-columns:repeat(2,1fr); }
@@ -166,7 +204,7 @@
     .hy-burger{ display:block; margin-left:auto; }
     .hy-actions .hy-btn.line{ display:none; }
     .hy-actions{ margin-left:0; }
-    .hy-links{ display:none; position:absolute; top:100%; left:-24px; right:-24px; flex-direction:column; gap:0; background:var(--ink); padding:8px 24px 20px; border-top:1px solid #3A3680; box-shadow:0 20px 30px rgba(0,0,0,.3); }
+    .hy-links{ display:none; position:absolute; top:100%; left:-24px; right:-24px; flex-direction:column; gap:0; background:var(--soft); padding:8px 24px 20px; border-top:1px solid #6E9A80; box-shadow:0 20px 30px rgba(47,75,59,.3); }
     .hy-links.open{ display:flex; }
     .hy-links a{ display:block; padding:12px 0; font-size:17px; }
     .hy-m-only{ display:block; }
@@ -202,17 +240,17 @@
   }
 </style>
 @endpush
-
+ 
 @section('content')
-
+ 
 @if (session('status'))
   <div style="background:#e2ecd7;border-bottom:1px solid #a9c98f;color:#4b6b2f;font-size:14px;padding:12px 6%;text-align:center;">
     {{ session('status') }}
   </div>
 @endif
-
+ 
 <div class="hy">
-
+ 
 {{-- ===================== HEADER ===================== --}}
 <header class="hy-header">
   <div class="hy-wrap">
@@ -238,9 +276,10 @@
     </nav>
   </div>
 </header>
-
+ 
 {{-- ===================== HERO ABOUT ===================== --}}
-<div class="hy-wrap" id="top">
+<div class="hy-herobg" id="top">
+<div class="hy-wrap">
   <section class="hy-hero" id="about">
     <div>
       <span class="hy-tag">🎮 Game Based Learning · Chinese Course</span>
@@ -261,14 +300,15 @@
     </div>
   </section>
 </div>
-
+</div>
+ 
 {{-- Strip ringkasan (opsional, boleh dihapus) --}}
 <section class="hy-strip"><div class="hy-wrap">
   <div class="hy-it"><span class="hy-ico">🎲</span><span><b>Permainan interaktif</b><p>Belajar lewat game, bukan sekadar menghafal.</p></span></div>
   <div class="hy-it"><span class="hy-ico">🏮</span><span><b>Pertukaran budaya</b><p>Mengenal budaya Tiongkok langsung dalam kelas.</p></span></div>
   <div class="hy-it"><span class="hy-ico">💬</span><span><b>Aktif berbicara</b><p>Murid terbiasa ngomong Mandarin setiap hari.</p></span></div>
 </div></section>
-
+ 
 {{-- ===================== PROGRAM KURSUS ===================== --}}
 <section class="hy-s hy-light" id="program">
   <div class="hy-wrap">
@@ -277,7 +317,7 @@
       <h2>Program Kursus</h2>
       <p>Metode belajar yang dirancang supaya anak berani &amp; terbiasa berbicara Mandarin.</p>
     </div>
-
+ 
     @php
       $metodeBelajar = [
         'Kelas kecil (maks. 6 murid).',
@@ -297,13 +337,13 @@
         ['nama' => 'Feixiang', 'usia' => '15++ Tahun',  'foto' => 'feixiang.jpeg'],
       ];
     @endphp
-
+ 
     <div class="hy-prog">
       @foreach ($metodeBelajar as $i => $poin)
         <div><b>{{ $i + 1 }}</b><p>{{ $poin }}</p></div>
       @endforeach
     </div>
-
+ 
     <div class="hy-kelas">
       <span class="hy-pill">Pilih sesuai kebutuhan</span>
       <h3>Pilihan Kelas</h3>
@@ -313,7 +353,7 @@
         @endforeach
       </div>
     </div>
-
+ 
     <div class="hy-head" style="margin-top:72px;">
       <span class="hy-pill">Sesuai usia</span>
       <h2>Pilihan Kelompok Umur</h2>
@@ -329,7 +369,7 @@
     </div>
   </div>
 </section>
-
+ 
 {{-- ===================== OUR SERVICE ===================== --}}
 <section class="hy-s" id="ourservice">
   <div class="hy-wrap">
@@ -347,7 +387,7 @@
     </div>
   </div>
 </section>
-
+ 
 {{-- ===================== REWARD SYSTEM ===================== --}}
 <section class="hy-s hy-light" id="reward">
   <div class="hy-wrap">
@@ -361,7 +401,7 @@
       <div><span>⭐</span>Poin</div><i>→</i>
       <div><span>🎁</span>Hadiah</div>
     </div>
-
+ 
     @php
       $katalogHadiah = [
         ['nama' => 'Samsung Smart TV 32 Inch', 'gambar' => 'samsung.jpg'],
@@ -381,7 +421,7 @@
     </div>
   </div>
 </section>
-
+ 
 {{-- ===================== EVENT ===================== --}}
 <section class="hy-s hy-lavs" id="event">
   <div class="hy-wrap">
@@ -389,7 +429,7 @@
       <span class="hy-pill">Belajar lewat pengalaman</span>
       <h2>Event</h2>
     </div>
-
+ 
     @php
       // Isi 'foto' dengan nama file di public/assets/img/ bila sudah punya foto kegiatannya (contoh: 'event-parfum.jpg').
       // Kalau null, kotak menampilkan emoji.
@@ -401,7 +441,7 @@
       ];
       $tileAktif = 1;
     @endphp
-
+ 
     <div class="hy-ev">
       <div>
         <p>Di Haoyou, bahasa Mandarin tidak hanya dipelajari dari buku, tetapi juga lewat pengalaman nyata.</p>
@@ -409,7 +449,7 @@
         <p>Siswa berbicara Mandarin langsung sambil melakukan kegiatan seru. Mereka belajar kosakata baru, memahami instruksi, dan berlatih ngomong secara natural, jadi belajar lebih menyenangkan dan lebih membekas.</p>
         <p class="hy-hint">👆 Tap kegiatan untuk melihat kosakatanya</p>
       </div>
-
+ 
       <div class="hy-bento">
         <img src="{{ asset('assets/img/event.jpeg') }}" alt="Event belajar Mandarin" loading="lazy">
         @foreach ($eventTiles as $i => $t)
@@ -431,7 +471,7 @@
     </div>
   </div>
 </section>
-
+ 
 {{-- ===================== TESTIMONI ===================== --}}
 <section class="hy-s" id="testimoni">
   <div class="hy-wrap">
@@ -441,7 +481,7 @@
       <div class="hy-stars">★★★★★</div>
       <p>Kepuasan siswa dan orang tua menjadi motivasi kami untuk terus memberikan pengalaman belajar Mandarin yang menyenangkan dan berkualitas.</p>
     </div>
-
+ 
     @php
       $fotoTestimoni = ['testimoni1.jpg', 'testimoni2.jfif', 'testimoni3.jfif', 'testimoni4.jfif'];
     @endphp
@@ -453,7 +493,7 @@
     <p class="hy-swipe">← geser untuk melihat lainnya →</p>
   </div>
 </section>
-
+ 
 {{-- ===================== TENTANG KAMI + HARGA ===================== --}}
 <section class="hy-s hy-about" id="tentang" style="padding-top:40px;">
   <div class="hy-wrap">
@@ -470,7 +510,7 @@
     </div>
   </div>
 </section>
-
+ 
 {{-- ===================== FOOTER ===================== --}}
 @php $waNomor = $whatsappAdmin ?? '62895352684913'; @endphp
 <footer class="hy-footer" id="kontak">
@@ -497,12 +537,12 @@
     <p class="hy-copy">© 2026 Haoyou Educator. Semua hak dilindungi.</p>
   </div>
 </footer>
-
+ 
 {{-- Lightbox testimoni --}}
 <div class="hy-lb" id="hyLb"><img alt=""></div>
-
+ 
 </div>{{-- /.hy --}}
-
+ 
 <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
 <script>
   // Menu mobile
@@ -515,7 +555,7 @@
   menu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
     menu.classList.remove('open'); burger.textContent = '☰'; burger.setAttribute('aria-expanded', false);
   }));
-
+ 
   // Event: klik kegiatan -> ganti keterangan
   const cap = document.getElementById('hyCap'), tiles = document.querySelectorAll('.hy-tile');
   tiles.forEach(b => b.addEventListener('click', () => {
@@ -528,7 +568,7 @@
     cap.append(em, sp);
     cap.classList.remove('hy-pop'); void cap.offsetWidth; cap.classList.add('hy-pop');
   }));
-
+ 
   // Testimoni: klik untuk memperbesar
   const lb = document.getElementById('hyLb');
   document.querySelectorAll('.hy-tm img').forEach(i => i.addEventListener('click', () => {
@@ -537,5 +577,6 @@
   lb.addEventListener('click', () => lb.classList.remove('on'));
   document.addEventListener('keydown', e => { if (e.key === 'Escape') lb.classList.remove('on'); });
 </script>
-
+ 
 @endsection
+ 
