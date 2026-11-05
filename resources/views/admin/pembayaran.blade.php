@@ -236,6 +236,9 @@
                                             data-package="{{ $packageName }}"
                                             data-remaining="{{ $remaining }}"
                                             data-next-stage="{{ $enrollment->next_stage }}"
+                                            data-next-amount="{{ $enrollment->next_amount }}"
+                                            data-next-min="{{ $enrollment->next_min }}"
+                                            data-next-exact="{{ $enrollment->next_exact ? 1 : 0 }}"
                                             onclick="openPayModal(this)">
                                         <i class="fa-solid fa-money-bill-wave"></i>
                                     </button>
@@ -324,13 +327,10 @@
 
                 <div class="modal-body">
                     <div class="form-grid">
+                        {{-- Tahap ditentukan sistem (DP / Termin 1-3 / Pelunasan), hanya ditampilkan --}}
                         <div class="form-field">
-                            <label>Tahap Pembayaran *</label>
-                            <select name="payment_stage" id="pay_stage" required>
-                                @foreach ($stages as $stage)
-                                    <option value="{{ $stage }}">{{ $stage }}</option>
-                                @endforeach
-                            </select>
+                            <label>Tahap Pembayaran</label>
+                            <input type="text" id="pay_stage" readonly>
                         </div>
 
                         <div class="form-field">
@@ -488,12 +488,29 @@
 
         document.getElementById('payForm').action = `/admin/pembayaran/${btn.dataset.id}`;
         document.getElementById('pay_sub').textContent = `${btn.dataset.name} · ${btn.dataset.package}`;
-        document.getElementById('pay_stage').value = btn.dataset.nextStage;
+        document.getElementById('pay_stage').value = btn.dataset.nextStage || '';
 
         const amount = document.getElementById('pay_amount');
-        amount.value = '';
+        const hint = document.getElementById('pay_remaining_hint');
+        const exact = btn.dataset.nextExact === '1';
+        const nextAmount = Number(btn.dataset.nextAmount);
+        const nextMin = Number(btn.dataset.nextMin);
+
         amount.max = remaining;
-        document.getElementById('pay_remaining_hint').textContent = `Sisa tagihan ${rupiah(remaining)}`;
+
+        if (exact && nextAmount > 0) {
+            // Termin 1-3 / Pelunasan: nominal ditentukan sistem
+            amount.value = nextAmount;
+            amount.min = nextAmount;
+            amount.readOnly = true;
+            hint.textContent = `Nominal ${btn.dataset.nextStage} sesuai jadwal. Sisa tagihan ${rupiah(remaining)}`;
+        } else {
+            // DP: nominal bebas, minimal sebesar biaya pendaftaran
+            amount.value = '';
+            amount.min = nextMin > 0 ? nextMin : 1;
+            amount.readOnly = false;
+            hint.textContent = `Minimal DP ${rupiah(nextMin)}. Sisa tagihan ${rupiah(remaining)}`;
+        }
 
         document.getElementById('payModalOverlay').classList.add('open');
     }

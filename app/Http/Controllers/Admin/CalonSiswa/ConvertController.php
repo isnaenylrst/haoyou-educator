@@ -14,7 +14,10 @@ use App\Models\ProgramPackage;
 use App\Models\Setting;
 use App\Models\Student;
 use App\Models\Teacher;
+use App\Models\TeachingJournal;
 use App\Models\User;
+use App\Services\ClassCapacityService;
+use App\Services\ClassOfferService;
 use App\Services\ClassScheduleService;
 use App\Services\ClassSessionService;
 use App\Services\PaymentInstallmentService;
@@ -35,6 +38,8 @@ class ConvertController extends Controller
         private PaymentInstallmentService $payments,
         private ClassScheduleService $classes,
         private ClassSessionService $sessions,
+        private ClassCapacityService $capacity,
+        private ClassOfferService $offers,
     ) {
     }
 
@@ -73,14 +78,23 @@ class ConvertController extends Controller
             $classes = ClassModel::whereIn('program_package_id', $packages->pluck('id'))
                 ->whereIn('status', ['Open', 'Running'])
                 ->orderBy('class_name')
-                ->get(['id', 'class_name', 'program_package_id', 'level_id', 'delivery_mode', 'status']);
+                ->get(['id', 'class_name', 'program_package_id', 'level_id', 'delivery_mode', 'status', 'capacity'])
+                // Kelas reguler yang sudah penuh tidak ditawarkan (batas max siswa)
+                ->map(function ($c) {
+                    $c->slots_left = $this->capacity->remainingSlots($c);
+
+                    return $c;
+                })
+                ->filter(fn ($c) => $c->slots_left > 0)
+                ->values();
         }
 
         $privatePackages = PrivatePackage::where('is_active', true)
             ->orderBy('package_name')
             ->get();
 
-        // --- Data untuk form kelas private (guru, ruangan) ---
+        // --- Data untuk form kelas private (ruangan) ---
+        // Guru tidak dipilih lagi di sini: kelas diajukan ke guru setelah convert.
         $teachers = Teacher::where('status', 'Active')->orderBy('name')->get(['id', 'name']);
 
         $roomSuggestions = ClassSchedule::whereNotNull('room')
@@ -90,8 +104,23 @@ class ConvertController extends Controller
             ->orderBy('room')
             ->pluck('room');
 
-        // Jadwal tersedia & jam terpakai tiap guru, ditampilkan di form agar admin bisa memilih slot
         $teacherSlots = $this->classes->teacherSlotsMap();
+
+        // --- Kelas private yang masih punya slot kosong (difilter per paket di blade) ---
+        $joinableClasses = ClassModel::with(['teacher:id,name', 'schedules'])
+            ->whereNotNull('private_package_id')
+            ->whereIn('status', ['Open', 'Running'])
+            ->get()
+            ->map(function ($c) {
+                $c->slots_left = $this->capacity->remainingSlots($c);
+
+                return $c;
+            })
+            ->filter(fn ($c) => $c->slots_left > 0)
+            ->values();
+
+        // --- Progres pertemuan kelas yang bisa dipilih (reguler & private) ---
+        $classProgress = $this->meetingProgressMap($classes->concat($joinableClasses));
 
         // --- Rekomendasi kategori berdasarkan umur (khusus Daily Activity) ---
         $candidateAge = null;
@@ -119,6 +148,8 @@ class ConvertController extends Controller
             'teachers',
             'roomSuggestions',
             'teacherSlots',
+            'joinableClasses',
+            'classProgress',
             'candidateAge',
             'recommendedCategory',
             'defaultPackageType',
@@ -133,7 +164,9 @@ class ConvertController extends Controller
     {
         abort_if($candidateStudent->student()->exists(), 404, 'Calon siswa ini sudah menjadi siswa.');
 
-        $isPrivate = $request->input('package_type') === 'private';
+        $isPrivate     = $request->input('package_type') === 'private';
+        $joining       = $isPrivate && $request->filled('join_class_id');
+        $needsNewClass = $isPrivate && ! $joining;
 
         $validated = $request->validate([
             'package_type'       => 'required|in:program,private',
@@ -141,20 +174,23 @@ class ConvertController extends Controller
             'private_package_id' => 'required_if:package_type,private|nullable|exists:private_packages,id',
             'level_id'           => 'required_if:package_type,program|nullable|exists:program_levels,id',
             'class_id'           => 'nullable|exists:classes,id',
+            'join_class_id'      => 'nullable|exists:classes,id',
 
-            // khusus private: kelas langsung dibuat saat convert
-            'teacher_id'             => [Rule::requiredIf($isPrivate), 'nullable', 'exists:teachers,id'],
-            'delivery_mode'          => [Rule::requiredIf($isPrivate), 'nullable', Rule::in(['Offline', 'Online'])],
-            'start_date'             => [Rule::requiredIf($isPrivate), 'nullable', 'date'],
+            // Materi yang diminta siswa private (wajib diisi admin, ikut tercetak di formulir)
+            'requested_material' => [Rule::requiredIf($isPrivate), 'nullable', 'string', 'max:2000'],
+
+            // kelas private BARU: tanpa guru, guru diajukan setelah convert
+            'delivery_mode'          => [Rule::requiredIf($needsNewClass), 'nullable', Rule::in(['Offline', 'Online'])],
+            'start_date'             => [Rule::requiredIf($needsNewClass), 'nullable', 'date'],
             'end_date'               => ['nullable', 'date', 'after_or_equal:start_date'],
-            'schedules'              => [Rule::requiredIf($isPrivate), 'nullable', 'array', 'min:1'],
+            'schedules'              => [Rule::requiredIf($needsNewClass), 'nullable', 'array', 'min:1'],
             'schedules.*.day'        => ['required', Rule::in(ClassScheduleService::DAYS)],
             'schedules.*.start_time' => ['required', 'date_format:H:i'],
             'schedules.*.end_time'   => ['required', 'date_format:H:i', 'after:schedules.*.start_time'],
             'schedules.*.room'       => ['nullable', 'string', 'max:255'],
         ], [
             'level_id.required_if'       => 'Level wajib dipilih.',
-            'teacher_id.required'        => 'Guru wajib dipilih untuk kelas private.',
+            'requested_material.required' => 'Materi yang diminta siswa private wajib diisi.',
             'delivery_mode.required'     => 'Mode kelas wajib dipilih.',
             'start_date.required'        => 'Tanggal mulai wajib diisi.',
             'schedules.required'         => 'Tambahkan minimal satu jadwal mingguan.',
@@ -166,17 +202,25 @@ class ConvertController extends Controller
         // Validasi kecocokan paket / level / kelas
         [, $package] = $this->resolveSelection($validated, $candidateStudent);
 
-        if ($isPrivate) {
+        if ($joining) {
+            // Gabung ke kelas private yang sudah ada: jadwal, guru, dan mode mengikuti kelas itu
+            $this->assertJoinable(
+                ClassModel::findOrFail($validated['join_class_id']),
+                (int) $validated['private_package_id']
+            );
+
+            unset(
+                $validated['delivery_mode'],
+                $validated['start_date'],
+                $validated['end_date'],
+                $validated['schedules']
+            );
+        } elseif ($needsNewClass) {
             // Ruangan mengikuti mode kelas + cek jadwal bertabrakan di form yang sama
             $validated['schedules'] = $this->classes->normalizeSchedules(
                 $validated['schedules'],
                 $validated['delivery_mode']
             );
-
-            // Guru tidak boleh bentrok dengan kelas lain
-            $this->classes->assertTeacherFree((int) $validated['teacher_id'], $validated['schedules']);
-            // Slot harus berada di dalam jam tersedia guru
-            $this->classes->assertTeacherAvailable((int) $validated['teacher_id'], $validated['schedules']);
 
             // Tanggal selesai otomatis kalau dikosongkan
             if (empty($validated['end_date'])) {
@@ -186,10 +230,15 @@ class ConvertController extends Controller
                     $validated['schedules']
                 );
             }
+
+            // Cek bentrok jadwal/ruangan SEKARANG (step 1), bukan baru saat submit pembayaran di step 2.
+            // Kelas dibuat percobaan lalu dibatalkan, memakai logika yang sama persis dengan saat disimpan.
+            $this->assertPrivateClassBuildable($validated, $package, $candidateStudent);
         } else {
             // Siswa reguler tidak membuat kelas baru; buang field khusus private
             unset(
-                $validated['teacher_id'],
+                $validated['join_class_id'],
+                $validated['requested_material'],
                 $validated['delivery_mode'],
                 $validated['start_date'],
                 $validated['end_date'],
@@ -243,6 +292,13 @@ class ConvertController extends Controller
             ? $lesTotalTermin + $registrationFee + $activityFee
             : null;
 
+        // Kelas yang dipilih di step 1 (reguler atau private yang digabung): tampilkan progres
+        // dan isi catatan otomatis kalau kelas sudah berjalan. Catatan tetap bisa diedit admin.
+        $chosenClassId  = $draft['join_class_id'] ?? $draft['class_id'] ?? null;
+        $chosenClass    = $chosenClassId ? ClassModel::find($chosenClassId) : null;
+        $chosenProgress = $chosenClass ? $this->meetingProgress($chosenClass) : null;
+        $midClassNote   = $this->midClassNote($chosenClass, $chosenProgress);
+
         return view('admin.calon-siswa.convert', compact(
             'candidateStudent',
             'package',
@@ -254,13 +310,16 @@ class ConvertController extends Controller
             'lesTotal',
             'lesTotalTermin',
             'totalBill',
-            'totalBillTermin'
+            'totalBillTermin',
+            'midClassNote',
+            'chosenClass',
+            'chosenProgress'
         ))->with('step', 2);
     }
 
     /* =====================================================================
-     |  STEP 2: submit, buat user, siswa, kelas private (jika private),
-     |          enrollment, pembayaran + bukti
+     |  STEP 2: submit, buat user, siswa, kelas private (jika private baru),
+     |          enrollment, pembayaran + bukti, lalu ajukan kelas ke guru
      * ===================================================================== */
     public function store(Request $request, CandidateStudent $candidateStudent)
     {
@@ -320,9 +379,20 @@ class ConvertController extends Controller
 
         $totalBill = $baseTotal - $discount;
 
-        if (! $canInstallment && round((float) $validated['amount_paid'], 2) < round($totalBill, 2)) {
+        // Aturan DP: pembayaran pertama minimal sebesar biaya pendaftaran dan tidak boleh melebihi total tagihan.
+        // Berlaku untuk skema Lunas maupun Termin (PaymentInstallmentService mengecek ulang saat dicatat).
+        $minDp = $this->payments->minimumDownPayment($registrationFee, $activityFee, $totalBill);
+        $paidNow = round((float) $validated['amount_paid'], 2);
+
+        if ($paidNow + 0.005 < $minDp) {
             throw ValidationException::withMessages([
-                'amount_paid' => 'Paket ini wajib dibayar lunas sebelum program dimulai (Rp' . number_format($totalBill, 0, ',', '.') . '), tidak bisa dicicil/DP.',
+                'amount_paid' => 'Minimal DP Rp' . number_format($minDp, 0, ',', '.') . ' (biaya pendaftaran).',
+            ]);
+        }
+
+        if ($paidNow > round($totalBill, 2) + 0.005) {
+            throw ValidationException::withMessages([
+                'amount_paid' => 'Nominal melebihi total tagihan (Rp' . number_format($totalBill, 0, ',', '.') . ').',
             ]);
         }
 
@@ -352,33 +422,26 @@ class ConvertController extends Controller
 
                 $classId = $draft['class_id'] ?? null;
 
-                // ---- Siswa private: kelas langsung dibuat dengan guru, mode, tanggal & jadwal ----
-                if ($isPrivate) {
-                    // Cek ulang bentrok guru, karena di antara step 1 dan step 2
-                    // bisa saja ada kelas lain yang mengisi jam tersebut.
-                    $this->classes->assertTeacherFree((int) $draft['teacher_id'], $draft['schedules']);
-                    $this->classes->assertTeacherAvailable((int) $draft['teacher_id'], $draft['schedules']);
-
-                    $privatePackage = PrivatePackage::findOrFail($draft['private_package_id']);
-
-                    $kelas = new ClassModel();
-                    $kelas->forceFill([
-                        'program_package_id' => null,
-                        'private_package_id' => $privatePackage->id,
-                        'level_id'           => null,
-                        'teacher_id'         => $draft['teacher_id'],
-                        'class_name'         => 'Private - ' . $candidateStudent->name,
-                        'delivery_mode'      => $draft['delivery_mode'],
-                        'start_date'         => $draft['start_date'],
-                        'end_date'           => $draft['end_date'] ?? null,
-                        'capacity'           => $privatePackage->max_students ?? 1,
-                        'status'             => 'Open',
-                    ])->save();
-
-                    $this->classes->createSchedules($kelas, $draft['schedules'], $draft['start_date']);
-                    $this->sessions->generateForNewClass($kelas->refresh(), (int) $privatePackage->total_meetings);
+                if ($isPrivate && ! empty($draft['join_class_id'])) {
+                    // ---- Gabung kelas private yang sudah ada ----
+                    $kelas = ClassModel::lockForUpdate()->findOrFail($draft['join_class_id']);
+                    $this->assertJoinable($kelas, (int) $draft['private_package_id']);
 
                     $classId = $kelas->id;
+                } elseif ($isPrivate) {
+                    // ---- Kelas private baru: tanpa guru, sesi langsung dibuat
+                    //      (sama seperti kelas reguler), guru diajukan setelah transaksi ----
+                    $kelas = $this->createPrivateClass(
+                        $draft,
+                        PrivatePackage::findOrFail($draft['private_package_id']),
+                        $candidateStudent
+                    );
+
+                    $classId = $kelas->id;
+                } elseif ($classId) {
+                    // ---- Reguler: kelas dipilih langsung, cek batas max siswa ----
+                    $kelas = ClassModel::lockForUpdate()->findOrFail($classId);
+                    $this->capacity->assertHasAvailableSlot($kelas);
                 }
 
                 $enrollment = ClassEnrollment::create([
@@ -387,13 +450,16 @@ class ConvertController extends Controller
                     'program_package_id' => $isPrivate ? null : $draft['program_package_id'],
                     'private_package_id' => $isPrivate ? $draft['private_package_id'] : null,
                     'enrollment_date'    => Carbon::parse($validated['payment_date'])->toDateString(),
-                    // Private selalu punya kelas → Active. Reguler tanpa kelas → Waiting Class.
+                    // Private selalu punya kelas -> Active. Reguler tanpa kelas -> Waiting Class.
                     'status'             => (! $isPrivate && ! $classId) ? 'Waiting Class' : 'Active',
                     // registration_fee dipakai service untuk total tagihan, activity_fee untuk formulir
                     'registration_fee' => $registrationFee,
                     'activity_fee'     => $activityFee,
                     'discount'         => $discount,
                     'notes'            => filled($validated['notes'] ?? null) ? trim($validated['notes']) : null,
+                    'requested_material' => $isPrivate && filled($draft['requested_material'] ?? null)
+                        ? trim($draft['requested_material'])
+                        : null,
                     // Skema bayar menentukan total tagihan (Lunas = price, Termin = installment_price x lama paket)
                     'payment_scheme'   => $scheme,
                 ]);
@@ -417,9 +483,21 @@ class ConvertController extends Controller
             throw $e;
         }
 
+        $message = 'Siswa berhasil didaftarkan.';
+
+        // Kelas private baru yang belum punya guru: ajukan ke guru. Dilakukan di luar transaksi
+        // supaya kegagalan pengajuan tidak membatalkan siswa dan pembayaran.
+        $kelas = $enrollment->class;
+
+        if ($isPrivate && $kelas && ! $kelas->teacher_id && empty($draft['join_class_id'])) {
+            $message .= ' ' . $this->offerPrivateClass($kelas);
+        }
+
         session()->forget(self::SESSION_KEY . $candidateStudent->id);
 
-        return redirect()->route('admin.calon-siswa.convert.step3', $enrollment);
+        return redirect()
+            ->route('admin.calon-siswa.convert.step3', $enrollment)
+            ->with('success', $message);
     }
 
     /* =====================================================================
@@ -452,10 +530,15 @@ class ConvertController extends Controller
 
         abort_unless($classBelongsToPackage, 422, 'Kelas tidak sesuai dengan paket program siswa ini.');
 
-        $enrollment->update([
-            'class_id' => $validated['class_id'],
-            'status'   => 'Active',
-        ]);
+        DB::transaction(function () use ($validated, $enrollment) {
+            $kelas = ClassModel::lockForUpdate()->findOrFail($validated['class_id']);
+            $this->capacity->assertHasAvailableSlot($kelas);
+
+            $enrollment->update([
+                'class_id' => $validated['class_id'],
+                'status'   => 'Active',
+            ]);
+        });
 
         return redirect()
             ->back()
@@ -508,6 +591,156 @@ class ConvertController extends Controller
         }
 
         return [$isPrivate, $package, $level, $levelId];
+    }
+
+    /**
+     * Buat kelas private baru (tanpa guru) lengkap dengan jadwal mingguan dan pertemuan bertanggal.
+     * Melempar ValidationException kalau jadwal/ruangan bentrok. Panggil di dalam transaksi.
+     */
+    private function createPrivateClass(array $data, PrivatePackage $privatePackage, CandidateStudent $candidateStudent): ClassModel
+    {
+        $shared = ($privatePackage->max_students ?? 1) > 1;
+
+        $kelas = new ClassModel();
+        $kelas->forceFill([
+            'program_package_id' => null,
+            'private_package_id' => $privatePackage->id,
+            'level_id'           => null,
+            'teacher_id'         => null,
+            'class_name'         => $shared
+                ? $privatePackage->package_name . ' - ' . Carbon::parse($data['start_date'])->format('d M Y')
+                : 'Private - ' . $candidateStudent->name,
+            'delivery_mode'      => $data['delivery_mode'],
+            'start_date'         => $data['start_date'],
+            'end_date'           => $data['end_date'] ?? null,
+            'capacity'           => $privatePackage->max_students ?? 1,
+            'status'             => 'Open',
+        ])->save();
+
+        $this->classes->createSchedules($kelas, $data['schedules'], $data['start_date']);
+        $this->sessions->generateForNewClass($kelas->refresh(), (int) $privatePackage->total_meetings);
+
+        return $kelas;
+    }
+
+    /** Uji coba pembuatan kelas private: semua perubahan database dibatalkan, hanya error bentrok yang tersisa. */
+    private function assertPrivateClassBuildable(array $data, PrivatePackage $privatePackage, CandidateStudent $candidateStudent): void
+    {
+        DB::beginTransaction();
+
+        try {
+            $this->createPrivateClass($data, $privatePackage, $candidateStudent);
+        } finally {
+            DB::rollBack();
+        }
+    }
+
+    /** Ajukan kelas private ke guru yang cocok; kalau tidak ada yang cocok, ke semua guru aktif. */
+    private function offerPrivateClass(ClassModel $kelas): string
+    {
+        try {
+            $names = $this->offers->offer($kelas, 'matching', []);
+        } catch (ValidationException $e) {
+            // offer() melempar exception kalau tidak ada guru yang cocok / sudah diajukan semua
+            try {
+                $names = $this->offers->offer($kelas, 'all', []);
+            } catch (\Throwable $e2) {
+                report($e2);
+
+                return 'Kelas dibuat, tapi belum bisa diajukan ke guru. Ajukan lewat halaman Edit kelas.';
+            }
+        } catch (\Throwable $e) {
+            report($e);
+
+            return 'Kelas dibuat, tapi belum bisa diajukan ke guru. Ajukan lewat halaman Edit kelas.';
+        }
+
+        $list = $names->take(5)->implode(', ') . ($names->count() > 5 ? ', ...' : '');
+
+        return "Kelas diajukan ke {$names->count()} guru: {$list}.";
+    }
+
+    /** Kelas private yang dipilih harus sesuai paket, masih menerima murid, dan masih ada slot. */
+    private function assertJoinable(ClassModel $kelas, int $privatePackageId): void
+    {
+        if ((int) $kelas->private_package_id !== $privatePackageId) {
+            throw ValidationException::withMessages([
+                'join_class_id' => 'Kelas yang dipilih bukan untuk paket private ini.',
+            ]);
+        }
+
+        if (! in_array($kelas->status, ['Open', 'Running'], true)) {
+            throw ValidationException::withMessages([
+                'join_class_id' => 'Kelas ini sudah tidak menerima murid baru.',
+            ]);
+        }
+
+        $this->capacity->assertHasAvailableSlot($kelas);
+    }
+
+    /**
+     * Progres pertemuan kelas: jumlah pertemuan yang benar-benar terlaksana (jurnal berstatus Conducted,
+     * dihitung sama dengan halaman Kelas), total pertemuan paket, dan tanggal pertemuan terakhir.
+     *
+     * @param  iterable<ClassModel>  $classes
+     * @return array<int, array{done:int,total:int,next:int,last_date:?string}>
+     */
+    private function meetingProgressMap(iterable $classes): array
+    {
+        $ids = collect($classes)->pluck('id')->unique()->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        $journals = TeachingJournal::query()
+            ->whereIn('class_id', $ids)
+            ->where('class_status', 'Conducted')
+            ->selectRaw('class_id, COUNT(DISTINCT COALESCE(class_session_id, id)) AS done, MAX(session_date) AS last_date')
+            ->groupBy('class_id')
+            ->get()
+            ->keyBy('class_id');
+
+        $models = ClassModel::with(['programPackage:id,total_meetings', 'privatePackage:id,total_meetings'])
+            ->whereIn('id', $ids)
+            ->get()
+            ->keyBy('id');
+
+        $result = [];
+
+        foreach ($ids as $id) {
+            $done = (int) ($journals[$id]->done ?? 0);
+            $kelas = $models[$id] ?? null;
+
+            $result[$id] = [
+                'done'      => $done,
+                'total'     => (int) ($kelas?->privatePackage?->total_meetings ?? $kelas?->programPackage?->total_meetings ?? 0),
+                'next'      => $done + 1,
+                'last_date' => isset($journals[$id]) && $journals[$id]->last_date
+                    ? Carbon::parse($journals[$id]->last_date)->format('d/m/Y')
+                    : null,
+            ];
+        }
+
+        return $result;
+    }
+
+    private function meetingProgress(ClassModel $kelas): array
+    {
+        return $this->meetingProgressMap([$kelas])[$kelas->id];
+    }
+
+    /** Catatan otomatis untuk siswa yang masuk ke kelas yang sudah berjalan (null kalau belum ada pertemuan). */
+    private function midClassNote(?ClassModel $kelas, ?array $progress): ?string
+    {
+        if (! $kelas || ! $progress || $progress['done'] < 1) {
+            return null;
+        }
+
+        $dari = $progress['total'] > 0 ? " dari {$progress['total']}" : '';
+
+        return "Daftar di tengah kelas: kelas sudah berjalan {$progress['done']}{$dari} pertemuan, "
+            . "siswa mulai dari pertemuan ke-{$progress['next']}.";
     }
 
     private function sortPackagesByCategoryAndLevel($packages)

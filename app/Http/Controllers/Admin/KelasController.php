@@ -25,6 +25,7 @@ use App\Services\ClassSessionRescheduleService;
 use App\Services\ClassSessionService;
 use App\Services\ExtraFeeService;
 use App\Services\TeacherAvailabilityService;
+use App\Services\ClassCapacityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -509,11 +510,23 @@ class KelasController extends Controller
             }
         }
 
-        // ---- Kapasitas tidak boleh di bawah jumlah siswa saat ini (edit) ----
+        // ---- Edit: kapasitas & syarat membuka kelas ----
         if ($kelas) {
             $enrolled = $kelas->enrollments()->whereIn('status', self::COUNTED_ENROLLMENT_STATUSES)->count();
+
+            // Kapasitas tidak boleh di bawah jumlah siswa saat ini
             if ($data['capacity'] < $enrolled) {
                 $errors['capacity'] = "Kapasitas tidak boleh di bawah jumlah siswa saat ini ({$enrolled} siswa).";
+            }
+
+            // Kelas hanya boleh dibuka (status Running) kalau siswa sudah memenuhi minimum paket.
+            // Dicek hanya saat status BERUBAH menjadi Running; kelas yang sudah berjalan tidak ikut terblokir.
+            if (($data['status'] ?? null) === 'Running'
+                && $kelas->status !== 'Running'
+                && ! app(ClassCapacityService::class)->meetsMinimum($kelas)
+            ) {
+                $min = $package->min_students ?? 1;
+                $errors['status'] = "Kelas belum bisa dibuka: minimal {$min} siswa, saat ini {$enrolled} siswa.";
             }
         }
 
@@ -846,6 +859,9 @@ class KelasController extends Controller
                     'private_package_id' => $isPrivate ? $locked->private_package_id : null,
                     'enrollment_date'    => now()->toDateString(),
                     'status'             => 'Active',
+                    'notes'              => ($locked->status === 'Running' || Carbon::parse($locked->start_date)->lte(today()))
+                                            ? 'Daftar di tengah kelas'
+                                            : null,
                 ]);
             }
         });

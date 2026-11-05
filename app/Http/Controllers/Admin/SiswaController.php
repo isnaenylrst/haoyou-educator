@@ -809,6 +809,7 @@ class SiswaController extends Controller
             'totalBill'      => $remaining,
             'canInstallment' => $payments->enrollmentAllowsInstallment($enrollment),
             'settlement'     => ['total' => $total, 'paid' => $paid, 'remaining' => $remaining],
+            'nextPayment'    => $payments->nextPayment($enrollment),
             'stepLabels'     => [1 => 'Pembayaran & Bukti', 2 => 'Invoice & Formulir'],
             'stepDisplay'    => 1,
         ]);
@@ -827,6 +828,8 @@ class SiswaController extends Controller
 
         $remaining = (float) $payments->remainingBill($enrollment);
 
+        // Nominal dan tahap ditentukan PaymentInstallmentService::nextPayment (Pelunasan atau Termin 1..3);
+        // service menolak nominal yang tidak sesuai.
         $data = $request->validate([
             'amount_paid'    => ['required', 'numeric', 'min:1', 'max:' . $remaining],
             'payment_method' => ['required', Rule::in(['Transfer Bank', 'Cash', 'QRIS'])],
@@ -837,7 +840,7 @@ class SiswaController extends Controller
         ]);
 
         $amount = (float) $data['amount_paid'];
-        $stage  = $this->nextStage($enrollment, $amount, $remaining);
+        $stage  = $payments->nextPayment($enrollment)['stage'] ?? 'Pelunasan'; // diabaikan service, tahap dihitung ulang di sana
 
         $proofPath = $request->file('proof')->store('payment-proofs', 'public');
 
@@ -862,30 +865,6 @@ class SiswaController extends Controller
             ->with('success', $after <= 0
                 ? "Pembayaran {$siswa->name} sudah lunas."
                 : 'Pembayaran dicatat. Sisa tagihan Rp ' . number_format($after, 0, ',', '.') . '.');
-    }
-
-    // Tahap otomatis: bayar penuh = Pelunasan, bayar sebagian = termin berikutnya yang belum terpakai
-    private function nextStage(ClassEnrollment $enrollment, float $amount, float $remaining): string
-    {
-        $used = $enrollment->packagePayments()->pluck('payment_stage')->all();
-
-        if (in_array('Pelunasan', $used, true)) {
-            throw ValidationException::withMessages([
-                'amount_paid' => 'Tahap Pelunasan sudah tercatat tetapi tagihan masih tersisa. Periksa riwayat di halaman Pembayaran.',
-            ]);
-        }
-
-        if ($amount >= $remaining) {
-            return 'Pelunasan';
-        }
-
-        foreach (['Termin 1', 'Termin 2', 'Termin 3'] as $stage) {
-            if (! in_array($stage, $used, true)) {
-                return $stage;
-            }
-        }
-
-        return 'Pelunasan';
     }
 
     /* =====================================================================
@@ -1021,6 +1000,9 @@ class SiswaController extends Controller
             'level_id'           => ['required_if:package_type,program', 'nullable', 'exists:program_levels,id'],
             'class_id'           => ['nullable', 'exists:classes,id'],
 
+            // Materi yang diminta siswa private (wajib, tercetak di formulir)
+            'requested_material' => [Rule::requiredIf($isPrivate), 'nullable', 'string', 'max:2000'],
+
             // khusus private: kelas dibuat saat pembayaran disimpan
             'teacher_id'             => [Rule::requiredIf($isPrivate), 'nullable', 'exists:teachers,id'],
             'delivery_mode'          => [Rule::requiredIf($isPrivate), 'nullable', Rule::in(['Offline', 'Online'])],
@@ -1067,6 +1049,7 @@ class SiswaController extends Controller
         } else {
             // reguler tidak membuat kelas baru; buang field khusus private
             unset(
+                $validated['requested_material'],
                 $validated['teacher_id'],
                 $validated['delivery_mode'],
                 $validated['start_date'],
@@ -1204,9 +1187,19 @@ class SiswaController extends Controller
 
         $totalBill = round($baseTotal - $discount, 2);
 
-        if (! $canInstallment && $amountPaid < $totalBill) {
+        // Aturan DP: pembayaran pertama minimal sebesar biaya pendaftaran (kalau tidak dikenakan: biaya aktivitas)
+        // dan tidak boleh melebihi total tagihan. Berlaku untuk skema Lunas maupun Termin.
+        $minDp = $payments->minimumDownPayment($registrationFee, $activityFee, $totalBill);
+
+        if ($amountPaid + 0.005 < $minDp) {
             throw ValidationException::withMessages([
-                'amount_paid' => 'Paket ini wajib dibayar lunas (Rp' . number_format($totalBill, 0, ',', '.') . '), tidak bisa dicicil/DP.',
+                'amount_paid' => 'Minimal DP Rp' . number_format($minDp, 0, ',', '.') . '.',
+            ]);
+        }
+
+        if ($amountPaid > round($totalBill, 2) + 0.005) {
+            throw ValidationException::withMessages([
+                'amount_paid' => 'Nominal melebihi total tagihan (Rp' . number_format($totalBill, 0, ',', '.') . ').',
             ]);
         }
 
@@ -1288,6 +1281,7 @@ class SiswaController extends Controller
                     'discount'           => $discount,
                     // Skema bayar menentukan total tagihan (Lunas = price, Termin = installment_price x lama paket)
                     'payment_scheme'     => $scheme,
+                    'requested_material' => $isPrivate ? ($draft['requested_material'] ?? null) : null,
                 ]);
 
                 $payments->recordPayment(

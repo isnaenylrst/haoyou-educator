@@ -299,6 +299,32 @@
         color: #dc2626;
     }
 
+    .class-progress-box {
+        margin-top: 8px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid #e5d9a8;
+        background: #fff9e6;
+        color: #5c4a00;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+    .stage-chip {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 8px;
+        border-radius: 999px;
+        background: #eef2ff;
+        color: #3730a3;
+        font-size: 11px;
+        font-weight: 700;
+    }
+    .class-progress-box.fresh {
+        border-color: #cfe3d2;
+        background: #f1f9f2;
+        color: #1e4d2b;
+    }
+
     #class_id option[hidden],
     #level_id option[hidden] {
         display: none;
@@ -976,11 +1002,18 @@
                                             $scheduleText = $class->schedules
                                                 ->map(fn ($s) => substr($s->day, 0, 3) . ' ' . substr($s->start_time, 0, 5) . '–' . substr($s->end_time, 0, 5))
                                                 ->implode(', ');
+                                            $pg = $classProgress[$class->id] ?? ['done' => 0, 'total' => 0, 'last_date' => null];
                                         @endphp
                                         <option value="{{ $class->id }}"
                                                 data-package="{{ $class->program_package_id }}"
-                                                data-level="{{ $class->level_id }}">
+                                                data-level="{{ $class->level_id }}"
+                                                data-done="{{ $pg['done'] }}"
+                                                data-total="{{ $pg['total'] }}"
+                                                data-last="{{ $pg['last_date'] }}"
+                                                data-slots="{{ $class->slots_left }}">
                                             {{ $class->class_name }} ({{ $class->delivery_mode }}, {{ $class->status }})@if ($scheduleText) - {{ $scheduleText }} @endif
+                                            @isset($class->slots_left) &middot; sisa {{ $class->slots_left }} slot @endisset
+                                            @if ($pg['done'] > 0) &middot; sudah berjalan {{ $pg['done'] }}{{ $pg['total'] ? '/' . $pg['total'] : '' }} pertemuan @endif
                                         </option>
                                     @endforeach
                                 </select>
@@ -988,6 +1021,7 @@
                                     <i class="fa-solid fa-circle-info"></i>
                                     Jika tidak dipilih, siswa berstatus "Menunggu Kelas"
                                 </p>
+                                <div class="class-progress-box" id="class-progress-box" style="display:none;"></div>
                             </div>
                         </div>
 
@@ -996,10 +1030,10 @@
                              style="display: {{ $defaultPackageType === 'private' ? 'grid' : 'none' }};">
                             <div class="form-field full">
                                 <label>Private Package *</label>
-                                <select name="private_package_id" id="private_package_id">
+                                <select name="private_package_id" id="private_package_id" onchange="onPrivatePackageChange()">
                                     <option value="">Pilih Package</option>
                                     @foreach ($privatePackages as $privatePackage)
-                                        <option value="{{ $privatePackage->id }}" data-price="{{ $privatePackage->price }}"
+                                        <option value="{{ $privatePackage->id }}" data-price="{{ $privatePackage->price }}" data-max="{{ $privatePackage->max_students ?? 1 }}"
                                             {{ $candidateStudent->private_package_id === $privatePackage->id ? 'selected' : '' }}>{{ $privatePackage->package_name }} &mdash; Rp {{ number_format($privatePackage->price, 0, ',', '.') }}</option>
                                     @endforeach
                                 </select>
@@ -1008,22 +1042,104 @@
                                 @endif
                             </div>
 
+                            {{-- Materi yang diminta siswa private: per siswa, wajib diisi, tercetak di formulir --}}
+                            <div class="form-field full" id="requested-material-field">
+                                <label>Materi yang Diminta Siswa *</label>
+                                <textarea name="requested_material" id="requested_material" rows="3" maxlength="2000"
+                                          placeholder="Contoh: percakapan sehari-hari, persiapan HSK 3, belajar menulis hanzi">{{ old('requested_material', ($draft ?? [])['requested_material'] ?? '') }}</textarea>
+                                <span class="form-section-note" style="margin-top:6px;">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                    Diisi per siswa, termasuk saat bergabung ke kelas private yang sudah ada. Materi ini tercetak di formulir pendaftaran.
+                                </span>
+                            </div>
+
+                            {{-- Pilihan buat kelas baru / gabung kelas private yang sudah ada (khusus konversi calon siswa) --}}
+                            @unless ($isContinueFlow)
+                                @php
+                                    $oldJoinClassId = old('join_class_id', $draft['join_class_id'] ?? '');
+                                    $oldPrivateMode = $oldJoinClassId ? 'join' : 'new';
+                                @endphp
+
+                                <div class="form-field full" id="private-mode-block" style="display:none;">
+                                    <label>Kelas Private</label>
+                                    <div class="package-type-toggle">
+                                        <label class="radio-pill">
+                                            <input type="radio" name="private_mode" value="new"
+                                                   {{ $oldPrivateMode === 'new' ? 'checked' : '' }} onchange="applyPrivateState()">
+                                            <span>Buat kelas baru</span>
+                                        </label>
+                                        <label class="radio-pill" id="join-pill">
+                                            <input type="radio" name="private_mode" value="join"
+                                                   {{ $oldPrivateMode === 'join' ? 'checked' : '' }} onchange="applyPrivateState()">
+                                            <span>Gabung kelas yang sudah ada</span>
+                                        </label>
+                                    </div>
+
+                                    <div id="join-section" style="display:none; margin-top:10px;">
+                                        <select name="join_class_id" id="join_class_id">
+                                            <option value="">Pilih kelas</option>
+                                            @foreach ($joinableClasses ?? [] as $jc)
+                                                @php
+                                                    $jcSchedule = $jc->schedules
+                                                        ->map(fn ($sc) => $sc->day . ' ' . substr($sc->start_time, 0, 5) . '-' . substr($sc->end_time, 0, 5))
+                                                        ->implode(', ');
+                                                @endphp
+                                                @php $jpg = $classProgress[$jc->id] ?? ['done' => 0, 'total' => 0, 'last_date' => null]; @endphp
+                                                <option value="{{ $jc->id }}" data-package="{{ $jc->private_package_id }}"
+                                                        data-done="{{ $jpg['done'] }}"
+                                                        data-total="{{ $jpg['total'] }}"
+                                                        data-last="{{ $jpg['last_date'] }}"
+                                                        data-slots="{{ $jc->slots_left }}"
+                                                        {{ (string) $oldJoinClassId === (string) $jc->id ? 'selected' : '' }}>
+                                                    {{ $jc->class_name }}
+                                                    &middot; {{ $jc->teacher?->name ?? 'Menunggu guru' }}
+                                                    @if ($jcSchedule) &middot; {{ $jcSchedule }} @endif
+                                                    &middot; sisa {{ $jc->slots_left }} slot
+                                                    @if ($jpg['done'] > 0) &middot; sudah berjalan {{ $jpg['done'] }}{{ $jpg['total'] ? '/' . $jpg['total'] : '' }} pertemuan @endif
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        <span class="form-section-note" id="join-empty-note" style="display:none; margin-top:6px;">
+                                            <i class="fa-solid fa-circle-info"></i>
+                                            Belum ada kelas dengan slot kosong untuk paket ini. Buat kelas baru.
+                                        </span>
+                                        <div class="class-progress-box" id="join-progress-box" style="display:none;"></div>
+                                        <span class="form-section-note" style="margin-top:6px;">
+                                            <i class="fa-solid fa-circle-info"></i>
+                                            Jadwal, guru, dan mode mengikuti kelas yang dipilih. Kalau kelas sudah berjalan,
+                                            catatan otomatis terisi di langkah berikutnya dan masih bisa diedit.
+                                        </span>
+                                    </div>
+                                </div>
+                            @endunless
+
                             <div class="private-class-box" id="private-class-fields">
                                 <div class="form-section-title"><i class="fa-solid fa-calendar-days"></i> Jadwal Kelas Private</div>
 
                                 <div class="form-grid">
-                                    <div class="form-field">
-                                        <label>Guru *</label>
-                                        <select name="teacher_id" id="teacher_id" required onchange="onTeacherChange()">
-                                            <option value="">Pilih Guru</option>
-                                            @foreach ($teachers as $teacher)
-                                                <option value="{{ $teacher->id }}"
-                                                        {{ (string) $oldTeacherId === (string) $teacher->id ? 'selected' : '' }}>
-                                                    {{ $teacher->name }}
-                                                </option>
-                                            @endforeach
-                                        </select>
-                                    </div>
+                                    @if ($isContinueFlow)
+                                        <div class="form-field">
+                                            <label>Guru *</label>
+                                            <select name="teacher_id" id="teacher_id" required onchange="onTeacherChange()">
+                                                <option value="">Pilih Guru</option>
+                                                @foreach ($teachers as $teacher)
+                                                    <option value="{{ $teacher->id }}"
+                                                            {{ (string) $oldTeacherId === (string) $teacher->id ? 'selected' : '' }}>
+                                                        {{ $teacher->name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                    @else
+                                        <div class="form-field full">
+                                            <span class="form-section-note" style="margin-top:0;">
+                                                <i class="fa-solid fa-circle-info"></i>
+                                                Guru tidak dipilih di sini. Setelah pendaftaran selesai, kelas otomatis diajukan
+                                                ke guru yang jadwalnya cocok (kalau tidak ada yang cocok, ke semua guru).
+                                                Guru kelas terisi setelah ada yang menerima.
+                                            </span>
+                                        </div>
+                                    @endif
 
                                     <div class="form-field">
                                         <label>Mode Kelas *</label>
@@ -1047,10 +1163,12 @@
                                         </span>
                                     </div>
 
-                                    <div class="form-field full">
-                                        <label>Jadwal Tersedia Guru</label>
-                                        <div id="teacher-availability" class="teacher-availability"></div>
-                                    </div>
+                                    @if ($isContinueFlow)
+                                        <div class="form-field full">
+                                            <label>Jadwal Tersedia Guru</label>
+                                            <div id="teacher-availability" class="teacher-availability"></div>
+                                        </div>
+                                    @endif
 
                                     <div class="form-field full">
                                         <label>Jadwal Mingguan *</label>
@@ -1061,7 +1179,7 @@
                                         <div id="schedule-check" class="schedule-check" style="display:none;"></div>
                                         <span class="form-section-note" style="margin-top:6px;">
                                             <i class="fa-solid fa-circle-info"></i>
-                                            Baris awal diisi dari jadwal yang diminta calon siswa. Sesuaikan dengan jadwal guru.
+                                            Baris awal diisi dari jadwal yang diminta calon siswa. Bentrok jadwal/ruangan dicek saat menekan "Lanjut ke Pembayaran".
                                         </span>
                                     </div>
                                 </div>
@@ -1138,6 +1256,16 @@
     ===================================================================== --}}
     @elseif ($step === 2)
 
+        @php
+            // Pelunasan/termin lanjutan: nominal dan tahap ditentukan sistem (PaymentInstallmentService::nextPayment).
+            // Didefinisikan di awal step 2 supaya terpakai di form, catatan, dan ringkasan.
+            $lockedPayment = null;
+
+            if (! empty($settlement) && ! empty($nextPayment) && ! empty($nextPayment['exact'])) {
+                $lockedPayment = $nextPayment;
+            }
+        @endphp
+
         <div class="convert-layout">
 
             {{-- ===================== FORM PEMBAYARAN ===================== --}}
@@ -1149,7 +1277,10 @@
                       data-base-termin="{{ isset($totalBillTermin) ? (float) $totalBillTermin : '' }}"
                       data-les-lunas="{{ isset($lesTotal) ? (float) $lesTotal : '' }}"
                       data-les-termin="{{ isset($lesTotalTermin) ? (float) $lesTotalTermin : '' }}"
-                      data-installment="{{ $canInstallment ? 1 : 0 }}">
+                      data-installment="{{ $canInstallment ? 1 : 0 }}"
+                      data-reg-fee="{{ (float) ($registrationFee ?? 0) }}"
+                      data-act-fee="{{ (float) ($activityFee ?? 0) }}"
+                      data-settlement="{{ ! empty($settlement) ? 1 : 0 }}">
                     @csrf
 
                     <div class="form-section-title"><i class="fa-solid fa-money-bill-wave"></i> Pembayaran</div>
@@ -1176,12 +1307,30 @@
                         @endif
 
                         <div class="form-field">
-                            <label>Nominal Dibayar *</label>
-                            <input type="number" name="amount_paid" id="amount_paid" min="1" step="0.01" required
-                                   value="{{ old('amount_paid', $canInstallment ? '' : (float) $totalBill) }}">
-                            <button type="button" class="link-fill" id="fill-total">
-                                Isi sesuai {{ empty($settlement) ? 'total tagihan' : 'sisa tagihan' }} (<span id="fill-total-label">Rp {{ number_format($totalBill, 0, ',', '.') }}</span>)
-                            </button>
+                            <label>
+                                Nominal Dibayar *
+                                @if ($lockedPayment)
+                                    <span class="stage-chip">{{ $lockedPayment['stage'] }}</span>
+                                @endif
+                            </label>
+                            <input type="number" name="amount_paid" id="amount_paid" step="0.01" required
+                                   min="{{ $lockedPayment ? (float) $lockedPayment['amount'] : 1 }}"
+                                   {{ $lockedPayment ? 'readonly' : '' }}
+                                   value="{{ old('amount_paid', $lockedPayment ? (float) $lockedPayment['amount'] : '') }}">
+
+                            @if ($lockedPayment)
+                                <span class="form-section-note" style="margin-top:6px;">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                    Nominal {{ $lockedPayment['stage'] }} sudah ditentukan sistem sesuai skema pembayaran siswa.
+                                </span>
+                            @else
+                                <button type="button" class="link-fill" id="fill-min">
+                                    Isi minimal DP (<span id="min-dp-label">-</span>)
+                                </button>
+                                <button type="button" class="link-fill" id="fill-total">
+                                    Isi sesuai {{ empty($settlement) ? 'total tagihan' : 'sisa tagihan' }} (<span id="fill-total-label">Rp {{ number_format($totalBill, 0, ',', '.') }}</span>)
+                                </button>
+                            @endif
                         </div>
 
                         @if (empty($settlement))
@@ -1197,13 +1346,29 @@
 
                         {{-- Catatan enrollment: konversi calon siswa dan lanjut program (tidak untuk pelunasan) --}}
                         @if (empty($settlement))
+                            @if (! empty($chosenClass) && ! empty($chosenProgress))
+                                <div class="form-field full">
+                                    <div class="class-progress-box {{ $chosenProgress['done'] > 0 ? '' : 'fresh' }}">
+                                        <strong>{{ $chosenClass->class_name }}</strong><br>
+                                        @if ($chosenProgress['done'] > 0)
+                                            Sudah berjalan {{ $chosenProgress['done'] }}{{ $chosenProgress['total'] ? ' dari ' . $chosenProgress['total'] : '' }} pertemuan
+                                            @if ($chosenProgress['last_date']) (terakhir {{ $chosenProgress['last_date'] }}) @endif.
+                                            Siswa baru mulai dari pertemuan ke-{{ $chosenProgress['next'] }}.
+                                        @else
+                                            Kelas ini belum memulai pertemuan.
+                                        @endif
+                                    </div>
+                                </div>
+                            @endif
+
                             <div class="form-field full">
                                 <label>Catatan Enrollment</label>
                                 <textarea name="notes" id="notes" rows="3" maxlength="1000"
-                                          placeholder="Contoh: Masuk di pertengahan kelas (mulai pertemuan ke-5), berhak potongan.">{{ old('notes', $isContinueFlow ? '' : ($candidateStudent->notes ?? '')) }}</textarea>
+                                          placeholder="Contoh: Masuk di pertengahan kelas (mulai pertemuan ke-5), berhak potongan.">{{ old('notes', $isContinueFlow ? '' : trim(($midClassNote ?? '') . ' ' . ($candidateStudent->notes ?? ''))) }}</textarea>
                                 <span class="form-section-note" style="margin-top:0;">
                                     <i class="fa-solid fa-circle-info"></i>
                                     Catatan ini akan tercetak di invoice.
+                                    @if (! empty($midClassNote)) Terisi otomatis karena kelas sudah berjalan, silakan edit kalau perlu. @endif
                                 </span>
                             </div>
                         @endif
@@ -1232,18 +1397,22 @@
                         </div>
                     </div>
 
+                    @if (empty($settlement))
+                        {{-- Rencana pembayaran: dihitung ulang di JS dari nominal DP yang diisi --}}
+                        <div class="class-progress-box fresh" id="payment-plan" style="margin-top:14px;"></div>
+                    @endif
+
                     <p class="form-section-note">
                         <i class="fa-solid fa-circle-info"></i>
                         @if (! empty($settlement))
-                            @if ($canInstallment)
-                                Nominal boleh di bawah sisa tagihan (dicicil), tetapi program berikutnya baru bisa dipilih setelah lunas.
+                            @if ($lockedPayment)
+                                Tahap dan nominal mengikuti jadwal pembayaran siswa. Program berikutnya baru bisa dipilih setelah lunas.
                             @else
-                                Paket ini wajib dibayar lunas, jadi nominal harus sama dengan sisa tagihan.
+                                Nominal tidak boleh melebihi sisa tagihan, dan program berikutnya baru bisa dipilih setelah lunas.
                             @endif
-                        @elseif ($canInstallment)
-                            Nominal di bawah total tagihan dicatat sebagai DP. Sisanya bisa dibayar bertahap setelah siswa aktif.
                         @else
-                            Paket ini wajib dibayar lunas sebelum program dimulai, jadi nominal harus sama dengan total tagihan.
+                            Pembayaran pertama dicatat sebagai DP (minimal sebesar biaya pendaftaran). Sisanya dibayar setelah siswa aktif,
+                            sesuai skema Lunas (sekali bayar) atau Termin (3 kali).
                         @endif
                     </p>
 
@@ -1336,10 +1505,12 @@
 
                     <div>
                         <div class="info-item-label">Aturan Pembayaran</div>
-                        @if ($canInstallment)
-                            <span class="badge-rule cicil">Boleh DP / dicicil</span>
+                        @if (! empty($settlement) && ! empty($nextPayment))
+                            <span class="badge-rule cicil">{{ $nextPayment['stage'] }}</span>
+                        @elseif ($canInstallment)
+                            <span class="badge-rule cicil">DP minimal pendaftaran · Lunas atau Termin</span>
                         @else
-                            <span class="badge-rule lunas">Wajib lunas</span>
+                            <span class="badge-rule lunas">DP minimal pendaftaran · pelunasan sekali bayar</span>
                         @endif
                     </div>
                 </div>
@@ -1738,16 +1909,79 @@
         const online = document.getElementById('delivery_mode').value === 'Online';
         const box = document.getElementById('private-class-fields');
 
+        // Mode gabung kelas (hanya ada di konversi calon siswa): form kelas baru disembunyikan & dinonaktifkan
+        const modeBlock = document.getElementById('private-mode-block');
+        const modeEl = document.querySelector('input[name="private_mode"]:checked');
+        const joining = !! (isPrivate && modeBlock && modeBlock.style.display !== 'none' && modeEl && modeEl.value === 'join');
+
+        const joinSection = document.getElementById('join-section');
+        const joinSelect = document.getElementById('join_class_id');
+        if (joinSection) joinSection.style.display = joining ? '' : 'none';
+        if (joinSelect) {
+            joinSelect.disabled = ! joining;
+            joinSelect.required = joining;
+        }
+
+        box.style.display = joining ? 'none' : '';
+
+        // Materi permintaan siswa: hanya untuk paket private
+        const material = document.getElementById('requested_material');
+        if (material) {
+            material.disabled = ! isPrivate;
+            material.required = isPrivate;
+        }
+
         box.querySelectorAll('select, input').forEach(el => {
             if (el.classList.contains('js-room')) {
-                el.disabled = ! isPrivate || online;
-                el.required = isPrivate && ! online;
+                el.disabled = ! isPrivate || joining || online;
+                el.required = isPrivate && ! joining && ! online;
                 el.closest('.room-wrap').style.display = online ? 'none' : '';
                 el.closest('.schedule-row').classList.toggle('no-room', online);
             } else {
-                el.disabled = ! isPrivate;
+                el.disabled = ! isPrivate || joining;
             }
         });
+    }
+
+    /**
+     * Pilihan "gabung kelas" hanya muncul untuk paket private yang boleh diikuti lebih dari 1 siswa
+     * (max_students > 1), dan hanya menampilkan kelas dengan paket yang sama.
+     */
+    function onPrivatePackageChange() {
+        const select = document.getElementById('private_package_id');
+        const modeBlock = document.getElementById('private-mode-block');
+        if (! modeBlock) { applyPrivateState(); return; }
+
+        const opt = select.selectedOptions[0];
+        const packageId = opt ? opt.value : '';
+        const shared = !! (opt && opt.value && parseInt(opt.dataset.max || '1', 10) > 1);
+
+        const joinSelect = document.getElementById('join_class_id');
+        let available = 0;
+
+        Array.from(joinSelect.options).forEach(o => {
+            if (! o.value) return;
+            const match = o.dataset.package === packageId;
+            o.hidden = ! match;
+            o.disabled = ! match;
+            if (match) available++;
+        });
+
+        const stillValid = Array.from(joinSelect.options).some(o => o.value === joinSelect.value && ! o.disabled);
+        if (! stillValid) joinSelect.value = '';
+
+        document.getElementById('join-empty-note').style.display = available ? 'none' : '';
+
+        const joinRadio = document.querySelector('input[name="private_mode"][value="join"]');
+        const newRadio  = document.querySelector('input[name="private_mode"][value="new"]');
+        joinRadio.disabled = ! available;
+        document.getElementById('join-pill').style.opacity = available ? '' : '0.5';
+
+        if (! shared || ! available) newRadio.checked = true;
+
+        modeBlock.style.display = shared ? '' : 'none';
+
+        applyPrivateState();
     }
 
     /* ============================================================
@@ -1823,6 +2057,36 @@
     }
 
     // Filter Kelas berdasarkan Program Package DAN Level yang dipilih
+    /** Rincian progres kelas yang dipilih (reguler & private join): sudah berapa pertemuan berjalan. */
+    function renderClassProgress(selectId, boxId) {
+        const select = document.getElementById(selectId);
+        const box = document.getElementById(boxId);
+        if (! select || ! box) return;
+
+        const opt = select.selectedOptions[0];
+        if (! opt || ! opt.value) { box.style.display = 'none'; return; }
+
+        const done = parseInt(opt.dataset.done || '0', 10);
+        const total = parseInt(opt.dataset.total || '0', 10);
+        const last = opt.dataset.last || '';
+        const slots = opt.dataset.slots;
+
+        let html = '';
+        if (done > 0) {
+            html = 'Kelas ini <strong>sudah berjalan ' + done + (total ? ' dari ' + total : '') + ' pertemuan</strong>'
+                 + (last ? ' (terakhir ' + last + ')' : '')
+                 + '. Siswa baru mulai dari <strong>pertemuan ke-' + (done + 1) + '</strong>.';
+            box.classList.remove('fresh');
+        } else {
+            html = 'Kelas ini belum memulai pertemuan.';
+            box.classList.add('fresh');
+        }
+        if (slots !== undefined && slots !== '') html += ' Sisa slot: ' + slots + '.';
+
+        box.innerHTML = html;
+        box.style.display = '';
+    }
+
     function filterClasses() {
         const packageId = document.getElementById('program_package_id').value;
         const levelId = document.getElementById('level_id').value;
@@ -1838,6 +2102,7 @@
         });
 
         classSelect.value = '';
+        renderClassProgress('class_id', 'class-progress-box');
     }
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -1897,6 +2162,15 @@
             document.getElementById('private_package_id').value = draft.private_package_id;
             refreshSearchSelect('private_package_id');
         }
+
+        // Pilihan gabung kelas (kembali dari step 2 / gagal validasi)
+        onPrivatePackageChange();
+
+        // Rincian progres kelas yang dipilih
+        const regSel = document.getElementById('class_id');
+        const joinSel = document.getElementById('join_class_id');
+        if (regSel) { regSel.addEventListener('change', () => renderClassProgress('class_id', 'class-progress-box')); renderClassProgress('class_id', 'class-progress-box'); }
+        if (joinSel) { joinSel.addEventListener('change', () => renderClassProgress('join_class_id', 'join-progress-box')); renderClassProgress('join_class_id', 'join-progress-box'); }
     });
 </script>
 @endpush
@@ -1914,16 +2188,85 @@
         const lesLunas      = parseFloat(form.dataset.lesLunas);
         const lesTermin     = parseFloat(form.dataset.lesTermin);
         const hasTermin     = ! isNaN(baseTermin);
-        const installment   = form.dataset.installment === '1';
+        const regFee        = parseFloat(form.dataset.regFee) || 0;
+        const actFee        = parseFloat(form.dataset.actFee) || 0;
+        const isSettlement  = form.dataset.settlement === '1';
         const discountInput = document.getElementById('discount');
         const amountInput   = document.getElementById('amount_paid');
+        const planBox       = document.getElementById('payment-plan');
+        const fillMin       = document.getElementById('fill-min');
+        const fillTotal     = document.getElementById('fill-total');
         const rupiah        = n => 'Rp ' + Math.round(n).toLocaleString('id-ID');
         let total = baseLunas;
+        let minDp = 1;
 
         // true kalau admin memilih skema Termin (radio hanya ada untuk paket yang punya harga termin)
         function isTermin() {
             const checked = document.querySelector('input[name="payment_scheme"]:checked');
             return hasTermin && checked && checked.value === 'Termin';
+        }
+
+        // Sama dengan PaymentInstallmentService: minimal DP = biaya pendaftaran (kalau tidak ada: biaya aktivitas)
+        function minimumDown(totalBill) {
+            const min = regFee > 0 ? regFee : actFee;
+            return Math.min(Math.max(min, 1), Math.max(totalBill, 1));
+        }
+
+        // Sebar uang masuk: pendaftaran, aktivitas, lalu biaya les (sama dengan PaymentInstallmentService::allocate)
+        function allocate(amount, totalBill) {
+            const lesNet = Math.max(totalBill - regFee - actFee, 0);
+            const feeDue = totalBill - lesNet;
+            const regDue = Math.min(regFee, feeDue);
+            const actDue = feeDue - regDue;
+            const toReg  = Math.min(amount, regDue);
+            const toAct  = Math.min(amount - toReg, actDue);
+            const toLes  = amount - toReg - toAct;
+            return { toReg, toAct, toLes, actUnpaid: actDue - toAct, lesRemaining: Math.max(lesNet - toLes, 0) };
+        }
+
+        function renderPlan() {
+            if (! planBox) return;
+
+            const amount = parseFloat(amountInput.value) || 0;
+
+            if (amount <= 0) {
+                planBox.innerHTML = 'Isi nominal DP untuk melihat rencana pembayaran. Minimal DP <strong>' + rupiah(minDp) + '</strong>.';
+                return;
+            }
+
+            if (amount + 0.005 < minDp) {
+                planBox.innerHTML = '<strong>Nominal kurang.</strong> Minimal DP ' + rupiah(minDp) + ' (biaya pendaftaran).';
+                return;
+            }
+
+            if (amount > total + 0.005) {
+                planBox.innerHTML = '<strong>Nominal melebihi total tagihan</strong> (' + rupiah(total) + ').';
+                return;
+            }
+
+            const a = allocate(amount, total);
+            let html = '<strong>Rencana pembayaran</strong><br>'
+                + 'DP ' + rupiah(amount) + ' &rarr; pendaftaran ' + rupiah(a.toReg)
+                + (a.toAct > 0 ? ', aktivitas ' + rupiah(a.toAct) : '')
+                + (a.toLes > 0 ? ', biaya les ' + rupiah(a.toLes) : '') + '.<br>';
+
+            if (amount >= total - 0.005) {
+                planBox.innerHTML = html + 'Tagihan <strong>lunas</strong>, tidak ada pembayaran berikutnya.';
+                return;
+            }
+
+            if (isTermin()) {
+                const base = Math.floor(a.lesRemaining / 3);
+                const parts = [base + a.actUnpaid, base, a.lesRemaining - 2 * base];
+                const rows = [];
+                parts.forEach((v, i) => { if (v > 0) rows.push('Termin ' + (i + 1) + ': ' + rupiah(v)); });
+                html += rows.join(' &middot; ')
+                    + (a.actUnpaid > 0 ? '<br><small>Termin 1 sudah termasuk sisa biaya aktivitas ' + rupiah(a.actUnpaid) + '.</small>' : '');
+            } else {
+                html += 'Sisa <strong>' + rupiah(total - amount) + '</strong> dilunasi sekali bayar (Pelunasan).';
+            }
+
+            planBox.innerHTML = html;
         }
 
         function recalc() {
@@ -1933,6 +2276,7 @@
             let discount = parseFloat(discountInput.value) || 0;
             discount = Math.min(Math.max(discount, 0), base);
             total = base - discount;
+            minDp = isSettlement ? 1 : minimumDown(total);
 
             // Harga paket di ringkasan ikut berubah sesuai skema
             const pkg = document.getElementById('bill-package');
@@ -1940,15 +2284,21 @@
 
             document.getElementById('bill-discount').textContent = '- ' + rupiah(discount);
             document.getElementById('bill-total').textContent = rupiah(total);
-            document.getElementById('fill-total-label').textContent = rupiah(total);
 
-            // Paket wajib lunas: nominal otomatis mengikuti total setelah diskon
-            if (! installment) amountInput.value = total;
+            const totalLabel = document.getElementById('fill-total-label');
+            if (totalLabel) totalLabel.textContent = rupiah(total);
+
+            const minLabel = document.getElementById('min-dp-label');
+            if (minLabel) minLabel.textContent = rupiah(minDp);
+
+            if (! amountInput.readOnly) amountInput.min = minDp;
+
+            renderPlan();
         }
 
-        document.getElementById('fill-total').addEventListener('click', () => {
-            amountInput.value = total;
-        });
+        if (fillMin)   fillMin.addEventListener('click',   () => { amountInput.value = minDp; renderPlan(); });
+        if (fillTotal) fillTotal.addEventListener('click', () => { amountInput.value = total;  renderPlan(); });
+        amountInput.addEventListener('input', renderPlan);
 
         document.querySelectorAll('input[name="payment_scheme"]').forEach(r => r.addEventListener('change', recalc));
         discountInput.addEventListener('input', recalc);

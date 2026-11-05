@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ClassSession;
 use App\Models\Payment;
 use App\Models\PrintTemplate;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -20,6 +21,7 @@ class InvoiceService
     public const PLACEHOLDERS = [
         'Invoice' => [
             'logo'          => 'Logo Haoyou',
+            'watermark'     => 'Watermark logo di latar invoice (public/assets/img/invoice-watermark.png)',
             'nomor_invoice' => 'Nomor invoice',
             'tanggal_bayar' => 'Tanggal bayar',
             'tahap'         => 'Tahap pembayaran (DP / Termin 1 / Pelunasan)',
@@ -29,8 +31,10 @@ class InvoiceService
         'Siswa' => [
             'nama_siswa' => 'Nama siswa',
             'level'      => 'Level',
+            'kelas'      => 'Nama kelas',
             'jadwal'     => 'Jadwal kelas',
             'lokasi'     => 'Lokasi',
+            'daftar_pertemuan' => 'Tanggal pertemuan per bulan',
         ],
 
         'Paket & biaya' => [
@@ -44,6 +48,7 @@ class InvoiceService
 
         'Pembayaran ini' => [
             'sudah_dibayar'    => 'Sudah dibayar sebelumnya',
+            'rincian_dibayar'  => 'Komponen yang dibayar (mis. Biaya Aktivitas & Termin 1)',
             'jumlah_dibayar'   => 'Dibayar pada invoice ini',
             'sisa_setelah_ini' => 'Sisa tagihan setelah pembayaran ini',
         ],
@@ -130,7 +135,7 @@ class InvoiceService
             $unpaid
         );
 
-        return $this->toPdf($content);
+        return $this->toPdf($content, true); // invoice paket: A4 landscape (sesuai template Word)
     }
 
     /**
@@ -196,6 +201,7 @@ class InvoiceService
         }
 
         $values['logo'] = $this->logoTag();
+        $values['watermark'] = $this->watermarkTag();
 
         if ($key === self::TEMPLATE_KEY_EXTRA) {
             return $this->toPdf(
@@ -204,9 +210,12 @@ class InvoiceService
         }
 
         $values['rincian_tambahan'] = '';
+        $values['rincian_awal']     = '';
+        $values['rincian_diskon']   = '';
 
         return $this->toPdf(
-            $this->render($content, $values, true, true)
+            $this->render($content, $values, true, true),
+            true
         );
     }
 
@@ -255,6 +264,7 @@ class InvoiceService
         $values = [
             'logo' => $this->logoTag(),
 
+            'watermark' => $this->watermarkTag(),
             'nomor_invoice' => e($payment->invoice_number),
             'tanggal_bayar' => e(
                 $this->dateId($payment->payment_date)
@@ -264,6 +274,8 @@ class InvoiceService
 
             'nama_siswa' => e($student?->name),
             'level' => e($levelName),
+            'kelas' => e($enrollment->class?->class_name ?: 'Belum masuk kelas'),
+            'daftar_pertemuan' => $this->sessionDatesByMonth($enrollment) ?: '-',
 
             'jadwal' => implode(
                 '<br>',
@@ -271,7 +283,7 @@ class InvoiceService
                     'e',
                     $this->scheduleLines($enrollment)
                 )
-            ),
+            ) ?: '-',
 
             'lokasi' => 'Haoyou Educator',
 
@@ -287,6 +299,25 @@ class InvoiceService
 
             'harga_paket' => $this->rupiah($lesTotal),
 
+            // Baris di atas Biaya Les: pendaftaran dan aktivitas
+            'rincian_awal' =>
+                $this->feeRow(
+                    'Biaya pendaftaran',
+                    (float) $enrollment->registration_fee
+                )
+                . $this->feeRow(
+                    'Biaya aktivitas',
+                    (float) $enrollment->activity_fee
+                ),
+
+            // Baris di bawah Biaya Les: diskon
+            'rincian_diskon' => $this->feeRow(
+                'Diskon',
+                (float) $enrollment->discount,
+                true
+            ),
+
+            // Dipertahankan untuk template lama yang masih memakai satu penanda
             'rincian_tambahan' =>
                 $this->feeRow(
                     'Biaya pendaftaran',
@@ -311,6 +342,7 @@ class InvoiceService
                 : '',
 
             'sudah_dibayar' => $this->rupiah($previous),
+            'rincian_dibayar' => e($this->paidComponentsLabel($enrollment, $payment, $previous, $paid)),
             'jumlah_dibayar' => $this->rupiah($paid),
             'sisa_setelah_ini' => $this->rupiah($remaining),
 
@@ -323,7 +355,7 @@ class InvoiceService
                 ? e(implode('.', array_filter([
                     Str::lower(Str::slug((string) $student?->name, '')),
                     str_replace(' ', '', (string) $levelName),
-                    $this->nextStage($payment->payment_stage),
+                    $this->nextStage($payment->payment_stage, $enrollment->payment_scheme),
                 ], fn ($part) => $part !== '')))
                 : '',
         ];
@@ -414,6 +446,64 @@ class InvoiceService
         ];
     }
 
+    /**
+     * Daftar tanggal pertemuan kelas per bulan, mis. "November 2026: 3, 10, 17, 24".
+     * Kosong kalau siswa belum masuk kelas.
+     */
+    private function sessionDatesByMonth(\App\Models\ClassEnrollment $enrollment): string
+    {
+        if (! $enrollment->class_id) {
+            return '';
+        }
+
+        $dates = ClassSession::where('class_id', $enrollment->class_id)
+            ->where('kind', 'Regular')
+            ->orderBy('session_date')
+            ->pluck('session_date');
+
+        if ($dates->isEmpty()) {
+            return '';
+        }
+
+        $lines = $dates
+            ->map(fn ($d) => Carbon::parse($d))
+            ->groupBy(fn (Carbon $d) => $d->format('Y-m'))
+            ->map(fn ($group) => $group->first()->copy()->locale('id')->translatedFormat('F Y')
+                . ': ' . $group->map(fn (Carbon $d) => $d->format('j'))->implode(', '));
+
+        return implode('<br>', $lines->map(fn ($l) => e($l))->all());
+    }
+
+    /**
+     * Label komponen yang dibayar pada invoice ini, mis. "Biaya Aktivitas & Termin 1",
+     * "Biaya Pendaftaran", atau "Pelunasan". Dihitung dari urutan penyebaran uang
+     * (pendaftaran, aktivitas, biaya les).
+     */
+    private function paidComponentsLabel(\App\Models\ClassEnrollment $enrollment, Payment $payment, float $previous, float $paid): string
+    {
+        $parts = $this->installments->paymentComponents($enrollment, $previous, $paid);
+
+        $labels = [];
+
+        if ($parts['pendaftaran'] > 0) {
+            $labels[] = 'Biaya Pendaftaran';
+        }
+
+        if ($parts['aktivitas'] > 0) {
+            $labels[] = 'Biaya Aktivitas';
+        }
+
+        if ($parts['les'] > 0) {
+            $labels[] = match ($payment->payment_stage) {
+                'DP'     => 'Biaya Les (DP)',
+                'Lunas'  => 'Biaya Les (Lunas)',
+                default  => $payment->payment_stage,   // Termin 1..3 / Pelunasan
+            };
+        }
+
+        return $labels !== [] ? implode(' & ', $labels) : (string) $payment->payment_stage;
+    }
+
     /* ==========================================================
      * RENDER DAN PDF
      * ========================================================== */
@@ -425,8 +515,16 @@ class InvoiceService
         bool $unpaid
     ): string {
         $html = str_replace(
-            '<!--RINCIAN_TAMBAHAN-->',
-            $values['rincian_tambahan'] ?? '',
+            [
+                '<!--RINCIAN_AWAL-->',
+                '<!--RINCIAN_DISKON-->',
+                '<!--RINCIAN_TAMBAHAN-->',
+            ],
+            [
+                $values['rincian_awal'] ?? '',
+                $values['rincian_diskon'] ?? '',
+                $values['rincian_tambahan'] ?? '',
+            ],
             $html
         );
 
@@ -474,7 +572,7 @@ class InvoiceService
         );
     }
 
-    private function toPdf(string $body): string
+    private function toPdf(string $body, bool $landscape = false): string
     {
         $html = '<!DOCTYPE html>
         <html>
@@ -482,7 +580,7 @@ class InvoiceService
             <meta charset="utf-8">
             <style>
                 @page {
-                    margin: 1.6cm;
+                    margin: ' . ($landscape ? '1.2cm 2cm' : '1.6cm') . ';
                 }
 
                 body {
@@ -502,7 +600,7 @@ class InvoiceService
         </html>';
 
         return Pdf::loadHTML($html)
-            ->setPaper('a4')
+            ->setPaper('a4', $landscape ? 'landscape' : 'portrait')
             ->output();
     }
 
@@ -510,13 +608,15 @@ class InvoiceService
      * HELPER
      * ========================================================== */
 
-    private function nextStage(?string $stage): string
+    /** Contoh keterangan transfer untuk tahap berikutnya (skema Termin: DP lalu Termin 1; skema Lunas: DP lalu Pelunasan). */
+    private function nextStage(?string $stage, ?string $scheme = null): string
     {
-        return match ($stage) {
-            'DP'       => 'Pelunasan',
-            'Termin 1' => 'Termin2',
-            'Termin 2' => 'Termin3',
-            default    => 'Termin',
+        return match (true) {
+            $stage === 'DP' && $scheme === 'Termin' => 'Termin1',
+            $stage === 'DP'                         => 'Pelunasan',
+            $stage === 'Termin 1'                   => 'Termin2',
+            $stage === 'Termin 2'                   => 'Termin3',
+            default                                 => 'Termin',
         };
     }
 
@@ -529,8 +629,8 @@ class InvoiceService
             return '';
         }
 
-        $td = 'padding:9px 8px;'
-            . 'border-bottom:1px solid #d9d2ca;'
+        $td = 'border:1px solid #000;'
+            . 'padding:3px 6px;'
             . 'vertical-align:top;';
 
         return '<tr><td style="' . $td . '">'
@@ -552,6 +652,21 @@ class InvoiceService
         return Carbon::parse($date)
             ->locale('id')
             ->translatedFormat('j F Y');
+    }
+
+    /** Watermark logo di latar invoice paket. Kosong kalau file gambarnya belum ada. */
+    private function watermarkTag(): string
+    {
+        $path = public_path('assets/img/invoice-watermark.png');
+
+        if (! is_file($path)) {
+            return '';
+        }
+
+        // Posisi tengah halaman A4 landscape (lebar isi kira-kira 728pt)
+        return '<img src="data:image/png;base64,'
+            . base64_encode(file_get_contents($path))
+            . '" style="position:absolute;left:202pt;top:100pt;width:324pt;height:324pt;">';
     }
 
     private function logoTag(): string

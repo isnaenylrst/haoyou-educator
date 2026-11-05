@@ -19,10 +19,20 @@ class PembayaranController extends Controller
 
     private const METHODS = ['Transfer Bank', 'Cash', 'QRIS'];
 
-    private const BILL_SQL = '(COALESCE(
-        (select price from program_packages where program_packages.id = class_enrollments.program_package_id),
+    // Sama dengan PaymentInstallmentService::totalBillFor():
+    // harga paket (termin: installment_price x lama paket) + pendaftaran + aktivitas - diskon, minimal 0.
+    private const BILL_SQL = 'GREATEST(COALESCE(
+        (select case
+            when class_enrollments.payment_scheme = \'Termin\' and program_packages.installment_price > 0
+                then program_packages.installment_price * GREATEST(COALESCE(program_packages.duration_months, 1), 1)
+            else program_packages.price
+         end
+         from program_packages where program_packages.id = class_enrollments.program_package_id),
         (select price from private_packages where private_packages.id = class_enrollments.private_package_id),
-        0) + class_enrollments.registration_fee)';
+        0)
+        + class_enrollments.registration_fee
+        + class_enrollments.activity_fee
+        - class_enrollments.discount, 0)';
 
     private const PAID_SQL = 'COALESCE(
         (
@@ -54,8 +64,8 @@ class PembayaranController extends Controller
             ->selectRaw(self::PAID_SQL . ' as total_paid')
             ->with([
                 'student:id,name',
-                'programPackage:id,package_name',
-                'privatePackage:id,package_name',
+                'programPackage',   // kolom harga dibutuhkan untuk menghitung pembayaran berikutnya
+                'privatePackage',
                 'packagePayments:id,enrollment_id,payment_stage',
             ])
             ->when($request->payment_status === 'lunas', fn ($q) => $q->whereRaw(self::PAID_SQL . ' >= ' . self::BILL_SQL))
@@ -69,8 +79,14 @@ class PembayaranController extends Controller
             ->paginate(10)
             ->withQueryString();
 
+        // Pembayaran berikutnya menurut aturan DP / Lunas / Termin (null kalau sudah lunas)
         $enrollments->getCollection()->each(function ($enrollment) {
-            $enrollment->next_stage = $this->suggestNextStage($enrollment);
+            $next = $this->payments->nextPayment($enrollment);
+
+            $enrollment->next_stage  = $next['stage'] ?? null;
+            $enrollment->next_amount = $next['amount'] ?? null;   // null = DP (nominal bebas)
+            $enrollment->next_min    = $next['min'] ?? null;
+            $enrollment->next_exact  = $next['exact'] ?? false;
         });
 
         /* ---------- Kartu statistik ----------
@@ -146,6 +162,7 @@ class PembayaranController extends Controller
             'total_bill'   => $this->payments->totalBillFor($enrollment),
             'total_paid'   => $this->payments->totalPaid($enrollment),
             'remaining'    => $this->payments->remainingBill($enrollment),
+            'next_payment' => $this->payments->nextPayment($enrollment),
             'payments' => $payments->map(fn (Payment $p) => [
                 'id'             => $p->id,
                 'invoice_number' => $p->invoice_number,
@@ -178,20 +195,16 @@ class PembayaranController extends Controller
             ]);
         }
 
-        $usedStages = $enrollment->packagePayments()
-            ->pluck('payment_stage')
-            ->all();
+        // Tahap dan nominal ditentukan PaymentInstallmentService::nextPayment (Pelunasan atau Termin 1..3,
+        // nominal harus sesuai jadwal). Input payment_stage dari form lama diabaikan.
+        $next = $this->payments->nextPayment($enrollment);
 
         $data = $request->validate([
-            'payment_stage'  => ['required', Rule::in(self::STAGES), Rule::notIn($usedStages)],
             'amount_paid'    => ['required', 'numeric', 'min:1'],
             'payment_method' => ['required', Rule::in(self::METHODS)],
             'payment_date'   => ['required', 'date'],
             'payment_proof'  => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:2048'],
-        ], [
-            'payment_stage.not_in' => 'Tahap pembayaran ini sudah pernah dicatat untuk siswa ini.',
-        ], [
-            'payment_stage'  => 'tahap pembayaran',
+        ], [], [
             'amount_paid'    => 'nominal',
             'payment_method' => 'metode pembayaran',
             'payment_date'   => 'tanggal pembayaran',
@@ -205,7 +218,7 @@ class PembayaranController extends Controller
         try {
             DB::transaction(fn () => $this->payments->recordPayment(
                 $enrollment,
-                $data['payment_stage'],
+                $next['stage'] ?? 'Pelunasan',
                 (float) $data['amount_paid'],
                 $data['payment_method'],
                 $data['payment_date'],
@@ -222,24 +235,6 @@ class PembayaranController extends Controller
         return redirect()
             ->route('admin.pembayaran', $request->only(['search', 'type', 'payment_status', 'page']))
             ->with('success', 'Pembayaran berhasil dicatat.');
-    }
-
-    /* ============================================================
-       Tahap yang disarankan berikutnya: Termin 1 -> 2 -> 3, lalu Pelunasan
-    ============================================================ */
-    private function suggestNextStage(ClassEnrollment $enrollment): string
-    {
-        $used = $enrollment->packagePayments
-            ->pluck('payment_stage')
-            ->all();
-
-        foreach (['Termin 1', 'Termin 2', 'Termin 3'] as $stage) {
-            if (! in_array($stage, $used, true)) {
-                return $stage;
-            }
-        }
-
-        return 'Pelunasan';
     }
 
     /* ============================================================
