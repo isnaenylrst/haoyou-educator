@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ClassEnrollment extends Model
 {
@@ -73,6 +74,24 @@ class ClassEnrollment extends Model
     public function payments()
     {
         return $this->hasMany(Payment::class, 'enrollment_id');
+    }
+
+    public function packagePayments(): HasMany
+    {
+        return $this->hasMany(Payment::class, 'enrollment_id')
+            ->where('payment_type', Payment::TYPE_PACKAGE);
+    }
+
+    public function extraPayments(): HasMany
+    {
+        return $this->hasMany(Payment::class, 'enrollment_id')
+            ->whereIn('payment_type', Payment::EXTRA_TYPES);
+    }
+
+    public function replacementSessions(): HasMany
+    {
+        return $this->hasMany(ClassSession::class, 'class_enrollment_id')
+            ->where('kind', 'Replacement');
     }
 
     public function progressReports()

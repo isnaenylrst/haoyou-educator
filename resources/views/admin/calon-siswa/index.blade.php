@@ -19,10 +19,10 @@
         </div>
 
         <div class="dashboard-header-actions">
-            <button class="btn">
+            {{-- <button class="btn">
                 <i class="fa-solid fa-file-export"></i>
                 Export
-            </button>
+            </button> --}}
 
             <button type="button" class="btn btn-primary" onclick="openLeadModal()">
                 <i class="fa-solid fa-plus"></i>
@@ -452,21 +452,11 @@
                                 <input type="date" name="consultation_date">
                             </div>
                             <div class="form-field full">
-                                <label>Catatan Konsultasi</label>
+                                <label>Catatan Siswa</label>
                                 <textarea name="consultation_notes" rows="2"></textarea>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="form-section">
-                        <div class="form-section-title"><i class="fa-solid fa-note-sticky"></i> Catatan</div>
-                        <div class="form-grid">
-                            <div class="form-field full">
-                                <label>Catatan Siswa</label>
-                                <textarea name="notes" rows="3" placeholder="Contoh: Masuk dipertengahan kelas"></textarea>
-                            </div>
-                        </div>
-                    </div>                    
+                    </div>                   
 
                     <div class="form-section">
                         <div class="form-section-title"><i class="fa-solid fa-calendar-week"></i> Jadwal Tersedia</div>
@@ -668,7 +658,7 @@
                                 </select>
                             </div>
                             <div class="form-field full">
-                                <label>Catatan Konsultasi</label>
+                                <label>Catatan Siswa</label>
                                 <textarea name="consultation_notes" id="edit_consultation_notes" rows="2"></textarea>
                             </div>
                         </div>

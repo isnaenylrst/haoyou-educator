@@ -11,10 +11,10 @@ use Illuminate\Validation\ValidationException;
 class PaymentInstallmentService
 {
     /**
-     * Catat SATU transaksi termin (Cara B) — selalu bikin baris Payment
-     * baru, tidak pernah update baris lama. remaining_bill dihitung
-     * kumulatif dari total_bill dikurangi SEMUA amount_paid yang sudah
-     * tercatat sebelumnya untuk enrollment ini, ditambah transaksi ini.
+     * Catat SATU transaksi termin (Cara B).
+     * Selalu membuat baris Payment baru, tidak mengubah transaksi lama.
+     * remaining_bill dihitung dari total tagihan dikurangi seluruh
+     * pembayaran paket sebelumnya dan pembayaran saat ini.
      */
     public function recordPayment(
         ClassEnrollment $enrollment,
@@ -47,11 +47,13 @@ class PaymentInstallmentService
             ]);
         }
 
+        // Total pembayaran paket sebelum transaksi baru.
         $alreadyPaid = $this->totalPaid($enrollment);
         $remaining = round($totalBill - $alreadyPaid - $amount, 2);
 
         if ($remaining < 0) {
             $sisaSaatIni = number_format($totalBill - $alreadyPaid, 0, ',', '.');
+
             throw ValidationException::withMessages([
                 'amount_paid' => "Jumlah bayar melebihi sisa tagihan (Rp{$sisaSaatIni}).",
             ]);
@@ -66,6 +68,7 @@ class PaymentInstallmentService
         return Payment::create([
             'enrollment_id' => $enrollment->id,
             'invoice_number' => $this->generateInvoiceNumber(),
+            'payment_type' => Payment::TYPE_PACKAGE,
             'payment_stage' => $stage,
             'total_bill' => $totalBill,
             'amount_paid' => $amount,
@@ -78,8 +81,8 @@ class PaymentInstallmentService
     }
 
     /**
-     * Total tagihan enrollment = harga paket (sudah total, bukan per bulan)
-     * + biaya pendaftaran + biaya aktivitas - diskon.
+     * Total tagihan enrollment = harga paket + biaya pendaftaran
+     * + biaya aktivitas - diskon.
      */
     public function totalBillFor(ClassEnrollment $enrollment): ?float
     {
@@ -97,7 +100,10 @@ class PaymentInstallmentService
         return max($total, 0);
     }
 
-    /** Lama kelas (bulan), hanya informasi. Tidak dipakai untuk mengalikan harga. */
+    /**
+     * Lama kelas (bulan), hanya informasi.
+     * Tidak dipakai untuk mengalikan harga.
+     */
     public function monthsFor(ClassEnrollment $e): int
     {
         $package = $e->programPackage ?? $e->privatePackage;
@@ -107,15 +113,19 @@ class PaymentInstallmentService
 
     /**
      * Total biaya les dari enrollment.
-     * Skema Termin (khusus paket reguler yang punya installment_price) = harga per bulan x lama paket.
-     * Selain itu = harga paket apa adanya (harga lunas).
+     * Paket reguler dengan skema Termin menggunakan totalFor('Termin').
+     * Selain itu, gunakan harga paket apa adanya.
      */
     public function packageTotal(ClassEnrollment $e): ?float
     {
         $isPrivate = ! $e->programPackage;
-        $package   = $e->programPackage ?? $e->privatePackage;
+        $package = $e->programPackage ?? $e->privatePackage;
 
-        if (! $isPrivate && $e->payment_scheme === 'Termin' && $package?->installment_price) {
+        if (
+            ! $isPrivate
+            && $e->payment_scheme === 'Termin'
+            && $package?->installment_price
+        ) {
             return $package->totalFor('Termin');
         }
 
@@ -123,8 +133,8 @@ class PaymentInstallmentService
     }
 
     /**
-     * Lama kelas (bulan) dari paketnya langsung. Dipakai juga saat konversi calon siswa,
-     * ketika enrollment belum dibuat. Membaca kolom duration_months; fallback 3 (program) / 1 (private).
+     * Lama kelas (bulan) dari paket.
+     * Fallback 3 bulan untuk program dan 1 bulan untuk private.
      */
     public function monthsForPackage(mixed $package, bool $isPrivate): int
     {
@@ -132,8 +142,8 @@ class PaymentInstallmentService
     }
 
     /**
-     * Total biaya les dari paketnya langsung = harga paket apa adanya (tidak dikali bulan).
-     * Parameter $isPrivate dipertahankan supaya pemanggil lama tidak error.
+     * Total biaya paket sesuai harga yang tersimpan.
+     * Parameter $isPrivate dipertahankan untuk kompatibilitas.
      */
     public function packageTotalFor(mixed $package, bool $isPrivate): ?float
     {
@@ -144,11 +154,22 @@ class PaymentInstallmentService
         return (float) $package->price;
     }
 
-    public function allowsInstallment(bool $isPrivate, ?string $programName, ?string $levelName): bool
-    {
-        if ($isPrivate) return false;
-        if ($programName === 'Daily Activity') return true;
-        if (! str_starts_with((string) $levelName, 'HSK ')) return false;
+    public function allowsInstallment(
+        bool $isPrivate,
+        ?string $programName,
+        ?string $levelName
+    ): bool {
+        if ($isPrivate) {
+            return false;
+        }
+
+        if ($programName === 'Daily Activity') {
+            return true;
+        }
+
+        if (! str_starts_with((string) $levelName, 'HSK ')) {
+            return false;
+        }
 
         $level = (int) trim(substr($levelName, 4));
 
@@ -164,9 +185,13 @@ class PaymentInstallmentService
         );
     }
 
+    /**
+     * Total pembayaran khusus paket.
+     * Pembayaran biaya tambahan tidak dihitung ke tagihan paket.
+     */
     public function totalPaid(ClassEnrollment $enrollment): float
     {
-        return (float) $enrollment->payments()->sum('amount_paid');
+        return (float) $enrollment->packagePayments()->sum('amount_paid');
     }
 
     public function remainingBill(ClassEnrollment $enrollment): float
@@ -181,7 +206,11 @@ class PaymentInstallmentService
         return $this->remainingBill($enrollment) <= 0;
     }
 
-    private function generateInvoiceNumber(): string
+    /**
+     * Membuat nomor invoice dengan format yang sama untuk semua jenis pembayaran.
+     * Format: INV-YYYYMMDD-XXXXXX
+     */
+    public function generateInvoiceNumber(): string
     {
         do {
             $number = 'INV-' . now()->format('Ymd') . '-' . strtoupper(Str::random(6));

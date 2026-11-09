@@ -14,37 +14,21 @@
   $q = request('q');
 @endphp
 
-<div class="vb-grid2">
-  <div class="vb-card" style="margin:0">
-    <div style="display:flex;gap:12px;align-items:center">
-      @include('Siswa.vocab._star', ['size' => 52])
-      <div>
-        @if($state === 'on_track')
-          <span class="vb-pill s-hafal">On track</span>
-          <div style="font-size:13px;color:#6b6652;margin-top:6px">Mantap! Kamu sesuai target Study plan.</div>
-        @elseif($state === 'behind')
-          <span class="vb-pill s-blank">Behind</span>
-          <div style="font-size:13px;color:#6b6652;margin-top:6px">Masih agak ketinggalan. Ayo, lanjut dikit demi dikit.</div>
-        @else
-          <span class="vb-pill s-blank">Belum ada rencana</span>
-          <div style="font-size:13px;color:#6b6652;margin-top:6px">Atur dulu target harianmu di <a href="{{ route('student.vocab.plan') }}" style="text-decoration:underline">Study plan</a>.</div>
-        @endif
-      </div>
+<div class="vb-card" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+  @include('Siswa.vocab._star', ['size' => 52])
+  <div style="flex:1;min-width:240px">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="vb-pill s-hafal">⭐ {{ $learned }} / {{ $total }} kata hafal</span>
+      @if($state === 'on_track')
+        <span class="vb-pill s-hafal">On track</span>
+      @elseif($state === 'behind')
+        <span class="vb-pill s-ragu">Behind</span>
+      @else
+        <a href="{{ route('student.vocab.plan') }}" class="vb-pill s-blank" style="text-decoration:none">Belum ada rencana → isi Study Plan</a>
+      @endif
     </div>
-    <div class="vb-bar" style="margin-top:14px"><div style="width:{{ max(1, $pct) }}%"></div></div>
-    <div style="display:flex;justify-content:space-between;font-size:10px;color:#9CA294;margin-top:6px">
-      @foreach($stageNames as $i => $n)<span style="{{ $i === $stage ? 'font-weight:700;color:#5c4500' : '' }}">{{ $n }}</span>@endforeach
-    </div>
-  </div>
-
-  <div class="vb-card" style="margin:0;background:#EAF5EC;border-color:#D9EEDD">
-    <div style="display:flex;gap:12px;align-items:center">
-      @include('Siswa.vocab._star', ['size' => 52])
-      <div>
-        <span class="vb-pill s-hafal">⭐ {{ $learned }} / {{ $total }}</span>
-        <div style="font-size:13px;color:#357048;margin-top:6px">Terus pelajari {{ $total - $learned }} kosa kata! Banyak hafal, banyak bintang!</div>
-      </div>
-    </div>
+    <div class="vb-bar" style="margin:10px 0 6px"><div style="width:{{ max(1, $pct) }}%"></div></div>
+    <div style="font-size:13px;color:#6b6652">Terus pelajari {{ $total - $learned }} kosa kata! Banyak hafal, banyak bintang!</div>
   </div>
 </div>
 

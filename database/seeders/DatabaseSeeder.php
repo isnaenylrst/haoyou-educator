@@ -43,6 +43,7 @@ class DatabaseSeeder extends Seeder
             DocumentSeeder::class,
             PrintTemplateSeeder::class,
             KurikulumModuleSeeder::class,
+            VocabWordSeeder::class,   // data kosakata Belajar Vocab
         ]);
     }
 }

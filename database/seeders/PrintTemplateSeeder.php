@@ -19,6 +19,7 @@ class PrintTemplateSeeder extends Seeder
             'form_regular' => ['Formulir Pendaftaran Regular', $this->regularForm()],
             'form_private' => ['Formulir Pendaftaran Private', $this->privateForm()],
             'invoice'      => ['Invoice Pembayaran', $this->invoiceForm()],
+            'invoice_extra'=> ['Invoice Biaya Tambahan', $this->invoiceExtraForm()],
         ];
 
         foreach ($templates as $key => [$name, $html]) {
@@ -341,6 +342,127 @@ class PrintTemplateSeeder extends Seeder
         <li>Untuk murid datang kerumah akan dikenakan biaya tambahan sebesar 50 rb/ pertemuan, pembayaran wajib dilakukan H-1, jika tidak melakukan pembayaran kelas akan tetap berjalan secara offline di tempat haoyou.</li>
         <li>Uang DP yang sudah dibayarkan tidak dapat dikembalikan dan di keep maximal 3 bulan (setelah 3 bulan akan di anggap hangus), jika setelah uang DP hangus, client akan memulai program les maka akan dikenakan biaya pendaftaran dan aktivitas lagi.</li>
         </ol>
+        HTML;
+    }
+
+    private function invoiceExtraForm(): string
+    {
+        return <<<'HTML'
+        <div style="font-family:Helvetica,Arial,sans-serif;font-size:11pt;color:#1f1a17;">
+
+            <table style="width:100%;border-collapse:collapse;border-bottom:2px solid #1f1a17;">
+                <tr>
+                    <td style="width:60%;padding-bottom:10px;vertical-align:middle;">
+                        <table style="border-collapse:collapse;">
+                            <tr>
+                                <td style="padding-right:10px;vertical-align:middle;">
+                                    {logo}
+                                </td>
+                                <td style="vertical-align:middle;">
+                                    <div style="font-size:17pt;font-weight:bold;">
+                                        Haoyou Educator
+                                    </div>
+                                    <div style="font-size:9.5pt;color:#6b625c;">
+                                        Mandarin Learning Center
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                    <td style="width:40%;text-align:right;vertical-align:top;padding-bottom:10px;">
+                        <div style="font-size:24pt;font-weight:bold;">Invoice</div>
+                        <div style="font-size:9.5pt;color:#6b625c;">
+                            No. {nomor_invoice}
+                        </div>
+                    </td>
+                </tr>
+            </table>
+
+            <div style="margin-top:20px;padding:12px;background:#f7f3ee;">
+                <div style="font-size:9.5pt;color:#6b625c;">
+                    Jenis biaya
+                </div>
+                <div style="font-size:14pt;font-weight:bold;margin-top:4px;">
+                    {jenis_biaya}
+                </div>
+            </div>
+
+            <table style="width:100%;border-collapse:collapse;margin-top:18px;">
+                <tr>
+                    <td style="width:50%;vertical-align:top;">
+                        <div style="font-size:9.5pt;color:#6b625c;border-bottom:1px solid #d9d2ca;padding-bottom:4px;">
+                            Data siswa
+                        </div>
+                        <table style="width:100%;border-collapse:collapse;margin-top:6px;">
+                            <tr>
+                                <td style="padding:5px 0;color:#6b625c;width:90px;">Nama</td>
+                                <td style="padding:5px 0;">{nama_siswa}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:5px 0;color:#6b625c;">Kelas</td>
+                                <td style="padding:5px 0;">{kelas}</td>
+                            </tr>
+                        </table>
+                    </td>
+
+                    <td style="width:50%;vertical-align:top;padding-left:12px;">
+                        <div style="font-size:9.5pt;color:#6b625c;border-bottom:1px solid #d9d2ca;padding-bottom:4px;">
+                            Info pembayaran
+                        </div>
+                        <table style="width:100%;border-collapse:collapse;margin-top:6px;">
+                            <tr>
+                                <td style="padding:5px 0;color:#6b625c;width:105px;">Tanggal bayar</td>
+                                <td style="padding:5px 0;">{tanggal_bayar}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:5px 0;color:#6b625c;">Metode</td>
+                                <td style="padding:5px 0;">{metode_bayar}</td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+
+            <div style="margin-top:22px;font-size:9.5pt;color:#6b625c;border-bottom:1px solid #d9d2ca;padding-bottom:5px;">
+                Detail pertemuan
+            </div>
+
+            <table style="width:100%;border-collapse:collapse;margin-top:6px;">
+                <tr>
+                    <td style="padding:7px 0;width:150px;color:#6b625c;">Tanggal pertemuan</td>
+                    <td style="padding:7px 0;">{tanggal_pertemuan}</td>
+                </tr>
+                <tr>
+                    <td style="padding:7px 0;color:#6b625c;">Jam pertemuan</td>
+                    <td style="padding:7px 0;">{jam_pertemuan}</td>
+                </tr>
+                <tr>
+                    <td style="padding:7px 0;color:#6b625c;">Guru</td>
+                    <td style="padding:7px 0;">{guru}</td>
+                </tr>
+                <tr>
+                    <td style="padding:7px 0;color:#6b625c;">Lokasi</td>
+                    <td style="padding:7px 0;">{lokasi}</td>
+                </tr>
+            </table>
+
+            <table style="width:100%;border-collapse:collapse;margin-top:24px;">
+                <tr>
+                    <td style="padding:12px 8px;border-top:2px solid #1f1a17;font-size:13pt;font-weight:bold;">
+                        Total dibayarkan
+                    </td>
+                    <td style="padding:12px 8px;border-top:2px solid #1f1a17;font-size:15pt;font-weight:bold;text-align:right;white-space:nowrap;">
+                        {jumlah_dibayar}
+                    </td>
+                </tr>
+            </table>
+
+            <div style="font-size:9.5pt;color:#6b625c;margin-top:28px;border-top:1px solid #d9d2ca;padding-top:8px;">
+                Terima kasih telah belajar bersama Haoyou Educator.
+                Invoice ini sah tanpa tanda tangan.
+            </div>
+
+        </div>
         HTML;
     }
 }

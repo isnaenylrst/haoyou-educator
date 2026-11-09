@@ -77,7 +77,7 @@ class VocabController extends Controller
             ->whereIn('vocab_word_id', $words->pluck('id'))
             ->selectRaw('vocab_word_id, count(*) c')->groupBy('vocab_word_id')->pluck('c', 'vocab_word_id');
 
-        $total   = VocabWord::count();
+        $total   = VocabWord::where('trap_only', false)->count();
         $learned = VocabTestResult::where('user_id', $uid)->where('status', 'hafal')
             ->distinct()->count('vocab_word_id');
 

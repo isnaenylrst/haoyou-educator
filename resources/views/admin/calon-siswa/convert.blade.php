@@ -1000,10 +1000,7 @@
                                     <option value="">Pilih Package</option>
                                     @foreach ($privatePackages as $privatePackage)
                                         <option value="{{ $privatePackage->id }}" data-price="{{ $privatePackage->price }}"
-                                                {{ $candidateStudent->private_package_id === $privatePackage->id ? 'selected' : '' }}>
-                                            {{ $privatePackage->package_name }} &mdash;
-                                            Rp {{ number_format($privatePackage->price, 0, ',', '.') }}
-                                        </option>
+                                            {{ $candidateStudent->private_package_id === $privatePackage->id ? 'selected' : '' }}>{{ $privatePackage->package_name }} &mdash; Rp {{ number_format($privatePackage->price, 0, ',', '.') }}</option>
                                     @endforeach
                                 </select>
                                 @if ($privatePackages->isEmpty())
@@ -1405,7 +1402,7 @@
                     </a>
                 </div>
 
-                @php $latestPayment = $enrollment->payments()->latest('id')->first(); @endphp
+                @php $latestPayment = $enrollment->packagePayments()->latest('id')->first(); @endphp
                 <div class="doc-download-item">
                     <div class="doc-info">
                         <div class="doc-icon"><i class="fa-solid fa-file-invoice-dollar"></i></div>

@@ -18,12 +18,6 @@
             <h1>Selamat datang kembali, {{ auth()->user()->name }} 👋</h1>
             <p>Berikut ringkasan operasional Haoyou Educator hari ini, {{ now()->translatedFormat('l d F Y') }}.</p>
         </div>
-
-        <div class="dashboard-header-actions">
-            <button class="btn btn-secondary">
-                <i class="fa-solid fa-chart-line"></i> Lihat Laporan
-            </button>
-        </div>
     </div>
 
     {{-- =====================================================
@@ -114,92 +108,6 @@
                 <strong>{{ $value }}</strong>
             </div>
         @endforeach
-    </div>
-
-    {{-- =====================================================
-        ANALYTICS
-    ===================================================== --}}
-    <div class="dashboard-two-column">
-
-        {{-- FUNNEL --}}
-        <div class="dashboard-card funnel-card">
-            <div class="card-header">
-                <div>
-                    <h3>Lead Conversion Funnel</h3>
-                    <p>Inquiry &rarr; Warm &rarr; Trial &rarr; Payment &rarr; Student</p>
-                </div>
-                <div class="period-tabs">
-                    <button class="active">30 Hari</button>
-                    <button>90 Hari</button>
-                </div>
-            </div>
-
-            <div class="funnel-list">
-                <div class="funnel-row">
-                    <span class="funnel-name">Inquiry</span>
-                    <div class="funnel-bar"><div style="width: 100%" class="funnel-fill gray"></div></div>
-                    <strong>128</strong>
-                </div>
-                <div class="funnel-row">
-                    <span class="funnel-name">Warm Lead</span>
-                    <div class="funnel-bar"><div style="width: 68%" class="funnel-fill yellow"></div></div>
-                    <strong>87</strong>
-                </div>
-                <div class="funnel-row">
-                    <span class="funnel-name">Trial</span>
-                    <div class="funnel-bar"><div style="width: 38%" class="funnel-fill blue"></div></div>
-                    <strong>49</strong>
-                </div>
-                <div class="funnel-row">
-                    <span class="funnel-name">Payment</span>
-                    <div class="funnel-bar"><div style="width: 29%" class="funnel-fill gold"></div></div>
-                    <strong>37</strong>
-                </div>
-                <div class="funnel-row">
-                    <span class="funnel-name">Student</span>
-                    <div class="funnel-bar"><div style="width: 24%" class="funnel-fill green"></div></div>
-                    <strong>31</strong>
-                </div>
-            </div>
-        </div>
-
-        {{-- PAYMENT STATUS --}}
-        <div class="dashboard-card payment-card">
-            <div class="card-header">
-                <div>
-                    <h3>Status Pembayaran</h3>
-                    <p>Bulan berjalan</p>
-                </div>
-            </div>
-
-            <div class="payment-content">
-                <div class="donut">
-                    <div class="donut-center">
-                        <div class="val">Rp205Jt</div>
-                        <div class="lbl">Total Invoice</div>
-                    </div>
-                </div>
-
-                <div class="legend">
-                    <div class="legend-item">
-                        <span class="legend-dot green-dot"></span>
-                        Paid - 58%
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-dot yellow-dot"></span>
-                        Partial - 20%
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-dot red-dot"></span>
-                        Overdue - 12%
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-dot gray-dot"></span>
-                        Belum Ditagih - 10%
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 
     {{-- =====================================================
@@ -302,10 +210,10 @@
         {{-- =====================================================
         PAYMENT + TEACHER
         ===================================================== --}}
-        <div class="dashboard-two-column">
+        {{-- <div class="dashboard-two-column"> --}}
 
             {{-- PAYMENT DUE --}}
-            <div class="dashboard-card">
+            {{-- <div class="dashboard-card">
                 <div class="card-header">
                     <div>
                         <h3>Pembayaran Jatuh Tempo</h3>
@@ -341,10 +249,10 @@
               </div>
             </div>
             <button class="btn btn-ghost" style="width:100%; justify-content:center; margin-top:12px; font-size:12px; padding:8px;">Lihat semua tagihan</button>
-            </div>
+            </div> --}}
 
             {{-- TEACHER --}}
-            <div class="dashboard-card">
+            {{-- <div class="dashboard-card">
                 <div class="card-header">
                     <div>
                         <h3>Guru Tersedia Hari Ini</h3>
@@ -367,7 +275,7 @@
             </div>
             </div>
 
-        </div>
+        </div> --}}
     </div>
 
 @endsection

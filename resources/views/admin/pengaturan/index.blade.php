@@ -157,36 +157,36 @@
                     ],
                 ],
             ],
-            [
-                'title' => 'Lembaga',
-                'icon'  => 'fa-building',
-                'items' => [
-                    [
-                        'name'  => 'Profil Lembaga',
-                        'desc'  => 'Nama, alamat, kontak, dan logo Haoyou Educator.',
-                        'icon'  => 'fa-id-card',
-                        'route' => null,
-                    ],
-                    [
-                        'name'  => 'Metode Pembayaran',
-                        'desc'  => 'Daftar rekening, QRIS, dan metode pembayaran yang tersedia.',
-                        'icon'  => 'fa-money-bill-wave',
-                        'route' => null,
-                    ],
-                ],
-            ],
-            [
-                'title' => 'Sistem',
-                'icon'  => 'fa-gear',
-                'items' => [
-                    [
-                        'name'  => 'Pengguna & Hak Akses',
-                        'desc'  => 'Kelola akun admin dan level akses.',
-                        'icon'  => 'fa-user-shield',
-                        'route' => null,
-                    ],
-                ],
-            ],
+            // [
+            //     'title' => 'Lembaga',
+            //     'icon'  => 'fa-building',
+            //     'items' => [
+            //         [
+            //             'name'  => 'Profil Lembaga',
+            //             'desc'  => 'Nama, alamat, kontak, dan logo Haoyou Educator.',
+            //             'icon'  => 'fa-id-card',
+            //             'route' => null,
+            //         ],
+            //         [
+            //             'name'  => 'Metode Pembayaran',
+            //             'desc'  => 'Daftar rekening, QRIS, dan metode pembayaran yang tersedia.',
+            //             'icon'  => 'fa-money-bill-wave',
+            //             'route' => null,
+            //         ],
+            //     ],
+            // ],
+            // [
+            //     'title' => 'Sistem',
+            //     'icon'  => 'fa-gear',
+            //     'items' => [
+            //         [
+            //             'name'  => 'Pengguna & Hak Akses',
+            //             'desc'  => 'Kelola akun admin dan level akses.',
+            //             'icon'  => 'fa-user-shield',
+            //             'route' => null,
+            //         ],
+            //     ],
+            // ],
         ];
     @endphp
 
