@@ -23,7 +23,7 @@ use App\Http\Controllers\Kurikulum\MonitoringController;
 use App\Http\Controllers\Kurikulum\JadwalKonsultasiController;
 use App\Http\Controllers\Kurikulum\ReviewPengajuanController;
 use App\Http\Controllers\Kurikulum\TugasKelasController as KurikulumTugasKelasController;
-use App\Http\Controllers\Kurikulum\KompetensiController;
+use App\Http\Controllers\Kurikulum\ReportTemplateController;
 use App\Http\Controllers\Kurikulum\KetersediaanGuruController;
 use App\Http\Controllers\Kurikulum\VideoController as KurikulumVideoController;
 use App\Http\Controllers\Kurikulum\TeacherObservationController;
@@ -116,6 +116,16 @@ Route::middleware('guest')->group(function () {
 */
 
 Route::middleware('auth')->group(function () {
+
+    // DOKUMEN PROGRESS REPORT (pratinjau, PDF, edit sebelum final) - hak akses dicek di controller
+    Route::get('/progress-report-dokumen/{report}', [\App\Http\Controllers\ProgressReportDocumentController::class, 'show'])
+        ->name('progress-report.document');
+    Route::get('/progress-report-dokumen/{report}/pdf', [\App\Http\Controllers\ProgressReportDocumentController::class, 'pdf'])
+        ->name('progress-report.document.pdf');
+    Route::get('/progress-report-dokumen/{report}/edit', [\App\Http\Controllers\ProgressReportDocumentController::class, 'edit'])
+        ->name('progress-report.document.edit');
+    Route::put('/progress-report-dokumen/{report}', [\App\Http\Controllers\ProgressReportDocumentController::class, 'update'])
+        ->name('progress-report.document.update');
 
     Route::post('/logout', [AuthController::class, 'logout'])
         ->name('logout');
@@ -470,30 +480,17 @@ Route::middleware(['auth', 'role:Curriculum'])
 
         /*
         |--------------------------------------------------------------------------
-        | KOMPETENSI PROGRESS REPORT & DESKRIPSI ACHIEVEMENT LEVEL
+        | TEMPLATE PROGRESS REPORT (Learning Materials per program)
         |--------------------------------------------------------------------------
         */
 
-        Route::get('/kompetensi', [KompetensiController::class, 'index'])
-            ->name('kompetensi');
+                // TEMPLATE LEARNING MATERIALS PROGRESS REPORT (per program: Feixiang, Maochong, HSK, ...)
+        Route::get('/template-progress-report', [ReportTemplateController::class, 'index'])->name('report-template.index');
+        Route::post('/template-progress-report', [ReportTemplateController::class, 'store'])->name('report-template.store');
+        Route::get('/template-progress-report/{template}', [ReportTemplateController::class, 'edit'])->name('report-template.edit');
+        Route::put('/template-progress-report/{template}', [ReportTemplateController::class, 'update'])->name('report-template.update');
+        Route::delete('/template-progress-report/{template}', [ReportTemplateController::class, 'destroy'])->name('report-template.destroy');
 
-        Route::post('/kompetensi', [KompetensiController::class, 'store'])
-            ->name('kompetensi.store');
-
-        Route::put('/kompetensi-deskripsi', [KompetensiController::class, 'updateDescriptions'])
-            ->name('kompetensi.descriptions');
-
-        Route::put('/kompetensi/{competency}', [KompetensiController::class, 'update'])
-            ->name('kompetensi.update');
-
-        Route::delete('/kompetensi/{competency}', [KompetensiController::class, 'destroy'])
-            ->name('kompetensi.destroy');
-
-        // Template Learning Material per Kelas (Poin 6)
-        Route::post('/kompetensi/class-material', [KompetensiController::class, 'storeClassMaterial'])
-            ->name('kompetensi.class-material.store');
-        Route::delete('/kompetensi/class-material/{material}', [KompetensiController::class, 'destroyClassMaterial'])
-            ->name('kompetensi.class-material.destroy');
 
         /*
         |--------------------------------------------------------------------------
@@ -672,7 +669,8 @@ Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
         Route::get('/progress-report', [GuruProgressReportController::class, 'index'])->name('progress-report');
         Route::get('/progress-report/enrollment/{enrollment}', [GuruProgressReportController::class, 'form'])->name('progress-report.form');
         Route::post('/progress-report/enrollment/{enrollment}', [GuruProgressReportController::class, 'store'])->name('progress-report.store');
-        Route::get('/progress-report/{report}/download', [GuruProgressReportController::class, 'download'])->name('progress-report.download');
+                Route::get('/progress-report/{report}/download', [GuruProgressReportController::class, 'download'])->name('progress-report.download');
+        Route::delete('/progress-report/{report}', [GuruProgressReportController::class, 'destroy'])->name('progress-report.destroy');
         Route::post('/progress-report/submit-all', [GuruProgressReportController::class, 'submitAll'])->name('progress-report.submit-all');
 
         // Sertifikat: guru membuat -> Kurikulum ACC -> tampil di siswa
@@ -875,7 +873,7 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
             ->name('siswa.show');
 
         // SISWA: LANJUT PROGRAM
-        Route::get('/{siswa}/continue', [SiswaController::class, 'continueProgramForm'])
+        Route::get('/{siswa}/continue', fn (\App\Models\Student $siswa) => redirect()->route('admin.siswa.continue.program', $siswa))
             ->name('siswa.continue.form');
         // Jalur 1 (belum lunas): pelunasan
         Route::get('/{siswa}/pelunasan', [SiswaController::class, 'settlementForm'])

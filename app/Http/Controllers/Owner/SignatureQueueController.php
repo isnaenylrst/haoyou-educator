@@ -88,24 +88,7 @@ class SignatureQueueController extends Controller
                 'published_at'         => $report->published_at ?? now(),
             ]);
 
-            // Regenerate PDF
-            try {
-                $e = (object) [
-                    'student_name' => $report->student?->name,
-                    'class_name'   => $report->enrollment?->class?->class_name,
-                ];
-                $pdf = Pdf::loadView('guru.progress-report-pdf', [
-                    'report'  => $report,
-                    'teacher' => $report->teacher,
-                    'e'       => $e,
-                ])->setPaper('a4');
-
-                $path = "progress-reports/report-{$report->id}.pdf";
-                Storage::disk('public')->put($path, $pdf->output());
-                $report->update(['file_path' => $path]);
-            } catch (\Throwable $err) {
-                report($err);
-            }
+                \App\Services\ProgressReportDocument::store($report->refresh());
 
             // Simpan riwayat penandatanganan
             SignatureHistory::create([
@@ -172,23 +155,7 @@ class SignatureQueueController extends Controller
                     'published_at'         => $report->published_at ?? now(),
                 ]);
 
-                try {
-                    $e = (object) [
-                        'student_name' => $report->student?->name,
-                        'class_name'   => $report->enrollment?->class?->class_name,
-                    ];
-                    $pdf = Pdf::loadView('guru.progress-report-pdf', [
-                        'report'  => $report,
-                        'teacher' => $report->teacher,
-                        'e'       => $e,
-                    ])->setPaper('a4');
-
-                    $path = "progress-reports/report-{$report->id}.pdf";
-                    Storage::disk('public')->put($path, $pdf->output());
-                    $report->update(['file_path' => $path]);
-                } catch (\Throwable $err) {
-                    report($err);
-                }
+                        \App\Services\ProgressReportDocument::store($report->refresh());
 
                 SignatureHistory::create([
                     'document_type'  => 'progress_report',

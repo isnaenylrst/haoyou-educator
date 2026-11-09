@@ -3,14 +3,13 @@
 namespace App\Http\Controllers\Guru;
 
 use App\Http\Controllers\Controller;
-use App\Models\AchievementLevel;
-use App\Models\ClassLearningMaterial;
 use App\Models\ClassModel;
 use App\Models\Material;
 use App\Models\ProgressReport;
-use App\Models\ReportCompetency;
+use App\Models\ProgressReportTemplate;
 use App\Models\User;
 use App\Notifications\AppNotification;
+use App\Services\ProgressReportDocument;
 use App\Services\ProgressReportService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -130,207 +129,202 @@ class ProgressReportController extends Controller
         $history = ProgressReport::where('teacher_id', $teacher->id)
             ->whereNotNull('file_path')->with('student')->latest('id')->take(15)->get();
 
-        return view('guru.progress-report', compact('classes', 'classId', 'students', 'history'));
+        $template = $classId ? ProgressReportTemplate::forClass($classId) : null;
+        $templateMissing = $classId && $classes->contains('id', $classId) && !$template && config('progress_report.require_template');
+        $templateName = $template?->name;
+        $templateMessage = $templateMissing ? $this->templateMissingMessage($classId) : null;
+
+        return view('guru.progress-report', compact('classes', 'classId', 'students', 'history', 'templateMissing', 'templateName', 'templateMessage'));
+    }
+
+    /** Baris awal editor (hanya bila template tidak diwajibkan): report tersimpan, jurnal mengajar, lalu satu baris kosong. */
+    private function initialRows(object $e, ?ProgressReport $report): array
+    {
+        if ($report && !empty($report->content)) {
+            return collect($report->content)->map(fn ($r) => [
+                'meeting' => $r['meeting'] ?? '', 'material' => $r['material'] ?? '',
+                'level' => $r['level'] ?? '', 'description' => $r['description'] ?? '',
+            ])->values()->all();
+        }
+
+        $journals = DB::table('teaching_journals as j')
+            ->leftJoin('materials as m', 'm.id', '=', 'j.material_id')
+            ->where('j.class_id', $e->class_id)->where('j.class_status', 'Conducted')
+            ->orderBy('j.session_date')->orderBy('j.id')
+            ->get(['j.meeting_number', 'j.material_taught', 'j.learning_activities', 'm.title as material_title']);
+
+        if ($journals->isNotEmpty()) {
+            return $journals->values()->map(fn ($j, $i) => [
+                'meeting'     => $j->meeting_number ?: ($i + 1),
+                'material'    => trim((string) ($j->material_taught ?: ($j->material_title ?: $j->learning_activities))),
+                'level'       => '',
+                'description' => '',
+            ])->all();
+        }
+
+        
+
+        return [['meeting' => 1, 'material' => '', 'level' => '', 'description' => '']];
+    }
+
+    /** Baris editor dari template Kurikulum; level & description diambil dari isian guru yang sudah tersimpan. */
+    private function templateRows(ProgressReportTemplate $template, ?ProgressReport $report): array
+    {
+        $saved = collect($report?->content ?? [])->keyBy(fn ($r) => (string) (int) ($r['meeting'] ?? 0));
+
+        return $template->meetings->map(function ($m) use ($saved) {
+            $old = $saved->get((string) $m->meeting_number, []);
+
+            return [
+                'meeting'     => $m->meeting_number,
+                'material'    => $m->materials,   // dikunci: dari Kurikulum
+                'level'       => $old['level'] ?? '',
+                'description' => $old['description'] ?? '',
+            ];
+        })->values()->all();
+    }
+
+    private function templateMissingMessage(int $classId): string
+    {
+        return 'Kurikulum belum membuat template Learning Materials untuk program '
+            . ProgressReportTemplate::programLabelForClass($classId)
+            . '. Hubungi Kurikulum agar membuatnya di menu Template Progress Report.';
     }
 
     public function form(int $enrollment)
     {
         $e = $this->myEnrollment($enrollment);
+        if (config('progress_report.require_template') && !ProgressReportTemplate::forClass($e->class_id)) {
+            return redirect()->route('teacher.progress-report', ['class_id' => $e->class_id])
+                ->with('error', $this->templateMissingMessage($e->class_id));
+        }
+        $teacher = $this->teacher();
         $report = $this->draftFor($e->id);
         [$present, $total] = $this->attendanceStats($e->class_id, $e->student_id);
-        $replacementCount = $this->replacementClassCount($e->class_id, $e->student_id);
 
-        // 1. Template Learning Materials per kelas
-        $classMaterials = ClassLearningMaterial::where('class_id', $e->class_id)->orderBy('sort_order')->get();
-
-        // 2. Fallback ke ReportCompetency level
-        if ($classMaterials->isEmpty() && $e->class_level_id) {
-            $classMaterials = ReportCompetency::forLevel($e->class_level_id)->get()->map(function ($c) {
-                return (object) ['id' => $c->id, 'material_name' => $c->name];
-            });
+        if ($report && $report->status === 'Submitted') {
+            return redirect()->route('progress-report.document', $report)
+                ->with('success', 'Report sudah diajukan dan menunggu review Kurikulum.');
         }
 
-        // 3. Fallback ke isi report yang tersimpan sebelumnya
-        if ($classMaterials->isEmpty() && $report && !empty($report->content)) {
-            $classMaterials = collect($report->content)->map(function ($row, $idx) {
-                return (object) ['id' => $idx + 1, 'material_name' => $row['material'] ?? "Materi " . ($idx + 1)];
-            });
-        }
-
-        // 4. Fallback ke materi kurikulum yang ada di level tersebut
-        if ($classMaterials->isEmpty() && $e->class_level_id) {
-            $classMaterials = Material::where('level_id', $e->class_level_id)->orderBy('meeting_number')->take(6)->get()->map(function ($m) {
-                return (object) ['id' => $m->id, 'material_name' => $m->title];
-            });
-        }
-
-        // 5. Fallback ke kompetensi standar agar form tidak pernah kosong
-        if ($classMaterials->isEmpty()) {
-            $classMaterials = collect([
-                (object) ['id' => 1, 'material_name' => 'Penguasaan Kosakata (Vocabulary)'],
-                (object) ['id' => 2, 'material_name' => 'Tata Bahasa & Pola Kalimat (Grammar & Sentence Pattern)'],
-                (object) ['id' => 3, 'material_name' => 'Pelafalan & Percakapan (Pronunciation & Speaking)'],
-                (object) ['id' => 4, 'material_name' => 'Pemahaman Mendengar & Membaca (Listening & Reading Comprehension)'],
-            ]);
-        }
-
-        // Pilihan Achievement Level baku
-        $achievementChoices = ['Sufficient', 'Proficient', 'Excellent'];
-        $levelDescriptions = AchievementLevel::pluck('description', 'level')->all();
-
-        // Nilai yang tersimpan sebelumnya
-        $savedMaterials = collect($report->content ?? [])->keyBy('material');
-        $savedAssessments = !empty($report->assessment_data) ? $report->assessment_data : [
-            ['assessment' => 'Speaking & Pronunciation', 'score' => '', 'grade' => '', 'note' => ''],
-            ['assessment' => 'Reading Comprehension',   'score' => '', 'grade' => '', 'note' => ''],
-            ['assessment' => 'Writing (Pinyin / Hanzi)', 'score' => '', 'grade' => '', 'note' => ''],
+        $h = (array) ($report->header_data ?? []);
+        $header = [
+            'title'        => $h['title'] ?? config('progress_report.default_title'),
+            'teacher'      => $h['teacher'] ?? $teacher->name,
+            'student'      => $h['student'] ?? $e->student_name,
+            'class'        => $h['class'] ?? $e->class_name,
+            'present'      => $h['present'] ?? ($total ? "{$present}/{$total}" : ''),
+            'teacher_sign' => $h['teacher_sign'] ?? (Auth::user()->name ?: $teacher->name),
         ];
 
-        $overallLevel = $report->overall_achievement_level ?? 'Proficient';
+        $assessments = !empty($report->assessment_data) ? $report->assessment_data : [
+            ['assessment' => '', 'score' => '', 'grade' => '', 'note' => ''],
+        ];
 
         $deadline = ProgressReportService::deadline($e->class_id, $report);
         $isLate = $deadline && now()->gt($deadline);
 
-        return view('guru.progress-report-form', compact(
-            'e', 'report', 'present', 'total', 'replacementCount', 'classMaterials',
-            'achievementChoices', 'levelDescriptions', 'savedMaterials', 'savedAssessments', 'overallLevel', 'deadline', 'isLate'
-        ));
+        $template = ProgressReportTemplate::forClass($e->class_id);
+        $notice = $isLate ? $this->deadlineMessage($e->class_id, $report) : ($report?->review_note ? 'Dikembalikan Kurikulum: ' . $report->review_note : null);
+        if (!$template && !$notice) {
+            $notice = 'Kurikulum belum membuat template Learning Materials untuk program kelas ini, jadi kolom Learning Materials masih bisa Anda isi sendiri.';
+        }
+
+        return view('progress-report.editor', [
+            'lockMaterials' => (bool) $template,
+            'templateName'  => $template?->name,
+            'layout'     => 'layouts.guru',
+            'formAction' => route('teacher.progress-report.store', $e->id),
+            'method'     => 'POST',
+            'backUrl'    => route('teacher.progress-report', ['class_id' => $e->class_id]),
+            'header'     => $header,
+            'rows'       => $template ? $this->templateRows($template, $report) : $this->initialRows($e, $report),
+            'assessments' => $assessments,
+            'overall'    => $report->overall_achievement_level ?? 'Proficient',
+            'suggestion' => $report->suggestion_box ?? '',
+            'period'     => $report->report_period ?? '',
+            'legend'     => ProgressReportDocument::legend(),
+            'achievementHtml'        => array_key_exists('achievement_page', $h) ? (string) $h['achievement_page'] : ProgressReportDocument::defaultAchievementHtml(),
+            'defaultAchievementHtml' => ProgressReportDocument::defaultAchievementHtml(),
+            'report'     => $report,
+            'canDraft'   => !$isLate,
+            'canSubmit'  => !$isLate,
+            'notice'     => $notice,
+            'deleteUrl'  => ($report && $report->exists && $report->status === 'Draft') ? route('teacher.progress-report.destroy', $report) : null,
+        ]);
     }
 
     public function store(Request $request, int $enrollment)
     {
         $e = $this->myEnrollment($enrollment);
+        if (config('progress_report.require_template') && !ProgressReportTemplate::forClass($e->class_id)) {
+            return back()->with('error', $this->templateMissingMessage($e->class_id));
+        }
         $teacher = $this->teacher();
 
         $report = $this->draftFor($e->id) ?? new ProgressReport();
 
-        // Batas H+3
+        if ($report->exists && $report->status === 'Submitted') {
+            return back()->with('error', 'Report sudah diajukan; tunggu review Kurikulum.');
+        }
+
         if (ProgressReportService::isPastDeadline($e->class_id, $report->exists ? $report : null)) {
             return back()->withInput()->with('error', $this->deadlineMessage($e->class_id, $report->exists ? $report : null));
         }
 
-        $action = $request->input('action', 'draft');
+        // bersihkan HTML dari editor (aman + "kosong" dikenali) sebelum disaring/divalidasi
+        $request->merge(['materials' => ProgressReportDocument::cleanRows((array) $request->input('materials', []))]);
 
-        // Auto-calculate grade pada input request sebelum validasi jika score terisi namun grade kosong
-        $assessmentsInput = $request->input('assessments', []);
-        if (is_array($assessmentsInput)) {
-            foreach ($assessmentsInput as $k => $ass) {
-                if ((!isset($ass['grade']) || trim((string) $ass['grade']) === '') && isset($ass['score']) && $ass['score'] !== '') {
-                    $sc = (float) $ass['score'];
-                    $assessmentsInput[$k]['grade'] = $sc >= 85 ? 'A' : ($sc >= 75 ? 'B' : ($sc >= 60 ? 'C' : 'D'));
-                }
-            }
-            $request->merge(['assessments' => $assessmentsInput]);
+        // Learning Materials dikunci dari template Kurikulum: dipaksa dari server, abaikan teks kiriman form.
+        $template = ProgressReportTemplate::forClass($e->class_id);
+        if ($template) {
+            $byNumber = $template->meetings->keyBy(fn ($m) => (string) $m->meeting_number);
+            $rows = collect($request->input('materials', []))
+                ->filter(fn ($m) => is_array($m)
+                    && $byNumber->has((string) (int) ($m['meeting'] ?? 0))
+                    && (filled($m['level'] ?? null) || filled($m['description'] ?? null)))
+                ->map(function ($m) use ($byNumber) {
+                    $n = (string) (int) $m['meeting'];
+                    $m['meeting']  = $n;
+                    $m['material'] = $byNumber[$n]->materials;
+
+                    return $m;
+                })
+                ->unique('meeting')
+                ->sortBy(fn ($m) => (int) $m['meeting'])
+                ->values()->all();
+            $request->merge(['materials' => $rows]);
         }
 
-        if ($action === 'submit') {
-            // Validasi lengkap saat diajukan ke Kurikulum
-            $data = $request->validate([
-                'report_type'               => 'required|string|max:100',
-                'report_period'             => 'required|string|max:100',
-                'materials'                 => 'required|array|min:1',
-                'materials.*.material'      => 'required|string|max:255',
-                'materials.*.level'         => ['required', Rule::in(['Sufficient', 'Proficient', 'Excellent', 'Good', 'Needs Improvement'])],
-                'materials.*.description'   => 'required|string|max:1000',
-                'assessments'               => 'required|array|min:1',
-                'assessments.*.assessment'  => 'required|string|max:255',
-                'assessments.*.score'       => 'required|numeric|min:0|max:100',
-                'assessments.*.grade'       => 'required|string|max:10',
-                'assessments.*.note'        => 'nullable|string|max:255',
-                'overall_achievement_level' => ['required', Rule::in(['Sufficient', 'Proficient', 'Excellent'])],
-                'suggestion_box'            => 'nullable|string|max:2000',
-            ], [
-                'materials.required'               => 'Daftar materi pembelajaran minimal harus ada 1 materi.',
-                'materials.*.description.required' => 'Deskripsi capaian materi wajib diisi.',
-                'assessments.*.score.required'     => 'Nilai score penilaian wajib diisi (0-100).',
-                'assessments.*.grade.required'     => 'Grade penilaian wajib diisi.',
-                'overall_achievement_level.required' => 'Overall Achievement Level wajib dipilih.',
-            ]);
-        } else {
-            // Validasi fleksibel saat simpan Draft
-            $data = $request->validate([
-                'report_type'               => 'required|string|max:100',
-                'report_period'             => 'required|string|max:100',
-                'materials'                 => 'nullable|array',
-                'materials.*.material'      => 'required|string|max:255',
-                'materials.*.level'         => ['nullable', Rule::in(['Sufficient', 'Proficient', 'Excellent', 'Good', 'Needs Improvement'])],
-                'materials.*.description'   => 'nullable|string|max:1000',
-                'assessments'               => 'nullable|array',
-                'assessments.*.assessment'  => 'nullable|string|max:255',
-                'assessments.*.score'       => 'nullable|numeric|min:0|max:100',
-                'assessments.*.grade'       => 'nullable|string|max:10',
-                'assessments.*.note'        => 'nullable|string|max:255',
-                'overall_achievement_level' => ['nullable', Rule::in(['Sufficient', 'Proficient', 'Excellent'])],
-                'suggestion_box'            => 'nullable|string|max:2000',
-            ]);
-        }
-
-        // Auto-calculate grade jika score diisi tapi grade kosong
-        if (!empty($data['assessments'])) {
-            foreach ($data['assessments'] as &$ass) {
-                if (empty($ass['grade']) && isset($ass['score']) && $ass['score'] !== '') {
-                    $sc = (float) $ass['score'];
-                    $ass['grade'] = $sc >= 85 ? 'A' : ($sc >= 75 ? 'B' : ($sc >= 60 ? 'C' : 'D'));
-                }
-            }
-            unset($ass);
-        }
-
-        // Filter materi yang memiliki nama
-        $materials = collect($data['materials'] ?? [])
-            ->filter(fn ($m) => !empty($m['material']))
-            ->values()
-            ->all();
+        $action = $request->input('action', 'draft') === 'submit' ? 'submit' : 'draft';
+        $data = $request->validate(ProgressReportDocument::rules($action === 'submit'), ProgressReportDocument::messages());
 
         [$present, $total] = $this->attendanceStats($e->class_id, $e->student_id);
         $replacementCount = $this->replacementClassCount($e->class_id, $e->student_id);
 
-        DB::transaction(function () use (&$report, $e, $teacher, $data, $materials, $present, $total, $replacementCount, $action) {
+        DB::transaction(function () use (&$report, $e, $teacher, $data, $present, $total, $replacementCount, $action) {
+            ProgressReportDocument::fillFrom($report, $data);
             $report->fill([
-                'student_id'                => $e->student_id,
-                'teacher_id'                => $teacher->id,
-                'enrollment_id'             => $e->id,
-                'report_type'               => $data['report_type'],
-                'report_period'             => $data['report_period'],
-                'content'                   => $materials,
-                'assessment_data'           => $data['assessments'] ?? [],
-                'overall_achievement_level' => $data['overall_achievement_level'] ?? 'Proficient',
-                'suggestion_box'            => $data['suggestion_box'] ?? null,
-                'attendance_present'        => $present,
-                'attendance_total'          => $total,
-                'replacement_class_count'   => $replacementCount,
-                'uploaded_by'               => Auth::id(),
-                'status'                    => 'Draft',
+                'student_id'              => $e->student_id,
+                'teacher_id'              => $teacher->id,
+                'enrollment_id'           => $e->id,
+                'attendance_present'      => $present,
+                'attendance_total'        => $total,
+                'replacement_class_count' => $replacementCount,
+                'uploaded_by'             => Auth::id(),
+                'status'                  => 'Draft',
             ]);
             $report->save();
 
-            // Generate PDF
-            try {
-                $pdf = Pdf::loadView('guru.progress-report-pdf', [
-                    'report' => $report, 'teacher' => $teacher, 'e' => $e,
-                ])->setPaper('a4');
-
-                $path = "progress-reports/report-{$report->id}.pdf";
-                Storage::disk('public')->put($path, $pdf->output());
-                $report->file_path = $path;
-                $report->save();
-            } catch (\Throwable $pdfEx) {
-                report($pdfEx);
-            }
-
             if ($action === 'submit') {
                 $report->update([
-                    'status'       => 'Submitted',
-                    'submitted_at' => now(),
-                    'returned_at'  => null,
-                    'review_note'  => null,
+                    'status' => 'Submitted', 'submitted_at' => now(), 'returned_at' => null, 'review_note' => null,
                 ]);
 
-                // Kirim notifikasi database ke Kurikulum
                 $curriculums = User::whereHas('level', fn ($q) => $q->whereIn('nama_level', ['Curriculum', 'Kurikulum']))->get();
                 foreach ($curriculums as $curr) {
                     $curr->notify(new AppNotification(
-                        title: "Progress Report Diajukan",
+                        title: 'Progress Report Diajukan',
                         message: "Guru {$teacher->name} telah mengajukan Progress Report untuk {$e->student_name} ({$e->class_name}).",
                         url: url('/kurikulum/review-pengajuan?tab=report'),
                         type: 'progress_report',
@@ -338,12 +332,17 @@ class ProgressReportController extends Controller
                     ));
                 }
             }
+
+            ProgressReportDocument::store($report);
         });
 
+        if ($action === 'draft') {
+            return redirect()->route('teacher.progress-report.form', $e->id)
+                ->with('success', "Draft Progress Report untuk {$e->student_name} disimpan. Anda bisa melihat PDF-nya lewat tombol Pratinjau/PDF.");
+        }
+
         return redirect()->route('teacher.progress-report', ['class_id' => $e->class_id])
-            ->with('success', $action === 'submit'
-                ? "Progress Report untuk {$e->student_name} berhasil diajukan ke Kurikulum untuk di-ACC."
-                : "Draft Progress Report untuk {$e->student_name} berhasil disimpan.");
+            ->with('success', "Progress Report untuk {$e->student_name} berhasil diajukan ke Kurikulum untuk di-ACC.");
     }
 
     public function submitAll(Request $request)
@@ -384,12 +383,30 @@ class ProgressReportController extends Controller
             ->with('success', "{$drafts->count()} Progress Report berhasil diajukan ke Kurikulum.");
     }
 
+    /** Guru boleh menghapus draft miliknya (report yang sudah diajukan tidak bisa dihapus). */
+    public function destroy(ProgressReport $report)
+    {
+        abort_unless((int) $report->teacher_id === (int) $this->teacher()->id, 403, 'Bukan report Anda.');
+        abort_unless($report->status === 'Draft', 403, 'Hanya draft yang bisa dihapus.');
+
+        $classId = DB::table('class_enrollments')->where('id', $report->enrollment_id)->value('class_id');
+        $name = $report->student?->name ?? 'siswa';
+
+        if ($report->file_path) {
+            foreach ([ProgressReportDocument::DISK, 'public'] as $disk) {
+                \Illuminate\Support\Facades\Storage::disk($disk)->delete($report->file_path);
+            }
+        }
+        $report->delete();
+
+        return redirect()->route('teacher.progress-report', $classId ? ['class_id' => $classId] : [])
+            ->with('success', "Draft Progress Report {$name} dihapus.");
+    }
+
     public function download(ProgressReport $report)
     {
-        abort_unless($report->file_path, 404);
-        $path = storage_path('app/public/' . $report->file_path);
-        abort_unless(file_exists($path), 404, 'File PDF tidak ditemukan.');
+        abort_unless(ProgressReportDocument::canView(Auth::user(), $report), 403, 'Anda tidak berhak mengunduh report ini.');
 
-        return response()->download($path, 'Progress_Report_' . str_replace(' ', '_', $report->student?->name ?? 'Siswa') . '.pdf');
+        return redirect()->route('progress-report.document.pdf', $report);
     }
 }

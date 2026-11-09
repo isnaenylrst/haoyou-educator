@@ -48,7 +48,7 @@ class OwnerMenu
                 'key'   => 'kurikulum',
                 'label' => 'KURIKULUM',
                 'color' => '#7c3aed',
-                'desc'  => 'Materi, review pengajuan guru, kompetensi, monitoring',
+                'desc'  => 'Materi, template progress report, review pengajuan guru, monitoring',
                 'items' => [
                     ['Dashboard Kurikulum',     'fa-house',          '/kurikulum/dashboard',         'Pengajuan yang perlu ditindaklanjuti'],
                     ['Materi & Silabus',        'fa-folder-open',    '/kurikulum/materi',            'CCO, lesson plan, aktivitas, kode box'],
@@ -59,7 +59,7 @@ class OwnerMenu
                     ['Materi Training',         'fa-graduation-cap', '/kurikulum/training',          'Akses modul materi training'],
                     ['Request Belajar',         'fa-book-open-reader','/kurikulum/request-belajar',  'Request belajar dari siswa'],
                     ['Review Pengajuan',        'fa-circle-check',   '/kurikulum/review-pengajuan',  'ACC materi, jurnal, report, cuti, sertifikat, reimburse'],
-                    ['Kompetensi Report',       'fa-list-check',     '/kurikulum/kompetensi',        'Kompetensi dan level progress report'],
+                    ['Template Progress Report','fa-table-list',     '/kurikulum/template-progress-report', 'Learning Materials per program (Feixiang, Maochong, HSK)'],
                     ['Observasi Guru',          'fa-magnifying-glass-chart', '/kurikulum/observasi', 'Observasi kelas mingguan guru'],
                     ['Hasil Konsultasi',        'fa-comments',       '/kurikulum/hasil-konsultasi',  'Hasil dan tindak lanjut konsultasi guru'],
                     ['Ketersediaan Guru',       'fa-user-clock',     '/kurikulum/ketersediaan-guru', 'Hari dan jam guru bisa mengajar'],

@@ -133,8 +133,11 @@ class ReviewPengajuanController extends Controller
 
     // ------------------------------------------------------------------ BERKAS (aman, butuh login)
 
-    public function file(string $type, int $id)
+        public function file(string $type, int $id)
     {
+        if ($type === 'report') {
+            return redirect()->route('progress-report.document.pdf', ProgressReport::findOrFail($id));
+        }
         $path = match ($type) {
             'lp'     => TeacherMaterial::findOrFail($id)->lp_file_path,
             'ppt'    => TeacherMaterial::findOrFail($id)->ppt_file_path,
@@ -287,29 +290,12 @@ class ReviewPengajuanController extends Controller
                 'reviewed_at'               => now(),
                 'published_at'              => now(),
                 'curriculum_signature_path' => $user->signature_path,
-                'owner_signature_path'      => $ownerSig,
+                'owner_signature_path'      => null, // TTD Owner baru ditempel saat Owner menandatangani di Antrean TTD
                 'review_note'               => null,
                 'returned_at'               => null,
             ]);
 
-            // Regenerate PDF dengan TTD Kurikulum & Owner serta tanggal terbit
-            try {
-                $e = (object) [
-                    'student_name' => $progressReport->student?->name,
-                    'class_name'   => $progressReport->enrollment?->class?->class_name,
-                ];
-                $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('guru.progress-report-pdf', [
-                    'report'  => $progressReport,
-                    'teacher' => $progressReport->teacher,
-                    'e'       => $e,
-                ])->setPaper('a4');
-
-                $path = "progress-reports/report-{$progressReport->id}.pdf";
-                Storage::disk('public')->put($path, $pdf->output());
-                $progressReport->update(['file_path' => $path]);
-            } catch (\Throwable $err) {
-                report($err);
-            }
+                \App\Services\ProgressReportDocument::store($progressReport->refresh());
 
             // Notifikasi ke Siswa
             if ($progressReport->student?->user) {

@@ -124,13 +124,12 @@
                                             <div class="small text-muted">{{ $report->reviewed_at?->format('d/m/Y H:i') }}</div>
                                         </td>
                                         <td>
-                                            @if($report->file_path && Storage::disk('public')->exists($report->file_path))
-                                                <a href="{{ asset('storage/' . $report->file_path) }}" target="_blank" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
-                                                    <i class="fa-solid fa-file-pdf text-danger me-1"></i> Lihat PDF
-                                                </a>
-                                            @else
-                                                <span class="text-muted small">Belum di-generate</span>
-                                            @endif
+                                                                                        <a href="{{ route('progress-report.document', $report) }}" target="_blank" class="btn btn-outline-primary btn-sm rounded-pill px-3">
+                                                <i class="fa-regular fa-eye me-1"></i> Lihat Dokumen
+                                            </a>
+                                            <a href="{{ route('progress-report.document.pdf', $report) }}" target="_blank" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+                                                <i class="fa-solid fa-file-pdf text-danger me-1"></i> PDF
+                                            </a>
                                         </td>
                                         <td class="text-end">
                                             <button type="button" class="btn btn-success btn-sm rounded-pill px-3" onclick="document.getElementById('sign-report-{{ $report->id }}').submit();">

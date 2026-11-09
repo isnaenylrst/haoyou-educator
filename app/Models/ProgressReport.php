@@ -61,6 +61,9 @@ class ProgressReport extends Model
         'returned_at',
         'submitted_at',
         'extended_until',
+        'header_data',
+        'document_edited_at',
+        'document_edited_by',
     ];
 
     protected $casts = [
@@ -75,6 +78,8 @@ class ProgressReport extends Model
         'submitted_at'    => 'datetime',
         'owner_signed_at' => 'datetime',
         'extended_until'  => 'date',
+        'header_data'     => 'array',
+        'document_edited_at' => 'datetime',
     ];
 
     public function student()

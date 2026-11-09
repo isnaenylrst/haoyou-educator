@@ -82,7 +82,7 @@ public function followUp(Request $request, ProgressReport $report)
             return $this->missingFile();
         }
 
-        return Storage::disk('public')->response($report->file_path, $this->fileName($report));
+        return response()->file(\App\Services\ProgressReportDocument::absolutePath($report), ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="' . $this->fileName($report) . '"']);
     }
 
     /** Unduh PDF */
@@ -92,14 +92,14 @@ public function followUp(Request $request, ProgressReport $report)
             return $this->missingFile();
         }
 
-        return Storage::disk('public')->download($report->file_path, $this->fileName($report));
+        return response()->download(\App\Services\ProgressReportDocument::absolutePath($report), $this->fileName($report));
     }
 
     private function resolveFile(ProgressReport $report): bool
     {
         return $report->status === 'Submitted'
             && $report->file_path
-            && Storage::disk('public')->exists($report->file_path);
+            && \App\Services\ProgressReportDocument::absolutePath($report) !== null;
     }
 
     private function missingFile()

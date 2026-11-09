@@ -62,7 +62,7 @@ class SiswaLearningController extends Controller
                 ->get()
             : collect();
 
-        return view('siswa.progress-report', [
+        return view('Siswa.progress-report', [
             'title'    => 'Progress Report',
             'subtitle' => 'Laporan perkembangan belajar',
             'laporan'  => $laporan,
@@ -81,8 +81,12 @@ class SiswaLearningController extends Controller
             403
         );
 
-        $path = storage_path('app/public/' . $report->file_path);
-        abort_unless(file_exists($path), 404, 'File PDF tidak ditemukan.');
+        $path = \App\Services\ProgressReportDocument::absolutePath($report);
+        if (!$path) {
+            \App\Services\ProgressReportDocument::store($report);
+            $path = \App\Services\ProgressReportDocument::absolutePath($report);
+        }
+        abort_unless($path, 404, 'File PDF tidak ditemukan.');
 
         return response()->download($path, 'Progress_Report_' . str_replace(' ', '_', $student->name) . '.pdf');
     }
@@ -101,7 +105,7 @@ class SiswaLearningController extends Controller
                 ->get()
             : collect();
 
-        return view('siswa.sertifikat', [
+        return view('Siswa.sertifikat', [
             'title'      => 'Sertifikat',
             'subtitle'   => 'Download sertifikat kelulusan',
             'sertifikat' => $sertifikat,
@@ -150,7 +154,7 @@ class SiswaLearningController extends Controller
             return $v->category?->category_name ?? 'Umum / Semua Program';
         });
 
-        return view('siswa.video', [
+        return view('Siswa.video', [
             'title'         => 'Video Pembelajaran',
             'subtitle'      => 'Tonton video materi dan pembahasan terkelompok per kategori program',
             'groupedVideos' => $groupedVideos,
