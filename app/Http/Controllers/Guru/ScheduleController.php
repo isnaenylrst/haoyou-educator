@@ -4,13 +4,16 @@ namespace App\Http\Controllers\Guru;
 
 use App\Http\Controllers\Controller;
 use App\Models\ClassModel;
+use App\Models\ClassSessionTeacherOffer;
 use App\Models\TeacherAvailability;
 use App\Models\TeacherLeave;
+use App\Services\ClassScheduleService;
 use App\Services\TeacherAvailabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ScheduleController extends Controller
 {
@@ -123,6 +126,38 @@ class ScheduleController extends Controller
                 return $c;
             });
 
+        // Kelas pengganti (satu pertemuan untuk satu siswa) yang diajukan kepada saya. Siapa cepat dia dapat.
+        $scheduleSvc = app(ClassScheduleService::class);
+
+        $replacementOffers = ClassSessionTeacherOffer::with(['session.enrollment.student', 'session.enrollment.class'])
+            ->where('teacher_id', $teacher->id)
+            ->where('status', 'Pending')
+            ->whereHas('session', fn ($q) => $q
+                ->where('kind', 'Replacement')->where('status', 'Scheduled')
+                ->whereNull('teacher_id')->whereDate('session_date', '>=', today()))
+            ->get()
+            ->sortBy(fn ($o) => $o->session->session_date->toDateString() . ' ' . $o->session->start_time)
+            ->values()
+            ->map(function ($o) use ($teacher, $scheduleSvc) {
+                $s = $o->session;
+
+                $o->clash = false;
+                try {
+                    $scheduleSvc->assertTeacherFreeOn($teacher->id, $s->session_date, $s->start_time, $s->end_time, $s->id);
+                } catch (ValidationException) {
+                    $o->clash = true;
+                }
+
+                $o->fits = $scheduleSvc->isTeacherAvailable(
+                    $teacher->id,
+                    ClassScheduleService::DAYS[$s->session_date->dayOfWeekIso - 1],
+                    $s->start_time,
+                    $s->end_time
+                );
+
+                return $o;
+            });
+
         // Permintaan dari guru lain agar saya menggantikan kelasnya
         $replacementRequests = TeacherLeave::with(['teacher', 'classSchedule.class'])
             ->where('replacement_teacher_id', $teacher->id)
@@ -144,7 +179,7 @@ class ScheduleController extends Controller
             'weekStart', 'weekEnd', 'scope', 'teacherFilterId', 'teachers',
             'slots', 'cells', 'dayHeaders', 'next',
             'myAvailabilities', 'days', 'pendingClasses',
-            'replacementRequests', 'availabilityGrid', 'myTeacherId'
+            'replacementRequests', 'replacementOffers', 'availabilityGrid', 'myTeacherId'
         ));
     }
 

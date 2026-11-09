@@ -177,7 +177,7 @@ class InvoiceService
             false
         );
 
-        return $this->toPdf($content);
+        return $this->toPdf($content, true);
     }
 
     /**

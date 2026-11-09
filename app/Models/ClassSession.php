@@ -83,6 +83,11 @@ class ClassSession extends Model
         );
     }
 
+    public function teacherOffers(): HasMany
+    {
+        return $this->hasMany(ClassSessionTeacherOffer::class, 'class_session_id');
+    }
+
     /* ---------------------------------------------------------- */
     /*  Scope                                                      */
     /* ---------------------------------------------------------- */
@@ -193,6 +198,14 @@ class ClassSession extends Model
     public function isReplacement(): bool
     {
         return $this->kind === 'Replacement';
+    }
+
+    /** Kelas pengganti yang sudah dibayar tapi belum diterima guru mana pun. */
+    public function isAwaitingTeacher(): bool
+    {
+        return $this->kind === 'Replacement'
+            && $this->status === 'Scheduled'
+            && $this->teacher_id === null;
     }
 
     public function countsTowardPackage(): bool

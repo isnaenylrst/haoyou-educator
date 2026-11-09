@@ -11,801 +11,7 @@
 @section('title', 'Konversi Calon Siswa | Haoyou Educator')
 
 @push('styles')
-<style>
-    /* ============================================================
-       WIZARD KONVERSI CALON SISWA (step 1, 2, 3 dalam satu file)
-    ============================================================ */
-
-    .dashboard-header {
-        display: flex;
-        align-items: flex-end;
-        justify-content: space-between;
-        margin-bottom: 23px;
-        flex-wrap: wrap;
-    }
-
-    .eyebrow {
-        color: #d4a900;
-        font-size: 11.5px;
-        font-weight: 700;
-        letter-spacing: .07em;
-        text-transform: uppercase;
-        margin-bottom: 6px;
-    }
-
-    .dashboard-header h1 {
-        margin-top: 4px;
-        font-size: 24px;
-        font-weight: 700;
-        line-height: 1.2;
-        letter-spacing: -0.01em;
-        color: #111827;
-    }
-
-    .dashboard-header p {
-        margin-top: 4px;
-        color: #6B7280;
-        font-size: 13px;
-    }
-
-    .btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        height: 35px;
-        padding: 9px 18px;
-        border-radius: 7px;
-        font-size: 13px;
-        font-weight: 700;
-        border: 1px solid transparent;
-        cursor: pointer;
-        text-decoration: none;
-    }
-
-    .btn-secondary {
-        background: #FFFFFF;
-        border: 1px solid #E5E7EB;
-        color: #3F3F3F;
-    }
-
-    .btn-primary {
-        background: #ffd400;
-        border: 1px solid #ffd400;
-        box-shadow: 0 1px 2px rgba(28,25,23,0.06);
-        color: #111;
-    }
-
-    .card {
-        background: #fff;
-        border: 1px solid #edeef1;
-        border-radius: 12px;
-        overflow: hidden;
-        padding: 24px;
-    }
-
-    .alert-error {
-        background: #fef2f2;
-        border: 1px solid #fecaca;
-        color: #dc2626;
-        border-radius: 10px;
-        padding: 14px 18px;
-        margin-bottom: 20px;
-    }
-
-    .alert-error ul {
-        margin: 0;
-        padding-left: 18px;
-    }
-
-    .alert-error li {
-        font-size: 13px;
-        line-height: 1.6;
-    }
-
-    .success-banner {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        background: #f0fdf4;
-        border: 1px solid #bbf7d0;
-        color: #16a34a;
-        border-radius: 10px;
-        padding: 14px 18px;
-        font-size: 13px;
-        font-weight: 600;
-        margin-bottom: 20px;
-    }
-
-    /* =====================================================
-       STEPPER
-    ===================================================== */
-
-    .convert-steps {
-        display: flex;
-        gap: 10px;
-        margin-bottom: 20px;
-        flex-wrap: wrap;
-    }
-
-    .convert-step {
-        flex: 1;
-        min-width: 170px;
-        display: flex;
-        align-items: center;
-        gap: 9px;
-        padding: 10px 14px;
-        background: #fff;
-        border: 1px solid #edeef1;
-        border-radius: 10px;
-        font-size: 12.5px;
-        font-weight: 600;
-        color: #9ca3af;
-    }
-
-    .convert-step .num {
-        width: 22px;
-        height: 22px;
-        border-radius: 50%;
-        background: #f3f4f6;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 11px;
-        font-weight: 700;
-        flex-shrink: 0;
-    }
-
-    .convert-step.active {
-        background: #FFF8D6;
-        border-color: #ffd400;
-        color: #111827;
-    }
-
-    .convert-step.active .num {
-        background: #ffd400;
-        color: #111;
-    }
-
-    .convert-step.done {
-        color: #16a34a;
-    }
-
-    .convert-step.done .num {
-        background: #dcfce7;
-        color: #16a34a;
-    }
-
-    /* =====================================================
-       LAYOUT 2 KOLOM
-    ===================================================== */
-
-    .convert-layout {
-        display: grid;
-        grid-template-columns: 1.7fr 1fr;
-        gap: 20px;
-        align-items: start;
-    }
-
-    .convert-layout.equal {
-        grid-template-columns: 1fr 1fr;
-    }
-
-    .convert-side {
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
-    }
-
-    /* =====================================================
-       FORM
-    ===================================================== */
-
-    .form-section {
-        margin-bottom: 22px;
-    }
-
-    .form-section:last-child {
-        margin-bottom: 0;
-    }
-
-    .form-section-title {
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: .06em;
-        color: #b8860b;
-        margin-bottom: 12px;
-        display: flex;
-        align-items: center;
-        gap: 7px;
-    }
-
-    .form-section-title i {
-        font-size: 11px;
-    }
-
-    .form-section-note {
-        display: flex;
-        align-items: flex-start;
-        gap: 7px;
-        margin-top: 10px;
-        font-size: 12px;
-        line-height: 1.5;
-        color: #6b7280;
-    }
-
-    .form-section-note i {
-        margin-top: 1px;
-        color: #b8860b;
-    }
-
-    .form-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
-    }
-
-    .form-field {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        min-width: 0;
-    }
-
-    .form-field.full {
-        grid-column: 1 / -1;
-    }
-
-    .form-field label {
-        font-size: 12.5px;
-        font-weight: 600;
-        color: #374151;
-    }
-
-    .form-field input,
-    .form-field select,
-    .form-field textarea {
-        width: 100%;
-        min-width: 0;
-        box-sizing: border-box;
-        padding: 9px 12px;
-        border: 1px solid #e5e7eb;
-        border-radius: 9px;
-        outline: none;
-        background: #fff;
-        font: inherit;
-        font-size: 13px;
-        color: #111827;
-        transition: border-color .2s ease, box-shadow .2s ease;
-    }
-
-    .form-field select {
-        text-overflow: ellipsis;
-    }
-
-    .form-field input[type="file"] {
-        padding: 8px 10px;
-    }
-
-    .form-field input:focus,
-    .form-field select:focus,
-    .form-field textarea:focus {
-        border-color: #FFDD05;
-        box-shadow: 0 0 0 3px rgba(255, 221, 5, 0.18);
-    }
-
-    .form-field small {
-        font-size: 11px;
-        color: #dc2626;
-    }
-
-    .class-progress-box {
-        margin-top: 8px;
-        padding: 10px 12px;
-        border-radius: 8px;
-        border: 1px solid #e5d9a8;
-        background: #fff9e6;
-        color: #5c4a00;
-        font-size: 13px;
-        line-height: 1.5;
-    }
-    .stage-chip {
-        display: inline-block;
-        margin-left: 6px;
-        padding: 1px 8px;
-        border-radius: 999px;
-        background: #eef2ff;
-        color: #3730a3;
-        font-size: 11px;
-        font-weight: 700;
-    }
-    .class-progress-box.fresh {
-        border-color: #cfe3d2;
-        background: #f1f9f2;
-        color: #1e4d2b;
-    }
-
-    #class_id option[hidden],
-    #level_id option[hidden] {
-        display: none;
-    }
-
-    .link-fill {
-        align-self: flex-start;
-        background: none;
-        border: 0;
-        padding: 0;
-        font-size: 11.5px;
-        font-weight: 600;
-        color: #2563eb;
-        cursor: pointer;
-    }
-
-    .package-type-toggle {
-        display: flex;
-        gap: 12px;
-        margin-top: 8px;
-        margin-bottom: 20px;
-    }
-
-    .radio-pill {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 8px 16px;
-        border: 1px solid #d0d0d0;
-        border-radius: 999px;
-        cursor: pointer;
-        font-size: 14px;
-        transition: border-color 0.15s, background-color 0.15s;
-    }
-
-    .radio-pill:has(input:checked) {
-        border-color: #c9a227;
-        background-color: rgba(201, 162, 39, 0.08);
-    }
-
-    .radio-pill input[type="radio"] {
-        margin: 0;
-        accent-color: #c9a227;
-    }
-
-    .radio-pill span {
-        white-space: nowrap;
-    }
-
-    .form-footer {
-        display: flex;
-        justify-content: flex-end;
-        gap: 12px;
-        align-items: center;
-        padding-top: 20px;
-        border-top: 1px solid #edeef1;
-        margin-top: 24px;
-    }
-
-    /* =====================================================
-       KELAS PRIVATE (guru, mode, tanggal, jadwal mingguan)
-    ===================================================== */
-
-    .private-class-box {
-        grid-column: 1 / -1;
-        border-top: 1px dashed #e5e7eb;
-        padding-top: 16px;
-        margin-top: 4px;
-    }
-
-    .private-class-box .form-section-title {
-        margin-bottom: 14px;
-    }
-
-    .schedule-rows {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-
-    .schedule-row {
-        display: grid;
-        grid-template-columns: 1.1fr 1fr 1fr 1.4fr auto;
-        gap: 8px;
-        align-items: center;
-    }
-
-    .schedule-row.no-room {
-        grid-template-columns: 1.1fr 1fr 1fr auto;
-    }
-
-    .schedule-row select,
-    .schedule-row input {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 9px 12px;
-        border: 1px solid #e5e7eb;
-        border-radius: 9px;
-        outline: none;
-        background: #fff;
-        font: inherit;
-        font-size: 13px;
-        color: #111827;
-    }
-
-    .schedule-row select:focus,
-    .schedule-row input:focus {
-        border-color: #FFDD05;
-        box-shadow: 0 0 0 3px rgba(255, 221, 5, 0.18);
-    }
-
-    .schedule-remove {
-        width: 32px;
-        height: 32px;
-        border-radius: 8px;
-        border: 1px solid #edeef1;
-        background: #fff;
-        color: #9ca3af;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .schedule-remove:hover {
-        color: #dc2626;
-        border-color: #fecaca;
-        background: #fef2f2;
-    }
-
-    .schedule-add {
-        align-self: flex-start;
-        margin-top: 10px;
-        background: none;
-        border: 0;
-        padding: 0;
-        font-size: 12px;
-        font-weight: 700;
-        color: #2563eb;
-        cursor: pointer;
-    }
-
-    /* =====================================================
-       INFO (kolom samping / ringkasan)
-    ===================================================== */
-
-    .info-list {
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-    }
-
-    .info-item-label {
-        font-size: 11.5px;
-        color: #9ca3af;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: .04em;
-        margin-bottom: 3px;
-    }
-
-    .info-item-value {
-        font-size: 14px;
-        color: #111827;
-        font-weight: 600;
-    }
-
-    .info-item-value .badge-private-inline {
-        display: inline-block;
-        margin-left: 6px;
-        padding: 1px 8px;
-        border-radius: 999px;
-        background: rgba(201, 162, 39, 0.12);
-        color: #b8860b;
-        font-size: 10.5px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: .03em;
-        vertical-align: middle;
-    }
-
-    .schedule-list-item {
-        font-size: 13px;
-        font-weight: 600;
-        color: #111827;
-    }
-
-    .bill-row {
-        display: flex;
-        justify-content: space-between;
-        gap: 10px;
-        font-size: 13px;
-        color: #374151;
-        padding: 6px 0;
-    }
-
-    .bill-row.total {
-        border-top: 1px dashed #e5e7eb;
-        margin-top: 4px;
-        padding-top: 12px;
-        font-weight: 700;
-        color: #111827;
-        font-size: 14px;
-    }
-
-    .badge-rule {
-        display: inline-block;
-        padding: 3px 10px;
-        border-radius: 999px;
-        font-size: 11px;
-        font-weight: 700;
-    }
-
-    .badge-rule.lunas {
-        background: #fef2f2;
-        color: #dc2626;
-    }
-
-    .badge-rule.cicil {
-        background: #f0fdf4;
-        color: #16a34a;
-    }
-
-    /* =====================================================
-       DOKUMEN (step 3)
-    ===================================================== */
-
-    .doc-download-item {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        padding: 12px 14px;
-        border: 1px solid #edeef1;
-        border-radius: 10px;
-        margin-bottom: 10px;
-    }
-
-    .doc-download-item:last-child {
-        margin-bottom: 0;
-    }
-
-    .doc-info {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-
-    .doc-icon {
-        width: 34px;
-        height: 34px;
-        border-radius: 8px;
-        background: #FFF8D6;
-        color: #A46A00;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 13px;
-        flex-shrink: 0;
-    }
-
-    .doc-name {
-        font-size: 13px;
-        font-weight: 600;
-        color: #111827;
-    }
-
-    .doc-note {
-        font-size: 11px;
-        color: #9ca3af;
-        margin-top: 1px;
-    }
-
-    .doc-download-btn {
-        width: 34px;
-        height: 34px;
-        border-radius: 8px;
-        border: 1px solid #edeef1;
-        background: #fff;
-        color: #6b7280;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        transition: .2s;
-        flex-shrink: 0;
-        text-decoration: none;
-    }
-
-    .doc-download-btn:hover {
-        background: #f8f9fb;
-        border-color: #2563eb;
-        color: #2563eb;
-    }
-
-    .doc-download-btn.disabled {
-        opacity: .45;
-        pointer-events: none;
-        cursor: not-allowed;
-    }
-
-    /* =====================================================
-       SEARCH-SELECT (combobox: bisa diketik, bisa klik daftar)
-    ===================================================== */
-
-    .search-select {
-        position: relative;
-    }
-
-    .search-select-native {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        opacity: 0;
-        pointer-events: none;
-    }
-
-    .search-select-input {
-        position: relative;
-        z-index: 1;
-        cursor: text;
-        background: #fff;
-        width: 100%;
-        box-sizing: border-box;
-    }
-
-    .search-select-list {
-        display: none;
-        position: absolute;
-        top: calc(100% + 4px);
-        left: 0;
-        right: 0;
-        z-index: 30;
-        max-height: 230px;
-        overflow-y: auto;
-        background: #fff;
-        border: 1px solid #e5e7eb;
-        border-radius: 9px;
-        box-shadow: 0 10px 28px rgba(0, 0, 0, .1);
-    }
-
-    .search-select-list.open {
-        display: block;
-    }
-
-    .search-select-item {
-        padding: 8px 12px;
-        font-size: 12.5px;
-        color: #111827;
-        cursor: pointer;
-        line-height: 1.4;
-    }
-
-    .search-select-item:hover,
-    .search-select-item.is-highlighted {
-        background: #FFF8D6;
-    }
-
-    .search-select-item.is-selected {
-        font-weight: 700;
-    }
-
-    .search-select-empty {
-        padding: 8px 12px;
-        font-size: 12px;
-        color: #9ca3af;
-    }
-
-    /* =====================================================
-       JADWAL TERSEDIA GURU (panel info di form kelas private)
-    ===================================================== */
-
-    .teacher-availability {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        padding: 10px 12px;
-        border: 1px solid #edeef1;
-        border-radius: 9px;
-        background: #fafafa;
-    }
-
-    .ta-row {
-        display: flex;
-        gap: 10px;
-        align-items: flex-start;
-    }
-
-    .ta-day {
-        width: 62px;
-        flex-shrink: 0;
-        padding-top: 3px;
-        font-size: 12px;
-        font-weight: 700;
-        color: #374151;
-    }
-
-    .ta-slots {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-    }
-
-    .ta-chip {
-        display: inline-block;
-        padding: 2px 9px;
-        border-radius: 999px;
-        font-size: 11.5px;
-        font-weight: 600;
-        white-space: nowrap;
-    }
-
-    .ta-chip.free {
-        background: #f0fdf4;
-        color: #16a34a;
-        border: 1px solid #bbf7d0;
-    }
-
-    .ta-chip.busy {
-        background: #fef2f2;
-        color: #dc2626;
-        border: 1px solid #fecaca;
-    }
-
-    .ta-legend {
-        display: flex;
-        gap: 8px;
-        margin-top: 4px;
-        padding-top: 6px;
-        border-top: 1px dashed #e5e7eb;
-    }
-
-    .ta-empty {
-        font-size: 12px;
-        color: #9ca3af;
-    }
-
-    .ta-warn {
-        font-size: 12px;
-        font-weight: 600;
-        color: #dc2626;
-    }
-
-    .schedule-check {
-        margin-top: 8px;
-        padding: 8px 12px;
-        border-radius: 9px;
-        border: 1px solid #fde68a;
-        background: #fffbeb;
-        color: #92400e;
-        font-size: 12px;
-        line-height: 1.6;
-    }
-
-    /* =====================================================
-       RESPONSIVE
-    ===================================================== */
-
-    @media (max-width: 900px) {
-        .convert-layout,
-        .convert-layout.equal {
-            grid-template-columns: 1fr;
-        }
-    }
-
-    @media (max-width: 640px) {
-        .card {
-            padding: 18px;
-        }
-
-        .form-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .schedule-row,
-        .schedule-row.no-room {
-            grid-template-columns: 1fr 1fr;
-        }
-    }
-</style>
+    <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
 @endpush
 
 @section('content')
@@ -936,13 +142,13 @@
 
                         <div class="form-field full">
                             <label>Tipe Paket *</label>
-                            <div class="package-type-toggle">
-                                <label class="radio-pill">
+                            <div class="form-radio-group">
+                                <label class="form-radio">
                                     <input type="radio" name="package_type" value="program"
                                            {{ $defaultPackageType === 'program' ? 'checked' : '' }} onchange="togglePackageType()">
                                     <span>Program Reguler</span>
                                 </label>
-                                <label class="radio-pill">
+                                <label class="form-radio">
                                     <input type="radio" name="package_type" value="private"
                                            {{ $defaultPackageType === 'private' ? 'checked' : '' }} onchange="togglePackageType()">
                                     <span>Private</span>
@@ -987,41 +193,56 @@
                                         </option>
                                     @endforeach
                                 </select>
-                                <span class="form-section-note" style="margin-top:0;">
+                                <p class="form-section-note" style="margin-top: 4px;">
                                     <i class="fa-solid fa-circle-info"></i>
                                     Level otomatis terisi untuk paket HSK
-                                </span>
+                                </p>
                             </div>
 
                             <div class="form-field">
                                 <label>Kelas (opsional, bisa ditentukan belakangan)</label>
                                 <select name="class_id" id="class_id">
                                     <option value="">Belum ditentukan</option>
+
                                     @foreach ($classes as $class)
                                         @php
                                             $scheduleText = $class->schedules
                                                 ->map(fn ($s) => substr($s->day, 0, 3) . ' ' . substr($s->start_time, 0, 5) . '–' . substr($s->end_time, 0, 5))
                                                 ->implode(', ');
-                                            $pg = $classProgress[$class->id] ?? ['done' => 0, 'total' => 0, 'last_date' => null];
+
+                                            $pg = $classProgress[$class->id] ?? [
+                                                'done' => 0,
+                                                'total' => 0,
+                                                'last_date' => null
+                                            ];
                                         @endphp
+
                                         <option value="{{ $class->id }}"
-                                                data-package="{{ $class->program_package_id }}"
-                                                data-level="{{ $class->level_id }}"
-                                                data-done="{{ $pg['done'] }}"
-                                                data-total="{{ $pg['total'] }}"
-                                                data-last="{{ $pg['last_date'] }}"
-                                                data-slots="{{ $class->slots_left }}">
-                                            {{ $class->class_name }} ({{ $class->delivery_mode }}, {{ $class->status }})@if ($scheduleText) - {{ $scheduleText }} @endif
-                                            @isset($class->slots_left) &middot; sisa {{ $class->slots_left }} slot @endisset
-                                            @if ($pg['done'] > 0) &middot; sudah berjalan {{ $pg['done'] }}{{ $pg['total'] ? '/' . $pg['total'] : '' }} pertemuan @endif
+                                            data-package="{{ $class->program_package_id }}"
+                                            data-level="{{ $class->level_id }}"
+                                            data-done="{{ $pg['done'] }}"
+                                            data-total="{{ $pg['total'] }}"
+                                            data-last="{{ $pg['last_date'] }}"
+                                            data-slots="{{ $class->slots_left }}">
+
+                                            {{ $class->class_name }} ({{ $class->delivery_mode }}, {{ $class->status }})
+                                            @if ($scheduleText) - {{ $scheduleText }} @endif
+                                            @isset($class->slots_left)
+                                                &middot; sisa {{ $class->slots_left }} slot
+                                            @endisset
+                                            @if ($pg['done'] > 0)
+                                                &middot; sudah berjalan {{ $pg['done'] }}{{ $pg['total'] ? '/' . $pg['total'] : '' }} pertemuan
+                                            @endif
                                         </option>
                                     @endforeach
                                 </select>
-                                <p class="form-section-note" style="margin-top: 4px;">
+
+                                {{-- Satu tampilan: teks bawaan saat kelas kosong, rincian progres saat kelas dipilih (diisi renderClassProgress) --}}
+                                <p class="form-section-note" id="class-info" style="margin-top: 4px;"
+                                   data-default="Jika tidak dipilih, siswa berstatus &quot;Menunggu Kelas&quot;">
                                     <i class="fa-solid fa-circle-info"></i>
-                                    Jika tidak dipilih, siswa berstatus "Menunggu Kelas"
+                                    <span>Jika tidak dipilih, siswa berstatus "Menunggu Kelas"</span>
                                 </p>
-                                <div class="class-progress-box" id="class-progress-box" style="display:none;"></div>
                             </div>
                         </div>
 
@@ -1053,8 +274,8 @@
                                 </span>
                             </div>
 
-                            {{-- Pilihan buat kelas baru / gabung kelas private yang sudah ada (khusus konversi calon siswa) --}}
-                            @unless ($isContinueFlow)
+                            {{-- Pilihan buat kelas baru / gabung kelas private yang sudah ada (konversi dan lanjut program) --}}
+                            @if (true)
                                 @php
                                     $oldJoinClassId = old('join_class_id', $draft['join_class_id'] ?? '');
                                     $oldPrivateMode = $oldJoinClassId ? 'join' : 'new';
@@ -1062,13 +283,13 @@
 
                                 <div class="form-field full" id="private-mode-block" style="display:none;">
                                     <label>Kelas Private</label>
-                                    <div class="package-type-toggle">
-                                        <label class="radio-pill">
+                                    <div class="form-radio-group">
+                                        <label class="form-radio">
                                             <input type="radio" name="private_mode" value="new"
                                                    {{ $oldPrivateMode === 'new' ? 'checked' : '' }} onchange="applyPrivateState()">
                                             <span>Buat kelas baru</span>
                                         </label>
-                                        <label class="radio-pill" id="join-pill">
+                                        <label class="form-radio" id="join-pill">
                                             <input type="radio" name="private_mode" value="join"
                                                    {{ $oldPrivateMode === 'join' ? 'checked' : '' }} onchange="applyPrivateState()">
                                             <span>Gabung kelas yang sudah ada</span>
@@ -1103,7 +324,7 @@
                                             <i class="fa-solid fa-circle-info"></i>
                                             Belum ada kelas dengan slot kosong untuk paket ini. Buat kelas baru.
                                         </span>
-                                        <div class="class-progress-box" id="join-progress-box" style="display:none;"></div>
+                                        <span class="form-section-note" id="join-progress-box" style="display:none; margin-top:6px;"></span>
                                         <span class="form-section-note" style="margin-top:6px;">
                                             <i class="fa-solid fa-circle-info"></i>
                                             Jadwal, guru, dan mode mengikuti kelas yang dipilih. Kalau kelas sudah berjalan,
@@ -1111,35 +332,52 @@
                                         </span>
                                     </div>
                                 </div>
-                            @endunless
+                            @endif
 
-                            <div class="private-class-box" id="private-class-fields">
+                            <div class=" card private-class-box" id="private-class-fields">
                                 <div class="form-section-title"><i class="fa-solid fa-calendar-days"></i> Jadwal Kelas Private</div>
 
                                 <div class="form-grid">
-                                    @if ($isContinueFlow)
-                                        <div class="form-field">
-                                            <label>Guru *</label>
-                                            <select name="teacher_id" id="teacher_id" required onchange="onTeacherChange()">
-                                                <option value="">Pilih Guru</option>
-                                                @foreach ($teachers as $teacher)
-                                                    <option value="{{ $teacher->id }}"
-                                                            {{ (string) $oldTeacherId === (string) $teacher->id ? 'selected' : '' }}>
-                                                        {{ $teacher->name }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
+                                    @php
+                                        $oldOfferMode = old('offer_mode', $draft['offer_mode'] ?? 'matching');
+                                        $oldOfferIds  = collect(old('offer_teacher_ids', $draft['offer_teacher_ids'] ?? []))
+                                            ->map(fn ($i) => (int) $i)->all();
+                                        $offerModes = [
+                                            'selected' => 'Guru yang dicentang',
+                                            'matching' => 'Semua guru yang cocok',
+                                            'all'      => 'Semua guru',
+                                            'none'     => 'Jangan ajukan dulu',
+                                        ];
+                                    @endphp
+
+                                    <div class="form-field full">
+                                        <label>Ajukan ke Guru</label>
+
+                                        <div class="offer-modes">
+                                            @foreach ($offerModes as $value => $label)
+                                                <label class="offer-mode">
+                                                    <input type="radio" name="offer_mode" value="{{ $value }}"
+                                                           {{ $oldOfferMode === $value ? 'checked' : '' }} onchange="applyOfferMode()">
+                                                    <span>{{ $label }}</span>
+                                                </label>
+                                            @endforeach
                                         </div>
-                                    @else
-                                        <div class="form-field full">
-                                            <span class="form-section-note" style="margin-top:0;">
-                                                <i class="fa-solid fa-circle-info"></i>
-                                                Guru tidak dipilih di sini. Setelah pendaftaran selesai, kelas otomatis diajukan
-                                                ke guru yang jadwalnya cocok (kalau tidak ada yang cocok, ke semua guru).
-                                                Guru kelas terisi setelah ada yang menerima.
-                                            </span>
+
+                                        <div class="offer-teacher-list" id="offer-teacher-list">
+                                            @forelse ($teachers ?? [] as $teacher)
+                                                <label class="offer-teacher" data-teacher="{{ $teacher->id }}">
+                                                    <input type="checkbox" name="offer_teacher_ids[]" value="{{ $teacher->id }}"
+                                                           {{ in_array($teacher->id, $oldOfferIds, true) ? 'checked' : '' }}>
+                                                    <span class="offer-teacher-name">{{ $teacher->name }}</span>
+                                                    <span class="offer-teacher-tag"></span>
+                                                </label>
+                                            @empty
+                                                <span class="form-section-note" style="margin:0;">Belum ada guru aktif.</span>
+                                            @endforelse
                                         </div>
-                                    @endif
+
+                                        <p class="form-section-note" id="offer-hint" style="margin-top:8px;"></p>
+                                    </div>
 
                                     <div class="form-field">
                                         <label>Mode Kelas *</label>
@@ -1162,13 +400,6 @@
                                             Kosongkan agar dihitung otomatis dari jumlah pertemuan paket
                                         </span>
                                     </div>
-
-                                    @if ($isContinueFlow)
-                                        <div class="form-field full">
-                                            <label>Jadwal Tersedia Guru</label>
-                                            <div id="teacher-availability" class="teacher-availability"></div>
-                                        </div>
-                                    @endif
 
                                     <div class="form-field full">
                                         <label>Jadwal Mingguan *</label>
@@ -1216,6 +447,17 @@
                         <div>
                             <div class="info-item-label">No. Telepon</div>
                             <div class="info-item-value">{{ $candidateStudent->phone }}</div>
+                        </div>
+                        <div>
+                            <div class="info-item-label">Umur</div>
+                            <div class="info-item-value">
+                                @php
+                                    $umurCalon = $candidateStudent->birth_date
+                                        ? \Carbon\Carbon::parse($candidateStudent->birth_date)->age
+                                        : null;
+                                @endphp
+                                {{ $umurCalon !== null ? $umurCalon . ' Tahun' : '-' }}
+                            </div>
                         </div>
                         <div>
                             <div class="info-item-label">Program Diminati</div>
@@ -1291,13 +533,13 @@
                         @if (isset($totalBillTermin) && $canInstallment && empty($settlement))
                             <div class="form-field full">
                                 <label>Skema Pembayaran *</label>
-                                <div class="package-type-toggle" style="margin:0;">
-                                    <label class="radio-pill">
+                                <div class="form-radio-group">
+                                    <label class="form-radio">
                                         <input type="radio" name="payment_scheme" value="Lunas"
                                                {{ old('payment_scheme', 'Lunas') === 'Lunas' ? 'checked' : '' }}>
                                         <span>Lunas di awal (Rp {{ number_format($lesTotal, 0, ',', '.') }})</span>
                                     </label>
-                                    <label class="radio-pill">
+                                    <label class="form-radio">
                                         <input type="radio" name="payment_scheme" value="Termin"
                                                {{ old('payment_scheme') === 'Termin' ? 'checked' : '' }}>
                                         <span>Termin (Rp {{ number_format($lesTotalTermin, 0, ',', '.') }} total)</span>
@@ -1323,13 +565,12 @@
                                     <i class="fa-solid fa-circle-info"></i>
                                     Nominal {{ $lockedPayment['stage'] }} sudah ditentukan sistem sesuai skema pembayaran siswa.
                                 </span>
-                            @else
-                                <button type="button" class="link-fill" id="fill-min">
-                                    Isi minimal DP (<span id="min-dp-label">-</span>)
-                                </button>
-                                <button type="button" class="link-fill" id="fill-total">
-                                    Isi sesuai {{ empty($settlement) ? 'total tagihan' : 'sisa tagihan' }} (<span id="fill-total-label">Rp {{ number_format($totalBill, 0, ',', '.') }}</span>)
-                                </button>
+                            @elseif (empty($settlement))
+                                {{-- Rencana pembayaran: dihitung ulang di JS dari nominal yang diisi --}}
+                                <span class="form-section-note" style="margin-top:6px;">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                    <span id="payment-plan">Isi nominal DP untuk melihat rencana pembayaran. Minimal DP <strong>Rp {{ number_format(max((float) ($registrationFee ?: ($activityFee ?? 0)), 1), 0, ',', '.') }}</strong>.</span>
+                                </span>
                             @endif
                         </div>
 
@@ -1396,11 +637,6 @@
                             <input type="file" name="proof" accept=".jpg,.jpeg,.png,.pdf" required>
                         </div>
                     </div>
-
-                    @if (empty($settlement))
-                        {{-- Rencana pembayaran: dihitung ulang di JS dari nominal DP yang diisi --}}
-                        <div class="class-progress-box fresh" id="payment-plan" style="margin-top:14px;"></div>
-                    @endif
 
                     <p class="form-section-note">
                         <i class="fa-solid fa-circle-info"></i>
@@ -1894,6 +1130,118 @@
         out.innerHTML = problems.map(p => `<div>⚠ ${esc(p)}</div>`).join('');
     }
 
+    /* ============================================================
+       PEMILIH GURU (kartu)
+       - Daftar guru selalu tampil, tiap guru diberi label "cocok" / "di luar jadwal"
+         berdasarkan jadwal mingguan yang diisi (data TEACHER_SLOTS).
+       - "Guru yang dicentang": checkbox bisa dipilih.
+       - Mode lain: daftar jadi pratinjau (redup, tidak ikut terkirim):
+         cocok -> yang cocok tercentang, semua guru -> semua tercentang, jangan ajukan -> kosong.
+       Pengecekan akhir tetap dilakukan server saat kelas disimpan.
+    ============================================================ */
+    const offerChosen = new Set((@json($oldOfferIds ?? [])).map(Number));
+
+    function currentScheduleRows() {
+        const rows = [];
+
+        document.querySelectorAll('#schedule-rows .schedule-row').forEach(row => {
+            const day   = row.querySelector('select[name$="[day]"]')?.value;
+            const start = row.querySelector('input[name$="[start_time]"]')?.value;
+            const end   = row.querySelector('input[name$="[end_time]"]')?.value;
+
+            if (day && start && end) rows.push({ day, start, end });
+        });
+
+        return rows;
+    }
+
+    // Guru cocok kalau SEMUA baris jadwal masuk jam tersedianya dan tidak bentrok dengan kelas lain
+    function teacherMatches(id, rows) {
+        const availability = (TEACHER_SLOTS.availability || {})[id] || {};
+        const booked = (TEACHER_SLOTS.booked || {})[id] || {};
+
+        return rows.every(r =>
+            (availability[r.day] || []).some(a => a.start <= r.start && a.end >= r.end)
+            && ! (booked[r.day] || []).some(b => r.start < b.end && b.start < r.end)
+        );
+    }
+
+    function refreshOfferTeachers() {
+        const list = document.getElementById('offer-teacher-list');
+        if (! list) return;
+
+        const rows  = currentScheduleRows();
+        const cards = Array.from(list.querySelectorAll('.offer-teacher'));
+
+        cards.forEach((card, i) => {
+            if (card.dataset.order === undefined) card.dataset.order = i;
+
+            const match = rows.length ? teacherMatches(card.dataset.teacher, rows) : null;
+            card.dataset.match = match === null ? '' : (match ? '1' : '0');
+
+            const tag = card.querySelector('.offer-teacher-tag');
+            tag.textContent = match === null ? '' : (match ? 'cocok' : 'di luar jadwal');
+            tag.className = 'offer-teacher-tag' + (match === null ? '' : (match ? ' is-match' : ' is-off'));
+        });
+
+        // yang cocok di depan, sisanya mengikuti urutan awal
+        cards
+            .sort((a, b) => (b.dataset.match === '1') - (a.dataset.match === '1') || a.dataset.order - b.dataset.order)
+            .forEach(c => list.appendChild(c));
+
+        applyOfferMode();
+    }
+
+    function applyOfferMode() {
+        const checked = document.querySelector('input[name="offer_mode"]:checked');
+        const mode = checked ? checked.value : 'matching';
+        const radios = document.querySelectorAll('input[name="offer_mode"]');
+        const active = radios.length > 0 && ! radios[0].disabled;
+
+        const list = document.getElementById('offer-teacher-list');
+        if (! list) return;
+
+        list.classList.toggle('is-preview', mode !== 'selected');
+
+        let matchCount = 0;
+        let anyRows = false;
+
+        list.querySelectorAll('.offer-teacher').forEach(card => {
+            const cb = card.querySelector('input[type="checkbox"]');
+            const id = Number(card.dataset.teacher);
+            const match = card.dataset.match === '1';
+
+            if (card.dataset.match !== undefined && card.dataset.match !== '') anyRows = true;
+            if (match) matchCount++;
+
+            cb.disabled = ! active || mode !== 'selected';
+
+            if (mode === 'selected')      cb.checked = offerChosen.has(id);
+            else if (mode === 'matching') cb.checked = match;
+            else if (mode === 'all')      cb.checked = true;
+            else                          cb.checked = false;
+        });
+
+        let hint = '';
+        if (mode === 'selected') {
+            hint = 'Centang minimal satu guru, atau pilih opsi lain.';
+        } else if (mode === 'matching') {
+            hint = ! anyRows
+                ? 'Isi jadwal mingguan untuk melihat guru yang cocok.'
+                : (matchCount > 0
+                    ? matchCount + ' guru yang cocok akan diajukan saat kelas disimpan.'
+                    : 'Belum ada guru yang cocok dengan jadwal ini. Pilih "Semua guru" atau centang guru satu per satu.');
+        } else if (mode === 'all') {
+            hint = 'Kelas diajukan ke semua guru aktif saat disimpan.';
+        }
+
+        const hintEl = document.getElementById('offer-hint');
+        if (hintEl) {
+            hintEl.textContent = hint;
+            hintEl.style.display = hint ? '' : 'none';
+        }
+    }
+
     function onTeacherChange() {
         renderTeacherAvailability();
         checkScheduleRows();
@@ -1941,6 +1289,8 @@
                 el.disabled = ! isPrivate || joining;
             }
         });
+
+        applyOfferMode();
     }
 
     /**
@@ -2063,8 +1413,18 @@
         const box = document.getElementById(boxId);
         if (! select || ! box) return;
 
+        // Tampilan bergaya .form-section-note: ikon + teks. Kelas kosong -> teks bawaan (data-default)
+        // kalau ada, kalau tidak disembunyikan. Kelas dipilih -> rincian progres kelas.
+        const show = text => {
+            box.innerHTML = '<i class="fa-solid fa-circle-info"></i><span>' + text + '</span>';
+            box.style.display = '';
+        };
+
         const opt = select.selectedOptions[0];
-        if (! opt || ! opt.value) { box.style.display = 'none'; return; }
+        if (! opt || ! opt.value) {
+            if (box.dataset.default) { show(box.dataset.default); } else { box.style.display = 'none'; }
+            return;
+        }
 
         const done = parseInt(opt.dataset.done || '0', 10);
         const total = parseInt(opt.dataset.total || '0', 10);
@@ -2074,17 +1434,13 @@
         let html = '';
         if (done > 0) {
             html = 'Kelas ini <strong>sudah berjalan ' + done + (total ? ' dari ' + total : '') + ' pertemuan</strong>'
-                 + (last ? ' (terakhir ' + last + ')' : '')
                  + '. Siswa baru mulai dari <strong>pertemuan ke-' + (done + 1) + '</strong>.';
-            box.classList.remove('fresh');
         } else {
             html = 'Kelas ini belum memulai pertemuan.';
-            box.classList.add('fresh');
         }
         if (slots !== undefined && slots !== '') html += ' Sisa slot: ' + slots + '.';
 
-        box.innerHTML = html;
-        box.style.display = '';
+        show(html);
     }
 
     function filterClasses() {
@@ -2102,7 +1458,7 @@
         });
 
         classSelect.value = '';
-        renderClassProgress('class_id', 'class-progress-box');
+        renderClassProgress('class_id', 'class-info');
     }
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -2122,9 +1478,20 @@
 
         // Panel jadwal guru + cek jadwal: tampil awal, lalu ikut berubah saat baris jadwal diedit
         const rowsBox = document.getElementById('schedule-rows');
-        ['input', 'change'].forEach(evt => rowsBox.addEventListener(evt, checkScheduleRows));
+        ['input', 'change'].forEach(evt => rowsBox.addEventListener(evt, () => { checkScheduleRows(); refreshOfferTeachers(); }));
+        // baris jadwal ditambah / dihapus
+        new MutationObserver(refreshOfferTeachers).observe(rowsBox, { childList: true });
         renderTeacherAvailability();
         checkScheduleRows();
+
+        // centang manual (hanya berlaku di mode "Guru yang dicentang")
+        document.getElementById('offer-teacher-list')?.addEventListener('change', e => {
+            const cb = e.target;
+            if (! cb.matches('input[type="checkbox"]') || cb.disabled) return;
+            const id = Number(cb.value);
+            cb.checked ? offerChosen.add(id) : offerChosen.delete(id);
+        });
+        refreshOfferTeachers();
 
         const recommendedOption = document.querySelector('#program_package_id option[data-recommended="1"]');
         if (recommendedOption) {
@@ -2169,7 +1536,7 @@
         // Rincian progres kelas yang dipilih
         const regSel = document.getElementById('class_id');
         const joinSel = document.getElementById('join_class_id');
-        if (regSel) { regSel.addEventListener('change', () => renderClassProgress('class_id', 'class-progress-box')); renderClassProgress('class_id', 'class-progress-box'); }
+        if (regSel) { regSel.addEventListener('change', () => renderClassProgress('class_id', 'class-info')); renderClassProgress('class_id', 'class-info'); }
         if (joinSel) { joinSel.addEventListener('change', () => renderClassProgress('join_class_id', 'join-progress-box')); renderClassProgress('join_class_id', 'join-progress-box'); }
     });
 </script>

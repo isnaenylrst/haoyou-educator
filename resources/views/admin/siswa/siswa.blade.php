@@ -4,51 +4,6 @@
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
-
-    <style>
-        /* Tinggi mengikuti isi, maksimal 90% layar, sisanya scroll di dalam */
-        .modal {
-            width: 100%;
-            max-width: 860px;          /* ukuran kecil: Assign Kelas */
-            max-height: 90vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .modal.modal-lg {
-            max-width: 1000px;          /* ukuran besar: Detail & Edit Siswa */
-        }
-
-        /* form membungkus head/body/foot, jadi ikut jadi kolom */
-        .modal > form {
-            display: flex;
-            flex-direction: column;
-            flex: 1 1 auto;
-            min-height: 0;
-        }
-
-        .modal-head,
-        .modal-foot {
-            flex-shrink: 0;
-        }
-
-        .modal-body {
-            flex: 1 1 auto;
-            min-height: 0;
-            overflow-y: auto;
-        }
-
-        /* Hindari pop-up "melompat" saat data masih dimuat lewat fetch */
-        .modal-lg .modal-body {
-            min-height: 320px;
-        }
-
-        .meet-label { font-size: 13px; color: #6b7280; }
-        .meet-label strong { color: #111827; font-size: 14px; }
-        .meet-bar { height: 5px; width: 90px; background: #eee; border-radius: 999px; overflow: hidden; margin: 5px 0 4px; }
-        .meet-bar span { display: block; height: 100%; background: #22c55e; border-radius: 999px; }
-    </style>
 @endpush
 
 @section('content')
@@ -156,11 +111,11 @@
             <thead>
                 <tr>
                     <th>Siswa</th>
-                    <th>Program</th>
-                    <th>Kelas Aktif</th>
-                    <th>Pertemuan</th>
-                    <th>Status</th>
-                    <th>Poin</th>
+                    <th style="text-align: center;">Program</th>
+                    <th style="text-align: center;">Hadir</th>
+                    <th style="text-align: center;">Tidak Hadir</th>
+                    <th style="text-align: center;">Status</th>
+                    <th style="text-align: center;">Poin</th>
                     <th width="120" style="text-align: center;">Aksi</th>
                 </tr>
             </thead>
@@ -182,6 +137,11 @@
                                 ?? $activeEnrollment?->programPackage?->program?->program_name
                                 ?? '-');
 
+                        // Kategori program yang diikuti (mis. Maochong); Private tetap "Private"
+                        $categoryLabel = $isPrivate
+                            ? 'Private'
+                            : ($student->currentLevel?->category?->category_name ?? $programLabel);
+
                         $programBadgeClass = match ($programLabel) {
                             'HSK' => 'badge-warning',
                             'Daily Activity' => 'badge-cold',
@@ -198,62 +158,65 @@
                                 <div>
                                     <div class="cand-name">{{ $student->name }}</div>
                                     <div class="cand-sub">
-                                        @if ($isPrivate)
-                                            Private
-                                        @elseif ($student->currentLevel)
-                                            {{ $student->currentLevel->category?->category_name ? $student->currentLevel->category->category_name . ' - ' : '' }}{{ $student->currentLevel->level_name }}
+                                        @if ($isWaitingClass)
+                                            <span style="color:#dc2626;font-weight:600;">Menunggu Kelas</span>
                                         @else
-                                            -
+                                            {{ $kelasAktifLabel }}
                                         @endif
                                     </div>
                                 </div>
                             </div>
                         </td>
 
-                        <td>
-                            @if ($programLabel !== '-')
-                                <span class="badge {{ $programBadgeClass }}">{{ $programLabel }}</span>
+                        <td style="text-align: center; vertical-align: middle;">
+                            @if ($categoryLabel && $categoryLabel !== '-')
+                                <span class="badge {{ $programBadgeClass }}">{{ $categoryLabel }}</span>
                             @else
                                 -
                             @endif
                         </td>
 
-                        <td>
-                            {{ $kelasAktifLabel }}
-                            @if ($isWaitingClass)
-                                <span class="badge badge-hot" style="margin-left: 6px;">Menunggu Kelas</span>
-                            @endif
-                        </td>
+                        @php
+                            $classId = $activeEnrollment?->class_id;
+                            $attended = $classId ? (int) ($attendedMap[$student->id][$classId] ?? 0) : 0;
+                            // $absentMap = [student_id => [class_id => jumlah tidak hadir]] dari controller
+                            $absent = ($classId && isset($absentMap)) ? (int) ($absentMap[$student->id][$classId] ?? 0) : null;
+                            $held = $classId ? (int) ($heldMap[$classId] ?? 0) : 0;
+                            $totalMeetings = (int) (
+                                $activeEnrollment?->class?->programPackage?->total_meetings
+                                ?? $activeEnrollment?->programPackage?->total_meetings
+                                ?? $activeEnrollment?->privatePackage?->total_meetings
+                                ?? 0
+                            );
+                            $pct = $totalMeetings > 0 ? min(100, (int) round($attended / $totalMeetings * 100)) : 0;
+                            $absentPct = ($totalMeetings > 0 && $absent !== null) ? min(100, (int) round($absent / $totalMeetings * 100)) : 0;
+                        @endphp
 
-                        <td>
-                            @php
-                                $classId = $activeEnrollment?->class_id;
-                                $attended = $classId ? (int) ($attendedMap[$student->id][$classId] ?? 0) : 0;
-                                $held = $classId ? (int) ($heldMap[$classId] ?? 0) : 0;
-                                $totalMeetings = (int) (
-                                    $activeEnrollment?->class?->programPackage?->total_meetings
-                                    ?? $activeEnrollment?->programPackage?->total_meetings
-                                    ?? $activeEnrollment?->privatePackage?->total_meetings
-                                    ?? 0
-                                );
-                                $pct = $totalMeetings > 0 ? min(100, (int) round($attended / $totalMeetings * 100)) : 0;
-                            @endphp
-
+                        {{-- Hadir --}}
+                        <td style="text-align: center; vertical-align: middle;">
                             @if ($classId)
                                 <div class="meet-label">
                                     <strong>{{ $attended }}</strong>@if ($totalMeetings > 0)<span>/{{ $totalMeetings }}</span>@endif
-                                    <span>hadir</span>
+                                    <span>(hadir)</span>
                                 </div>
-
-                                @if ($totalMeetings > 0)
-                                    <div class="meet-bar"><span style="width: {{ $pct }}%"></span></div>
-                                @endif
                             @else
                                 <span class="cand-sub">-</span>
                             @endif
                         </td>
 
-                        <td>
+                        {{-- Tidak Hadir --}}
+                        <td style="text-align: center; vertical-align: middle;">
+                            @if ($classId && $absent !== null)
+                                <div class="meet-label absent">
+                                    <strong>{{ $absent }}</strong>@if ($totalMeetings > 0)<span>/{{ $totalMeetings }}</span>@endif
+                                    <span>(tidak hadir)</span>
+                                </div>
+                            @else
+                                <span class="cand-sub">-</span>
+                            @endif
+                        </td>
+
+                        <td style="text-align: center; vertical-align: middle;">
                             @php
                                 $statusClass = match ($student->status) {
                                     'Active' => 'badge-completed',
@@ -274,27 +237,66 @@
                             </span>
                         </td>
 
-                        <td>{{ $student->points }}</td>
+                        <td style="text-align: center; vertical-align: middle;">{{ $student->points }}</td>
 
                         {{-- Action --}}
-                        <td>
-                            <div class="row-actions">
-                                <button type="button" class="icon-btn" title="Detail & Edit"
-                                        onclick="openStudentModal({{ $student->id }})">
-                                    <i class="fa-regular fa-pen-to-square"></i>
-                                </button>
+                        <td style="text-align: center; vertical-align: middle;">
+                            @php
+                                $hasOutstanding = (bool) ($student->has_outstanding ?? false);
 
+                                // Kelas pengganti hanya untuk siswa aktif yang sedang punya kelas berjalan
+                                $classStatus = $activeEnrollment?->class?->status;
+                                $canReplace  = $student->status === 'Active'
+                                    && $activeEnrollment
+                                    && ! $isWaitingClass
+                                    && $activeEnrollment->class_id
+                                    && in_array($classStatus, ['Open', 'Running'], true);
+
+                                $replaceHint = $canReplace
+                                    ? 'Tambah Kelas Pengganti'
+                                    : match (true) {
+                                        ! $activeEnrollment           => 'Kelas pengganti tidak tersedia: siswa tidak sedang mengikuti kelas',
+                                        $isWaitingClass               => 'Kelas pengganti tidak tersedia: siswa masih menunggu kelas',
+                                        $student->status !== 'Active' => 'Kelas pengganti tidak tersedia: siswa tidak aktif',
+                                        default                       => 'Kelas pengganti tidak tersedia: kelas sudah selesai',
+                                    };
+                            @endphp
+
+                            <div class="row-actions">
+                                {{-- 1. Detail & Edit --}}
+                                <a class="icon-btn" title="Detail & Edit"
+                                   href="{{ route('admin.siswa.detail', $student) }}">
+                                    <i class="fa-regular fa-pen-to-square"></i>
+                                </a>
+
+                                {{-- 2. Assign Kelas / Lanjutkan Pembayaran / Lanjut Program --}}
                                 @if ($isWaitingClass)
                                     <button type="button" class="icon-btn wa" title="Assign Kelas"
                                             onclick="openAssignClassModal({{ $activeEnrollment->id }})">
                                         <i class="fa-solid fa-chalkboard-user"></i>
                                     </button>
+                                @elseif ($hasOutstanding)
+                                    <a class="icon-btn wa" title="Lanjutkan Pembayaran"
+                                       href="{{ route('admin.siswa.continue.program', $student) }}">
+                                        <i class="fa-solid fa-money-bill-wave"></i>
+                                    </a>
                                 @else
-                                    <a class="icon-btn wa"
-                                       title="{{ ($student->has_outstanding ?? false) ? 'Lanjutkan Pembayaran' : 'Lanjut Program Berikutnya' }}"
+                                    <a class="icon-btn wa" title="Lanjut Program Berikutnya"
                                        href="{{ route('admin.siswa.continue.program', $student) }}">
                                         <i class="fa-solid fa-forward"></i>
                                     </a>
+                                @endif
+
+                                {{-- 3. Kelas Pengganti --}}
+                                @if ($canReplace)
+                                    <a class="icon-btn wa" title="{{ $replaceHint }}"
+                                       href="{{ route('admin.siswa.replacement', $student) }}">
+                                        <i class="fa-solid fa-calendar-plus"></i>
+                                    </a>
+                                @else
+                                    <button type="button" class="icon-btn is-disabled" disabled title="{{ $replaceHint }}">
+                                        <i class="fa-solid fa-calendar-plus"></i>
+                                    </button>
                                 @endif
                             </div>
                         </td>
@@ -364,150 +366,6 @@
                     </nav>
                 @endif
             </div>
-        </div>
-    </div>
-
-    {{-- ========================= MODAL DETAIL & EDIT ========================= --}}
-    <div class="modal-overlay" id="studentModalOverlay">
-        <div class="modal modal-lg">
-            <form id="studentForm" method="POST">
-                @csrf
-                @method('PUT')
-
-                <div class="modal-head">
-                    <div>
-                        <div class="modal-title">Detail & Edit Siswa</div>
-                        <div class="modal-sub" id="student_modal_sub">-</div>
-                    </div>
-                    <button type="button" class="modal-close" onclick="closeStudentModal()" aria-label="Tutup">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
-                </div>
-
-                <div class="modal-body" id="studentModalBody">
-
-                    {{-- ===== Bisa diedit ===== --}}
-                    <div class="form-section">
-                        <div class="form-section-title"><i class="fa-solid fa-user"></i> Data Siswa</div>
-                        <div class="form-grid">
-                            <div class="form-field full">
-                                <label>Nama Lengkap *</label>
-                                <input type="text" name="name" id="student_name" required>
-                            </div>
-                            <div class="form-field">
-                                <label>Status Siswa *</label>
-                                <select name="status" id="student_status" required>
-                                    <option value="Active">Aktif</option>
-                                    <option value="Inactive">Cuti</option>
-                                    <option value="Graduated">Lulus</option>
-                                </select>
-                            </div>
-                            <div class="form-field">
-                                <label>Poin</label>
-                                <input type="number" name="points" id="student_points" min="0" value="0">
-                            </div>
-                            <div class="form-field">
-                                <label>Tanggal Bergabung</label>
-                                <input type="date" id="student_join_date" disabled>
-                                <small>Otomatis tercatat dari tanggal pembayaran pertama pada program yang sedang diikuti.</small>
-                            </div>
-                            <div class="form-field">
-                                <label>No. HP</label>
-                                <div id="student_phone">-</div>
-                            </div>
-                            <div class="form-field">
-                                <label>Usia</label>
-                                <div id="student_age">-</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- ===== Hanya lihat ===== --}}
-                    <div class="form-section">
-                        <div class="form-section-title"><i class="fa-solid fa-calendar-week"></i> Jadwal Siswa</div>
-                        <table class="table-mini">
-                            <thead>
-                                <tr>
-                                    <th>Hari</th>
-                                    <th>Jam Mulai</th>
-                                    <th>Jam Selesai</th>
-                                </tr>
-                            </thead>
-                            <tbody id="student_schedules">
-                                <tr><td colspan="3">-</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="form-section">
-                        <div class="form-section-title"><i class="fa-solid fa-graduation-cap"></i> Program yang Diikuti</div>
-                        <table class="table-mini">
-                            <thead>
-                                <tr>
-                                    <th>Program</th>
-                                    <th>Kelas</th>
-                                    <th>Tipe</th>
-                                    <th>Status</th>
-                                    <th>Tanggal Daftar</th>
-                                    <th>Kehadiran</th>
-                                </tr>
-                            </thead>
-                            <tbody id="student_programs">
-                                <tr><td colspan="6">-</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="form-section">
-                        <div class="form-section-title"><i class="fa-solid fa-chart-line"></i> Progress Report</div>
-                        <table class="table-mini">
-                            <thead>
-                                <tr>
-                                    <th>Tipe</th>
-                                    <th>Periode</th>
-                                    <th>Status</th>
-                                    <th>Tanggal Upload</th>
-                                </tr>
-                            </thead>
-                            <tbody id="student_progress_reports">
-                                <tr><td colspan="4">-</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="form-section">
-                        <div class="form-section-title"><i class="fa-solid fa-money-bill-wave"></i> Status Pembayaran</div>
-                        <table class="table-mini">
-                            <thead>
-                                <tr>
-                                    <th>Invoice</th>
-                                    <th>Program</th>
-                                    <th>Total Tagihan</th>
-                                    <th>Dibayar</th>
-                                    <th>Sisa</th>
-                                    <th>Status</th>
-                                    <th>Tanggal</th>
-                                    <th>Dokumen</th>
-                                </tr>
-                            </thead>
-                            <tbody id="student_payments">
-                                <tr><td colspan="8">-</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                </div>
-
-                <div class="modal-foot">
-                    <div class="modal-foot-right">
-                        <button type="button" class="btn btn-secondary" onclick="closeStudentModal()">Tutup</button>
-                        <button type="submit" class="btn btn-primary" id="studentSaveBtn" disabled>
-                            <i class="fa-solid fa-check"></i>
-                            Simpan Perubahan
-                        </button>
-                    </div>
-                </div>
-            </form>
         </div>
     </div>
 
@@ -591,163 +449,6 @@
         })();
 
         /* ============================================================
-        HELPER
-        ============================================================ */
-        function renderRows(tbodyId, items, emptyColspan, rowBuilder) {
-            const tbody = document.getElementById(tbodyId);
-            tbody.innerHTML = '';
-
-            if (!items || items.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="${emptyColspan}">Belum ada data.</td></tr>`;
-                return;
-            }
-
-            items.forEach(item => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = rowBuilder(item);
-                tbody.appendChild(tr);
-            });
-        }
-
-        function formatRupiah(value) {
-            return 'Rp ' + Number(value ?? 0).toLocaleString('id-ID');
-        }
-
-        function enrollmentStatusLabel(status) {
-            const labels = {
-                'Active': 'Berjalan',
-                'Completed': 'Selesai',
-                'Cancelled': 'Dibatalkan',
-            };
-            return labels[status] ?? (status ?? '-');
-        }
-
-        /* ============================================================
-        MODAL: DETAIL & EDIT SISWA
-        ============================================================ */
-        function resetStudentModal() {
-            document.getElementById('student_modal_sub').textContent = 'Memuat...';
-            document.getElementById('student_name').value = '';
-            document.getElementById('student_points').value = 0;
-            document.getElementById('student_join_date').value = '';
-            document.getElementById('student_status').value = 'Active';
-            document.getElementById('student_phone').textContent = '-';
-            document.getElementById('student_age').textContent = '-';
-
-            [
-                ['student_schedules', 3],
-                ['student_programs', 6],
-                ['student_progress_reports', 4],
-                ['student_payments', 8],
-            ].forEach(([id, cols]) => {
-                document.getElementById(id).innerHTML = `<tr><td colspan="${cols}">-</td></tr>`;
-            });
-
-            document.getElementById('studentModalBody').scrollTop = 0;
-        }
-
-        function openStudentModal(id) {
-            const overlay = document.getElementById('studentModalOverlay');
-            const form = document.getElementById('studentForm');
-            const saveBtn = document.getElementById('studentSaveBtn');
-
-            form.action = `/admin/siswa/${id}`;
-            saveBtn.disabled = true; // jangan bisa simpan sebelum data selesai dimuat
-            resetStudentModal();
-            overlay.classList.add('open');
-
-            fetch(`/admin/siswa/${id}`, {
-                headers: { 'Accept': 'application/json' }
-            })
-            .then(response => {
-                if (!response.ok) throw new Error('Gagal memuat data');
-                return response.json();
-            })
-            .then(data => {
-                // --- bagian edit ---
-                document.getElementById('student_modal_sub').textContent = data.name ?? '-';
-                document.getElementById('student_name').value = data.name ?? '';
-                document.getElementById('student_points').value = data.points ?? 0;
-                document.getElementById('student_join_date').value = data.join_date ?? '';
-                document.getElementById('student_status').value = data.status ?? 'Active';
-
-                // --- bagian info ---
-                document.getElementById('student_phone').textContent = data.phone ?? '-';
-                document.getElementById('student_age').textContent = data.age ? `${data.age} Tahun` : '-';
-
-                renderRows('student_schedules', data.schedules, 3, s => `
-                    <td>${s.day ?? '-'}</td>
-                    <td>${s.start_time ?? '-'}</td>
-                    <td>${s.end_time ?? '-'}</td>
-                `);
-
-                renderRows('student_programs', data.programs, 6, p => `
-                    <td>${p.program_name ?? '-'}</td>
-                    <td>${p.class_name ?? '-'}</td>
-                    <td>${p.course_type ?? '-'}</td>
-                    <td>${enrollmentStatusLabel(p.enrollment_status)}</td>
-                    <td>${p.enrollment_date ?? '-'}</td>
-                    <td>${p.attended === null || p.attended === undefined
-                        ? '-'
-                        : p.attended + (p.total_meetings ? '/' + p.total_meetings : '') + ' pertemuan'}</td>
-                `);
-
-                renderRows('student_progress_reports', data.progress_reports, 4, r => `
-                    <td>${r.report_type ?? '-'}</td>
-                    <td>${r.report_period ?? '-'}</td>
-                    <td>${r.status ?? '-'}</td>
-                    <td>${r.uploaded_at ?? '-'}</td>
-                `);
-                
-                renderRows('student_payments', data.payments, 8, p => `
-                    <td>${p.invoice_number ?? '-'}</td>
-                    <td>
-                        ${p.program_name ?? '-'}
-                        <div style="margin-top:4px;">
-                            <span class="badge ${p.payment_type === 'package' ? 'bg-primary' : 'bg-info'}">
-                                ${p.payment_type === 'package' ? 'Paket' : 'Biaya Tambahan'}
-                            </span>
-                        </div>
-                    </td>
-                    <td>${formatRupiah(p.total_bill)}</td>
-                    <td>${formatRupiah(p.amount_paid)}</td>
-                    <td>${formatRupiah(p.remaining_bill)}</td>
-                    <td>${p.status ?? '-'}</td>
-                    <td>${p.payment_date ?? '-'}</td>
-                    <td>
-                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                            ${p.invoice_url
-                                ? `<a href="${p.invoice_url}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;">
-                                    <i class="fa-regular fa-file-lines"></i> Invoice
-                                </a>`
-                                : ''}
-                            ${p.proof_url
-                                ? `<a href="${p.proof_url}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;">
-                                    <i class="fa-regular fa-file-image"></i> Bukti
-                                </a>`
-                                : '<span style="color:#9ca3af;font-size:12px;">Bukti belum ada</span>'}
-                        </div>
-                    </td>
-                `);
-
-
-                saveBtn.disabled = false;
-            })
-            .catch(() => {
-                alert('Gagal memuat data siswa.');
-                closeStudentModal();
-            });
-        }
-
-        function closeStudentModal() {
-            document.getElementById('studentModalOverlay').classList.remove('open');
-        }
-
-        document.getElementById('studentModalOverlay').addEventListener('click', function (e) {
-            if (e.target === this) closeStudentModal();
-        });
-
-        /* ============================================================
         MODAL: ASSIGN KELAS
         ============================================================ */
         function openAssignClassModal(enrollmentId) {
@@ -814,7 +515,6 @@
         document.addEventListener('keydown', function (e) {
             if (e.key !== 'Escape') return;
 
-            closeStudentModal();
             closeAssignClassModal();
         });
     </script>

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Certificate;
 use App\Models\ClassModel;
+use App\Models\ClassSessionTeacherOffer;
 use App\Models\ClassTask;
 use App\Models\Consultation;
 use App\Models\Document;
@@ -15,6 +16,7 @@ use App\Models\TeachingJournal;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Satu-satunya sumber data notifikasi guru.
@@ -45,7 +47,7 @@ class TeacherNotificationService
                      'report_approved', 'report_returned', 'certificate_approved', 'certificate_rejected', 'leave_result'],
         'surat' => ['document', 'sop_new'],
         'konsultasi' => ['consultation', 'consultation_pending', 'consultation_cancelled'],
-        'tugas' => ['task', 'task_done', 'class_assign', 'replacement_request'],
+        'tugas' => ['task', 'task_done', 'class_assign', 'replacement_request', 'replacement_offer'],
     ];
 
     private ?Collection $cache = null;
@@ -96,6 +98,7 @@ class TeacherNotificationService
         $rows = [
             ['type' => 'class_assign',         'label' => 'Kelas menunggu konfirmasi',     'hint' => 'Terima atau tolak di Schedule',        'url' => route('teacher.schedule')],
             ['type' => 'replacement_request',  'label' => 'Permintaan menggantikan kelas', 'hint' => 'Dari guru lain, jawab di Schedule',     'url' => route('teacher.schedule')],
+            ['type' => 'replacement_offer',    'label' => 'Pengajuan kelas pengganti',     'hint' => 'Terima atau tolak di Schedule',        'url' => route('teacher.schedule')],
             ['type' => 'consultation',         'label' => 'Jadwal konsultasi mendatang',   'hint' => 'Hadir sesuai jadwal',                  'url' => route('teacher.notifikasi', ['filter' => 'konsultasi'])],
             ['type' => 'task',                 'label' => 'Tugas dari Kurikulum',          'hint' => 'Tandai selesai di halaman Notifikasi', 'url' => route('teacher.notifikasi')],
             ['type' => 'report_returned',      'label' => 'Progress report dikembalikan',  'hint' => 'Perbaiki lalu ajukan ulang',           'url' => route('teacher.progress-report')],
@@ -323,6 +326,50 @@ class TeacherNotificationService
                     'title' => ($l->teacher->name ?? 'Guru lain') . " meminta Anda menggantikan kelas {$cn}{$when}",
                     'category' => 'Permintaan Menggantikan', 'time' => $l->created_at,
                     'note' => $l->reason, 'actionable' => true,
+                    'action' => ['kind' => 'link', 'label' => 'Terima / Tolak', 'url' => route('teacher.schedule')],
+                ]);
+            });
+
+        // 9b. Pengajuan kelas pengganti (satu pertemuan untuk satu siswa) yang menunggu jawaban saya.
+        //     Hanya info + tautan ke Schedule tempat guru menerima/menolak; siapa cepat dia dapat.
+        $schedules = app(ClassScheduleService::class);
+
+        ClassSessionTeacherOffer::with(['session.enrollment.student', 'session.enrollment.class'])
+            ->where('teacher_id', $t->id)->where('status', 'Pending')
+            ->whereHas('session', fn ($q) => $q
+                ->where('kind', 'Replacement')->where('status', 'Scheduled')
+                ->whereNull('teacher_id')->whereDate('session_date', '>=', today()))
+            ->get()
+            ->each(function ($o) use ($push, $t, $schedules) {
+                $s       = $o->session;
+                $student = $s->enrollment?->student?->name ?? 'siswa';
+                $class   = $s->enrollment?->class?->class_name;
+                $when    = $s->session_date->translatedFormat('l, d M Y') . ', '
+                         . substr($s->start_time, 0, 5) . '–' . substr($s->end_time, 0, 5);
+                $loc     = $s->location_type . ($s->location_type === 'Studio' && $s->room ? " · {$s->room}" : '');
+
+                $clash = false;
+                try {
+                    $schedules->assertTeacherFreeOn($t->id, $s->session_date, $s->start_time, $s->end_time, $s->id);
+                } catch (ValidationException) {
+                    $clash = true;
+                }
+
+                $day       = ClassScheduleService::DAYS[$s->session_date->dayOfWeekIso - 1];
+                $available = $schedules->isTeacherAvailable($t->id, $day, $s->start_time, $s->end_time);
+
+                $notes = ['Lokasi: ' . $loc . ($s->location_type === 'Home Visit' ? ' (guru datang ke rumah siswa)' : '')];
+                if ($clash) {
+                    $notes[] = 'Bentrok dengan jadwal Anda di jam ini, tidak bisa diterima.';
+                } elseif (! $available) {
+                    $notes[] = 'Di luar jam tersedia Anda.';
+                }
+
+                $push([
+                    'key' => "rsess-{$s->id}", 'type' => 'replacement_offer',
+                    'title' => "Kelas pengganti {$student}" . ($class ? " ({$class})" : '') . " diajukan kepada Anda: {$when}",
+                    'category' => 'Kelas Pengganti', 'time' => $o->updated_at,
+                    'note' => implode("\n", $notes), 'actionable' => true,
                     'action' => ['kind' => 'link', 'label' => 'Terima / Tolak', 'url' => route('teacher.schedule')],
                 ]);
             });

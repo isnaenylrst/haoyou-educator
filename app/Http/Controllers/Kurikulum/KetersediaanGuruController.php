@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Kurikulum;
 
 use App\Http\Controllers\Controller;
 use App\Models\ClassModel;
+use App\Models\ClassSession;
 use App\Models\Teacher;
 use App\Models\TeacherAvailability;
+use App\Services\ClassSessionOfferService;
 use App\Services\TeacherAvailabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -51,6 +53,15 @@ class KetersediaanGuruController extends Controller
                 ->all();
         }
 
+        // Kelas pengganti (satu pertemuan untuk satu siswa) yang sudah dibayar tapi belum diterima guru mana pun
+        $replacementsWaiting = ClassSession::with(['enrollment.student', 'enrollment.class', 'teacherOffers.teacher:id,name'])
+            ->where('kind', 'Replacement')
+            ->where('status', 'Scheduled')
+            ->whereNull('teacher_id')
+            ->whereDate('session_date', '>=', today())
+            ->orderBy('session_date')->orderBy('start_time')
+            ->get();
+
         $days = TeacherAvailability::DAYS;
 
         // Kalender mingguan: semua slot semua guru aktif
@@ -69,7 +80,7 @@ class KetersediaanGuruController extends Controller
 
         return view('kurikulum.ketersediaan-guru', compact(
             'teachers', 'needsAction', 'waiting', 'suitable', 'days',
-            'availabilityGrid', 'notFilled', 'filledCount'
+            'availabilityGrid', 'notFilled', 'filledCount', 'replacementsWaiting'
         ));
     }
 
@@ -115,6 +126,19 @@ class KetersediaanGuruController extends Controller
         $availability->delete();
 
         return back()->with('success', 'Ketersediaan dihapus.');
+    }
+
+    /** Ajukan kelas pengganti yang menunggu guru ke guru yang cocok atau ke semua guru. Guru terisi setelah ada yang menerima. */
+    public function offerReplacement(Request $request, ClassSession $classSession, ClassSessionOfferService $offers)
+    {
+        $data = $request->validate([
+            'mode' => ['required', Rule::in(['matching', 'all'])],
+        ]);
+
+        $names = $offers->offer($classSession, $data['mode']);
+        $list  = $names->take(5)->implode(', ') . ($names->count() > 5 ? ', ...' : '');
+
+        return back()->with('success', "Kelas pengganti diajukan ke {$names->count()} guru: {$list}.");
     }
 
     /** Tugaskan (atau tugaskan ulang) guru ke kelas; guru harus menjawab lagi. */

@@ -97,7 +97,7 @@ class PrintTemplateSeeder extends Seeder
     private function invoiceForm(): string
     {
         // Tata letak mengikuti template Word (A4 landscape): kop tengah, judul INVOICE kuning,
-        // tabel berbingkai dengan header kuning, watermark logo di latar.
+        // tabel berbingkai dengan header kuning tebal, watermark logo di latar.
         return <<<'HTML'
         <div style="position:relative;font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#000;">
         {watermark}
@@ -113,8 +113,8 @@ class PrintTemplateSeeder extends Seeder
 
         <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
         <tr>
-        <td colspan="2" style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:normal;">Data Siswa</td>
-        <td colspan="2" style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;">Info Pembayaran</td>
+        <td colspan="2" style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;">Data Siswa</td>
+        <td colspan="2" style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;">Info Pembayaran</td>
         </tr>
         <tr>
         <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:13%;">Nama</td><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:31%;">{nama_siswa}</td>
@@ -139,8 +139,8 @@ class PrintTemplateSeeder extends Seeder
 
         <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
         <tr>
-        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;width:70%;">Rincian Biaya</td>
-        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;width:30%;text-align:right;">Jumlah(Rp)</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:70%;">Rincian Biaya</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:30%;text-align:right;">Jumlah(Rp)</td>
         </tr>
         <!--RINCIAN_AWAL-->
         <tr>
@@ -436,119 +436,82 @@ class PrintTemplateSeeder extends Seeder
     private function invoiceExtraForm(): string
     {
         return <<<'HTML'
-        <div style="font-family:Helvetica,Arial,sans-serif;font-size:11pt;color:#1f1a17;">
+        <div style="position:relative;font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#000;">
 
-            <table style="width:100%;border-collapse:collapse;border-bottom:2px solid #1f1a17;">
-                <tr>
-                    <td style="width:60%;padding-bottom:10px;vertical-align:middle;">
-                        <table style="border-collapse:collapse;">
-                            <tr>
-                                <td style="padding-right:10px;vertical-align:middle;">
-                                    {logo}
-                                </td>
-                                <td style="vertical-align:middle;">
-                                    <div style="font-size:17pt;font-weight:bold;">
-                                        Haoyou Educator
-                                    </div>
-                                    <div style="font-size:9.5pt;color:#6b625c;">
-                                        Mandarin Learning Center
-                                    </div>
-                                </td>
-                            </tr>
-                        </table>
-                    </td>
-                    <td style="width:40%;text-align:right;vertical-align:top;padding-bottom:10px;">
-                        <div style="font-size:24pt;font-weight:bold;">Invoice</div>
-                        <div style="font-size:9.5pt;color:#6b625c;">
-                            No. {nomor_invoice}
-                        </div>
-                    </td>
-                </tr>
-            </table>
+        <div style="text-align:center;border-bottom:1px solid #000;padding-bottom:4px;">
+        <div style="font-size:15pt;font-weight:bold;">Haoyou Educator</div>
+        <div style="font-size:8pt;">Jl. Terusan Dieng No.9E, Pisang Candi, Kec. Sukun, Kota Malang, Jawa Timur 65115</div>
+        <div style="font-size:10pt;">Email : haoyoueducator@gmail.com &nbsp; HP : 089679209062</div>
+        </div>
 
-            <div style="margin-top:20px;padding:12px;background:#f7f3ee;">
-                <div style="font-size:9.5pt;color:#6b625c;">
-                    Jenis biaya
-                </div>
-                <div style="font-size:14pt;font-weight:bold;margin-top:4px;">
-                    {jenis_biaya}
-                </div>
-            </div>
+        <div style="font-size:20pt;font-weight:bold;color:#FFC000;margin-top:10px;line-height:1.1;">INVOICE</div>
+        <div style="font-size:11pt;font-weight:bold;margin-bottom:8px;">No. {nomor_invoice}</div>
 
-            <table style="width:100%;border-collapse:collapse;margin-top:18px;">
-                <tr>
-                    <td style="width:50%;vertical-align:top;">
-                        <div style="font-size:9.5pt;color:#6b625c;border-bottom:1px solid #d9d2ca;padding-bottom:4px;">
-                            Data siswa
-                        </div>
-                        <table style="width:100%;border-collapse:collapse;margin-top:6px;">
-                            <tr>
-                                <td style="padding:5px 0;color:#6b625c;width:90px;">Nama</td>
-                                <td style="padding:5px 0;">{nama_siswa}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding:5px 0;color:#6b625c;">Kelas</td>
-                                <td style="padding:5px 0;">{kelas}</td>
-                            </tr>
-                        </table>
-                    </td>
+        <table style="width:100%;border-collapse:collapse;">
+        <tr>
+        <td colspan="2" style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:50%;">Data Siswa</td>
+        <td colspan="2" style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:50%;">Info Pembayaran</td>
+        </tr>
+        <tr>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:16%;white-space:nowrap;">Nama</td><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:34%;">{nama_siswa}</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:16%;white-space:nowrap;">Tanggal Bayar</td><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:34%;">{tanggal_bayar}</td>
+        </tr>
+        <tr>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:16%;white-space:nowrap;">Kelas</td><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:34%;">{kelas}</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:16%;white-space:nowrap;">Metode</td><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:34%;">{metode_bayar}</td>
+        </tr>
+        </table>
 
-                    <td style="width:50%;vertical-align:top;padding-left:12px;">
-                        <div style="font-size:9.5pt;color:#6b625c;border-bottom:1px solid #d9d2ca;padding-bottom:4px;">
-                            Info pembayaran
-                        </div>
-                        <table style="width:100%;border-collapse:collapse;margin-top:6px;">
-                            <tr>
-                                <td style="padding:5px 0;color:#6b625c;width:105px;">Tanggal bayar</td>
-                                <td style="padding:5px 0;">{tanggal_bayar}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding:5px 0;color:#6b625c;">Metode</td>
-                                <td style="padding:5px 0;">{metode_bayar}</td>
-                            </tr>
-                        </table>
-                    </td>
-                </tr>
-            </table>
+        <div style="height:17px;line-height:17px;font-size:1px;">&nbsp;</div>
 
-            <div style="margin-top:22px;font-size:9.5pt;color:#6b625c;border-bottom:1px solid #d9d2ca;padding-bottom:5px;">
-                Detail pertemuan
-            </div>
+        <table style="width:100%;border-collapse:collapse;">
+        <tr>
+        <td colspan="4" style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;">Detail Pertemuan</td>
+        </tr>
+        <tr>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:16%;white-space:nowrap;">Tanggal Pertemuan</td><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:34%;">{tanggal_pertemuan}</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:16%;white-space:nowrap;">Jam Pertemuan</td><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:34%;">{jam_pertemuan}</td>
+        </tr>
+        <tr>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:16%;white-space:nowrap;">Guru</td><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:34%;">{guru}</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:16%;white-space:nowrap;">Lokasi</td><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:34%;">{lokasi}</td>
+        </tr>
+        </table>
 
-            <table style="width:100%;border-collapse:collapse;margin-top:6px;">
-                <tr>
-                    <td style="padding:7px 0;width:150px;color:#6b625c;">Tanggal pertemuan</td>
-                    <td style="padding:7px 0;">{tanggal_pertemuan}</td>
-                </tr>
-                <tr>
-                    <td style="padding:7px 0;color:#6b625c;">Jam pertemuan</td>
-                    <td style="padding:7px 0;">{jam_pertemuan}</td>
-                </tr>
-                <tr>
-                    <td style="padding:7px 0;color:#6b625c;">Guru</td>
-                    <td style="padding:7px 0;">{guru}</td>
-                </tr>
-                <tr>
-                    <td style="padding:7px 0;color:#6b625c;">Lokasi</td>
-                    <td style="padding:7px 0;">{lokasi}</td>
-                </tr>
-            </table>
+        <div style="height:17px;line-height:17px;font-size:1px;">&nbsp;</div>
 
-            <table style="width:100%;border-collapse:collapse;margin-top:24px;">
-                <tr>
-                    <td style="padding:12px 8px;border-top:2px solid #1f1a17;font-size:13pt;font-weight:bold;">
-                        Total dibayarkan
-                    </td>
-                    <td style="padding:12px 8px;border-top:2px solid #1f1a17;font-size:15pt;font-weight:bold;text-align:right;white-space:nowrap;">
-                        {jumlah_dibayar}
-                    </td>
-                </tr>
-            </table>
+        <table style="width:100%;border-collapse:collapse;">
+        <tr>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:70%;">Rincian Biaya</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:30%;text-align:right;">Jumlah(Rp)</td>
+        </tr>
+        <tr>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;">{jenis_biaya}</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;text-align:right;white-space:nowrap;">{jumlah_dibayar}</td>
+        </tr>
+        <tr>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFF2CC;font-weight:bold;">Total dibayarkan</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFF2CC;font-weight:bold;text-align:right;white-space:nowrap;">{jumlah_dibayar}</td>
+        </tr>
+        </table>
 
-            <div style="font-size:9.5pt;color:#6b625c;margin-top:28px;border-top:1px solid #d9d2ca;padding-top:8px;">
-                Terima kasih telah belajar bersama Haoyou Educator.
-                Invoice ini sah tanpa tanda tangan.
-            </div>
+        <div style="height:17px;line-height:17px;font-size:1px;">&nbsp;</div>
+
+        <table style="width:100%;border-collapse:collapse;">
+        <tr>
+        <td style="width:50%;vertical-align:top;">
+        <div style="font-weight:bold;">Pembayaran:</div>
+        <div>Melalui BANK CENTRAL ASIA</div>
+        <div>A.N GABRIELLA AGATA</div>
+        <div>No. Rekening 2589999724</div>
+        </td>
+        <td style="width:50%;vertical-align:top;">
+        <div style="font-weight:bold;">Cara Pembayaran:</div>
+        <div>Nama murid (titik) Nama Kelas</div>
+        <div>Contoh: Rudi.Maochong 1</div>
+        </td>
+        </tr>
+        </table>
 
         </div>
         HTML;

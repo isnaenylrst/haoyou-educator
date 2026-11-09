@@ -135,7 +135,6 @@
                         <th>Tanggal</th>
                         <th>Kelas</th>
                         <th>Laoshi</th>
-                        <th>Jadwal</th>
                         <th>Materi</th>
                         <th>Status</th>
                         <th>Kehadiran</th>
@@ -175,7 +174,7 @@
                         <tr>
                             <td>
                                 {{ $j->session_date->format('d M Y') }}
-                                <div class="cand-sub">{{ $j->session_date->copy()->locale('id')->translatedFormat('l') }}</div>
+                                <div class="cand-sub">{{ $scheduleText }}</div>
                             </td>
                             <td>
                                 <div class="cand-name">{{ $j->class?->class_name ?? '-' }}</div>
@@ -190,7 +189,6 @@
                                     @endif
                                 @endif
                             </td>
-                            <td>{{ $scheduleText }}</td>
                             <td>
                                 @if ($j->material)
                                     Pertemuan {{ $j->material->meeting_number }}
@@ -221,7 +219,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="x-empty">
+                            <td colspan="7" class="x-empty">
                                 <i class="fa-regular fa-folder-open"></i>
                                 Belum ada jurnal pada periode ini.
                             </td>

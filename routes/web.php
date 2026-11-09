@@ -60,6 +60,7 @@ use App\Http\Controllers\Guru\TugasKelasController as GuruTugasKelasController;
 use App\Http\Controllers\Guru\AvailabilityController as GuruAvailabilityController;
 use App\Http\Controllers\Guru\CertificateController as GuruCertificateController;
 use App\Http\Controllers\Guru\SuratController as GuruSuratController;
+use App\Http\Controllers\Guru\ReplacementOfferController;
 
 // ===== OWNER =====
 use App\Http\Controllers\Owner\DashboardController as OwnerDashboardController;
@@ -458,6 +459,10 @@ Route::middleware(['auth', 'role:Curriculum'])
         Route::delete('/ketersediaan-guru/{availability}', [KetersediaanGuruController::class, 'destroy'])
             ->name('ketersediaan.destroy');
 
+        // Ajukan kelas pengganti yang menunggu guru
+        Route::post('/ketersediaan-guru/pengganti/{classSession}/ajukan', [KetersediaanGuruController::class, 'offerReplacement'])
+            ->name('ketersediaan.pengganti.ajukan');
+
         /*
         |--------------------------------------------------------------------------
         | VIDEO PEMBELAJARAN (upload -> siswa bisa menonton)
@@ -586,6 +591,9 @@ Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
         // Terima / tolak kelas yang diberikan Kurikulum
         Route::post('/kelas-diberikan/{class}/respond', [GuruAvailabilityController::class, 'respondClass'])->name('class.respond');
 
+        // Guru kelas pengganti
+        Route::post('/kelas-pengganti/{classSession}/respond', [ReplacementOfferController::class, 'respond'])->name('pengganti.respond');
+
         // Surat dari Kurikulum
         Route::get('/surat', [GuruSuratController::class, 'index'])->name('surat');
         Route::patch('/surat/baca-semua', [GuruSuratController::class, 'readAll'])->name('surat.read-all');
@@ -666,6 +674,8 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
             ->name('siswa.update');
         Route::get('/{siswa}', [SiswaController::class, 'show'])
             ->name('siswa.show');
+        Route::get('/{siswa}/detail', [SiswaController::class, 'detail'])
+        ->name('siswa.detail');
 
         // SISWA: LANJUT PROGRAM
         Route::get('/{siswa}/continue', [SiswaController::class, 'continueProgramForm'])
@@ -694,6 +704,18 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
             \App\Http\Controllers\Admin\CalonSiswa\RegistrationFormController::class,
             'download'
         ])->name('siswa.formulir');
+
+        // SISWA: KELAS PENGGANTI
+        Route::get('/kelas-pengganti/guru', [SiswaController::class, 'replacementTeachers'])
+            ->name('siswa.replacement.teachers');
+        Route::get('/{siswa}/kelas-pengganti', [SiswaController::class, 'replacementPage'])
+            ->name('siswa.replacement');
+        Route::post('/{siswa}/kelas-pengganti', [SiswaController::class, 'storeReplacement'])
+            ->name('siswa.replacement.store');
+        Route::post('/{siswa}/kelas-pengganti/{classSession}/ajukan-ulang', [SiswaController::class, 'reofferReplacement'])
+            ->name('siswa.replacement.reoffer');
+        Route::post('/{siswa}/kelas-pengganti/{classSession}/batal', [SiswaController::class, 'cancelReplacement'])
+            ->name('siswa.replacement.cancel');
     });
 
     // ENROLLMENTS

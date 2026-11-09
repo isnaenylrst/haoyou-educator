@@ -106,18 +106,6 @@
                 <option value="Completed" {{ request('trial_status') == 'Completed' ? 'selected' : '' }}>Completed</option>
                 <option value="Cancelled" {{ request('trial_status') == 'Cancelled' ? 'selected' : '' }}>Cancelled</option>
             </select>
-
-
-            {{-- <select name="followup" class="select-chip" onchange="this.form.submit()">
-                <option value="">Semua Follow-up</option>
-                <option value="today" {{ request('followup') == 'today' ? 'selected' : '' }}>Hari Ini</option>
-                <option value="overdue" {{ request('followup') == 'overdue' ? 'selected' : '' }}>Overdue</option>
-            </select> --}}
-
-            {{-- <a href="{{ route('admin.calon-siswa') }}" class="btn">
-                <i class="fa-solid fa-rotate-right"></i>
-                Reset
-            </a> --}}
         </div>
     </form>
 
@@ -127,13 +115,11 @@
                 <tr>
                     <th>Calon Siswa</th>
                     <th>Program</th>
-                    {{-- <th>Sumber</th> --}}
-                    <th>Status Lead</th>
-                    <th>Status Trial</th>
-                    <th>Tanggal Trial</th>
-                    <th>Jadwal Konsultasi</th>
-                    {{-- <th>Follow-up Berikutnya</th> --}}
-                    <th width="120" style="text-align: center;">Aksi</th>
+                    <th style="text-align: center; vertical-align: middle;">Status Lead</th>
+                    <th style="text-align: center; vertical-align: middle;">Status Trial</th>
+                    <th style="text-align: center; vertical-align: middle;">Tanggal Trial</th>
+                    <th style="text-align: center; vertical-align: middle;">Jadwal Konsultasi</th>
+                    <th style="text-align: center; vertical-align: middle;"">Aksi</th>
                 </tr>
             </thead>
 
@@ -155,24 +141,16 @@
                         </td>
 
                         <td>
-                            {{-- Sebelumnya: null-coalescing chain di sini selalu jatuh ke
-                                 "(Privat)" walau kedua relasinya kosong, karena
-                                 `null . ' (Privat)'` di PHP jadi string " (Privat)",
-                                 bukan null — jadi baris "??  '-'" berikutnya tidak
-                                 pernah kepakai. Ditulis eksplisit di bawah supaya
-                                 kasus tanpa program & tanpa private tetap tampil "-". --}}
                             @if ($candidate->program)
                                 {{ $candidate->program->program_name }}
                             @elseif ($candidate->privatePackage)
                                 {{ $candidate->privatePackage->package_name }}
-                                <span class="badge badge-private-inline">Private</span>
                             @else
                                 -
                             @endif
                         </td>
-                        {{-- <td>{{ $candidate->source ?: '-' }}</td> --}}
 
-                        <td>
+                        <td style="text-align: center; vertical-align: middle;">
                             @php
                                 $leadClass = match ($candidate->lead_status) {
                                     'Cold' => 'badge-cold',
@@ -187,7 +165,7 @@
                             </span>
                         </td>
 
-                        <td>
+                        <td style="text-align: center; vertical-align: middle;">
                             @php
                                 $trialClass = match ($candidate->trial_status) {
                                     'Pending' => 'badge-pending',
@@ -202,29 +180,11 @@
                             </span>
                         </td>
 
-                        <td>
+                        <td style="text-align: center; vertical-align: middle;">
                             {{ $candidate->trial_date ? \Carbon\Carbon::parse($candidate->trial_date)->format('d M Y') : '-' }}
                         </td>
 
-                        {{-- <td>
-                            @if($candidate->latestFollowUp && $candidate->latestFollowUp->next_followup)
-                                @php
-                                    $next = \Carbon\Carbon::parse($candidate->latestFollowUp->next_followup)->startOfDay();
-                                    $today = \Carbon\Carbon::today();
-                                @endphp
-                                @if($next->lt($today))
-                                    <span class="followup-flag overdue"><i class="fa-solid fa-circle"></i> Overdue</span>
-                                @elseif($next->eq($today))
-                                    <span class="followup-flag today"><i class="fa-solid fa-circle"></i> Hari Ini</span>
-                                @else
-                                    <span class="followup-flag upcoming"><i class="fa-solid fa-circle"></i> {{ $next->format('d M Y') }}</span>
-                                @endif
-                            @else
-                                <span class="followup-flag upcoming">-</span>
-                            @endif
-                        </td> --}}
-
-                        <td>
+                        <td style="text-align: center; vertical-align: middle;">
                             {{ $candidate->consultation_date ? \Carbon\Carbon::parse($candidate->consultation_date)->format('d M Y') : '-' }}
                         </td>
 

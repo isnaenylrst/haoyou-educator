@@ -146,6 +146,62 @@
         </div>
     </div>
 
+    {{-- ===== KELAS PENGGANTI MENUNGGU GURU ===== --}}
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <span class="fw-bold">Kelas Pengganti Menunggu Guru</span>
+            <span class="badge {{ $replacementsWaiting->isEmpty() ? 'bg-success' : 'bg-warning text-dark' }}">{{ $replacementsWaiting->count() }}</span>
+        </div>
+
+        <div class="list-group list-group-flush">
+            @forelse ($replacementsWaiting as $rs)
+                @php
+                    $offerLabel = ['Pending' => 'menunggu jawaban', 'Rejected' => 'menolak', 'Closed' => 'ditutup', 'Accepted' => 'menerima'];
+                @endphp
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                        <div>
+                            <div class="fw-semibold">
+                                {{ $rs->enrollment?->student?->name ?? '-' }}
+                                @if ($rs->enrollment?->class)
+                                    <small class="text-muted fw-normal">· {{ $rs->enrollment->class->class_name }}</small>
+                                @endif
+                            </div>
+                            <small class="text-muted d-block">
+                                {{ $rs->session_date->translatedFormat('l, d M Y') }},
+                                {{ substr($rs->start_time, 0, 5) }}–{{ substr($rs->end_time, 0, 5) }}
+                                · {{ $rs->location_type }}{{ $rs->location_type === 'Studio' && $rs->room ? ' · ' . $rs->room : '' }}
+                            </small>
+
+                            @forelse ($rs->teacherOffers as $o)
+                                <div class="small {{ $o->status === 'Rejected' ? 'text-danger' : 'text-muted' }} mt-1">
+                                    {{ $o->teacher->name ?? '-' }}: {{ $offerLabel[$o->status] ?? $o->status }}
+                                    @if ($o->status === 'Rejected' && $o->response_note) ({{ $o->response_note }}) @endif
+                                </div>
+                            @empty
+                                <div class="small text-warning mt-1">Belum diajukan ke guru mana pun</div>
+                            @endforelse
+                        </div>
+
+                        <form action="{{ route('kurikulum.ketersediaan.pengganti.ajukan', $rs) }}" method="POST"
+                              class="d-flex gap-2 align-items-center">
+                            @csrf
+                            <select name="mode" class="form-select form-select-sm">
+                                <option value="matching">Guru yang cocok</option>
+                                <option value="all">Semua guru</option>
+                            </select>
+                            <button class="btn btn-primary btn-sm text-nowrap">Ajukan</button>
+                        </form>
+                    </div>
+                </div>
+            @empty
+                <div class="list-group-item text-center text-muted py-4">
+                    Tidak ada kelas pengganti yang menunggu guru.
+                </div>
+            @endforelse
+        </div>
+    </div>
+
     {{-- ===== MENUNGGU JAWABAN ===== --}}
     @if ($waiting->isNotEmpty())
         <div class="card shadow-sm border-0 mb-4">

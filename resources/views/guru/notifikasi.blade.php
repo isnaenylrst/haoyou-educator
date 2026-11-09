@@ -23,6 +23,10 @@
         <div class="alert alert-danger">{{ session('error') }}</div>
     @endif
 
+    @if ($errors->any())
+        <div class="alert alert-danger">{{ $errors->first() }}</div>
+    @endif
+
     {{-- Card --}}
     <div class="card border-0 shadow-sm rounded-4">
 

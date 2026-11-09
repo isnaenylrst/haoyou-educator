@@ -188,8 +188,14 @@ class ConvertController extends Controller
             'schedules.*.start_time' => ['required', 'date_format:H:i'],
             'schedules.*.end_time'   => ['required', 'date_format:H:i', 'after:schedules.*.start_time'],
             'schedules.*.room'       => ['nullable', 'string', 'max:255'],
+
+            // pengajuan kelas private baru ke guru: selected | matching | all | none (jangan ajukan dulu)
+            'offer_mode'             => [Rule::requiredIf($needsNewClass), 'nullable', Rule::in(['selected', 'matching', 'all', 'none'])],
+            'offer_teacher_ids'      => ['required_if:offer_mode,selected', 'nullable', 'array'],
+            'offer_teacher_ids.*'    => ['integer', 'exists:teachers,id'],
         ], [
             'level_id.required_if'       => 'Level wajib dipilih.',
+            'offer_teacher_ids.required_if' => 'Centang minimal satu guru, atau pilih opsi pengajuan lain.',
             'requested_material.required' => 'Materi yang diminta siswa private wajib diisi.',
             'delivery_mode.required'     => 'Mode kelas wajib dipilih.',
             'start_date.required'        => 'Tanggal mulai wajib diisi.',
@@ -213,7 +219,9 @@ class ConvertController extends Controller
                 $validated['delivery_mode'],
                 $validated['start_date'],
                 $validated['end_date'],
-                $validated['schedules']
+                $validated['schedules'],
+                $validated['offer_mode'],
+                $validated['offer_teacher_ids']
             );
         } elseif ($needsNewClass) {
             // Ruangan mengikuti mode kelas + cek jadwal bertabrakan di form yang sama
@@ -242,7 +250,9 @@ class ConvertController extends Controller
                 $validated['delivery_mode'],
                 $validated['start_date'],
                 $validated['end_date'],
-                $validated['schedules']
+                $validated['schedules'],
+                $validated['offer_mode'],
+                $validated['offer_teacher_ids']
             );
         }
 
@@ -490,7 +500,7 @@ class ConvertController extends Controller
         $kelas = $enrollment->class;
 
         if ($isPrivate && $kelas && ! $kelas->teacher_id && empty($draft['join_class_id'])) {
-            $message .= ' ' . $this->offerPrivateClass($kelas);
+            $message .= ' ' . $this->offerPrivateClass($kelas, $draft);
         }
 
         session()->forget(self::SESSION_KEY . $candidateStudent->id);
@@ -635,20 +645,26 @@ class ConvertController extends Controller
         }
     }
 
-    /** Ajukan kelas private ke guru yang cocok; kalau tidak ada yang cocok, ke semua guru aktif. */
-    private function offerPrivateClass(ClassModel $kelas): string
+    /**
+     * Ajukan kelas private baru ke guru sesuai pilihan admin di step 1:
+     * selected (guru yang dicentang), matching (semua guru yang cocok), all (semua guru aktif),
+     * atau none (jangan ajukan dulu). Tanpa pilihan, dipakai "matching".
+     */
+    private function offerPrivateClass(ClassModel $kelas, array $draft = []): string
     {
-        try {
-            $names = $this->offers->offer($kelas, 'matching', []);
-        } catch (ValidationException $e) {
-            // offer() melempar exception kalau tidak ada guru yang cocok / sudah diajukan semua
-            try {
-                $names = $this->offers->offer($kelas, 'all', []);
-            } catch (\Throwable $e2) {
-                report($e2);
+        $mode = $draft['offer_mode'] ?? 'matching';
 
-                return 'Kelas dibuat, tapi belum bisa diajukan ke guru. Ajukan lewat halaman Edit kelas.';
-            }
+        if ($mode === 'none') {
+            return 'Kelas belum diajukan ke guru. Ajukan lewat halaman Edit kelas.';
+        }
+
+        try {
+            $names = $this->offers->offer($kelas, $mode, $draft['offer_teacher_ids'] ?? []);
+        } catch (ValidationException $e) {
+            // mis. belum ada guru yang cocok / semua sudah diajukan
+            return 'Kelas dibuat, tapi belum diajukan ke guru: '
+                . collect($e->errors())->flatten()->first()
+                . ' Ajukan lewat halaman Edit kelas.';
         } catch (\Throwable $e) {
             report($e);
 
