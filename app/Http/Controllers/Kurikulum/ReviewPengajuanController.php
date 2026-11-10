@@ -280,6 +280,12 @@ class ReviewPengajuanController extends Controller
 
         if ($data['decision'] === 'Approved') {
             $user = Auth::user();
+
+            if (empty($user->signature_path) || !Storage::disk('public')->exists($user->signature_path)) {
+                return redirect()->route('profil.index')
+                    ->with('error', 'Anda harus memiliki tanda tangan digital terlebih dahulu sebelum melakukan ACC. Silakan gambar atau unggah tanda tangan Anda di menu Profil & Tanda Tangan.');
+            }
+
             $ownerSig = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Owner'))
                 ->whereNotNull('signature_path')
                 ->value('signature_path');
@@ -453,6 +459,14 @@ class ReviewPengajuanController extends Controller
             return back()->with('error', 'Sertifikat ini sudah pernah direview.');
         }
 
+        if ($data['decision'] === 'Approved') {
+            $user = Auth::user();
+            if (empty($user->signature_path) || !Storage::disk('public')->exists($user->signature_path)) {
+                return redirect()->route('profil.index')
+                    ->with('error', 'Anda harus memiliki tanda tangan digital terlebih dahulu sebelum melakukan ACC. Silakan gambar atau unggah tanda tangan Anda di menu Profil & Tanda Tangan.');
+            }
+        }
+
         $certificate->update([
             'status'      => $data['decision'],
             'review_note' => $data['decision'] === 'Rejected' ? $data['note'] : null,
@@ -530,6 +544,11 @@ class ReviewPengajuanController extends Controller
         $user = Auth::user();
 
         if ($data['decision'] === 'Approved') {
+            if (empty($user->signature_path) || !Storage::disk('public')->exists($user->signature_path)) {
+                return redirect()->route('profil.index')
+                    ->with('error', 'Anda harus memiliki tanda tangan digital terlebih dahulu sebelum melakukan ACC. Silakan gambar atau unggah tanda tangan Anda di menu Profil & Tanda Tangan.');
+            }
+
             // Sesuai alur Poin 4: Kurikulum + TTD -> diteruskan ke Admin untuk verifikasi
             $submission->update([
                 'status'                    => 'Review Admin',

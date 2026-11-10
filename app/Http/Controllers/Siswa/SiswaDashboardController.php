@@ -287,10 +287,11 @@ class SiswaDashboardController extends Controller
         $categoryIds = $this->resolveCategoryIds($student, $enrollments);
 
         $isAllowed = false;
-        if ($material->level_id && $levelIds->contains($material->level_id)) {
+        if (is_null($material->program_id) && is_null($material->level_id)) {
+            $isAllowed = true; // Materi Umum
+        } elseif ($material->level_id && $levelIds->contains($material->level_id)) {
             $isAllowed = true;
-        }
-        if ($material->program_id && $categoryIds->contains($material->program_id)) {
+        } elseif ($material->program_id && $categoryIds->contains($material->program_id)) {
             $isAllowed = true;
         }
 

@@ -328,7 +328,7 @@ class OwnerModuleTest extends TestCase
 
         // Kurikulum ACC
         $this->actingAs($this->kurikulumUser);
-        $resKur = $this->patch("/kurikulum/review-pengajuan/certificate/{$cert->id}", [
+        $resKur = $this->patch("/kurikulum/review-pengajuan/sertifikat/{$cert->id}", [
             'decision' => 'Approved',
         ]);
         $resKur->assertSessionHas('success');
