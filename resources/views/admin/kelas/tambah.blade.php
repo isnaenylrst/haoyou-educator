@@ -4,134 +4,6 @@
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/admin/kelas.css') }}">
-    <style>
-        .kelas-create-page { width: 100%; max-width: 1200px; margin: 0 auto; }
-        .kelas-page-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:24px; }
-        .kelas-page-heading h1 { margin:0; font-size:26px; font-weight:700; color:#111827; }
-        .kelas-page-heading p { margin:8px 0 0; color:#6b7280; font-size:14px; }
-        .kelas-form-card { background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:24px; box-shadow:0 2px 8px rgba(15,23,42,.04); }
-        .kelas-form-body { display:flex; flex-direction:column; gap:24px; }
-        .kelas-form-actions { display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e5e7eb; padding-top:20px; margin-top:24px; }
-        .schedule-row { display:flex; gap:10px; align-items:flex-end; margin-bottom:12px; }
-        .schedule-row .form-field { flex:1; min-width:0; }
-        .schedule-row .schedule-remove { flex:none; }
-        .room-picker { display:flex; gap:6px; }
-        .room-picker select { flex:1; min-width:0; }
-        .room-add { flex:none; width:40px; border:1px dashed #e0c200; background:#fff8cc; border-radius:10px; font-size:18px; font-weight:700; color:#8a6d00; cursor:pointer; }
-        .room-add:hover { background:#ffef99; }
-        .avail-title { display:block; font-size:13px; font-weight:600; margin-bottom:8px; }
-        .avail-panel { background:#fafafa; border:1px solid #eee; border-radius:12px; padding:14px 16px; margin-bottom:16px; }
-        .avail-empty { font-size:13px; color:#888; }
-        .avail-row { display:flex; gap:14px; align-items:flex-start; padding:5px 0; }
-        .avail-day { width:56px; flex:none; font-size:13px; font-weight:600; padding-top:3px; }
-        .avail-chips { display:flex; flex-wrap:wrap; gap:6px; }
-        .avail-chip { font-size:12px; font-weight:600; padding:3px 10px; border-radius:999px; border:1px solid; white-space:nowrap; }
-        .avail-chip.ok { background:#f0fdf4; border-color:#bbf7d0; color:#16a34a; }
-        .avail-chip.busy { background:#fef2f2; border-color:#fecaca; color:#dc2626; }
-        .avail-legend { display:flex; gap:8px; margin-top:10px; padding-top:10px; border-top:1px dashed #e5e5e5; }
-        .avail-warn { background:#fffbeb; border:1px solid #fde68a; color:#92400e; border-radius:10px; padding:10px 14px; margin-top:12px; font-size:13px; line-height:1.6; }
-        .form-hint { display:block; margin-top:6px; font-size:12px; color:#6b7280; }
-        /* Paket Program dan Level dalam satu baris */
-.form-row-program-level {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px;
-    width: 100%;
-}
-
-.form-row-program-level .form-group {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.form-row-program-level .form-group label {
-    margin-bottom: 8px;
-}
-
-.form-row-program-level .form-group select {
-    width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-}
-
-.form-row-program-level .form-hint {
-    display: block;
-    margin-top: 8px;
-}
-
-/* Container Zoom memenuhi seluruh lebar form */
-#add_zoom_fields {
-    display: none;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px 20px;
-
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-
-    grid-column: 1 / -1;
-    margin: 0;
-}
-
-/* Field Link Zoom dan Passcode */
-#add_zoom_fields .form-field {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    min-width: 0;
-    margin: 0;
-    box-sizing: border-box;
-}
-
-/* Input memenuhi kolom */
-#add_zoom_fields .form-field input {
-    display: block;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-}
-
-/* Keterangan memenuhi satu baris */
-#add_zoom_fields .zoom-hint {
-    grid-column: 1 / -1;
-    width: 100%;
-    margin: 0;
-}
-
-/* Tampilan HP */
-@media (max-width: 600px) {
-    #add_zoom_fields {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
-    #add_zoom_fields .zoom-hint {
-        grid-column: 1;
-    }
-}
-
-/* Tampilan HP */
-@media (max-width: 600px) {
-    .form-row-program-level {
-        grid-template-columns: 1fr;
-        gap: 12px;
-    }
-}
-        @media (max-width: 768px) {
-            .kelas-form-card { padding:16px; }
-            .schedule-row { flex-wrap:wrap; }
-            .schedule-row .form-field { flex:1 1 calc(50% - 10px); }
-            .kelas-form-actions { flex-direction:column-reverse; }
-            .kelas-form-actions .btn { width:100%; }
-        }
-        .offer-list { display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:6px; max-height:200px; overflow:auto; margin-top:10px; padding:10px; border:1px solid #eee; border-radius:12px; background:#fafafa; }
-        .offer-list.is-disabled { opacity:.45; }
-        .offer-item { display:flex; align-items:center; gap:8px; font-size:13px; }
-        .offer-badge { margin-left:auto; font-size:11px; color:#6b7280; }
-        .offer-item.fits .offer-badge { color:#15803d; font-weight:600; }
-    </style>
 @endpush
 
 @section('content')
@@ -143,8 +15,8 @@
             <p>Buat kelas Reguler atau Private beserta jadwal mingguannya.</p>
         </div>
         <div class="dashboard-header-actions">
-            <a href="{{ route('admin.kelas') }}" class="btn">
-                <i class="fa-solid fa-arrow-left"></i> Kembali ke Kelas
+            <a href="{{ route('admin.kelas') }}" class="btn btn-secondary">
+                <i class="fa-solid fa-arrow-left"></i> Kembali
             </a>
         </div>
     </div>
@@ -376,7 +248,7 @@
                 </div>
 
                 <div class="kelas-form-actions">
-                    <a href="{{ route('admin.kelas') }}" class="btn">Batal</a>
+                    <a href="{{ route('admin.kelas') }}" class="btn btn-secondary">Batal</a>
                     <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Simpan Kelas</button>
                 </div>
             </form>

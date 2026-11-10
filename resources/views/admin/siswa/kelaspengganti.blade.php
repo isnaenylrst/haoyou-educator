@@ -17,9 +17,9 @@
         </div>
 
         <div class="dashboard-header-actions">
-            <a href="{{ route('admin.siswa') }}" class="btn">
+            <a href="{{ route('admin.siswa') }}" class="btn btn-secondary">
                 <i class="fa-solid fa-arrow-left"></i>
-                Kembali ke Siswa
+                Kembali
             </a>
         </div>
     </div>

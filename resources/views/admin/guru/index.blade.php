@@ -107,10 +107,10 @@
             <thead>
                 <tr>
                     <th>Guru</th>
-                    <th>No. HP</th>
-                    <th>Tanggal Bergabung</th>
-                    <th>Status Training</th>
-                    <th>Status</th>
+                    <th style="text-align: center; vertical-align: middle;">No. HP</th>
+                    <th style="text-align: center; vertical-align: middle;">Tanggal Bergabung</th>
+                    <th style="text-align: center; vertical-align: middle;">Status Training</th>
+                    <th style="text-align: center; vertical-align: middle;">Status</th>
                     <th width="120" style="text-align: center;">Aksi</th>
                 </tr>
             </thead>
@@ -130,13 +130,15 @@
                             </div>
                         </td>
 
-                        <td>{{ $teacher->phone }}</td>
+                        <td style="text-align: center; vertical-align: middle;">
+                            {{ $teacher->phone }}
+                        </td>
 
-                        <td>
+                        <td style="text-align: center; vertical-align: middle;">
                             {{ $teacher->join_date ? \Carbon\Carbon::parse($teacher->join_date)->format('d M Y') : '-' }}
                         </td>
 
-                        <td>
+                        <td style="text-align: center; vertical-align: middle;">
                             @php
                                 $trainingClass = match ($teacher->training_status) {
                                     'Training' => 'badge-pending',
@@ -151,7 +153,7 @@
                             </span>
                         </td>
 
-                        <td>
+                        <td style="text-align: center; vertical-align: middle;">
                             @php
                                 $statusClass = $teacher->status === 'Active' ? 'badge-completed' : 'badge-cancelled';
                             @endphp
@@ -161,7 +163,7 @@
                             </span>
                         </td>
 
-                        <td>
+                        <td style="text-align: center; vertical-align: middle;">
                             <div class="row-actions">
                                 <a href="{{ route('admin.guru.show', $teacher->id) }}" class="icon-btn" title="Detail">
                                     <i class="fa-solid fa-eye"></i>

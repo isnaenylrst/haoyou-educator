@@ -4,164 +4,6 @@
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/admin/kelas.css') }}">
-    <style>
-        .kelas-create-page { width: 100%; max-width: 1200px; margin: 0 auto; }
-        .kelas-page-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:24px; }
-        .kelas-page-heading h1 { margin:0; font-size:26px; font-weight:700; color:#111827; }
-        .kelas-page-heading p { margin:8px 0 0; color:#6b7280; font-size:14px; }
-        .kelas-form-card { background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:24px; box-shadow:0 2px 8px rgba(15,23,42,.04); }
-        .kelas-form-body { display:flex; flex-direction:column; gap:24px; }
-        .kelas-form-actions { display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e5e7eb; padding-top:20px; margin-top:24px; }
-        .schedule-row { display:flex; gap:10px; align-items:flex-end; margin-bottom:12px; }
-        .schedule-row .form-field { flex:1; min-width:0; }
-        .schedule-row .schedule-remove { flex:none; }
-        .room-picker { display:flex; gap:6px; }
-        .room-picker select { flex:1; min-width:0; }
-        .room-add { flex:none; width:40px; border:1px dashed #e0c200; background:#fff8cc; border-radius:10px; font-size:18px; font-weight:700; color:#8a6d00; cursor:pointer; }
-        .room-add:hover { background:#ffef99; }
-        .avail-title { display:block; font-size:13px; font-weight:600; margin-bottom:8px; }
-        .avail-panel { background:#fafafa; border:1px solid #eee; border-radius:12px; padding:14px 16px; margin-bottom:16px; }
-        .avail-empty { font-size:13px; color:#888; }
-        .avail-row { display:flex; gap:14px; align-items:flex-start; padding:5px 0; }
-        .avail-day { width:56px; flex:none; font-size:13px; font-weight:600; padding-top:3px; }
-        .avail-chips { display:flex; flex-wrap:wrap; gap:6px; }
-        .avail-chip { font-size:12px; font-weight:600; padding:3px 10px; border-radius:999px; border:1px solid; white-space:nowrap; }
-        .avail-chip.ok { background:#f0fdf4; border-color:#bbf7d0; color:#16a34a; }
-        .avail-chip.busy { background:#fef2f2; border-color:#fecaca; color:#dc2626; }
-        .avail-legend { display:flex; gap:8px; margin-top:10px; padding-top:10px; border-top:1px dashed #e5e5e5; }
-        .avail-warn { background:#fffbeb; border:1px solid #fde68a; color:#92400e; border-radius:10px; padding:10px 14px; margin-top:12px; font-size:13px; line-height:1.6; }
-        .form-hint { display:block; margin-top:6px; font-size:12px; color:#6b7280; }
-        /* Paket Program dan Level dalam satu baris */
-.form-row-program-level {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px;
-    width: 100%;
-}
-
-.form-row-program-level .form-group {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.form-row-program-level .form-group label {
-    margin-bottom: 8px;
-}
-
-.form-row-program-level .form-group select {
-    width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-}
-
-.form-row-program-level .form-hint {
-    display: block;
-    margin-top: 8px;
-}
-
-/* Container Zoom memenuhi seluruh lebar form */
-#edit_zoom_fields {
-    display: none;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px 20px;
-
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-
-    grid-column: 1 / -1;
-    margin: 0;
-}
-
-/* Field Link Zoom dan Passcode */
-#edit_zoom_fields .form-field {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    min-width: 0;
-    margin: 0;
-    box-sizing: border-box;
-}
-
-/* Input memenuhi kolom */
-#edit_zoom_fields .form-field input {
-    display: block;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-}
-
-/* Keterangan memenuhi satu baris */
-#edit_zoom_fields .zoom-hint {
-    grid-column: 1 / -1;
-    width: 100%;
-    margin: 0;
-}
-
-/* Tampilan HP */
-@media (max-width: 600px) {
-    #edit_zoom_fields {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
-    #edit_zoom_fields .zoom-hint {
-        grid-column: 1;
-    }
-}
-
-/* Tampilan HP */
-@media (max-width: 600px) {
-    .form-row-program-level {
-        grid-template-columns: 1fr;
-        gap: 12px;
-    }
-}
-        @media (max-width: 768px) {
-            .kelas-form-card { padding:16px; }
-            .schedule-row { flex-wrap:wrap; }
-            .schedule-row .form-field { flex:1 1 calc(50% - 10px); }
-            .kelas-form-actions { flex-direction:column-reverse; }
-            .kelas-form-actions .btn { width:100%; }
-        }
-
-        a.btn, a.icon-btn { text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
-        .kelas-edit-card + .kelas-edit-card { margin-top:20px; }
-        .lock-note { background:#fffbeb; border:1px solid #fde68a; color:#92400e; border-radius:10px; padding:10px 14px; margin-bottom:14px; font-size:13px; line-height:1.6; }
-        .lock-note a { color:#92400e; font-weight:600; }
-        .edit-students .ms-list { max-height:360px; overflow-y:auto; }
-        /* Jarak antar kartu: pakai ~ karena ada <form> tersembunyi di antara kartu */
-        .kelas-edit-card ~ .kelas-edit-card { margin-top:24px; }
-
-        /* Guru pengampu (baca-saja) */
-        .teacher-readonly { display:flex; align-items:center; gap:10px; min-height:44px; padding:10px 14px; border:1px solid #e5e7eb; border-radius:10px; background:#f9fafb; font-size:14px; font-weight:400; color:#111827; }
-        .teacher-readonly b { font-weight:600; }
-
-        /* Ajukan ke Guru / Ganti Guru (ringkas). Jangan set font-family di semua elemen: ikon Font Awesome ikut rusak */
-        .offer-group, .offer-row, .offer-chip, #offerCard .btn, #offerCard .auto-note > span { font-family:inherit; }
-        #offerCard .auto-note { margin-bottom:4px; }
-        #offerCard .auto-note > span { flex:1; min-width:0; white-space:normal; line-height:1.6; }
-        .offer-group { margin-top:16px; }
-        .offer-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
-        .offer-head-title { font-size:13px; font-weight:600; color:#111827; }
-        .offer-count { margin-left:6px; font-weight:500; color:#6b7280; }
-        .offer-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:8px; }
-        .offer-row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 12px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; }
-        .offer-main { min-width:0; }
-        .offer-name { font-size:13px; font-weight:500; color:#111827; line-height:1.4; }
-        .offer-why { margin-top:1px; font-size:11.5px; color:#6b7280; }
-        .offer-note { margin-top:1px; font-size:11.5px; color:#b45309; }
-        .offer-actions { display:flex; align-items:center; gap:6px; flex:none; }
-        .offer-chip { display:inline-block; padding:2px 8px; border-radius:999px; background:#f3f4f6; color:#4b5563; font-size:11px; font-weight:600; line-height:1.5; white-space:nowrap; }
-        .offer-chip.accepted { background:#f0fdf4; color:#16a34a; }
-        .offer-chip.pending { background:#fffbeb; color:#b45309; }
-        .offer-chip.rejected { background:#fef2f2; color:#dc2626; }
-        #offerCard .btn-sm { padding:5px 12px; font-size:12px; font-weight:600; line-height:1.4; border-radius:8px; }
-        .offer-empty { padding:10px 14px; border:1px dashed #e5e7eb; border-radius:10px; background:#fafafa; font-size:12.5px; color:#6b7280; line-height:1.6; }
-        @media (max-width: 560px) { .offer-grid { grid-template-columns:1fr; } .offer-row { flex-wrap:wrap; } }
-    </style>
 @endpush
 
 @section('content')
@@ -202,8 +44,8 @@
             <p>{{ $kelas->class_name }} &mdash; perbarui data kelas dan kelola siswanya.</p>
         </div>
         <div class="dashboard-header-actions">
-            <a href="{{ route('admin.kelas') }}" class="btn">
-                <i class="fa-solid fa-arrow-left"></i> Kembali ke Kelas
+            <a href="{{ route('admin.kelas') }}" class="btn btn-secondary">
+                <i class="fa-solid fa-arrow-left"></i> Kembali
             </a>
         </div>
     </div>
@@ -394,7 +236,7 @@
             </div>
 
             <div class="kelas-form-actions">
-                <a href="{{ route('admin.kelas') }}" class="btn">Batal</a>
+                <a href="{{ route('admin.kelas') }}" class="btn btn-secondary">Batal</a>
                 <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Simpan Perubahan</button>
             </div>
         </form>
@@ -506,10 +348,10 @@
 
             <div class="ms-tabs">
                 <button type="button" class="ms-tab active" data-tab="waiting" onclick="switchStudentTab('waiting')">
-                    Dari Daftar Tunggu
+                    Tambah Siswa
                 </button>
                 <button type="button" class="ms-tab" data-tab="new" onclick="switchStudentTab('new')">
-                    Siswa Baru
+                    Daftar Siswa
                 </button>
             </div>
 

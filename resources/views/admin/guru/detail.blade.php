@@ -131,18 +131,24 @@
             <thead>
                 <tr>
                     <th>Judul</th>
-                    <th>Jenis</th>
-                    <th>Tanggal Upload</th>
+                    <th style="text-align: center; vertical-align: middle;">Jenis</th>
+                    <th style="text-align: center; vertical-align: middle;">Tanggal Upload</th>
                     <th width="130" style="text-align:center;">Aksi</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse ($documents as $doc)
                     <tr>
-                        <td>{{ $doc->title }}</td>
-                        <td>{{ $doc->document_type }}</td>
-                        <td>{{ $doc->created_at->format('d M Y') }}</td>
                         <td>
+                            {{ $doc->title }}
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;">
+                            {{ $doc->document_type }}
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;">
+                            {{ $doc->created_at->format('d M Y') }}
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;">
                             <div class="row-actions">
                                 <a href="{{ Storage::disk('public')->url($doc->file_path) }}" target="_blank" rel="noopener" class="icon-btn" title="Lihat">
                                     <i class="fa-solid fa-eye"></i>
@@ -183,17 +189,23 @@
                     <th>Tanggal Sesi</th>
                     <th>Kelas</th>
                     <th>Materi</th>
-                    <th>Status</th>
-                    <th>Catatan</th>
+                    <th style="text-align: center; vertical-align: middle;">Status</th>
+                    <th style="text-align: center; vertical-align: middle;">Catatan</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse ($teachingJournals as $journal)
                     <tr>
-                        <td>{{ \Carbon\Carbon::parse($journal->session_date)->format('d M Y') }}</td>
-                        <td>{{ $journal->class?->class_name ?? '-' }}</td>
-                        <td>{{ $journal->material?->title ?? '-' }}</td>
                         <td>
+                            {{ \Carbon\Carbon::parse($journal->session_date)->format('d M Y') }}
+                        </td>
+                        <td>
+                            {{ $journal->class?->class_name ?? '-' }}
+                        </td>
+                        <td>
+                            {{ $journal->material?->title ?? '-' }}
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;">
                             @php
                                 $jClass = match ($journal->class_status) {
                                     'Conducted'   => 'badge-completed',

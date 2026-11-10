@@ -82,12 +82,26 @@
     border: 1px solid transparent;
     cursor: pointer;
     text-decoration: none;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .15s ease, box-shadow .15s ease;
 }
 
 .btn-secondary {
     background: #FFFFFF;
     border-color: #E5E7EB;
     color: #3F3F3F;
+}
+
+.btn-secondary:hover {
+    background: #FFF4C2;
+    border-color: #F2C94C;
+    color: #3F3F3F;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(242, 201, 76, .35);
+}
+
+.btn-secondary:active {
+    transform: translateY(0);
+    box-shadow: none;
 }
 
 .btn-primary {
@@ -225,6 +239,7 @@
     border: none;
     outline: none;
     background: transparent;
+    font-family: inherit;
     font-size: 13px;
     flex: 1;
 }
@@ -236,7 +251,8 @@
     border-radius: 10px;
     background: #fff;
     color: #374151;
-    font-size: 14px;
+    font-family: inherit;       /* select & input date tidak otomatis mewarisi font halaman */
+    font-size: 13px;
     cursor: pointer;
     outline: none;
 }
@@ -2090,3 +2106,479 @@ a.icon-btn {
         grid-template-columns: 1fr;
     }
 }
+
+/* =====================================================
+   KELAS — halaman admin/kelas (index, tambah, edit, ubah jadwal)
+   Dulu terpisah di css/admin/kelas.css dan <style> tiap blade.
+   Semua CSS halaman Kelas sekarang hanya di file ini.
+===================================================== */
+
+a.btn,
+a.icon-btn {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* =====================================================
+   KELAS — tambahan di atas calonsiswa.css
+===================================================== */
+
+.badge-reguler {
+    background: #eff6ff;
+    color: #2563eb;
+}
+
+.badge-private {
+    background: #f5f3ff;
+    color: #7c3aed;
+}
+
+.schedule-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.schedule-chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: #f3f4f6;
+    color: #4b5563;
+    white-space: nowrap;
+}
+
+.capacity-ok {
+    font-weight: 600;
+    color: #16a34a;
+}
+
+.capacity-full {
+    font-weight: 600;
+    color: #dc2626;
+}
+
+.modal-foot-left {
+    display: flex;
+    align-items: center;
+}
+
+/* ==========================================================
+   MODAL KELOLA SISWA
+========================================================== */
+
+.modal-md {
+    max-width: 560px;
+}
+
+.ms-capacity {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #374151;
+    background: #f3f4f6;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+}
+
+.ms-capacity.is-full {
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+.ms-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid #edeef1;
+}
+
+.ms-tab {
+    border: none;
+    background: transparent;
+    padding: 8px 4px 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #9ca3af;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+
+.ms-tab.active {
+    color: #111827;
+    border-bottom-color: #ffd400;
+}
+
+.ms-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+.ms-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    border: 1px solid #edeef1;
+    border-radius: 12px;
+    padding: 13px 15px;
+}
+
+.ms-item-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.ms-item-sub {
+    font-size: 11.5px;
+    color: #9ca3af;
+    margin-top: 1px;
+}
+
+.ms-empty {
+    text-align: center;
+    font-size: 12.5px;
+    color: #9ca3af;
+    padding: 20px 0;
+}
+
+.btn-sm {
+    height: 30px;
+    padding: 0 12px;
+    font-size: 12px;
+}
+
+.btn-sm:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+.ms-item-schedule {
+    font-size: 11.5px;
+    color: #6b7280;
+    margin-top: 3px;
+}
+
+.ms-new-hint {
+    font-size: 12px;
+    color: #9ca3af;
+    margin: 4px 2px 10px;
+}
+
+/* ---------- Form tambah & edit kelas ---------- */
+        .kelas-create-page { width: 100%; max-width: 1200px; margin: 0 auto; }
+        .kelas-page-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:24px; }
+        .kelas-page-heading h1 { margin:0; font-size:26px; font-weight:700; color:#111827; }
+        .kelas-page-heading p { margin:8px 0 0; color:#6b7280; font-size:14px; }
+        .kelas-form-card { background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:24px; box-shadow:0 2px 8px rgba(15,23,42,.04); }
+        .kelas-form-body { display:flex; flex-direction:column; gap:24px; }
+        .kelas-form-actions { display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e5e7eb; padding-top:20px; margin-top:24px; }
+        .kelas-form-card .schedule-row { display:flex; gap:10px; align-items:flex-end; margin-bottom:12px; }
+        .kelas-form-card .schedule-row .form-field { flex:1; min-width:0; }
+        .kelas-form-card .schedule-row .schedule-remove { flex:none; }
+        .room-picker { display:flex; gap:6px; }
+        .room-picker select { flex:1; min-width:0; }
+        .room-add { flex:none; width:40px; border:1px dashed #e0c200; background:#fff8cc; border-radius:10px; font-size:18px; font-weight:700; color:#8a6d00; cursor:pointer; }
+        .room-add:hover { background:#ffef99; }
+        .avail-title { display:block; font-size:13px; font-weight:600; margin-bottom:8px; }
+        .avail-panel { background:#fafafa; border:1px solid #eee; border-radius:12px; padding:14px 16px; margin-bottom:16px; }
+        .avail-empty { font-size:13px; color:#888; }
+        .avail-row { display:flex; gap:14px; align-items:flex-start; padding:5px 0; }
+        .avail-day { width:56px; flex:none; font-size:13px; font-weight:600; padding-top:3px; }
+        .avail-chips { display:flex; flex-wrap:wrap; gap:6px; }
+        .avail-chip { font-size:12px; font-weight:600; padding:3px 10px; border-radius:999px; border:1px solid; white-space:nowrap; }
+        .avail-chip.ok { background:#f0fdf4; border-color:#bbf7d0; color:#16a34a; }
+        .avail-chip.busy { background:#fef2f2; border-color:#fecaca; color:#dc2626; }
+        .avail-legend { display:flex; gap:8px; margin-top:10px; padding-top:10px; border-top:1px dashed #e5e5e5; }
+        .avail-warn { background:#fffbeb; border:1px solid #fde68a; color:#92400e; border-radius:10px; padding:10px 14px; margin-top:12px; font-size:13px; line-height:1.6; }
+        .kelas-form-card .form-hint { display:block; margin-top:6px; font-size:12px; color:#6b7280; }
+        /* Paket Program dan Level dalam satu baris */
+.form-row-program-level {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    width: 100%;
+}
+
+.form-row-program-level .form-group {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.form-row-program-level .form-group label {
+    margin-bottom: 8px;
+}
+
+.form-row-program-level .form-group select {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.form-row-program-level .form-hint {
+    display: block;
+    margin-top: 8px;
+}
+
+/* Container Zoom memenuhi seluruh lebar form */
+#add_zoom_fields,
+#edit_zoom_fields {
+    display: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 20px;
+
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+
+    grid-column: 1 / -1;
+    margin: 0;
+}
+
+/* Field Link Zoom dan Passcode */
+#add_zoom_fields .form-field,
+#edit_zoom_fields .form-field {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+/* Input memenuhi kolom */
+#add_zoom_fields .form-field input,
+#edit_zoom_fields .form-field input {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+/* Keterangan memenuhi satu baris */
+#add_zoom_fields .zoom-hint,
+#edit_zoom_fields .zoom-hint {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin: 0;
+}
+
+/* Tampilan HP */
+@media (max-width: 600px) {
+    #add_zoom_fields,
+    #edit_zoom_fields {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #add_zoom_fields .zoom-hint,
+
+    #edit_zoom_fields .zoom-hint {
+        grid-column: 1;
+    }
+}
+
+/* Tampilan HP */
+@media (max-width: 600px) {
+    .form-row-program-level {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+}
+        @media (max-width: 768px) {
+            .kelas-form-card { padding:16px; }
+            .kelas-form-card .schedule-row { flex-wrap:wrap; }
+            .kelas-form-card .schedule-row .form-field { flex:1 1 calc(50% - 10px); }
+            .kelas-form-actions { flex-direction:column-reverse; }
+            .kelas-form-actions .btn { width:100%; }
+        }
+        .offer-list { display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:6px; max-height:200px; overflow:auto; margin-top:10px; padding:10px; border:1px solid #eee; border-radius:12px; background:#fafafa; }
+        .offer-list.is-disabled { opacity:.45; }
+        .offer-item { display:flex; align-items:center; gap:8px; font-size:13px; }
+        .offer-badge { margin-left:auto; font-size:11px; color:#6b7280; }
+        .offer-item.fits .offer-badge { color:#15803d; font-weight:600; }
+    
+
+/* ---------- Edit kelas: kartu, ajukan ke guru ---------- */
+        .kelas-edit-card + .kelas-edit-card { margin-top:20px; }
+        .lock-note { background:#fffbeb; border:1px solid #fde68a; color:#92400e; border-radius:10px; padding:10px 14px; margin-bottom:14px; font-size:13px; line-height:1.6; }
+        .lock-note a { color:#92400e; font-weight:600; }
+        .edit-students .ms-list { max-height:360px; overflow-y:auto; }
+        /* Jarak antar kartu: pakai ~ karena ada <form> tersembunyi di antara kartu */
+        .kelas-edit-card ~ .kelas-edit-card { margin-top:24px; }
+
+        /* Guru pengampu (baca-saja) */
+        .teacher-readonly { display:flex; align-items:center; gap:10px; min-height:44px; padding:10px 14px; border:1px solid #e5e7eb; border-radius:10px; background:#f9fafb; font-size:14px; font-weight:400; color:#111827; }
+        .teacher-readonly b { font-weight:600; }
+
+        /* Ajukan ke Guru / Ganti Guru (ringkas). Jangan set font-family di semua elemen: ikon Font Awesome ikut rusak */
+        .offer-group, .offer-row, .offer-chip, #offerCard .btn, #offerCard .auto-note > span { font-family:inherit; }
+        #offerCard .auto-note { margin-bottom:4px; }
+        #offerCard .auto-note > span { flex:1; min-width:0; white-space:normal; line-height:1.6; }
+        .offer-group { margin-top:16px; }
+        .offer-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+        .offer-head-title { font-size:13px; font-weight:600; color:#111827; }
+        .offer-count { margin-left:6px; font-weight:500; color:#6b7280; }
+        .offer-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:8px; }
+        .offer-row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 12px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; }
+        .offer-main { min-width:0; }
+        .offer-name { font-size:13px; font-weight:500; color:#111827; line-height:1.4; }
+        .offer-why { margin-top:1px; font-size:11.5px; color:#6b7280; }
+        .offer-note { margin-top:1px; font-size:11.5px; color:#b45309; }
+        .offer-actions { display:flex; align-items:center; gap:6px; flex:none; }
+        .offer-chip { display:inline-block; padding:2px 8px; border-radius:999px; background:#f3f4f6; color:#4b5563; font-size:11px; font-weight:600; line-height:1.5; white-space:nowrap; }
+        .offer-chip.accepted { background:#f0fdf4; color:#16a34a; }
+        .offer-chip.pending { background:#fffbeb; color:#b45309; }
+        .offer-chip.rejected { background:#fef2f2; color:#dc2626; }
+        #offerCard .btn-sm { padding:5px 12px; font-size:12px; font-weight:600; line-height:1.4; border-radius:8px; }
+        .offer-empty { padding:10px 14px; border:1px dashed #e5e7eb; border-radius:10px; background:#fafafa; font-size:12.5px; color:#6b7280; line-height:1.6; }
+        @media (max-width: 560px) { .offer-grid { grid-template-columns:1fr; } .offer-row { flex-wrap:wrap; } }
+    
+
+/* ---------- Ubah jadwal ---------- */
+        .uj-grid { display:grid; grid-template-columns:minmax(0, 1.25fr) minmax(0, 1fr); gap:20px; align-items:start; }
+        .uj-card { background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:24px; box-shadow:0 2px 8px rgba(15,23,42,.04); }
+        .uj-card h2 { margin:0 0 4px; font-size:16px; font-weight:700; color:#111827; }
+        .uj-card .uj-sub { margin:0 0 16px; font-size:13px; color:#6b7280; }
+        .uj-side { position:sticky; top:16px; }
+        .uj-placeholder { text-align:center; padding:36px 12px; color:#9ca3af; font-size:13px; line-height:1.7; }
+        .uj-placeholder i { display:block; font-size:28px; margin-bottom:10px; color:#d1d5db; }
+        .uj-pattern { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; }
+
+        #ses_list .ms-item.is-selected { border-color:#facc15; background:#fffbeb; }
+        #ses_list { max-height:none; }
+
+        .ses-actions { display:flex; align-items:center; gap:8px; flex:none; }
+        .ses-changed { font-size:12px; color:#92400e; margin-top:2px; }
+        .ses-meta { font-size:12px; color:#6b7280; margin-top:2px; }
+        #rs_confirm_wrap { display:none; margin-top:4px; }
+        .uj-actions { display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e5e7eb; padding-top:16px; margin-top:18px; }
+
+        @media (max-width: 900px) {
+            .uj-grid { grid-template-columns:minmax(0, 1fr); }
+            .uj-side { position:static; }
+            .uj-card { padding:16px; }
+        }
+
+/* =====================================================
+   KOMPONEN TAMBAHAN (dulu admin-extra.css)
+   Jurnal Mengajar, Kurikulum & Materi, Progress Report, Dokumen.
+   Semua class diawali "x-" supaya tidak bentrok dengan class lain.
+   Warna kuning/gold memakai variable di :root bagian atas file ini.
+===================================================== */
+
+/* ---------- Alert (sama dengan .alert-error / .success-banner) ---------- */
+.x-alert { border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; font-size: 14px; border: 1px solid; }
+.x-alert-success { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+.x-alert-warning { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+.x-alert-danger  { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+
+.x-note { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: #6b7280; margin: -4px 0 16px; }
+.x-note i { margin-top: 2px; color: var(--gold-label); }
+
+/* ---------- Tabs (sama dengan .ms-tab di calonsiswa.css) ---------- */
+.x-tabs { display: flex; gap: 20px; margin: 4px 0 16px; border-bottom: 1px solid #edeef1; }
+.x-tab { font-family: inherit; display: inline-flex; align-items: center; gap: 8px; padding: 8px 4px 10px; margin-bottom: -1px;
+         font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+         color: #9ca3af; text-decoration: none; border-bottom: 2px solid transparent; }
+.x-tab:hover { color: #111827; }
+.x-tab.active { color: #111827; border-bottom-color: var(--yellow); }
+.x-count { font-family: inherit; background: #f3f4f6; color: #4b5563; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.x-count-red { background: #fef2f2; color: #dc2626; }
+
+/* ---------- Teks bantu ---------- */
+.x-muted { color: #9ca3af; font-size: 11.5px; }
+.x-late { color: #dc2626; font-weight: 600; }
+.x-ok { color: #16a34a; font-weight: 600; }
+.x-empty { text-align: center; padding: 50px 20px; color: #9ca3af; font-size: 13px; }
+.x-empty i { display: block; font-size: 28px; margin-bottom: 10px; color: #d1d5db; }
+.x-empty.is-ok i { color: #86efac; }
+
+.x-chip { display: inline-block; background: #f3f4f6; color: #4b5563; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; margin: 0 4px 4px 0; }
+.x-chip-warn { background: var(--gold-badge-bg); color: var(--gold-badge-text); }
+
+/* ---------- Ringkasan laoshi tertunggak ---------- */
+.x-summary { padding: 16px 18px; margin-bottom: 16px; }
+.x-summary-title { font-weight: 700; font-size: 14px; color: #111827; margin-bottom: 12px; display: flex; gap: 8px; align-items: center; }
+.x-summary-title i { color: var(--gold-label); }
+.x-summary-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.x-summary-item { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+                  border: 1px solid #edeef1; border-radius: 12px; padding: 10px 12px; }
+
+/* ---------- Detail (modal) ---------- */
+.x-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; margin-bottom: 16px; }
+.x-detail-grid .full { grid-column: 1 / -1; }
+.x-detail-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; font-weight: 700; margin-bottom: 2px; }
+.x-detail-value { font-size: 13px; color: #111827; }
+.x-pre { white-space: pre-line; background: #f5f6f8; border: 1px solid #eceef1; border-radius: 10px; padding: 10px 12px; font-size: 13px; color: #374151; }
+
+/* ---------- Folder dokumen ---------- */
+.x-folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.x-folder { display: flex; gap: 14px; align-items: center; padding: 14px 16px; background: #fff; border: 1px solid #edeef1;
+            border-radius: 12px; text-decoration: none; color: inherit; transition: .15s; }
+.x-folder:hover { border-color: var(--yellow); box-shadow: 0 4px 14px var(--yellow-ring); transform: translateY(-1px); }
+.x-folder.active { border-color: var(--yellow); background: var(--yellow-soft); }
+.x-folder-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--yellow-soft); color: var(--gold-dark);
+                 display: grid; place-items: center; font-size: 19px; flex: none; }
+.x-folder.active .x-folder-icon { background: #fff; }
+.x-folder-name { font-weight: 700; font-size: 14px; color: #111827; }
+.x-folder-count { font-size: 11.5px; color: #9ca3af; }
+
+.x-file { display: flex; gap: 12px; align-items: center; }
+.x-file-icon { width: 36px; height: 36px; border-radius: 10px; background: #f3f4f6; color: #4b5563; display: grid; place-items: center; flex: none; }
+.x-file-icon.pdf { background: #fef2f2; color: #dc2626; }
+.x-file-icon.word { background: #eff6ff; color: #2563eb; }
+.x-file-icon.excel { background: #f0fdf4; color: #16a34a; }
+.x-file-icon.ppt { background: #ffedd5; color: #ea580c; }
+.x-file-icon.image { background: var(--yellow-soft); color: var(--gold-dark); }
+
+.x-btn-danger { color: #dc2626 !important; }
+.x-inline-form { display: inline; margin: 0; }
+
+/* ---------- Kurikulum & Materi: sesi harian ---------- */
+.x-date-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.x-date-title { font-weight: 700; font-size: 15px; color: #111827; min-width: 220px; text-align: center; }
+
+.x-session { display: grid; grid-template-columns: 130px minmax(0, 1fr) minmax(0, 1.1fr); gap: 18px;
+             background: #fff; border: 1px solid #edeef1; border-radius: 12px; padding: 16px 18px; margin-bottom: 12px; }
+.x-session-time { font-weight: 700; font-size: 18px; line-height: 1.1; color: #111827; }
+.x-session-time small { display: block; font-size: 12px; font-weight: 500; color: #6b7280; margin-top: 4px; }
+.x-session-title { font-weight: 700; font-size: 14px; color: #111827; margin-bottom: 2px; }
+.x-students { margin-top: 10px; }
+
+.x-material { border-radius: 12px; padding: 12px 14px; border: 1px solid #edeef1; background: #f5f6f8; font-size: 13px; color: #374151; }
+.x-material.is-rencana { background: var(--yellow-soft); border-color: var(--yellow-soft-border); }
+.x-material.is-sudah { background: #f0fdf4; border-color: #bbf7d0; }
+.x-material.is-warn { background: #fef2f2; border-color: #fecaca; }
+.x-material-meeting { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: #9ca3af; }
+.x-material-title { font-weight: 700; font-size: 14px; color: #111827; margin: 2px 0 6px; }
+.x-material-syllabus { color: #6b7280; margin-bottom: 8px; }
+.x-material-foot { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.x-flag { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; font-weight: 600; color: #dc2626; margin-top: 8px; }
+
+/* ---------- Kurikulum & Materi: katalog ---------- */
+.x-material-card { background: #fff; border: 1px solid #edeef1; border-radius: 12px; margin-bottom: 10px; }
+.x-material-card > summary { list-style: none; cursor: pointer; display: flex; gap: 14px; align-items: center; padding: 14px 16px; }
+.x-material-card > summary::-webkit-details-marker { display: none; }
+.x-meeting-no { width: 40px; height: 40px; border-radius: 12px; background: var(--yellow-soft); color: var(--gold-dark); font-weight: 700; display: grid; place-items: center; flex: none; }
+.x-material-card .x-body { padding: 0 16px 16px 70px; }
+
+@media (max-width: 900px) {
+    .x-session { grid-template-columns: 1fr; gap: 10px; }
+    .x-detail-grid { grid-template-columns: 1fr; }
+    .x-material-card .x-body { padding-left: 16px; }
+}
+
+/* Filter tanggal: segmen dd/mm/yyyy ikut font halaman */
+input[type="date"].select-chip { font-variant-numeric: normal; }
+input[type="date"].select-chip::-webkit-datetime-edit,
+input[type="date"].select-chip::-webkit-datetime-edit-fields-wrapper { font-family: inherit; }

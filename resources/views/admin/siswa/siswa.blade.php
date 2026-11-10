@@ -89,13 +89,14 @@
                 <option value="Graduated" {{ request('status') == 'Graduated' ? 'selected' : '' }}>Lulus</option>
             </select>
 
-            <select name="class_id" class="select-chip" onchange="this.form.submit()">
-                <option value="">Semua Kelas</option>
-                @foreach($classes as $class)
-                    <option value="{{ $class->id }}" {{ request('class_id') == $class->id ? 'selected' : '' }}>
-                        {{ $class->class_name }}
+            <select name="program" class="select-chip" onchange="this.form.submit()">
+                <option value="">Semua Program</option>
+                @foreach($categories as $category)
+                    <option value="{{ $category->id }}" {{ (string) request('program') === (string) $category->id ? 'selected' : '' }}>
+                        {{ $category->category_name }}
                     </option>
                 @endforeach
+                <option value="private" {{ request('program') === 'private' ? 'selected' : '' }}>Private</option>
             </select>
 
             <a href="{{ route('admin.siswa') }}" class="btn">
@@ -269,7 +270,19 @@
                                     <i class="fa-regular fa-pen-to-square"></i>
                                 </a>
 
-                                {{-- 2. Assign Kelas / Lanjutkan Pembayaran / Lanjut Program --}}
+                                {{-- 2. Kelas Pengganti --}}
+                                @if ($canReplace)
+                                    <a class="icon-btn wa" title="{{ $replaceHint }}"
+                                       href="{{ route('admin.siswa.replacement', $student) }}">
+                                        <i class="fa-solid fa-calendar-plus"></i>
+                                    </a>
+                                @else
+                                    <button type="button" class="icon-btn is-disabled" disabled title="{{ $replaceHint }}">
+                                        <i class="fa-solid fa-calendar-plus"></i>
+                                    </button>
+                                @endif
+
+                                {{-- 3. Assign Kelas / Lanjutkan Pembayaran / Lanjut Program --}}
                                 @if ($isWaitingClass)
                                     <button type="button" class="icon-btn wa" title="Assign Kelas"
                                             onclick="openAssignClassModal({{ $activeEnrollment->id }})">
@@ -285,18 +298,6 @@
                                        href="{{ route('admin.siswa.continue.program', $student) }}">
                                         <i class="fa-solid fa-forward"></i>
                                     </a>
-                                @endif
-
-                                {{-- 3. Kelas Pengganti --}}
-                                @if ($canReplace)
-                                    <a class="icon-btn wa" title="{{ $replaceHint }}"
-                                       href="{{ route('admin.siswa.replacement', $student) }}">
-                                        <i class="fa-solid fa-calendar-plus"></i>
-                                    </a>
-                                @else
-                                    <button type="button" class="icon-btn is-disabled" disabled title="{{ $replaceHint }}">
-                                        <i class="fa-solid fa-calendar-plus"></i>
-                                    </button>
                                 @endif
                             </div>
                         </td>

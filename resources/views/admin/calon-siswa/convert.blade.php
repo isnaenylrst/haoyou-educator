@@ -133,10 +133,13 @@
         <div class="convert-layout">
 
             {{-- ===================== FORM ===================== --}}
-            <div class="card">
-                <form action="{{ $step1Action ?? route('admin.calon-siswa.convert.step1.store', $candidateStudent->id) }}" method="POST">
+            <div class="convert-main" style="min-width:0;">
+                <form action="{{ $step1Action ?? route('admin.calon-siswa.convert.step1.store', $candidateStudent->id) }}" method="POST"
+                      style="display:flex; flex-direction:column; gap:20px;">
                     @csrf
 
+                    {{-- Kartu 1: Paket Program --}}
+                    <div class="card">
                     <div class="form-section">
                         <div class="form-section-title"><i class="fa-solid fa-box"></i> Paket Program</div>
 
@@ -334,97 +337,102 @@
                                 </div>
                             @endif
 
-                            <div class=" card private-class-box" id="private-class-fields">
-                                <div class="form-section-title"><i class="fa-solid fa-calendar-days"></i> Jadwal Kelas Private</div>
-
-                                <div class="form-grid">
-                                    @php
-                                        $oldOfferMode = old('offer_mode', $draft['offer_mode'] ?? 'matching');
-                                        $oldOfferIds  = collect(old('offer_teacher_ids', $draft['offer_teacher_ids'] ?? []))
-                                            ->map(fn ($i) => (int) $i)->all();
-                                        $offerModes = [
-                                            'selected' => 'Guru yang dicentang',
-                                            'matching' => 'Semua guru yang cocok',
-                                            'all'      => 'Semua guru',
-                                            'none'     => 'Jangan ajukan dulu',
-                                        ];
-                                    @endphp
-
-                                    <div class="form-field full">
-                                        <label>Ajukan ke Guru</label>
-
-                                        <div class="offer-modes">
-                                            @foreach ($offerModes as $value => $label)
-                                                <label class="offer-mode">
-                                                    <input type="radio" name="offer_mode" value="{{ $value }}"
-                                                           {{ $oldOfferMode === $value ? 'checked' : '' }} onchange="applyOfferMode()">
-                                                    <span>{{ $label }}</span>
-                                                </label>
-                                            @endforeach
-                                        </div>
-
-                                        <div class="offer-teacher-list" id="offer-teacher-list">
-                                            @forelse ($teachers ?? [] as $teacher)
-                                                <label class="offer-teacher" data-teacher="{{ $teacher->id }}">
-                                                    <input type="checkbox" name="offer_teacher_ids[]" value="{{ $teacher->id }}"
-                                                           {{ in_array($teacher->id, $oldOfferIds, true) ? 'checked' : '' }}>
-                                                    <span class="offer-teacher-name">{{ $teacher->name }}</span>
-                                                    <span class="offer-teacher-tag"></span>
-                                                </label>
-                                            @empty
-                                                <span class="form-section-note" style="margin:0;">Belum ada guru aktif.</span>
-                                            @endforelse
-                                        </div>
-
-                                        <p class="form-section-note" id="offer-hint" style="margin-top:8px;"></p>
-                                    </div>
-
-                                    <div class="form-field">
-                                        <label>Mode Kelas *</label>
-                                        <select name="delivery_mode" id="delivery_mode" required onchange="applyPrivateState()">
-                                            <option value="Offline" {{ $oldDeliveryMode === 'Offline' ? 'selected' : '' }}>Offline</option>
-                                            <option value="Online" {{ $oldDeliveryMode === 'Online' ? 'selected' : '' }}>Online</option>
-                                        </select>
-                                    </div>
-
-                                    <div class="form-field">
-                                        <label>Tanggal Mulai *</label>
-                                        <input type="date" name="start_date" id="start_date" required value="{{ $oldStartDate }}">
-                                    </div>
-
-                                    <div class="form-field">
-                                        <label>Tanggal Selesai (opsional)</label>
-                                        <input type="date" name="end_date" id="end_date" value="{{ $oldEndDate }}">
-                                        <span class="form-section-note" style="margin-top:0;">
-                                            <i class="fa-solid fa-circle-info"></i>
-                                            Kosongkan agar dihitung otomatis dari jumlah pertemuan paket
-                                        </span>
-                                    </div>
-
-                                    <div class="form-field full">
-                                        <label>Jadwal Mingguan *</label>
-                                        <div class="schedule-rows" id="schedule-rows"></div>
-                                        <button type="button" class="schedule-add" onclick="addScheduleRow()">
-                                            <i class="fa-solid fa-plus"></i> Tambah jadwal
-                                        </button>
-                                        <div id="schedule-check" class="schedule-check" style="display:none;"></div>
-                                        <span class="form-section-note" style="margin-top:6px;">
-                                            <i class="fa-solid fa-circle-info"></i>
-                                            Baris awal diisi dari jadwal yang diminta calon siswa. Bentrok jadwal/ruangan dicek saat menekan "Lanjut ke Pembayaran".
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <datalist id="room-suggestions">
-                                    @foreach ($roomSuggestions as $room)
-                                        <option value="{{ $room }}"></option>
-                                    @endforeach
-                                </datalist>
-                            </div>
                         </div>
                     </div>
 
-                    <div class="form-footer">
+                    </div>{{-- /kartu Paket Program --}}
+
+                    {{-- Kartu terpisah: hanya tampil untuk Private + buat kelas baru (disinkronkan applyPrivateState) --}}
+                    <div class="card private-class-box" id="private-class-fields"
+                         style="border-style:solid; margin:0;{{ $defaultPackageType === 'private' ? '' : ' display:none;' }}">
+                        <div class="form-section-title"><i class="fa-solid fa-calendar-days"></i> Jadwal Kelas Private</div>
+
+                        <div class="form-grid">
+                            @php
+                                $oldOfferMode = old('offer_mode', $draft['offer_mode'] ?? 'matching');
+                                $oldOfferIds  = collect(old('offer_teacher_ids', $draft['offer_teacher_ids'] ?? []))
+                                    ->map(fn ($i) => (int) $i)->all();
+                                $offerModes = [
+                                    'selected' => 'Pilih Laoshi',
+                                    'matching' => 'Laoshi cocok',
+                                    'all'      => 'Semua Laoshi',
+                                    'none'     => 'Ajukan nanti',
+                                ];
+                            @endphp
+
+                            <div class="form-field full">
+                                <label>Ajukan ke Guru</label>
+
+                                <div class="offer-modes">
+                                    @foreach ($offerModes as $value => $label)
+                                        <label class="offer-mode">
+                                            <input type="radio" name="offer_mode" value="{{ $value }}"
+                                                   {{ $oldOfferMode === $value ? 'checked' : '' }} onchange="applyOfferMode()">
+                                            <span>{{ $label }}</span>
+                                        </label>
+                                    @endforeach
+                                </div>
+
+                                <div class="offer-teacher-list" id="offer-teacher-list">
+                                    @forelse ($teachers ?? [] as $teacher)
+                                        <label class="offer-teacher" data-teacher="{{ $teacher->id }}">
+                                            <input type="checkbox" name="offer_teacher_ids[]" value="{{ $teacher->id }}"
+                                                   {{ in_array($teacher->id, $oldOfferIds, true) ? 'checked' : '' }}>
+                                            <span class="offer-teacher-name">{{ $teacher->name }}</span>
+                                            <span class="offer-teacher-tag"></span>
+                                        </label>
+                                    @empty
+                                        <span class="form-section-note" style="margin:0;">Belum ada guru aktif.</span>
+                                    @endforelse
+                                </div>
+
+                                <p class="form-section-note" id="offer-hint" style="margin-top:8px;"></p>
+                            </div>
+
+                            <div class="form-field">
+                                <label>Mode Kelas *</label>
+                                <select name="delivery_mode" id="delivery_mode" required onchange="applyPrivateState()">
+                                    <option value="Offline" {{ $oldDeliveryMode === 'Offline' ? 'selected' : '' }}>Offline</option>
+                                    <option value="Online" {{ $oldDeliveryMode === 'Online' ? 'selected' : '' }}>Online</option>
+                                </select>
+                            </div>
+
+                            <div class="form-field">
+                                <label>Tanggal Mulai *</label>
+                                <input type="date" name="start_date" id="start_date" required value="{{ $oldStartDate }}">
+                            </div>
+
+                            <div class="form-field">
+                                <label>Tanggal Selesai (opsional)</label>
+                                <input type="date" name="end_date" id="end_date" value="{{ $oldEndDate }}">
+                                <span class="form-section-note" style="margin-top:0;">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                    Kosongkan agar dihitung otomatis dari jumlah pertemuan paket
+                                </span>
+                            </div>
+
+                            <div class="form-field full">
+                                <label>Jadwal Mingguan *</label>
+                                <div class="schedule-rows" id="schedule-rows"></div>
+                                <button type="button" class="schedule-add" onclick="addScheduleRow()">
+                                    <i class="fa-solid fa-plus"></i> Tambah jadwal
+                                </button>
+                                <div id="schedule-check" class="schedule-check" style="display:none;"></div>
+                                <span class="form-section-note" style="margin-top:6px;">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                    Baris awal diisi dari jadwal yang diminta calon siswa. Bentrok jadwal/ruangan dicek saat menekan "Lanjut ke Pembayaran".
+                                </span>
+                            </div>
+                        </div>
+
+                        <datalist id="room-suggestions">
+                            @foreach ($roomSuggestions as $room)
+                                <option value="{{ $room }}"></option>
+                            @endforeach
+                        </datalist>
+                    </div>
+
+                    <div class="form-footer" style="border-top:0; margin-top:0; padding-top:0;">
                         <a href="{{ $cancelUrl ?? route('admin.calon-siswa.index') }}" class="btn btn-secondary">Batal</a>
                         <button type="submit" class="btn btn-primary">
                             Lanjut ke Pembayaran <i class="fa-solid fa-arrow-right"></i>
@@ -1270,7 +1278,8 @@
             joinSelect.required = joining;
         }
 
-        box.style.display = joining ? 'none' : '';
+        // Kartu jadwal terpisah: tampil hanya untuk Private + buat kelas baru (bukan gabung kelas)
+        box.style.display = (isPrivate && ! joining) ? '' : 'none';
 
         // Materi permintaan siswa: hanya untuk paket private
         const material = document.getElementById('requested_material');

@@ -32,9 +32,9 @@
         </div>
 
         <div class="dashboard-header-actions">
-            <a href="{{ route('admin.siswa') }}" class="btn">
+            <a href="{{ route('admin.siswa') }}" class="btn btn-secondary">
                 <i class="fa-solid fa-arrow-left"></i>
-                Kembali ke Siswa
+                Kembali
             </a>
         </div>
     </div>
@@ -157,7 +157,7 @@
                     <thead>
                         <tr>
                             <th>Program</th>
-                            <th style="text-align: center; vertical-align: middle;">Kelas</th>
+                            <th>Kelas</th>
                             <th style="text-align: center; vertical-align: middle;">Tipe</th>
                             <th style="text-align: center; vertical-align: middle;">Status</th>
                             <th style="text-align: center; vertical-align: middle;">Tanggal Daftar</th>
@@ -176,7 +176,7 @@
                                 <td>
                                     {{ $p['program_name'] }}
                                 </td>
-                                <td style="text-align: center; vertical-align: middle;">
+                                <td>
                                     {{ $p['class_name'] }}
                                 </td>
                                 <td style="text-align: center; vertical-align: middle;">

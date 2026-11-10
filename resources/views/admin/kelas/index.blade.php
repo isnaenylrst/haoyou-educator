@@ -4,21 +4,6 @@
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/admin/kelas.css') }}">
-    <style>
-        a.icon-btn, a.btn {
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        /* Progres pertemuan */
-        .meet-label { font-size: 13px; color: #6b7280; }
-        .meet-label strong { color: #111827; font-size: 14px; }
-        .meet-bar { height: 5px; width: 90px; background: #eee; border-radius: 999px; overflow: hidden; margin: 5px 0 4px; }
-        .meet-bar span { display: block; height: 100%; background: #facc15; border-radius: 999px; }
-    </style>
 @endpush
 
 @section('content')
@@ -45,7 +30,7 @@
         </div>
 
         <div class="dashboard-header-actions">
-            <a href="{{ $hasExportRoute ? route('admin.kelas.export', request()->query()) : '#' }}" class="btn">
+            <a href="{{ $hasExportRoute ? route('admin.kelas.export', request()->query()) : '#' }}" class="btn btn-secondary">
                 <i class="fa-solid fa-file-export"></i>
                 Export
             </a>
@@ -159,14 +144,11 @@
             <thead>
                 <tr>
                     <th>Kelas</th>
-                    {{-- <th>Program &amp; Paket</th> --}}
-                    {{-- <th>Tipe</th> --}}
                     <th>Guru</th>
-                    <th>Jadwal Mingguan</th>
-                    <th>Pertemuan</th>
-                    <th>Kapasitas</th>
-                    <th>Status</th>
-                    <th width="140" style="text-align: center;">Aksi</th>
+                    <th style="text-align: center; vertical-align: middle;">Pertemuan</th>
+                    <th style="text-align: center; vertical-align: middle;">Kapasitas</th>
+                    <th style="text-align: center; vertical-align: middle;">Status</th>
+                    <th style="text-align: center; vertical-align: middle;">Aksi</th>
                 </tr>
             </thead>
 
@@ -175,6 +157,7 @@
                     @php
                         $isPrivate = ! is_null($kelas->private_package_id);
                         $jadwalUrl = $hasJadwalRoute ? route('admin.jadwal', ['class_id' => $kelas->id]) : '#';
+                        $isOnline  = $kelas->delivery_mode === 'Online';
                     @endphp
                     <tr>
                         <td>
@@ -184,13 +167,17 @@
                                 </div>
                                 <div>
                                     <div class="cand-name">{{ $kelas->class_name }}</div>
+
+                                    {{-- Jadwal: teks biasa, tanpa background --}}
                                     <div class="cand-sub">
-                                        @if ($kelas->level?->level_name)
-                                            Level {{ $kelas->level->level_name }} &middot;
+                                        @if ($kelas->schedules->count())
+                                            {{ $kelas->schedules->map(fn ($s) => $s->day . ' ' . substr($s->start_time, 0, 5) . ' - ' . substr($s->end_time, 0, 5))->implode(', ') }}
+                                        @else
+                                            Belum ada jadwal
                                         @endif
-                                        {{ $kelas->delivery_mode }}
                                     </div>
-                                    @if ($kelas->delivery_mode === 'Online')
+
+                                    @if ($isOnline)
                                         <div class="cand-sub" style="color: {{ $kelas->zoom_link ? '#16a34a' : '#dc2626' }};">
                                             {{ $kelas->zoom_link ? 'Zoom ✓' : 'Belum ada link Zoom' }}
                                         </div>
@@ -198,23 +185,6 @@
                                 </div>
                             </div>
                         </td>
-
-                        {{-- <td>
-                            @if ($isPrivate)
-                                Private
-                                <div class="cand-sub">{{ $kelas->privatePackage?->package_name ?? '-' }}</div>
-                            @else
-                                {{ $kelas->programPackage?->program?->program_name ?? '-' }}
-                                <div class="cand-sub">{{ $kelas->programPackage?->package_name ?? '' }}</div>
-                            @endif
-                        </td> --}}
-
-                        {{-- <td>
-                            <span class="badge {{ $isPrivate ? 'badge-private' : 'badge-reguler' }}">
-                                <span class="badge-dot"></span>
-                                {{ $isPrivate ? 'Private' : 'Reguler' }}
-                            </span>
-                        </td> --}}
 
                         <td>
                             @if ($kelas->teacher)
@@ -224,21 +194,7 @@
                             @endif
                         </td>
 
-                        <td>
-                            @if ($kelas->schedules->count())
-                                <div class="schedule-chips">
-                                    @foreach ($kelas->schedules as $s)
-                                        <span class="schedule-chip">
-                                            {{ substr($s->day, 0, 3) }} {{ substr($s->start_time, 0, 5) }}–{{ substr($s->end_time, 0, 5) }}
-                                        </span>
-                                    @endforeach
-                                </div>
-                            @else
-                                <span class="cand-sub">Belum ada jadwal</span>
-                            @endif
-                        </td>
-
-                        <td>
+                        <td style="text-align: center; vertical-align: middle;">
                             @php
                                 $mp    = $meetingProgress[$kelas->id] ?? null;
                                 $done  = (int) ($mp->done ?? 0);
@@ -250,37 +206,23 @@
                                 <strong>{{ $done }}</strong>@if ($total > 0)<span>/{{ $total }}</span>@endif
                                 <span>pertemuan</span>
                             </div>
+                        </td>
 
-                            @if ($total > 0)
-                                <div class="meet-bar"><span style="width: {{ $pct }}%"></span></div>
-                            @endif
-
-                            <div class="cand-sub">
-                                @if ($total > 0 && $done >= $total)
-                                    Semua pertemuan selesai
-                                @elseif ($mp)
-                                    Terakhir {{ \Illuminate\Support\Carbon::parse($mp->last_date)->format('d M Y') }}
-                                @else
-                                    Belum ada jurnal
-                                @endif
-                            </div>
-                        </td>                        
-
-                        <td>
+                        <td style="text-align: center; vertical-align: middle;">
                             @php $full = $kelas->students_count >= $kelas->capacity; @endphp
                             <span class="{{ $full ? 'capacity-full' : 'capacity-ok' }}">
                                 {{ $kelas->students_count }}/{{ $kelas->capacity }}
                             </span>
                         </td>
 
-                        <td>
+                        <td style="text-align: center; vertical-align: middle;">
                             <span class="badge {{ $statusBadge[$kelas->status] ?? '' }}">
                                 <span class="badge-dot"></span>
                                 {{ $kelas->status }}
                             </span>
                         </td>
 
-                        <td>
+                        <td style="text-align: center; vertical-align: middle;">
                             <div class="row-actions">
                                 {{-- 1. Edit kelas (sudah termasuk tambah murid) --}}
                                 <a href="{{ route('admin.kelas.edit', $kelas->id) }}" class="icon-btn" title="Edit Kelas &amp; Siswa">
@@ -301,7 +243,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" style="text-align:center;padding:50px;color:#888;">
+                        <td colspan="6" style="text-align:center;padding:50px;color:#888;">
                             Belum ada data kelas.
                         </td>
                     </tr>

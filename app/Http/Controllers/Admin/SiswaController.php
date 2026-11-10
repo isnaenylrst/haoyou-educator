@@ -9,6 +9,7 @@ use App\Models\ClassModel;
 use App\Models\ClassSchedule;
 use App\Models\ClassSession;
 use App\Models\PrivatePackage;
+use App\Models\Program;
 use App\Models\ProgramLevel;
 use App\Models\ProgramPackage;
 use App\Models\Setting;
@@ -55,9 +56,6 @@ class SiswaController extends Controller
 
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhereHas('user', function ($u) use ($search) {
-                      $u->where('phone', 'like', "%{$search}%");
-                  })
                   ->orWhereHas('candidateStudent', function ($c) use ($search) {
                       $c->where('school', 'like', "%{$search}%")
                         ->orWhere('phone', 'like', "%{$search}%");
@@ -69,10 +67,17 @@ class SiswaController extends Controller
             $query->where('status', $request->status);
         }
 
-        if ($request->filled('class_id')) {
-            $query->whereHas('enrollments', function ($q) use ($request) {
-                $q->where('class_id', $request->class_id);
-            });
+        // Filter program mengikuti kolom Program di tabel:
+        // angka = id kategori program (mis. Maochong, dari level siswa), 'private' = siswa paket private
+        if ($request->filled('program')) {
+            $program = $request->program;
+
+            if ($program === 'private') {
+                $query->whereHas('activeEnrollment', fn ($q) => $q->whereNotNull('private_package_id'));
+            } else {
+                $query->whereHas('currentLevel', fn ($q) => $q->where('category_id', $program))
+                      ->whereDoesntHave('activeEnrollment', fn ($q) => $q->whereNotNull('private_package_id'));
+            }
         }
 
         $students = $query->latest('id')
@@ -90,11 +95,12 @@ class SiswaController extends Controller
             $students->map(fn ($s) => $s->activeEnrollment?->class_id)->filter()->unique()->values()
         );
 
-        $classes = ClassModel::orderBy('class_name')->get(['id', 'class_name']);
+        // Opsi dropdown filter: kategori program, sama seperti yang tampil di kolom Program
+        $categories = DB::table('program_categories')->orderBy('category_name')->get(['id', 'category_name']);
 
         $stats = $this->getStats();
 
-        return view('admin.siswa.siswa', compact('students', 'classes', 'stats', 'attendedMap', 'absentMap', 'heldMap'));
+        return view('admin.siswa.siswa', compact('students', 'categories', 'stats', 'attendedMap', 'absentMap', 'heldMap'));
     }
 
     private function getStats(): array
