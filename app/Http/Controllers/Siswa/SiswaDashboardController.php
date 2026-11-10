@@ -12,9 +12,11 @@ use App\Models\ProgressReport;
 use App\Models\ProgramLevel;
 use App\Models\ProgramVideo;
 use App\Models\Student;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class SiswaDashboardController extends Controller
 {
@@ -89,13 +91,13 @@ class SiswaDashboardController extends Controller
             ])
             ->all();
 
-        $progressReports = ProgressReport::with([
-            'teacher',
-            'enrollment.class',
-        ])
+        $progressReports = ProgressReport::approved()
+            ->with([
+                'teacher',
+                'enrollment.class',
+            ])
             ->where('student_id', $student->id)
-            ->where('status', 'Submitted')
-            ->latest('created_at')
+            ->latest('reviewed_at')
             ->get();
 
         $documents = $this->sertifikatQuery()->get();
@@ -212,19 +214,33 @@ class SiswaDashboardController extends Controller
         $student = $this->student();
 
         $enrollments = ClassEnrollment::with([
-            'class.level',
+            'class.level.category',
             'class.programPackage.program',
             'class.programPackage.level',
+            'class.programPackage.category',
         ])
             ->where('student_id', $student->id)
             ->whereIn('status', ['Active', 'Completed', 'Waiting Class'])
             ->get();
 
         $levelIds = $this->resolveLevelIds($student, $enrollments);
+        $categoryIds = $this->resolveCategoryIds($student, $enrollments);
 
-        $materials = Material::with(['level.program', 'vocabs'])
-            ->whereIn('level_id', $levelIds)
-            ->orderBy('level_id')
+        // Hanya materi bertujuan Siswa untuk program/kelas milik siswa + materi Umum
+        $materials = Material::query()
+            ->where('audience', 'Siswa')
+            ->with(['level.program', 'program', 'vocabs'])
+            ->where(function ($q) use ($levelIds, $categoryIds) {
+                if ($categoryIds->isNotEmpty()) {
+                    $q->whereIn('program_id', $categoryIds);
+                }
+                if ($levelIds->isNotEmpty()) {
+                    $q->orWhereIn('level_id', $levelIds);
+                }
+                // Materi lama berlabel "Umum" tetap bisa diakses
+                $q->orWhereNull('program_id');
+            })
+            ->orderByRaw('program_id IS NULL DESC, program_id ASC')
             ->orderBy('meeting_number')
             ->get();
 
@@ -255,6 +271,62 @@ class SiswaDashboardController extends Controller
         ]);
     }
 
+    /** Siswa hanya boleh membuka materi bertujuan Siswa untuk level/program kelasnya. */
+    private function authorizeStudentMaterial(Material $material): void
+    {
+        abort_unless($material->audience === 'Siswa', 404);
+
+        $student = $this->student();
+
+        $enrollments = ClassEnrollment::with(['class.programPackage.category', 'class.level.category'])
+            ->where('student_id', $student->id)
+            ->whereIn('status', ['Active', 'Completed', 'Waiting Class'])
+            ->get();
+
+        $levelIds = $this->resolveLevelIds($student, $enrollments);
+        $categoryIds = $this->resolveCategoryIds($student, $enrollments);
+
+        $isAllowed = false;
+        if (is_null($material->program_id) && is_null($material->level_id)) {
+            $isAllowed = true; // Materi Umum
+        } elseif ($material->level_id && $levelIds->contains($material->level_id)) {
+            $isAllowed = true;
+        } elseif ($material->program_id && $categoryIds->contains($material->program_id)) {
+            $isAllowed = true;
+        }
+
+        abort_unless(
+            $isAllowed,
+            403,
+            'Materi ini bukan untuk program atau level kelasmu.'
+        );
+
+        abort_unless($material->file_exists, 404, 'File materi tidak ditemukan.');
+    }
+
+    public function materiLihat(Material $material)
+    {
+        $this->authorizeStudentMaterial($material);
+
+        if (!$material->is_pdf) {
+            return $this->materiUnduh($material);
+        }
+
+        return response()->file(
+            storage_path('app/public/' . $material->material_file_path),
+            ['Content-Type' => 'application/pdf']
+        );
+    }
+
+    public function materiUnduh(Material $material)
+    {
+        $this->authorizeStudentMaterial($material);
+
+        $name = (Str::slug($material->title) ?: 'materi-' . $material->id) . '.' . $material->file_extension;
+
+        return response()->download(storage_path('app/public/' . $material->material_file_path), $name);
+    }
+
     /**
      * Mengambil level yang terkait dengan siswa.
      */
@@ -267,6 +339,23 @@ class SiswaDashboardController extends Controller
                 $enrollment->programPackage?->level_id,
             ])
             ->push($student->current_level_id)
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * Mengambil program/kategori yang terkait dengan siswa.
+     */
+    private function resolveCategoryIds(Student $student, $enrollments)
+    {
+        return $enrollments
+            ->flatMap(fn ($enrollment) => [
+                $enrollment->class?->level?->category_id,
+                $enrollment->class?->programPackage?->category_id,
+                $enrollment->programPackage?->category_id,
+            ])
+            ->push($student->currentLevel?->category_id)
             ->filter()
             ->unique()
             ->values();
@@ -311,7 +400,9 @@ class SiswaDashboardController extends Controller
 
         abort_unless($allowed, 403);
 
-        $path = Storage::disk('local')->path($video->video_path);
+        /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+        $disk = Storage::disk('local');
+        $path = $disk->path($video->video_path);
 
         abort_unless(is_file($path), 404);
 
@@ -364,13 +455,13 @@ class SiswaDashboardController extends Controller
     {
         $student = $this->student();
 
-        $laporan = ProgressReport::with([
-            'teacher',
-            'enrollment.class.programPackage.program',
-        ])
+        $laporan = ProgressReport::approved()
+            ->with([
+                'teacher',
+                'enrollment.class.programPackage.program',
+            ])
             ->where('student_id', $student->id)
-            ->where('status', 'Submitted')
-            ->orderByDesc('created_at')
+            ->orderByDesc('reviewed_at')
             ->get();
 
         return view(
@@ -417,6 +508,7 @@ class SiswaDashboardController extends Controller
 
     public function notifikasi()
     {
+        /** @var User $user */
         $user = Auth::user();
 
         $map = fn ($notification) => [
@@ -446,7 +538,10 @@ class SiswaDashboardController extends Controller
 
     public function notifikasiTandaiDibaca()
     {
-        Auth::user()->unreadNotifications->markAsRead();
+        /** @var User $user */
+        $user = Auth::user();
+
+        $user->unreadNotifications->markAsRead();
 
         return redirect()->route('notifikasi.index');
     }

@@ -277,10 +277,10 @@
                         <div class="doc-note">Untuk ditandatangani orang tua/siswa</div>
                     </div>
                 </div>
-                <a href="{{ route('admin.dokumen.syarat-ketentuan') }}"
+                <a href="{{ route('admin.dokumen') }}"
                    target="_blank"
                    class="doc-download-btn"
-                   title="Unduh Syarat & Ketentuan">
+                   title="Unduh Syarat & Ketentuan dari Dokumen">
                     <i class="fa-solid fa-download"></i>
                 </a>
             </div>
@@ -318,7 +318,7 @@
 
     <div class="form-footer">
         <a href="{{ route('admin.siswa') }}" class="btn btn-secondary">Lihat di Halaman Siswa</a>
-        <a href="{{ route('admin.calon-siswa') }}" class="btn btn-primary">
+        <a href="{{ route('admin.calon-siswa.index') }}" class="btn btn-primary">
             <i class="fa-solid fa-check"></i> Selesai
         </a>
     </div>

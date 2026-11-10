@@ -70,6 +70,104 @@
 
     </div>
 
+    {{-- ===== RANKING GURU PALING AKTIF MENGAJAR (Poin 7) ===== --}}
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+        <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <h5 class="fw-bold mb-0 text-dark">
+                    <i class="fa-solid fa-trophy text-warning me-2"></i> Ranking Guru Paling Aktif Mengajar
+                </h5>
+                <small class="text-muted">Diurutkan dari pertemuan terbanyak yang benar-benar diajar pada periode terpilih.</small>
+            </div>
+            <div class="btn-group btn-group-sm" role="group">
+                <a href="{{ request()->fullUrlWithQuery(['periode' => 'minggu']) }}"
+                   class="btn {{ ($periode ?? 'bulan') === 'minggu' ? 'btn-warning text-dark fw-bold' : 'btn-outline-secondary' }}">
+                    Minggu Ini
+                </a>
+                <a href="{{ request()->fullUrlWithQuery(['periode' => 'bulan']) }}"
+                   class="btn {{ ($periode ?? 'bulan') === 'bulan' ? 'btn-warning text-dark fw-bold' : 'btn-outline-secondary' }}">
+                    Bulan Ini
+                </a>
+                <a href="{{ request()->fullUrlWithQuery(['periode' => 'semester']) }}"
+                   class="btn {{ ($periode ?? 'bulan') === 'semester' ? 'btn-warning text-dark fw-bold' : 'btn-outline-secondary' }}">
+                    Semester Ini
+                </a>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 70px;" class="text-center">Rank</th>
+                        <th>Nama Guru</th>
+                        <th class="text-center">Pertemuan Diajar</th>
+                        <th class="text-center">Kelas Diampu</th>
+                        <th style="width: 250px;">Persentase Kehadiran Mengajar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($activeRankings as $index => $rank)
+                        @php
+                            $medal = match($index) {
+                                0 => '🥇',
+                                1 => '🥈',
+                                2 => '🥉',
+                                default => '#' . ($index + 1),
+                            };
+                            $badgeClass = match($index) {
+                                0 => 'bg-warning-subtle text-warning-emphasis border border-warning',
+                                1 => 'bg-secondary-subtle text-secondary border',
+                                2 => 'bg-danger-subtle text-danger border',
+                                default => 'text-muted',
+                            };
+                        @endphp
+                        <tr>
+                            <td class="text-center">
+                                <span class="fs-5 fw-bold">{{ $medal }}</span>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="avatar bg-warning text-dark fw-bold rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; font-size: 13px;">
+                                        {{ strtoupper(substr($rank->name, 0, 2)) }}
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold text-dark">{{ $rank->name }}</div>
+                                        <small class="text-muted">{{ $rank->phone ?: '-' }}</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-success-subtle text-success fs-6 px-3 py-2 border border-success">
+                                    <i class="fa-solid fa-person-chalkboard me-1"></i> {{ $rank->pertemuan_diajar }} Pertemuan
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-light text-dark border px-3 py-2">
+                                    <i class="fa-solid fa-users me-1"></i> {{ $rank->kelas_diampu }} Kelas
+                                </span>
+                            </td>
+                            <td>
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="small fw-semibold">{{ $rank->persentase_kehadiran }}%</span>
+                                    <small class="text-muted">{{ $rank->pertemuan_diajar }} / {{ max($rank->total_sesi, $rank->pertemuan_diajar) }} sesi</small>
+                                </div>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar {{ $rank->persentase_kehadiran >= 90 ? 'bg-success' : ($rank->persentase_kehadiran >= 75 ? 'bg-warning' : 'bg-danger') }}"
+                                         role="progressbar" style="width: {{ $rank->persentase_kehadiran }}%;"></div>
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="5" class="text-center py-4 text-muted">Belum ada data mengajar pada periode ini.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     {{-- ===== JADWAL MENGAJAR MINGGUAN ===== --}}
     @php
         $dayNames = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];

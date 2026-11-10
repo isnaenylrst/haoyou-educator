@@ -114,7 +114,7 @@
                 <option value="overdue" {{ request('followup') == 'overdue' ? 'selected' : '' }}>Overdue</option>
             </select> --}}
 
-            {{-- <a href="{{ route('admin.calon-siswa') }}" class="btn">
+            {{-- <a href="{{ route('admin.calon-siswa.index') }}" class="btn">
                 <i class="fa-solid fa-rotate-right"></i>
                 Reset
             </a> --}}

@@ -46,6 +46,7 @@
         'report'     => ['Progress Report', $totals['report']],
         'cuti'       => ['Cuti / Pengajuan Kelas', $totals['cuti']],
         'sertifikat' => ['Sertifikat', $totals['sertifikat']],
+        'pengajuan'  => ['Reimburse & Bahan', $totals['pengajuan']],
     ];
 @endphp
 
@@ -374,22 +375,22 @@
                                 <small class="text-muted">
                                     {{ $item->report_period }}
                                     @if ($item->submitted_at) · Dikirim {{ $item->submitted_at->diffForHumans() }} @endif
-                                    @if ($item->average_score !== null) · Rata-rata nilai {{ $item->average_score }} @endif
                                 </small>
 
                                 @if (!empty($item->content))
                                     <details class="mt-2">
-                                        <summary class="small text-primary" style="cursor:pointer">Lihat isi nilai</summary>
+                                        <summary class="small text-primary" style="cursor:pointer">Lihat isi report</summary>
                                         <table class="table table-sm table-bordered mt-2 mb-0 small">
                                             <thead class="table-light">
-                                                <tr><th>Kompetensi</th><th>Level</th><th>Nilai</th></tr>
+                                                <tr><th>Pertemuan</th><th>Learning Materials</th><th>Level</th><th>Description</th></tr>
                                             </thead>
                                             <tbody>
                                                 @foreach ($item->content as $row)
                                                     <tr>
-                                                        <td>{{ $row['competency'] ?? ($row['materials'] ?? '-') }}</td>
+                                                        <td>{{ $row['meeting'] ?? '-' }}</td>
+                                                        <td>{{ \Illuminate\Support\Str::limit(\App\Support\RichText::plain($row['material'] ?? ($row['competency'] ?? ($row['materials'] ?? '-'))), 160) }}</td>
                                                         <td>{{ $row['level'] ?? '-' }}</td>
-                                                        <td>{{ $row['score'] ?? '-' }}</td>
+                                                        <td>{{ \Illuminate\Support\Str::limit(\App\Support\RichText::plain($row['description'] ?? '-'), 160) }}</td>
                                                     </tr>
                                                 @endforeach
                                             </tbody>
@@ -399,10 +400,9 @@
                             </div>
 
                             <div class="d-flex gap-2 flex-wrap review-actions">
-                                @if ($item->file_path)
-                                    <a href="{{ route('kurikulum.review-pengajuan.file', ['report', $item->id]) }}" target="_blank"
-                                       class="btn btn-outline-secondary btn-sm">Lihat PDF</a>
-                                @endif
+                                <a href="{{ route('progress-report.document', $item) }}" target="_blank" class="btn btn-outline-secondary btn-sm">Lihat Dokumen</a>
+                                <a href="{{ route('progress-report.document.pdf', $item) }}" target="_blank" class="btn btn-outline-secondary btn-sm">PDF</a>
+                                <a href="{{ route('progress-report.document.edit', $item) }}" class="btn btn-outline-primary btn-sm">Edit Teks</a>
 
                                 <form action="{{ route('kurikulum.review-pengajuan.report', $item) }}" method="POST"
                                       onsubmit="return confirm('ACC progress report ini? Setelah ACC langsung tampil di siswa.')">
@@ -526,6 +526,11 @@
             {{-- ===== TAB SERTIFIKAT ===== --}}
             <div class="doc-tab {{ $tab === 'sertifikat' ? '' : 'd-none' }}" data-tab="sertifikat">
                 @include('kurikulum.partials.review-sertifikat')
+            </div>
+
+            {{-- ===== TAB PENGAJUAN (REIMBURSE & PEMBELIAN) ===== --}}
+            <div class="doc-tab {{ $tab === 'pengajuan' ? '' : 'd-none' }}" data-tab="pengajuan">
+                @include('kurikulum.partials.review-submission')
             </div>
 
         </div>

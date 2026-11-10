@@ -60,6 +60,12 @@
     $userName   = $authUser->teacher->name ?? $authUser->username ?? 'Admin';
     $initials   = strtoupper(mb_substr($authUser->username ?? $userName, 0, 2));
     $profileUrl = \Illuminate\Support\Facades\Route::has('profile.edit') ? route('profile.edit') : '#';
+
+    // Nama tampilan (dari Profil & Tanda Tangan) dan nama role; cadangan bila accessor belum ada
+    $displayName = (method_exists($authUser, 'getDisplayNameAttribute') || method_exists($authUser, 'displayName'))
+        ? ($authUser->display_name ?: $userName)
+        : $userName;
+    $levelName   = $authUser->level->nama_level ?? 'Administrator';
 @endphp
 
 <div class="app" id="adminApp">
@@ -93,10 +99,10 @@
                     <span class="label">Calon Siswa</span>
                 </a>
 
-                {{-- <a href="#" class="nav-item">
-                    <i class="fa-solid fa-comments nav-icon" title="Follow Up"></i>
-                    <span class="label">Follow Up</span>
-                </a> --}}
+                <a href="{{ route('admin.request-belajar.index') }}" class="nav-item {{ request()->routeIs('admin.request-belajar.*') ? 'active' : '' }}">
+                    <i class="fa-solid fa-book-open-reader nav-icon" title="Request Belajar Siswa"></i>
+                    <span class="label">Request Belajar</span>
+                </a>
             </div>
 
             {{-- AKADEMIK --}}
@@ -147,6 +153,12 @@
                     <i class="fa-solid fa-wallet nav-icon" title="Pembayaran"></i>
                     <span class="label">Pembayaran</span>
                 </a>
+
+                <a href="{{ route('admin.pengajuan.index') }}"
+                class="nav-item {{ request()->routeIs('admin.pengajuan*') ? 'active' : '' }}">
+                    <i class="fa-solid fa-receipt nav-icon" title="Rekap Pengajuan"></i>
+                    <span class="label">Rekap Pengajuan</span>
+                </a>
             </div>
 
             {{-- LAPORAN --}}
@@ -162,6 +174,11 @@
                     <i class="fa-solid fa-file-lines nav-icon" title="Dokumen"></i>
                     <span class="label">Dokumen</span>
                 </a>
+
+                <a href="{{ route('admin.training.index') }}" class="nav-item {{ request()->routeIs('admin.training*') ? 'active' : '' }}">
+                    <i class="fa-solid fa-graduation-cap nav-icon" title="Materi Training"></i>
+                    <span class="label">Materi Training</span>
+                </a>
             </div>
 
             {{-- PENGATURAN --}}
@@ -173,7 +190,7 @@
                     <span class="label">Program & Level</span>
                 </a>
 
-                {{-- <a href="{{ route('admin.tamplate-dokumen') }}" class="nav-item {{ request()->routeIs('admin.tamplate-dokumen*') ? 'active' : '' }}">
+                {{-- <a href="{{ route('admin.template-dokumen.index') }}" class="nav-item {{ request()->routeIs('admin.template-dokumen*') ? 'active' : '' }}">
                     <i class="fa-solid fa-print nav-icon" title="Print Dokumen"></i>
                     <span class="label">Print Dokumen</span>
                 </a> --}}
@@ -192,8 +209,8 @@
                 <div class="avatar">{{ $initials }}</div>
 
                 <div class="user-meta">
-                    <div class="name">{{ $userName }}</div>
-                    <div class="role">Admin</div>
+                    <div class="name">{{ $displayName }}</div>
+                    <div class="role">{{ $levelName }}</div>
                 </div>
 
                 <button type="button" class="collapse-btn" id="sidebarCollapse">‹</button>
@@ -215,31 +232,57 @@
                 <small>⌘K</small>
             </div>
 
-            <div class="topbar-actions">
-                {{-- Kalender --}}
-                <button class="topbar-button" title="Kalender">
-                    <i class="fa-solid fa-calendar-check topbar-icon"></i>
-                </button>
+            <div class="topbar-actions d-flex align-items-center gap-2">
+                {{-- Notifikasi (Laravel Database Notification) --}}
+                <div class="dropdown">
+                    <button class="topbar-button notification position-relative" data-bs-toggle="dropdown" aria-expanded="false" title="Notifikasi">
+                        <i class="fa-regular fa-bell topbar-icon"></i>
+                        @if(($unreadNotificationsCount ?? 0) > 0)
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:10px;">
+                                {{ $unreadNotificationsCount }}
+                            </span>
+                        @endif
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end p-0 shadow rounded-4" style="width:340px; max-height:450px; overflow-y:auto;">
+                        <div class="px-3 py-2 fw-bold border-bottom d-flex justify-content-between align-items-center bg-light">
+                            <span>Notifikasi @if(($unreadNotificationsCount ?? 0) > 0)<span class="badge bg-warning text-dark ms-1">{{ $unreadNotificationsCount }}</span>@endif</span>
+                            @if(($unreadNotificationsCount ?? 0) > 0)
+                                <form action="{{ route('notifications.mark-all-read') }}" method="POST" class="m-0">
+                                    @csrf
+                                    <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none text-muted" style="font-size:11px;">Tandai semua dibaca</button>
+                                </form>
+                            @endif
+                        </div>
 
-                {{-- Reminder / Tugas --}}
-                <button class="topbar-button notification" title="Reminder">
-                    <i class="fa-solid fa-list-check topbar-icon"></i>
-                </button>
-
-                {{-- Notifikasi --}}
-                <button class="topbar-button notification" title="Notifikasi">
-                    <i class="fa-regular fa-bell topbar-icon"></i>
-                </button>
+                        @if(!empty($unreadNotifications) && $unreadNotifications->count() > 0)
+                            @foreach($unreadNotifications as $notif)
+                                <a class="notif-item border-bottom d-flex align-items-start gap-2 text-decoration-none text-dark p-2" href="{{ route('notifications.read', $notif->id) }}">
+                                    <div class="badge-num mt-1"><i class="fa-solid {{ $notif->data['icon'] ?? 'fa-bell' }}"></i></div>
+                                    <div class="flex-grow-1">
+                                        <div class="fw-semibold small">{{ $notif->data['title'] ?? 'Pemberitahuan' }}</div>
+                                        <div class="text-muted" style="font-size:12px; line-height:1.2;">{{ Str::limit($notif->data['message'] ?? '', 75) }}</div>
+                                        <div class="text-secondary" style="font-size:10px;">{{ $notif->created_at->diffForHumans() }}</div>
+                                    </div>
+                                </a>
+                            @endforeach
+                        @else
+                            <div class="p-4 text-center text-muted small">
+                                <i class="fa-regular fa-bell-slash fs-4 d-block mb-2 text-secondary"></i>
+                                Tidak ada notifikasi baru 🎉
+                            </div>
+                        @endif
+                    </div>
+                </div>
 
                 <div class="topbar-divider"></div>
 
-                {{-- Profil + Logout --}}
+                {{-- Profil + Logout (dropdown manual, tidak bergantung Bootstrap JS) --}}
                 <div class="profile-dropdown" id="profileDropdown">
                     <div class="topbar-profile" id="profileToggle" role="button" tabindex="0" aria-expanded="false">
                         <div class="profile-avatar">{{ $initials }}</div>
                         <div class="profile-info">
-                            <strong>{{ $userName }}</strong>
-                            <span>Administrator</span>
+                            <strong>{{ $displayName }}</strong>
+                            <span>{{ $levelName }}</span>
                         </div>
                         <i class="fa-solid fa-chevron-down profile-caret"></i>
                     </div>
@@ -249,9 +292,9 @@
                             Masuk sebagai <strong>{{ $authUser->username ?? $userName }}</strong>
                         </div>
 
-                        {{-- <a href="{{ $profileUrl }}" class="profile-menu-item">
-                            <i class="fa-regular fa-user"></i> Edit Profil
-                        </a> --}}
+                        <a href="{{ route('profil.index') }}" class="profile-menu-item">
+                            <i class="fa-solid fa-signature" style="color:#f5b700;"></i> Profil & Tanda Tangan
+                        </a>
 
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
@@ -266,6 +309,7 @@
 
         {{-- PAGE CONTENT --}}
         <section class="page-content">
+            @include('partials.owner-bar')
             @yield('content')
         </section>
 

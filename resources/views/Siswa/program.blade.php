@@ -54,13 +54,20 @@
                             Pertemuan
                             {{ $material->meeting_number ?? '-' }}
 
+                            @if ($material->program)
+                                · {{ $material->program->category_name }}
+                            @endif
+
                             @if ($material->level)
-                                · {{ $material->level->program?->program_name }}
-                                {{ $material->level->level_name }}
+                                · {{ $material->level->level_name }}
                             @endif
 
                             @if ($material->vocabs->isNotEmpty())
                                 · {{ $material->vocabs->count() }} kosakata
+                            @endif
+
+                            @if ($material->description)
+                            <div class="text-xs text-gray-600 mt-1">{{ \Illuminate\Support\Str::limit($material->description, 140) }}</div>
                             @endif
 
                         </div>
@@ -72,13 +79,18 @@
 
                 @if ($material->material_file_path)
 
-                    <a
-                        href="{{ asset('storage/' . $material->material_file_path) }}"
-                        target="_blank"
-                        class="text-xs font-semibold border border-ink rounded-full px-4 py-2 hover:bg-ink hover:text-white transition"
-                    >
-                        Buka Materi →
-                    </a>
+                                        <div class="flex items-center gap-2">
+                        @if ($material->is_pdf)
+                            <a href="{{ route('program.materi.lihat', $material) }}" target="_blank"
+                               class="text-xs font-semibold border border-ink rounded-full px-4 py-2 hover:bg-ink hover:text-white transition">
+                                Buka Materi →
+                            </a>
+                        @endif
+                        <a href="{{ route('program.materi.unduh', $material) }}"
+                           class="text-xs font-semibold border border-ink rounded-full px-4 py-2 hover:bg-ink hover:text-white transition">
+                            Unduh
+                        </a>
+                    </div>
 
                 @else
 

@@ -42,12 +42,14 @@ class TeachingJournal extends Model
         'review_note',
         'reviewed_by',
         'reviewed_at',
+        'is_late',
     ];
 
     protected $casts = [
         'session_date' => 'date',
         'is_substitute' => 'boolean',
         'session_score' => 'integer',
+        'is_late' => 'boolean',
 
         // Baru
         'is_last_meeting' => 'boolean',

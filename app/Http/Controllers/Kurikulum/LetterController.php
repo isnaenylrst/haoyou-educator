@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Kurikulum;
 
 use App\Http\Controllers\Controller;
 use App\Models\Document;
+use App\Models\LetterType;
 use App\Models\Teacher;
+use App\Models\User;
+use App\Notifications\AppNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -38,7 +41,7 @@ class LetterController extends Controller
     /** Pastikan dokumen yang diakses memang surat, bukan SOP atau dokumen lain. */
     private function letter(Document $document): Document
     {
-        abort_unless(in_array($document->document_type, Document::LETTER_TYPES, true), 404);
+        abort_unless(in_array($document->document_type, Document::letterTypeCodes(), true), 404);
 
         return $document;
     }
@@ -52,8 +55,11 @@ class LetterController extends Controller
 
     public function index(Request $request)
     {
+        $letterTypes  = LetterType::where('is_active', true)->get();
+        $allowedCodes = Document::letterTypeCodes();
+
         $request->validate([
-            'type' => ['nullable', Rule::in(Document::LETTER_TYPES)],
+            'type' => ['nullable', Rule::in($allowedCodes)],
             'q'    => ['nullable', 'string', 'max:100'],
         ]);
 
@@ -90,13 +96,13 @@ class LetterController extends Controller
         // Jumlah penerima yang belum membuka suratnya
         $unreadLetters = DB::table('document_recipients as r')
             ->join('documents as d', 'd.id', '=', 'r.document_id')
-            ->whereIn('d.document_type', Document::LETTER_TYPES)
+            ->whereIn('d.document_type', $allowedCodes)
             ->whereNull('r.read_at')
             ->count();
 
         return view('kurikulum.surat', compact(
             'letters', 'teachers', 'teachersWithoutAccount',
-            'totalLetters', 'lettersThisMonth', 'unreadLetters', 'type', 'q'
+            'totalLetters', 'lettersThisMonth', 'unreadLetters', 'type', 'q', 'letterTypes'
         ));
     }
 
@@ -104,8 +110,10 @@ class LetterController extends Controller
 
     public function store(Request $request)
     {
+        $allowedCodes = Document::letterTypeCodes();
+
         $data = $request->validate([
-            'jenis_surat' => ['required', Rule::in(Document::LETTER_TYPES)],
+            'jenis_surat' => ['required', Rule::in($allowedCodes)],
             'penerima'    => ['required', Rule::in(['SEMUA_GURU', 'GURU_TERTENTU'])],
             'teacher_ids' => ['nullable', 'required_if:penerima,GURU_TERTENTU', 'array', 'min:1'],
             'teacher_ids.*' => ['integer', 'exists:teachers,id'],
@@ -128,10 +136,11 @@ class LetterController extends Controller
 
         $userIds = $teachers->pluck('user_id')->unique()->values();
         $path    = $request->file('file')->store('documents', 'public');
+        $createdDoc = null;
 
         try {
-            DB::transaction(function () use ($data, $path, $userIds) {
-                $document = Document::create([
+            DB::transaction(function () use ($data, $path, $userIds, &$createdDoc) {
+                $createdDoc = Document::create([
                     // satu penerima: user_id diisi (kompatibel data lama); banyak: null
                     'user_id'              => $data['penerima'] === 'GURU_TERTENTU' && $userIds->count() === 1 ? $userIds->first() : null,
                     'document_template_id' => null,
@@ -144,8 +153,29 @@ class LetterController extends Controller
                     'uploaded_at'          => now(),
                 ]);
 
-                $document->recipients()->attach($userIds->all());
+                $createdDoc->recipients()->attach($userIds->all());
             });
+
+            // Kirim Notifikasi via AppNotification ke setiap guru penerima (Poin 8)
+            $isSp = in_array($data['jenis_surat'], ['SP1', 'SP2', 'SP3'], true);
+            $typeName = LetterType::where('code', $data['jenis_surat'])->value('name') ?? $data['jenis_surat'];
+            $notifTitle = $isSp
+                ? "Peringatan: Anda Menerima {$typeName}"
+                : "Surat Baru dari Kurikulum";
+            $notifMessage = $isSp
+                ? "Kurikulum telah menerbitkan {$typeName} dengan judul '{$createdDoc->title}'. Silakan periksa berkas surat Anda."
+                : "Surat resmi '{$createdDoc->title}' telah dikirimkan untuk Anda. Silakan lihat di menu Surat.";
+
+            $recipientUsers = User::whereIn('id', $userIds)->get();
+            foreach ($recipientUsers as $recUser) {
+                $recUser->notify(new AppNotification(
+                    title: $notifTitle,
+                    message: $notifMessage,
+                    url: url('/guru/surat'),
+                    type: 'surat',
+                    icon: $isSp ? 'fa-triangle-exclamation' : 'fa-envelope-open-text'
+                ));
+            }
         } catch (\Throwable $e) {
             Storage::disk('public')->delete($path);   // jangan sisakan file yatim
             report($e);
@@ -154,7 +184,7 @@ class LetterController extends Controller
         }
 
         return redirect()->route('kurikulum.surat')
-            ->with('success', 'Surat berhasil dikirim ke ' . $userIds->count() . ' guru.');
+            ->with('success', 'Surat berhasil dikirim ke ' . $userIds->count() . ' guru dan notifikasi telah terkirim.');
     }
 
     // ------------------------------------------------------------------ UBAH
@@ -165,7 +195,7 @@ class LetterController extends Controller
         $this->letter($document);
 
         $data = $request->validate([
-            'jenis_surat' => ['required', Rule::in(Document::LETTER_TYPES)],
+            'jenis_surat' => ['required', Rule::in(Document::letterTypeCodes())],
             'judul'       => ['required', 'string', 'max:255'],
             'isi'         => ['nullable', 'string', 'max:5000'],
             'file'        => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],

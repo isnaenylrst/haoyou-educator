@@ -130,7 +130,14 @@
                                         @if($c->is_mine)
                                             <a href="{{ route('teacher.attendance', ['date' => $c->date]) }}">
                                         @endif
-                                        <strong>{{ $c->class_name }}</strong>
+                                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-1">
+                                            <strong>{{ $c->class_name }}</strong>
+                                            @if(!empty($c->is_replacement))
+                                                <span class="badge bg-primary text-white" style="font-size:10px;"><i class="fa-solid fa-user-clock me-1"></i> Pengganti</span>
+                                            @elseif(!empty($c->is_on_leave))
+                                                <span class="badge bg-secondary text-white" style="font-size:10px;"><i class="fa-solid fa-plane-departure me-1"></i> Cuti</span>
+                                            @endif
+                                        </div>
                                         <small>
                                             {{ $c->teacher_name ?? 'Belum ada guru' }} · {{ $c->students }} siswa · {{ $c->delivery_mode }}
                                         </small>
@@ -179,7 +186,12 @@
                 <div class="border rounded-3 p-3 mb-2">
                     <div class="d-flex justify-content-between flex-wrap gap-2">
                         <div>
-                            <div class="fw-semibold">{{ $pc->class_name }}</div>
+                            <div class="fw-semibold">
+                                {{ $pc->class_name }}
+                                @if($pc->broadcast_to_all)
+                                    <span class="badge bg-info text-dark ms-2"><i class="fa-solid fa-bullhorn me-1"></i> Terbuka Semua Guru</span>
+                                @endif
+                            </div>
                             <div class="small text-muted">
                                 @forelse($pc->schedules as $sc)
                                     {{ $sc->day }} {{ substr($sc->start_time, 0, 5) }}–{{ substr($sc->end_time, 0, 5) }}{{ !$loop->last ? ' · ' : '' }}
@@ -189,21 +201,28 @@
                                 · {{ $pc->delivery_mode }}
                             </div>
                             @if($pc->conflict)
-                                <div class="small text-danger">Bentrok dengan kelas {{ $pc->conflict }}</div>
+                                <div class="small text-danger"><i class="fa-solid fa-triangle-exclamation me-1"></i> Bentrok dengan kelas {{ $pc->conflict }}</div>
                             @elseif($pc->fits)
-                                <div class="small text-success">Sesuai ketersediaan Anda</div>
+                                <div class="small text-success"><i class="fa-solid fa-circle-check me-1"></i> Sesuai ketersediaan Anda</div>
                             @else
-                                <div class="small text-warning">Di luar ketersediaan yang Anda isi</div>
+                                <div class="small text-warning"><i class="fa-solid fa-circle-exclamation me-1"></i> Di luar ketersediaan yang Anda isi</div>
                             @endif
                         </div>
 
                         <form method="POST" action="{{ route('teacher.class.respond', $pc) }}"
                               class="d-flex flex-wrap gap-2 align-items-start">
                             @csrf
-                            <input type="text" name="note" maxlength="1000" class="form-control form-control-sm"
-                                   placeholder="Alasan jika menolak" style="min-width:200px">
-                            <button name="decision" value="Accepted" class="btn btn-success btn-sm">Terima</button>
-                            <button name="decision" value="Rejected" class="btn btn-outline-danger btn-sm">Tolak</button>
+                            @if(!$pc->broadcast_to_all)
+                                <input type="text" name="note" maxlength="1000" class="form-control form-control-sm"
+                                       placeholder="Alasan wajib jika menolak" style="min-width:200px">
+                                <button name="decision" value="Accepted" class="btn btn-success btn-sm">Terima</button>
+                                <button name="decision" value="Rejected" class="btn btn-outline-danger btn-sm">Tolak</button>
+                            @else
+                                <button name="decision" value="Accepted" class="btn btn-success btn-sm fw-semibold">
+                                    <i class="fa-solid fa-lock me-1"></i> Ambil & Kunci Jadwal
+                                </button>
+                                <button name="decision" value="Rejected" class="btn btn-outline-secondary btn-sm">Lewati</button>
+                            @endif
                         </form>
                     </div>
                 </div>
@@ -250,7 +269,8 @@
     </div>
     @endif
 
-    {{-- KETERSEDIAAN SAYA --}}
+        {{-- KETERSEDIAAN SAYA --}}
+    @php $addOld = old('_form') === 'add'; @endphp
     <div class="card shadow-sm border-0 rounded-4 mb-3">
         <div class="card-body">
             <h5 class="fw-bold mb-1">Ketersediaan Saya</h5>
@@ -299,30 +319,51 @@
             @endif
 
             <hr>
-            <form method="POST" action="{{ route('teacher.availability.store') }}" class="row g-2 align-items-end">
+            <h6 class="fw-bold">Tambah Ketersediaan</h6>
+
+            <form method="POST" action="{{ route('teacher.availability.store') }}">
                 @csrf
-                <div class="col-md-2">
-                    <label class="form-label small fw-semibold mb-1">Hari</label>
-                    <select name="day" class="form-select form-select-sm" required>
+                <input type="hidden" name="_form" value="add">
+
+                <div class="mb-2">
+                    <label class="form-label small fw-semibold mb-1">Hari <span class="text-muted fw-normal">(boleh lebih dari satu)</span></label>
+                    <div class="d-flex flex-wrap gap-3 mb-2">
                         @foreach($days as $d)
-                            <option @selected(old('day') === $d)>{{ $d }}</option>
+                            <label class="d-flex align-items-center gap-1 small">
+                                <input type="checkbox" class="myday-check" name="days[]" value="{{ $d }}"
+                                       @checked($addOld && in_array($d, (array) old('days', [])))> {{ $d }}
+                            </label>
                         @endforeach
-                    </select>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                onclick="document.querySelectorAll('.myday-check').forEach(c => c.checked = ['Senin','Selasa','Rabu','Kamis','Jumat'].includes(c.value))">Senin–Jumat</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                onclick="document.querySelectorAll('.myday-check').forEach(c => c.checked = true)">Semua hari</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                onclick="document.querySelectorAll('.myday-check').forEach(c => c.checked = false)">Kosongkan</button>
+                    </div>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label small fw-semibold mb-1">Mulai</label>
-                    <input type="time" name="start_time" class="form-control form-control-sm" value="{{ old('start_time') }}" required>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small fw-semibold mb-1">Selesai</label>
-                    <input type="time" name="end_time" class="form-control form-control-sm" value="{{ old('end_time') }}" required>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label small fw-semibold mb-1">Catatan</label>
-                    <input type="text" name="note" maxlength="255" class="form-control form-control-sm" value="{{ old('note') }}">
-                </div>
-                <div class="col-md-2 d-grid">
-                    <button class="btn btn-dark btn-sm">+ Tambah</button>
+
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold mb-1">Mulai</label>
+                        <input type="time" name="start_time" class="form-control form-control-sm"
+                               value="{{ $addOld ? old('start_time') : '' }}" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold mb-1">Selesai</label>
+                        <input type="time" name="end_time" class="form-control form-control-sm"
+                               value="{{ $addOld ? old('end_time') : '' }}" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold mb-1">Catatan</label>
+                        <input type="text" name="note" maxlength="255" class="form-control form-control-sm"
+                               value="{{ $addOld ? old('note') : '' }}">
+                    </div>
+                    <div class="col-md-2 d-grid">
+                        <button class="btn btn-dark btn-sm">+ Tambah</button>
+                    </div>
                 </div>
             </form>
         </div>

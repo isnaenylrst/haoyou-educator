@@ -24,6 +24,17 @@ class AppServiceProvider extends ServiceProvider
 
         Paginator::useBootstrapFive();
 
+        // Share unread notifications to all views
+        View::composer('*', function ($view) {
+            if (Auth::check()) {
+                $authUser = Auth::user();
+                $unreadNotifications = $authUser->unreadNotifications()->take(10)->get();
+                $unreadCount = $authUser->unreadNotifications()->count();
+                $view->with('unreadNotifications', $unreadNotifications);
+                $view->with('unreadNotificationsCount', $unreadCount);
+            }
+        });
+
         RedirectIfAuthenticated::redirectUsing(function ($request) {
             $user = $request->user();
 

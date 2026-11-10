@@ -14,6 +14,20 @@
 
 <div class="container-fluid py-3">
 
+    {{-- NAV TABS TERPADU: SOP & MATERI TRAINING --}}
+    <ul class="nav nav-pills mb-4 border-bottom pb-2">
+        <li class="nav-item">
+            <a class="nav-link active rounded-pill fw-bold px-4 me-2 bg-warning text-dark" href="{{ route('teacher.sop') }}">
+                <i class="fa-solid fa-book-bookmark me-1"></i> SOP & Standar Mengajar
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link rounded-pill fw-semibold px-4 text-secondary" href="{{ route('teacher.training') }}">
+                <i class="fa-solid fa-graduation-cap me-1"></i> Materi & Video Training
+            </a>
+        </li>
+    </ul>
+
     {{-- Header + pencarian --}}
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
         <div>

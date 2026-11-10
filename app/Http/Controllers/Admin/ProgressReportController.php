@@ -24,7 +24,7 @@ class ProgressReportController extends Controller
         $fu = null;
     }
 
-    $base = ProgressReport::where('status', ProgressReport::SUBMITTED);
+    $base = ProgressReport::whereIn('status', [ProgressReport::SUBMITTED, 'Published'])->whereNotNull('reviewed_at');
 
     $stats = [
         'terbit' => (clone $base)->count(),
@@ -41,7 +41,8 @@ class ProgressReportController extends Controller
             'enrollment.programPackage.program',
             'enrollment.privatePackage',
         ])
-        ->where('status', ProgressReport::SUBMITTED)
+        ->whereIn('status', [ProgressReport::SUBMITTED, 'Published'])
+        ->whereNotNull('reviewed_at')
         ->when($search !== '', fn ($q) => $q->where(function ($w) use ($search) {
             $w->where('report_period', 'like', "%{$search}%")
               ->orWhereHas('student', fn ($s) => $s->where('name', 'like', "%{$search}%"));
@@ -81,7 +82,7 @@ public function followUp(Request $request, ProgressReport $report)
             return $this->missingFile();
         }
 
-        return Storage::disk('public')->response($report->file_path, $this->fileName($report));
+        return response()->file(\App\Services\ProgressReportDocument::absolutePath($report), ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="' . $this->fileName($report) . '"']);
     }
 
     /** Unduh PDF */
@@ -91,14 +92,14 @@ public function followUp(Request $request, ProgressReport $report)
             return $this->missingFile();
         }
 
-        return Storage::disk('public')->download($report->file_path, $this->fileName($report));
+        return response()->download(\App\Services\ProgressReportDocument::absolutePath($report), $this->fileName($report));
     }
 
     private function resolveFile(ProgressReport $report): bool
     {
         return $report->status === 'Submitted'
             && $report->file_path
-            && Storage::disk('public')->exists($report->file_path);
+            && \App\Services\ProgressReportDocument::absolutePath($report) !== null;
     }
 
     private function missingFile()
