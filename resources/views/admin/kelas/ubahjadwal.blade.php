@@ -4,35 +4,6 @@
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/admin/kelas.css') }}">
-    <style>
-        .kelas-create-page { width:100%; max-width:1200px; margin:0 auto; }
-        a.btn, a.icon-btn { text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
-
-        .uj-grid { display:grid; grid-template-columns:minmax(0, 1.25fr) minmax(0, 1fr); gap:20px; align-items:start; }
-        .uj-card { background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:24px; box-shadow:0 2px 8px rgba(15,23,42,.04); }
-        .uj-card h2 { margin:0 0 4px; font-size:16px; font-weight:700; color:#111827; }
-        .uj-card .uj-sub { margin:0 0 16px; font-size:13px; color:#6b7280; }
-        .uj-side { position:sticky; top:16px; }
-        .uj-placeholder { text-align:center; padding:36px 12px; color:#9ca3af; font-size:13px; line-height:1.7; }
-        .uj-placeholder i { display:block; font-size:28px; margin-bottom:10px; color:#d1d5db; }
-        .uj-pattern { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; }
-
-        #ses_list .ms-item.is-selected { border-color:#facc15; background:#fffbeb; }
-        #ses_list { max-height:none; }
-
-        .ses-actions { display:flex; align-items:center; gap:8px; flex:none; }
-        .ses-changed { font-size:12px; color:#92400e; margin-top:2px; }
-        .ses-meta { font-size:12px; color:#6b7280; margin-top:2px; }
-        #rs_confirm_wrap { display:none; margin-top:4px; }
-        .uj-actions { display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e5e7eb; padding-top:16px; margin-top:18px; }
-
-        @media (max-width: 900px) {
-            .uj-grid { grid-template-columns:minmax(0, 1fr); }
-            .uj-side { position:static; }
-            .uj-card { padding:16px; }
-        }
-    </style>
 @endpush
 
 @section('content')
@@ -50,8 +21,8 @@
             </p>
         </div>
         <div class="dashboard-header-actions">
-            <a href="{{ route('admin.kelas') }}" class="btn">
-                <i class="fa-solid fa-arrow-left"></i> Kembali ke Kelas
+            <a href="{{ route('admin.kelas') }}" class="btn btn-secondary">
+                <i class="fa-solid fa-arrow-left"></i> Kembali
             </a>
         </div>
     </div>
@@ -144,6 +115,63 @@
                         <input type="text" id="rs_reason" maxlength="255" placeholder="Contoh: guru ada acara, ruang dipakai kelas lain">
                     </div>
 
+                    {{-- ===== Home Visit ===== --}}
+                    <div class="form-field full" id="rs_hv_done" style="display:none;">
+                        <span class="form-hint">Pertemuan ini sudah Home Visit dan sudah dibayar. Pindah jadwal tidak dikenai biaya lagi.</span>
+                    </div>
+
+                    <div class="form-field full" id="rs_hv_wrap" style="display:none;">
+                        <label>Home Visit (guru datang ke rumah)</label>
+                        <div class="form-radio-group">
+                            <label class="form-radio">
+                                <input type="radio" name="rs_hv" value="0" checked onchange="refreshHomeVisitUi()"> Tidak
+                            </label>
+                            <label class="form-radio">
+                                <input type="radio" name="rs_hv" value="1" onchange="refreshHomeVisitUi()"> Ya, jadikan Home Visit
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-field full" id="rs_hv_note_wrap" style="display:none;">
+                        <span class="form-hint" id="rs_hv_note"></span>
+                    </div>
+
+                    <div class="form-field full rs-hv-field" style="display:none;">
+                        <div class="alert-success" style="margin:0;">
+                            <strong>Ketentuan Home Visit</strong>
+                            <ul style="margin:6px 0 0 18px; padding:0;">
+                                <li>Biaya <strong id="rs_hv_fee"></strong> per pertemuan, hanya untuk pertemuan ini. Pertemuan lain tidak kena biaya.</li>
+                                <li>Wajib dibayar dulu: jadwal baru tersimpan setelah pembayaran tercatat.</li>
+                                <li>Satu invoice untuk pertemuan ini, terbit otomatis setelah disimpan.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="form-field full rs-hv-field" style="display:none;">
+                        <label>Dibayar oleh *</label>
+                        <select id="rs_payer"></select>
+                    </div>
+
+                    <div class="form-field rs-hv-field" style="display:none;">
+                        <label>Tanggal Bayar *</label>
+                        <input type="date" id="rs_pay_date">
+                    </div>
+
+                    <div class="form-field rs-hv-field" style="display:none;">
+                        <label>Metode Bayar *</label>
+                        <select id="rs_pay_method">
+                            <option value="Transfer Bank">Transfer Bank</option>
+                            <option value="Cash">Cash</option>
+                            <option value="QRIS">QRIS</option>
+                        </select>
+                    </div>
+
+                    <div class="form-field full rs-hv-field" style="display:none;">
+                        <label>Bukti Pembayaran *</label>
+                        <input type="file" id="rs_pay_proof" accept=".jpg,.jpeg,.png,.pdf">
+                        <span class="form-hint">JPG, PNG, atau PDF, maksimal 4 MB.</span>
+                    </div>
+
                     <div class="form-field full" id="rs_confirm_wrap">
                         <label class="form-radio">
                             <input type="checkbox" id="rs_confirm"> Guru sudah setuju mengajar di luar jam tersedianya
@@ -154,7 +182,7 @@
                 <div class="alert-error" id="rs_error" style="display:none;margin-top:12px;"></div>
 
                 <div class="uj-actions">
-                    <button type="button" class="btn" onclick="cancelReschedule()">Batal</button>
+                    <button type="button" class="btn btn-secondary" onclick="cancelReschedule()">Batal</button>
                     <button type="button" class="btn btn-primary" id="rs_submit" onclick="submitReschedule()">
                         <i class="fa-solid fa-check"></i> Simpan Jadwal
                     </button>
@@ -171,8 +199,11 @@
     const ROOM_OPTIONS  = @json($roomSuggestions);
     const CSRF_TOKEN    = @json(csrf_token());
     const URL_RESCHEDULE = @json(route('admin.kelas.sessions.reschedule', ['classSession' => '__ID__']));
+    const PAYERS        = @json($payers);
+    const HV_FEE        = @json($homeVisitFee);
     const DAY_ORDER     = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
     const SESSION_STATUS_LABEL = { Scheduled: 'Terjadwal', Completed: 'Selesai', Cancelled: 'Dibatalkan' };
+    const SESSION_STATUS_BADGE = { Scheduled: 'badge-cold', Completed: 'badge-completed', Cancelled: 'badge-cancelled' };
 
     const sesData = {};
     SESSIONS.forEach(s => { sesData[s.id] = s; });
@@ -215,6 +246,11 @@
             ? `<button type="button" class="btn btn-primary btn-sm" onclick="selectSession(${s.id})">Ubah Jadwal</button>`
             : '';
 
+        const invoices = (s.payments || []).map(p =>
+            `<a href="${attrEscape(p.invoice_url)}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">
+                <i class="fa-solid fa-file-invoice"></i> Invoice
+            </a>`).join('');
+
         return `<div class="ms-item" id="ses_item_${s.id}">
             <div>
                 <div class="ms-item-name">Pertemuan ke-${s.number ?? '-'} &middot; ${escapeHtml(s.date_label)}</div>
@@ -222,7 +258,8 @@
                 ${changed}
             </div>
             <div class="ses-actions">
-                <span class="ms-status-chip">${escapeHtml(status)}</span>
+                <span class="badge ${SESSION_STATUS_BADGE[s.status] || 'badge-pending'}">${escapeHtml(status)}</span>
+                ${invoices}
                 ${action}
             </div>
         </div>`;
@@ -278,6 +315,7 @@
         document.getElementById('rs_error').style.display = 'none';
         document.getElementById('rs_submit').disabled = false;
 
+        resetHomeVisitForm();
         onRescheduleScopeChange();
 
         document.getElementById('rs_placeholder').style.display = 'none';
@@ -314,6 +352,7 @@
         document.getElementById('rs_date_field').style.display = following ? 'none' : '';
         document.getElementById('rs_day_field').style.display = following ? '' : 'none';
         updateFollowingPreview();
+        refreshHomeVisitUi();
     }
 
     function updateFollowingPreview() {
@@ -323,6 +362,59 @@
         const idx = DAY_ORDER.indexOf(document.getElementById('rs_day').value);
         el.textContent = 'Pertemuan ini pindah ke ' + formatDateId(sameWeekDate(rsSession.date, idx))
             + ', pertemuan sesudahnya mengikuti hari yang sama tiap minggu.';
+    }
+
+    /* ============================================================
+       HOME VISIT
+    ============================================================ */
+    function selectedHv() {
+        return document.querySelector('input[name="rs_hv"]:checked').value;
+    }
+
+    function resetHomeVisitForm() {
+        document.querySelector('input[name="rs_hv"][value="0"]').checked = true;
+        document.getElementById('rs_hv_fee').textContent = 'Rp' + Number(HV_FEE).toLocaleString('id-ID');
+        document.getElementById('rs_payer').innerHTML = PAYERS
+            .map(p => `<option value="${p.enrollment_id}">${escapeHtml(p.name)}</option>`).join('');
+
+        const pd = document.getElementById('rs_pay_date');
+        pd.max = todayIso();
+        pd.value = todayIso();
+        document.getElementById('rs_pay_method').value = 'Transfer Bank';
+        document.getElementById('rs_pay_proof').value = '';
+    }
+
+    function refreshHomeVisitUi() {
+        const s = rsSession;
+        if (! s) return;
+
+        const following = currentRescheduleScope() === 'following';
+        const alreadyHv = s.location_type === 'Home Visit';
+        const noPayer   = PAYERS.length === 0;
+        const offered   = ! alreadyHv && s.can_home_visit && ! following && ! noPayer;
+
+        document.getElementById('rs_hv_done').style.display = alreadyHv ? '' : 'none';
+        document.getElementById('rs_hv_wrap').style.display = offered ? '' : 'none';
+
+        let note = '';
+        if (! alreadyHv && s.can_home_visit && following) {
+            note = 'Home visit dikenakan per pertemuan, jadi hanya tersedia untuk "Pertemuan ini saja".';
+        } else if (! alreadyHv && s.can_home_visit && noPayer) {
+            note = 'Home visit belum bisa dipilih: tidak ada siswa aktif di kelas ini sebagai pembayar.';
+        }
+        document.getElementById('rs_hv_note').textContent = note;
+        document.getElementById('rs_hv_note_wrap').style.display = note ? '' : 'none';
+
+        if (! offered) {
+            document.querySelector('input[name="rs_hv"][value="0"]').checked = true;
+        }
+
+        const on = offered && selectedHv() === '1';
+        document.querySelectorAll('.rs-hv-field').forEach(el => el.style.display = on ? '' : 'none');
+
+        // Ruangan tidak relevan kalau pertemuan jadi Home Visit
+        const isStudio = s.location_type === 'Studio';
+        document.getElementById('rs_room_field').style.display = (isStudio && ! on) ? '' : 'none';
     }
 
     function showRescheduleError(messages) {
@@ -339,25 +431,43 @@
         const following = scope === 'following';
         const date      = document.getElementById('rs_date').value;
         const start     = document.getElementById('rs_start').value;
+        const hv        = ! following && selectedHv() === '1' && s.can_home_visit;
 
         if (! start || (! following && ! date)) {
             showRescheduleError([following ? 'Hari dan jam mulai wajib diisi.' : 'Tanggal dan jam mulai wajib diisi.']);
             return;
         }
 
-        const body = {
-            scope: scope,
-            start_time: start,
-            reason: document.getElementById('rs_reason').value.trim() || null,
-            confirm_outside_availability: document.getElementById('rs_confirm').checked,
-        };
-        if (following) {
-            body.day = document.getElementById('rs_day').value;
-        } else {
-            body.session_date = date;
+        const proof = document.getElementById('rs_pay_proof').files[0];
+        if (hv && ! proof) {
+            showRescheduleError(['Bukti pembayaran home visit wajib diunggah.']);
+            return;
         }
-        if (s.location_type === 'Studio') {
-            body.room = document.getElementById('rs_room').value.trim();
+
+        // Pakai FormData (ada upload bukti). POST + _method=PUT supaya route PUT tidak perlu diubah.
+        const form = new FormData();
+        form.append('_method', 'PUT');
+        form.append('scope', scope);
+        form.append('start_time', start);
+        form.append('confirm_outside_availability', document.getElementById('rs_confirm').checked ? '1' : '0');
+
+        const reason = document.getElementById('rs_reason').value.trim();
+        if (reason) form.append('reason', reason);
+
+        if (following) {
+            form.append('day', document.getElementById('rs_day').value);
+        } else {
+            form.append('session_date', date);
+        }
+
+        if (hv) {
+            form.append('home_visit', '1');
+            form.append('payer_enrollment_id', document.getElementById('rs_payer').value);
+            form.append('payment_date', document.getElementById('rs_pay_date').value);
+            form.append('payment_method', document.getElementById('rs_pay_method').value);
+            form.append('proof', proof);
+        } else if (s.location_type === 'Studio') {
+            form.append('room', document.getElementById('rs_room').value.trim());
         }
 
         const btn = document.getElementById('rs_submit');
@@ -365,13 +475,13 @@
         document.getElementById('rs_error').style.display = 'none';
 
         fetch(URL_RESCHEDULE.replace('__ID__', s.id), {
-            method: 'PUT',
+            method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
                 'Accept': 'application/json',
                 'X-CSRF-TOKEN': CSRF_TOKEN,
+                // Content-Type jangan diisi: browser mengisinya beserta boundary multipart
             },
-            body: JSON.stringify(body),
+            body: form,
         })
             .then(async (r) => {
                 if (r.ok) {

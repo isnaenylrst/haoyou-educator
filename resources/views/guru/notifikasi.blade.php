@@ -73,6 +73,10 @@
 
                 @if (($notif['action']['kind'] ?? null) === 'done')
                     <span class="badge rounded-pill bg-success px-3 py-2">Selesai</span>
+                @elseif (($notif['type'] ?? null) === 'journal_missing')
+                    <span class="badge rounded-pill text-danger border border-danger px-3 py-2 bg-white">
+                        Belum Diisi
+                    </span>
                 @elseif ($isNew)
                     <span class="badge rounded-pill text-warning border border-warning px-3 py-2 bg-white">
                         Baru

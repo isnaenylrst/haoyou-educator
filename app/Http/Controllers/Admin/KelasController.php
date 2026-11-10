@@ -27,6 +27,7 @@ use App\Services\ExtraFeeService;
 use App\Services\TeacherAvailabilityService;
 use App\Services\ClassCapacityService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -94,7 +95,21 @@ class KelasController extends Controller
             'kelas'           => $kelas,
             'sessionsData'    => $this->sessionList($kelas),
             'roomSuggestions' => $this->roomSuggestions(),
+            'payers'          => $this->payersFor($kelas),
+            'homeVisitFee'    => ExtraFeeService::FEE_HOME_VISIT,
         ]);
+    }
+
+    /** Calon pembayar home visit: siswa Active di kelas ini. */
+    private function payersFor(ClassModel $kelas)
+    {
+        return ClassEnrollment::with('student:id,name')
+            ->where('class_id', $kelas->id)
+            ->where('status', 'Active')
+            ->get()
+            ->filter(fn ($e) => $e->student)
+            ->map(fn ($e) => ['enrollment_id' => $e->id, 'name' => $e->student->name])
+            ->values();
     }
 
     /* ============================================================
@@ -936,26 +951,23 @@ class KelasController extends Controller
     {
         $kelas = ClassModel::findOrFail($id);
 
-        // Calon pembayar home visit: siswa Active di kelas ini
-        $payers = ClassEnrollment::with('student:id,name')
-            ->where('class_id', $kelas->id)
-            ->where('status', 'Active')
-            ->get()
-            ->filter(fn ($e) => $e->student)
-            ->map(fn ($e) => ['enrollment_id' => $e->id, 'name' => $e->student->name])
-            ->values();
-
         return response()->json([
             'kelas'    => ['id' => $kelas->id, 'class_name' => $kelas->class_name],
             'sessions' => $this->sessionList($kelas),
-            'payers'   => $payers,
+            'payers'   => $this->payersFor($kelas),
             'fees'     => ['home_visit' => ExtraFeeService::FEE_HOME_VISIT],
         ]);
     }
 
-    /** Ubah jadwal: satu pertemuan saja ("one") atau pertemuan ini dan seterusnya ("following"). */
+    /**
+     * Ubah jadwal: satu pertemuan saja ("one") atau pertemuan ini dan seterusnya ("following").
+     * Opsional (hanya "one"): jadikan pertemuan ini Home Visit. Dibayar dulu, lalu dijadwalkan,
+     * dalam satu transaksi: kalau salah satu gagal, dua-duanya dibatalkan.
+     */
     public function rescheduleSession(Request $request, ClassSession $classSession)
     {
+        $wantsHv = $request->boolean('home_visit');
+
         $data = $request->validate([
             'scope'                        => ['required', Rule::in(['one', 'following'])],
             'session_date'                 => ['required_if:scope,one', 'nullable', 'date'],
@@ -964,7 +976,46 @@ class KelasController extends Controller
             'room'                         => ['nullable', 'string', 'max:255'],
             'reason'                       => ['nullable', 'string', 'max:255'],
             'confirm_outside_availability' => ['nullable', 'boolean'],
+
+            // Home visit (opsional)
+            'home_visit'          => ['nullable', 'boolean'],
+            'payer_enrollment_id' => [Rule::requiredIf($wantsHv), 'nullable', 'integer', 'exists:class_enrollments,id'],
+            'payment_date'        => [Rule::requiredIf($wantsHv), 'nullable', 'date', 'before_or_equal:today'],
+            'payment_method'      => [Rule::requiredIf($wantsHv), 'nullable', Rule::in(self::PAYMENT_METHODS)],
+            'proof'               => [Rule::requiredIf($wantsHv), 'nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'],
+        ], [
+            'proof.required'               => 'Bukti pembayaran home visit wajib diunggah.',
+            'payer_enrollment_id.required' => 'Pilih siswa yang membayar home visit.',
+            'payment_date.required'        => 'Tanggal pembayaran home visit wajib diisi.',
+            'payment_method.required'      => 'Metode pembayaran home visit wajib dipilih.',
         ]);
+
+        $payer = null;
+
+        if ($wantsHv) {
+            // Biaya per pertemuan -> hanya untuk "Pertemuan ini saja"
+            if ($data['scope'] !== 'one') {
+                throw ValidationException::withMessages([
+                    'home_visit' => 'Home visit dikenakan per pertemuan, jadi hanya bisa dipilih untuk "Pertemuan ini saja".',
+                ]);
+            }
+
+            $payer = ClassEnrollment::where('class_id', $classSession->class_id)
+                ->where('status', 'Active')
+                ->find($data['payer_enrollment_id']);
+
+            if (! $payer) {
+                throw ValidationException::withMessages([
+                    'payer_enrollment_id' => 'Pembayar harus siswa aktif di kelas ini.',
+                ]);
+            }
+
+            if (! $classSession->canBecomeHomeVisit()) {
+                throw ValidationException::withMessages([
+                    'home_visit' => 'Pertemuan ini tidak bisa dijadikan home visit.',
+                ]);
+            }
+        }
 
         // "Seterusnya": admin memilih hari. Tanggal pertemuan yang diklik = hari itu di minggu yang sama
         // (pertemuan sesudahnya mengikuti di service dengan aturan yang sama).
@@ -977,15 +1028,50 @@ class KelasController extends Controller
                 ->toDateString();
         }
 
-        if ($data['scope'] === 'one') {
-            $this->rescheduleSvc->rescheduleOne($classSession, $data);
-            $message = 'Jadwal pertemuan berhasil diubah.';
-        } else {
-            $count   = $this->rescheduleSvc->rescheduleFollowing($classSession, $data);
-            $message = "Jadwal {$count} pertemuan (ini dan seterusnya) berhasil diubah.";
+        $reschedule = Arr::only($data, [
+            'scope', 'session_date', 'day', 'start_time', 'room', 'reason', 'confirm_outside_availability',
+        ]);
+
+        $proofPath = $wantsHv ? $request->file('proof')->store('payment-proofs', 'public') : null;
+        $count     = 1;
+
+        try {
+            DB::transaction(function () use ($wantsHv, $classSession, $payer, $data, $proofPath, $reschedule, &$count) {
+                // Bayar dulu, baru dijadwalkan
+                if ($wantsHv) {
+                    $this->sessionSvc->makeHomeVisitMany([$classSession->id], $payer, [
+                        'payment_date'       => $data['payment_date'],
+                        'payment_method'     => $data['payment_method'],
+                        'payment_proof_path' => $proofPath,
+                        'amount'             => null, // service memakai tarif FEE_HOME_VISIT
+                    ]);
+                    $classSession->refresh();
+                }
+
+                if ($data['scope'] === 'one') {
+                    $this->rescheduleSvc->rescheduleOne($classSession, $reschedule);
+                } else {
+                    $count = $this->rescheduleSvc->rescheduleFollowing($classSession, $reschedule);
+                }
+            });
+        } catch (\Throwable $e) {
+            if ($proofPath) {
+                Storage::disk('public')->delete($proofPath); // jangan tinggalkan file yatim
+            }
+            throw $e;
         }
 
-        // Dipanggil lewat fetch dari modal: balas JSON, pesan sukses tampil setelah halaman dimuat ulang
+        $message = $data['scope'] === 'one'
+            ? 'Jadwal pertemuan berhasil diubah.'
+            : "Jadwal {$count} pertemuan (ini dan seterusnya) berhasil diubah.";
+
+        if ($wantsHv) {
+            $message .= ' Pertemuan dijadikan Home Visit, Rp'
+                . number_format((float) ExtraFeeService::FEE_HOME_VISIT, 0, ',', '.')
+                . ' tercatat lunas. Invoice ada di daftar pertemuan.';
+        }
+
+        // Dipanggil lewat fetch dari halaman Ubah Jadwal: balas JSON, pesan sukses tampil setelah halaman dimuat ulang
         if ($request->expectsJson()) {
             session()->flash('success', $message);
 

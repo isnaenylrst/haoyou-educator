@@ -135,6 +135,9 @@
                                             {{ $c->teacher_name ?? 'Belum ada guru' }} · {{ $c->students }} siswa · {{ $c->delivery_mode }}
                                         </small>
                                         <small class="d-block">{{ $c->time }}{{ $c->room ? ' · ' . $c->room : '' }}</small>
+                                        @if(!empty($c->moved_note))
+                                            <small class="d-block fst-italic">{{ $c->moved_note }}</small>
+                                        @endif
                                         @if($c->is_mine && $c->is_filled)
                                             <small class="d-block fw-bold">✓ Jurnal terisi</small>
                                         @endif

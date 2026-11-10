@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Certificate;
 use App\Models\ClassModel;
+use App\Models\ClassSession;
 use App\Models\ClassSessionTeacherOffer;
 use App\Models\ClassTask;
 use App\Models\Consultation;
@@ -15,6 +16,7 @@ use App\Models\TeacherMaterial;
 use App\Models\TeachingJournal;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -35,6 +37,9 @@ class TeacherNotificationService
     /** Jika guru belum pernah membuka Notifikasi, informasi lebih lama dari ini tidak dianggap baru. */
     public const FALLBACK_DAYS = 14;
 
+    /** Sesi tanpa jurnal dicari sejauh ini ke belakang (sama dengan default rentang di admin). */
+    public const JOURNAL_LOOKBACK_DAYS = 14;
+
     /** Notifikasi informasi lebih lama dari ini tidak ditampilkan (yang butuh tindakan selalu tampil). */
     public const INFO_WINDOW_DAYS = 90;
 
@@ -47,7 +52,7 @@ class TeacherNotificationService
                      'report_approved', 'report_returned', 'certificate_approved', 'certificate_rejected', 'leave_result'],
         'surat' => ['document', 'sop_new'],
         'konsultasi' => ['consultation', 'consultation_pending', 'consultation_cancelled'],
-        'tugas' => ['task', 'task_done', 'class_assign', 'replacement_request', 'replacement_offer'],
+        'tugas' => ['task', 'task_done', 'class_assign', 'replacement_request', 'replacement_offer', 'home_visit', 'journal_missing', 'schedule_changed'],
     ];
 
     private ?Collection $cache = null;
@@ -99,10 +104,12 @@ class TeacherNotificationService
             ['type' => 'class_assign',         'label' => 'Kelas menunggu konfirmasi',     'hint' => 'Terima atau tolak di Schedule',        'url' => route('teacher.schedule')],
             ['type' => 'replacement_request',  'label' => 'Permintaan menggantikan kelas', 'hint' => 'Dari guru lain, jawab di Schedule',     'url' => route('teacher.schedule')],
             ['type' => 'replacement_offer',    'label' => 'Pengajuan kelas pengganti',     'hint' => 'Terima atau tolak di Schedule',        'url' => route('teacher.schedule')],
+            ['type' => 'home_visit',           'label' => 'Home visit mendatang',          'hint' => 'Guru datang ke rumah siswa',           'url' => route('teacher.notifikasi', ['filter' => 'tugas'])],
             ['type' => 'consultation',         'label' => 'Jadwal konsultasi mendatang',   'hint' => 'Hadir sesuai jadwal',                  'url' => route('teacher.notifikasi', ['filter' => 'konsultasi'])],
             ['type' => 'task',                 'label' => 'Tugas dari Kurikulum',          'hint' => 'Tandai selesai di halaman Notifikasi', 'url' => route('teacher.notifikasi')],
             ['type' => 'report_returned',      'label' => 'Progress report dikembalikan',  'hint' => 'Perbaiki lalu ajukan ulang',           'url' => route('teacher.progress-report')],
             ['type' => 'journal_revision',     'label' => 'Jurnal perlu revisi',           'hint' => 'Dikembalikan Kurikulum',               'url' => route('teacher.teaching-log')],
+            ['type' => 'journal_missing',      'label' => 'Jurnal mengajar belum diisi',   'hint' => 'Lihat sesi yang belum diisi',         'url' => route('teacher.notifikasi')],
             ['type' => 'material_rejected',    'label' => 'LP / PPT perlu direvisi',       'hint' => 'Upload ulang di menu Kelas',           'url' => route('teacher.kelas')],
             ['type' => 'certificate_rejected', 'label' => 'Sertifikat ditolak',            'hint' => 'Perbaiki di menu Sertifikat',          'url' => route('teacher.sertifikat')],
         ];
@@ -118,7 +125,7 @@ class TeacherNotificationService
         $infoNew = $all->where('actionable', false)->where('is_new', true)->count();
         if ($infoNew > 0) {
             $out[] = [
-                'type' => 'info', 'label' => 'Hasil review baru & surat', 'hint' => 'Buka halaman Notifikasi',
+                'type' => 'info', 'label' => 'Info baru: review, surat & jadwal', 'hint' => 'Buka halaman Notifikasi',
                 'url' => route('teacher.notifikasi'), 'count' => $infoNew,
             ];
         }
@@ -241,6 +248,38 @@ class TeacherNotificationService
                 ]);
             });
 
+        // 3b. Jurnal mengajar belum diisi: sesi sudah lewat tapi jurnalnya belum ada.
+        //     Dihitung dari MissingJournalFinder (sama dengan tab "Belum Diisi" di admin), jadi hilang
+        //     otomatis begitu jurnal diisi. Di-cache 60 detik per guru karena bell dipanggil di tiap halaman.
+        $toDate = today();
+
+        $missing = Cache::remember("teacher-{$t->id}-missing-journals", 60, fn () =>
+            app(MissingJournalFinder::class)
+                ->find($toDate->copy()->subDays(self::JOURNAL_LOOKBACK_DAYS), $toDate, $t->id)
+                ->map(fn ($m) => [
+                    'key'        => $m->key,
+                    'class_name' => $m->class->class_name ?? '-',
+                    'date'       => $m->date->toDateString(),
+                    'start'      => substr($m->schedule->start_time, 0, 5),
+                    'end'        => substr($m->schedule->end_time, 0, 5),
+                ])->all()
+        );
+
+        foreach ($missing as $m) {
+            $date = Carbon::parse($m['date']);
+
+            $push([
+                'key' => "jmiss-{$m['key']}", 'type' => 'journal_missing',
+                'title' => "Jurnal kelas {$m['class_name']} belum diisi: "
+                         . $date->translatedFormat('l, d M Y') . ", {$m['start']}–{$m['end']}",
+                'category' => 'Jurnal Mengajar Belum Diisi', 'time' => $date,
+                'note' => 'Isi jurnal dan absensi sesi ini.',
+                'actionable' => true,
+                // sama seperti tautan "Perbaiki Jurnal": halaman Jurnal & Absensi dengan tanggal sesi
+                'action' => ['kind' => 'link', 'label' => 'Isi Jurnal', 'url' => route('teacher.attendance', ['date' => $m['date']])],
+            ]);
+        }
+
         // 4. Progress report: disetujui (info) / dikembalikan (actionable)
         ProgressReport::with('student')->where('teacher_id', $t->id)->approved()->get()
             ->each(fn ($r) => $push([
@@ -312,7 +351,8 @@ class TeacherNotificationService
             'title' => (int) $c->teacher_id === (int) $t->id
                 ? "Kelas {$c->class_name} diberikan kepada Anda, mohon konfirmasi"
                 : "Kelas {$c->class_name} diajukan kepada Anda, mohon konfirmasi",
-            // category, time, actionable, action: tetap seperti sebelumnya
+            'category' => 'Penugasan Kelas', 'time' => $c->updated_at, 'actionable' => true,
+            'action' => ['kind' => 'link', 'label' => 'Terima / Tolak', 'url' => route('teacher.schedule')],
         ]));
 
         // 9. Permintaan dari guru lain agar saya menggantikan kelasnya
@@ -371,6 +411,106 @@ class TeacherNotificationService
                     'category' => 'Kelas Pengganti', 'time' => $o->updated_at,
                     'note' => implode("\n", $notes), 'actionable' => true,
                     'action' => ['kind' => 'link', 'label' => 'Terima / Tolak', 'url' => route('teacher.schedule')],
+                ]);
+            });
+
+        // 9c. Home Visit: pertemuan saya yang lokasinya rumah siswa (dijadikan Home Visit oleh admin di Ubah Jadwal,
+        //     atau kelas pengganti home visit yang sudah saya terima). Tampil sampai tanggal pertemuan lewat;
+        //     jadwal dipindah -> updated_at berubah, jadi muncul lagi sebagai yang terbaru.
+        ClassSession::with([
+                'class:id,class_name',
+                'class.enrollments' => fn ($q) => $q->where('status', 'Active'),
+                'class.enrollments.student:id,name',
+                'enrollment.student:id,name',
+            ])
+            ->where('teacher_id', $t->id)
+            ->where('location_type', 'Home Visit')
+            ->where('status', 'Scheduled')
+            ->whereDate('session_date', '>=', today())
+            ->orderBy('session_date')->orderBy('start_time')
+            ->get()
+            ->each(function ($s) use ($push) {
+                $isRepl = $s->kind === 'Replacement';
+
+                $students = $isRepl
+                    ? collect([$s->enrollment?->student?->name])
+                    : ($s->class?->enrollments ?? collect())->map(fn ($e) => $e->student?->name);
+                $students = $students->filter()->values();
+
+                $names = $students->take(3)->implode(', ')
+                    . ($students->count() > 3 ? ', +' . ($students->count() - 3) . ' lainnya' : '');
+
+                $when = $s->session_date->translatedFormat('l, d M Y') . ', '
+                      . substr($s->start_time, 0, 5) . '–' . substr($s->end_time, 0, 5);
+
+                $title = $isRepl
+                    ? 'Home Visit kelas pengganti' . ($names ? " {$names}" : '') . ": {$when}"
+                    : 'Home Visit kelas ' . ($s->class?->class_name ?? '-') . ": {$when}";
+
+                $notes = ['Guru datang ke rumah siswa, tidak di studio.'];
+                if ($names) {
+                    $notes[] = 'Siswa: ' . $names;
+                }
+                if ($s->original_date && ! $s->original_date->isSameDay($s->session_date)) {
+                    $notes[] = 'Jadwal semula ' . $s->original_date->translatedFormat('d M Y')
+                             . ($s->change_reason ? " ({$s->change_reason})" : '') . '.';
+                }
+
+                $push([
+                    'key' => "hv-{$s->id}", 'type' => 'home_visit',
+                    'title' => $title, 'category' => 'Home Visit', 'time' => $s->updated_at,
+                    'note' => implode("\n", $notes), 'actionable' => true,
+                    'action' => ['kind' => 'link', 'label' => 'Lihat Jadwal',
+                        'url' => route('teacher.schedule', ['week' => $s->session_date->toDateString()])],
+                ]);
+            });
+
+        // 9d. Perubahan jadwal pertemuan (INFO SAJA, tanpa terima/tolak): admin memindahkan pertemuan reguler saya
+        //     lewat Ubah Jadwal. ClassSessionRescheduleService::move() mengisi original_date setiap kali pertemuan
+        //     dipindah (juga kalau hanya jam/ruang yang berubah). Dikelompokkan per kelas supaya "ubah mulai pertemuan
+        //     ini dan seterusnya" tidak jadi belasan notifikasi. Hanya perubahan 14 hari terakhir untuk pertemuan
+        //     mendatang; Home Visit punya notifikasi sendiri (9c).
+        ClassSession::with('class:id,class_name')
+            ->where('teacher_id', $t->id)
+            ->where('kind', 'Regular')
+            ->where('status', 'Scheduled')
+            ->where('location_type', '!=', 'Home Visit')
+            ->whereNotNull('original_date')
+            ->whereDate('session_date', '>=', today())
+            ->where('updated_at', '>=', now()->subDays(14))
+            ->orderBy('session_date')->orderBy('start_time')
+            ->get()
+            ->groupBy('class_id')
+            ->each(function ($sessions) use ($push) {
+                $first = $sessions->first();
+                $cn    = $first->class->class_name ?? '-';
+
+                $lines = $sessions->take(3)->map(function ($s) {
+                    $time = substr($s->start_time, 0, 5) . '–' . substr($s->end_time, 0, 5);
+                    $room = $s->location_type === 'Studio' && $s->room ? ", ruang {$s->room}" : '';
+
+                    return $s->original_date->isSameDay($s->session_date)
+                        ? $s->session_date->translatedFormat('l, d M Y') . ": jam/ruang diubah menjadi {$time}{$room}"
+                        : $s->original_date->translatedFormat('l, d M') . ' → '
+                            . $s->session_date->translatedFormat('l, d M Y') . ", {$time}{$room}";
+                })->values();
+
+                if ($sessions->count() > 3) {
+                    $lines->push('+' . ($sessions->count() - 3) . ' pertemuan lainnya');
+                }
+
+                $reason = $sessions->pluck('change_reason')->filter()->unique()->first();
+                if ($reason) {
+                    $lines->push("Alasan: {$reason}");
+                }
+
+                $push([
+                    'key' => "resch-{$first->class_id}", 'type' => 'schedule_changed',
+                    'title' => "Jadwal kelas {$cn} diubah" . ($sessions->count() > 1 ? " ({$sessions->count()} pertemuan)" : ''),
+                    'category' => 'Perubahan Jadwal', 'time' => $sessions->max('updated_at'),
+                    'note' => $lines->implode("\n"),
+                    'action' => ['kind' => 'link', 'label' => 'Lihat Jadwal',
+                        'url' => route('teacher.schedule', ['week' => $first->session_date->toDateString()])],
                 ]);
             });
 

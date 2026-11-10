@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Guru;
 
 use App\Http\Controllers\Controller;
 use App\Models\ClassModel;
+use App\Models\ClassSession;
 use App\Models\ClassSessionTeacherOffer;
 use App\Models\TeacherAvailability;
 use App\Models\TeacherLeave;
@@ -76,24 +77,23 @@ class ScheduleController extends Controller
             ->get(['class_schedule_id', 'session_date'])
             ->mapWithKeys(fn ($j) => [$j->class_schedule_id . '|' . Carbon::parse($j->session_date)->toDateString() => true]);
 
+        // Entri jadwal minggu ini. Sumber kebenaran = pertemuan nyata (class_sessions), supaya perubahan dari
+        // admin (Ubah Jadwal) ikut terlihat. Kelas yang belum punya pertemuan memakai pola mingguan (class_schedules).
+        $entries = $this->weekEntries($rows, $weekStart, $weekEnd, $teacher->id);
+
+        foreach ($entries as $e) {
+            $e->is_filled = isset($filled[$e->id . '|' . $e->date]);
+        }
+
         // susun grid [jam][hari][]
         $dayNames = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-        if ($rows->contains('day', 'Minggu')) $dayNames[] = 'Minggu';
+        if ($entries->contains('day', 'Minggu')) $dayNames[] = 'Minggu';
 
-        $slots = $rows->map(fn ($r) => substr($r->start_time, 0, 5))->unique()->sort()->values();
+        $slots = $entries->map(fn ($r) => substr($r->start_time, 0, 5))->unique()->sort()->values();
 
         $cells = [];
-        foreach ($rows as $r) {
-            if (!isset(self::DAYS[$r->day])) continue;
-            $date = $weekStart->copy()->addDays(self::DAYS[$r->day]);
-
-            $r->color    = $this->colorFor($r->class_name);
-            $r->is_mine  = (int) $r->teacher_id === (int) $teacher->id && $r->teacher_response === 'Accepted';
-            $r->date     = $date->toDateString();
-            $r->time     = substr($r->start_time, 0, 5) . ' – ' . substr($r->end_time, 0, 5);
-            $r->is_filled = isset($filled[$r->id . '|' . $r->date]);
-
-            $cells[substr($r->start_time, 0, 5)][$r->day][] = $r;
+        foreach ($entries as $e) {
+            $cells[substr($e->start_time, 0, 5)][$e->day][] = $e;
         }
 
         $dayHeaders = collect($dayNames)->map(fn ($d) => [
@@ -183,18 +183,135 @@ class ScheduleController extends Controller
         ));
     }
 
-    /** Sesi mengajar guru ini yang paling dekat dari sekarang (2 minggu ke depan) */
+    /**
+     * Entri grid untuk satu minggu.
+     * - Kelas yang punya pertemuan Regular: pakai class_sessions (tanggal/jam/ruang nyata, termasuk yang dipindah admin).
+     * - Kelas tanpa pertemuan sama sekali: pakai pola mingguan (class_schedules), seperti sebelumnya.
+     */
+    private function weekEntries($rows, Carbon $weekStart, Carbon $weekEnd, int $myId)
+    {
+        $classIds     = $rows->pluck('class_id')->unique()->values()->all();
+        $classInfo    = $rows->groupBy('class_id')->map->first();
+        $withSessions = ClassSession::whereIn('class_id', $classIds)
+            ->where('kind', 'Regular')->distinct()->pluck('class_id')->flip();
+        $teacherNames = DB::table('teachers')->pluck('name', 'id');
+
+        $entries = collect();
+
+        // 1) Kelas tanpa pertemuan: pola mingguan
+        foreach ($rows as $r) {
+            if ($withSessions->has($r->class_id) || ! isset(self::DAYS[$r->day])) continue;
+
+            $date = $weekStart->copy()->addDays(self::DAYS[$r->day])->toDateString();
+            $entries->push($this->entry($r, $r->id, $date, $r->start_time, $r->end_time, $r->room,
+                $r->teacher_id, $r->teacher_name, $myId));
+        }
+
+        // 2) Kelas dengan pertemuan: pertemuan minggu ini (Cancelled disembunyikan)
+        $sessions = ClassSession::whereIn('class_id', $classIds)
+            ->where('kind', 'Regular')
+            ->whereIn('status', ['Scheduled', 'Completed'])
+            ->whereBetween('session_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+            ->orderBy('start_time')
+            ->get();
+
+        foreach ($sessions as $s) {
+            $info = $classInfo->get($s->class_id);
+            if (! $info) continue;
+
+            $tid = $s->teacher_id ?? $info->teacher_id;
+
+            $e = $this->entry($info, $s->class_schedule_id ?? $info->id, $s->session_date->toDateString(),
+                $s->start_time, $s->end_time,
+                $s->location_type === 'Home Visit' ? 'Home Visit' : $s->room,
+                $tid, $teacherNames[$tid] ?? null, $myId);
+
+            // Penanda kalau pertemuan ini pernah dipindah admin
+            $e->moved_note = null;
+            if ($s->original_date) {
+                $e->moved_note = $s->original_date->isSameDay($s->session_date)
+                    ? 'Jam/ruang diubah'
+                    : 'Dipindah dari ' . $s->original_date->translatedFormat('D, d M');
+            }
+
+            $entries->push($e);
+        }
+
+        return $entries->values();
+    }
+
+    /** Satu kartu di grid: salinan data kelas + tanggal/jam/ruang/guru pertemuannya. */
+    private function entry(object $info, $scheduleId, string $date, string $start, string $end, ?string $room, $teacherId, ?string $teacherName, int $myId): object
+    {
+        $e = clone $info;
+
+        $e->id           = $scheduleId;
+        $e->day          = array_search(Carbon::parse($date)->dayOfWeekIso - 1, self::DAYS, true);
+        $e->start_time   = $start;
+        $e->end_time     = $end;
+        $e->room         = $room;
+        $e->teacher_id   = $teacherId;
+        $e->teacher_name = $teacherName;
+        $e->color        = $this->colorFor($info->class_name);
+        $e->is_mine      = (int) $teacherId === $myId && $info->teacher_response === 'Accepted';
+        $e->date         = $date;
+        $e->time         = substr($start, 0, 5) . ' – ' . substr($end, 0, 5);
+        $e->is_filled    = false;
+        $e->moved_note   = null;
+
+        return $e;
+    }
+
+    /**
+     * Sesi mengajar guru ini yang paling dekat dari sekarang.
+     * Pertemuan nyata (class_sessions) dulu, jadi perubahan jadwal dari admin ikut terlihat;
+     * pola mingguan hanya untuk kelas yang belum punya pertemuan.
+     */
     private function upNext(int $teacherId)
     {
+        $best = null;
+
+        // 1) Pertemuan nyata
+        $sessions = ClassSession::with('class:id,class_name,delivery_mode')
+            ->where('teacher_id', $teacherId)
+            ->where('kind', 'Regular')
+            ->where('status', 'Scheduled')
+            ->whereDate('session_date', '>=', today())
+            ->whereHas('class', fn ($q) => $q->where('teacher_response', 'Accepted')->whereIn('status', ['Open', 'Running']))
+            ->orderBy('session_date')->orderBy('start_time')
+            ->get();
+
+        foreach ($sessions as $s) {
+            $date  = $s->session_date->toDateString();
+            $start = Carbon::parse($date . ' ' . $s->start_time);
+            $end   = Carbon::parse($date . ' ' . $s->end_time);
+            if ($end->lt(now())) continue;
+
+            $best = (object) [
+                's' => (object) [
+                    'id'            => $s->class_schedule_id,
+                    'class_id'      => $s->class_id,
+                    'class_name'    => $s->class->class_name ?? '-',
+                    'delivery_mode' => $s->class->delivery_mode ?? '-',
+                    'room'          => $s->location_type === 'Home Visit' ? 'Home Visit' : $s->room,
+                ],
+                'start' => $start, 'end' => $end, 'date' => $date,
+            ];
+            break;
+        }
+
+        // 2) Kelas yang belum punya pertemuan: pola mingguan
+        $withSessions = ClassSession::where('kind', 'Regular')->distinct()->pluck('class_id')->all();
+
         $schedules = DB::table('class_schedules as cs')
             ->join('classes as c', 'c.id', '=', 'cs.class_id')
             ->where('c.teacher_id', $teacherId)
             ->where('c.teacher_response', 'Accepted')
             ->whereIn('c.status', ['Open', 'Running'])
+            ->whereNotIn('c.id', $withSessions)
             ->select('cs.*', 'c.class_name', 'c.delivery_mode')
             ->get();
 
-        $best = null;
         $monday = now()->startOfWeek(Carbon::MONDAY);
 
         foreach ($schedules as $s) {
@@ -219,7 +336,7 @@ class ScheduleController extends Controller
 
         $att = DB::table('attendances as a')
             ->join('teaching_journals as j', 'j.id', '=', 'a.teaching_journal_id')
-            ->where('j.class_schedule_id', $best->s->id)
+            ->where('j.class_schedule_id', $best->s->id ?? 0)
             ->where('j.session_date', $best->date)
             ->pluck('a.status', 'a.student_id');
 

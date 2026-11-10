@@ -12,6 +12,7 @@ use App\Models\TeacherLeave;
 use App\Models\TeacherMaterial;
 use App\Models\TeachingJournal;
 use App\Services\ClassScheduleService;
+use App\Services\TeacherNotificationService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -24,6 +25,7 @@ class NotifikasiController extends Controller
     | 1. Surat/Dokumen dari Kurikulum (visibility Teacher/Private miliknya)
     | 2. Hasil review LP & PPT miliknya
     | 3. Hasil review Jurnal & Absensi miliknya
+    | 3b. Jurnal mengajar yang belum diisi (sesi sudah lewat, jurnal belum ada)
     | 4. Hasil review Progress Report miliknya
     | 5. Hasil review Cuti/Ganti Kelas miliknya
     | 6-8. Tugas kelas, penugasan kelas, permintaan menggantikan
@@ -111,6 +113,13 @@ class NotifikasiController extends Controller
                     ]
                     : null,
             ]);
+        }
+
+        // ----- 3b. Jurnal belum diisi + perubahan jadwal pertemuan (info saja) -----
+        // Sumbernya TeacherNotificationService, sama dengan bell & dashboard,
+        // jadi angka di lonceng dan daftar di halaman ini selalu cocok.
+        foreach (TeacherNotificationService::for($teacher)->all()->whereIn('type', ['journal_missing', 'schedule_changed']) as $item) {
+            $notifications->push($item);
         }
 
         // ----- 4. Progress Report -----
@@ -212,14 +221,22 @@ class NotifikasiController extends Controller
         }
 
         // ----- 7. Kelas baru menunggu konfirmasi (terima / tolak) -----
-        $assigned = ClassModel::where('teacher_id', $teacher->id)
-            ->where('teacher_response', 'Pending')
-            ->whereIn('status', ['Open', 'Running'])
+        // Dua sumber: (a) kelas yang diberikan langsung kepada saya (teacher_id + teacher_response Pending),
+        // (b) kelas yang diajukan admin ke beberapa guru (saya tercentang di teacherOffers, status Pending).
+        $assigned = ClassModel::whereIn('status', ['Open', 'Running'])
+            ->where(function ($q) use ($teacher) {
+                $q->where(fn ($q) => $q->where('teacher_id', $teacher->id)->where('teacher_response', 'Pending'))
+                  ->orWhereHas('teacherOffers', fn ($o) => $o->where('teacher_id', $teacher->id)->where('status', 'Pending'));
+            })
             ->get();
 
         foreach ($assigned as $class) {
+            $direct = (int) $class->teacher_id === (int) $teacher->id;
+
             $notifications->push([
-                'title' => "Kelas {$class->class_name} diberikan kepada Anda, mohon konfirmasi",
+                'title' => $direct
+                    ? "Kelas {$class->class_name} diberikan kepada Anda, mohon konfirmasi"
+                    : "Kelas {$class->class_name} diajukan kepada Anda, mohon konfirmasi",
                 'category' => 'Penugasan Kelas',
                 'time' => $class->updated_at,
                 'model' => $class,
