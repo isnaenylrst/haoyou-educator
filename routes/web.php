@@ -921,15 +921,14 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
     // PROGRESS REPORT
     Route::get('/progress-report', [ProgressReportController::class, 'index'])
         ->name('progress-report');
-
-    Route::get('/progress-report/{report}/lihat', [ProgressReportController::class, 'lihat'])
-        ->name('progress-report.lihat');
-
-    Route::get('/progress-report/{report}/unduh', [ProgressReportController::class, 'unduh'])
-        ->name('progress-report.unduh');
-
+    Route::post('/progress-report/remind', [ProgressReportController::class, 'remind'])
+        ->name('progress-report.remind');
     Route::patch('/progress-report/{report}/follow-up', [ProgressReportController::class, 'followUp'])
         ->name('progress-report.follow-up');
+    Route::get('/progress-report/{report}/lihat', [ProgressReportController::class, 'lihat'])
+        ->name('progress-report.lihat');
+    Route::get('/progress-report/{report}/unduh', [ProgressReportController::class, 'unduh'])
+        ->name('progress-report.unduh');
 
     // DOKUMEN
     Route::get('/dokumen', [DokumenController::class, 'index'])

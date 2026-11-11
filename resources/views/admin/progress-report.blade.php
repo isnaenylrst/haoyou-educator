@@ -263,8 +263,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Siswa</th>
-                        <th>Kelas</th>
+                        <th>Siswa &amp; Kelas</th>
                         <th>Laoshi</th>
                         <th style="text-align: center; vertical-align: middle;">Jatuh Tempo</th>
                         <th style="text-align: center; vertical-align: middle;">Status</th>
@@ -288,20 +287,16 @@
                                     <div class="avatar-sm">{{ strtoupper(substr($m->student->name ?? '?', 0, 1)) }}</div>
                                     <div>
                                         <div class="cand-name">{{ $m->student->name ?? '-' }}</div>
+                                        <div class="cand-sub">
+                                            {{ $m->class->class_name }} · {{ $m->class->private_package_id ? 'Private' : ($m->class->programPackage?->program?->program_name ?? '-') }}@if ($m->class->level) · {{ $m->class->level->level_name }}@endif
+                                        </div>
                                         <div class="cand-sub">{{ $m->kind_label }}</div>
                                     </div>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="cand-name">{{ $m->class->class_name }}</div>
-                                <div class="cand-sub">
-                                    {{ $m->class->private_package_id ? 'Private' : ($m->class->programPackage?->program?->program_name ?? '-') }}@if ($m->class->level) · {{ $m->class->level->level_name }}@endif
                                 </div>
                             </td>
                             <td>{{ $m->teacher->name }}</td>
                             <td style="text-align: center; vertical-align: middle;">
                                 {{ $m->due->format('d M Y') }}
-                                <div class="cand-sub">{{ $m->due->copy()->locale('id')->translatedFormat('l') }}</div>
                             </td>
                             <td style="text-align: center; vertical-align: middle;">
                                 <span class="badge {{ $stateBadge }}">{{ $m->state }}</span>
@@ -336,7 +331,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="x-empty is-ok">
+                            <td colspan="7" class="x-empty is-ok">
                                 <i class="fa-solid fa-circle-check"></i>
                                 Semua progress report yang jatuh tempo sudah dikirim.
                             </td>
