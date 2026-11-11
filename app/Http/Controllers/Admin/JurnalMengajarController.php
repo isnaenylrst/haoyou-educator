@@ -124,6 +124,7 @@ class JurnalMengajarController extends Controller
             ->values();
 
         $this->attachReminders($missing);
+        $this->attachMeetings($missing);
 
         $stats['belum'] = $missing->count();
 
@@ -376,6 +377,39 @@ class JurnalMengajarController extends Controller
             $item->reminded_at =
                 $map[$item->teacher->user_id . '|' . $item->key]
                 ?? null;
+        }
+    }
+
+    /**
+     * Perkiraan nomor pertemuan untuk sesi yang jurnalnya belum diisi:
+     * nomor terakhir pada jurnal kelas tersebut sebelum tanggal sesi, + 1.
+     * Sesi tertunggak berikutnya di kelas yang sama bertambah satu lagi.
+     */
+    private function attachMeetings(Collection $items): void
+    {
+        if ($items->isEmpty()) {
+            return;
+        }
+
+        $journals = TeachingJournal::query()
+            ->whereIn('class_id', $items->map(fn ($i) => $i->class->id)->unique())
+            ->where('class_status', 'Conducted')
+            ->get(['class_id', 'session_date', 'meeting_number'])
+            ->groupBy('class_id');
+
+        $counters = [];
+
+        foreach ($items->sortBy(fn ($i) => $i->date->timestamp) as $item) {
+            $classId = $item->class->id;
+
+            $before = ($journals[$classId] ?? collect())
+                ->filter(fn ($j) => $j->session_date->lt($item->date));
+
+            $base = $before->max('meeting_number') ?? $before->count();
+
+            $counters[$classId] = max(($counters[$classId] ?? 0) + 1, $base + 1);
+
+            $item->meeting_number = $counters[$classId];
         }
     }
 

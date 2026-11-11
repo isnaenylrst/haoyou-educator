@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ClassModel;
 use App\Models\TeacherAvailability;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 
 class TeacherAvailabilityService
 {
@@ -248,5 +249,43 @@ class TeacherAvailabilityService
     private static function minutes(string $time): int
     {
         return ((int) substr($time, 0, 2)) * 60 + (int) substr($time, 3, 2);
+    }
+
+    /** Memilih ID guru yang cocok dengan seluruh jadwal mingguan kelas. */
+    public static function matchingTeacherIds(ClassModel $class): Collection
+    {
+        $class->loadMissing('schedules');
+
+        if ($class->schedules->isEmpty()) {
+            return collect();
+        }
+
+        return TeacherAvailability::with('teacher')->get()
+            ->filter(fn ($a) => $a->teacher !== null)
+            ->groupBy('teacher_id')
+            ->filter(fn ($slots, $teacherId) => self::coversClass($slots, $class)
+                && self::conflictWith((int) $teacherId, $class) === null)
+            ->keys()
+            ->values();
+    }
+
+    /**
+     * Tawarkan ke seluruh guru
+     */
+    public static function isOfferedTo(int $teacherId, ClassModel $class): bool
+    {
+        $class->loadMissing('schedules');
+
+        if ($class->schedules->isEmpty()) {
+            return false;
+        }
+
+        $mine = TeacherAvailability::where('teacher_id', $teacherId)->get();
+
+        if (self::coversClass($mine, $class) && self::conflictWith($teacherId, $class) === null) {
+            return true;
+        }
+
+        return self::matchingTeacherIds($class)->isEmpty();
     }
 }

@@ -3,18 +3,7 @@
 @section('title', 'Detail Guru | CRM')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
-    <style>
-        .avail-panel { background: #fafafa; border: 1px solid #eee; border-radius: 12px; padding: 14px 16px; }
-        .avail-empty { font-size: 13px; color: #888; }
-        .avail-row { display: flex; gap: 14px; align-items: flex-start; padding: 5px 0; }
-        .avail-day { width: 64px; flex: none; font-size: 13px; font-weight: 600; padding-top: 3px; }
-        .avail-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-        .avail-chip { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
-        .avail-chip.ok   { background: #f0fdf4; border-color: #bbf7d0; color: #16a34a; }
-        .avail-chip.busy { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
-        .avail-legend { display: flex; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e5e5e5; }
-    </style>
+    <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
 @endpush
 
 @section('content')
@@ -131,18 +120,24 @@
             <thead>
                 <tr>
                     <th>Judul</th>
-                    <th>Jenis</th>
-                    <th>Tanggal Upload</th>
+                    <th style="text-align: center; vertical-align: middle;">Jenis</th>
+                    <th style="text-align: center; vertical-align: middle;">Tanggal Upload</th>
                     <th width="130" style="text-align:center;">Aksi</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse ($documents as $doc)
                     <tr>
-                        <td>{{ $doc->title }}</td>
-                        <td>{{ $doc->document_type }}</td>
-                        <td>{{ $doc->created_at->format('d M Y') }}</td>
                         <td>
+                            {{ $doc->title }}
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;">
+                            {{ $doc->document_type }}
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;">
+                            {{ $doc->created_at->format('d M Y') }}
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;">
                             <div class="row-actions">
                                 <a href="{{ Storage::disk('public')->url($doc->file_path) }}" target="_blank" rel="noopener" class="icon-btn" title="Lihat">
                                     <i class="fa-solid fa-eye"></i>
@@ -183,17 +178,23 @@
                     <th>Tanggal Sesi</th>
                     <th>Kelas</th>
                     <th>Materi</th>
-                    <th>Status</th>
-                    <th>Catatan</th>
+                    <th style="text-align: center; vertical-align: middle;">Status</th>
+                    <th style="text-align: center; vertical-align: middle;">Catatan</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse ($teachingJournals as $journal)
                     <tr>
-                        <td>{{ \Carbon\Carbon::parse($journal->session_date)->format('d M Y') }}</td>
-                        <td>{{ $journal->class?->class_name ?? '-' }}</td>
-                        <td>{{ $journal->material?->title ?? '-' }}</td>
                         <td>
+                            {{ \Carbon\Carbon::parse($journal->session_date)->format('d M Y') }}
+                        </td>
+                        <td>
+                            {{ $journal->class?->class_name ?? '-' }}
+                        </td>
+                        <td>
+                            {{ $journal->material?->title ?? '-' }}
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;">
                             @php
                                 $jClass = match ($journal->class_status) {
                                     'Conducted'   => 'badge-completed',

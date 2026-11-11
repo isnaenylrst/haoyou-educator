@@ -19,7 +19,8 @@ use Illuminate\Database\Seeder;
  *  - Private Exclusive (paket max_students > 1): satu kelas berjalan per paket
  * Kelas private 1-on-1 tidak di-seed karena dibuat otomatis saat calon siswa dikonversi.
  *
- * Jadwal mingguan dibuat oleh ClassScheduleSeeder (jalankan setelah seeder ini).
+ * Jadwal mingguan dibuat oleh ClassScheduleSeeder (jalankan setelah seeder ini);
+ * pertemuan + jurnalnya dibuat oleh ClassSessionSeeder.
  * Aman dijalankan ulang: kelas dicari berdasarkan class_name.
  */
 class ClassSeeder extends Seeder
@@ -142,14 +143,21 @@ class ClassSeeder extends Seeder
      */
     private function createClass(array $identity, $package, int $teacherId, int $n, Carbon $today, bool $open): void
     {
-        // Kelas "Open" belum mulai; sisanya sudah berjalan 4-8 minggu
-        $start = $open
-            ? $today->copy()->addWeeks(2)
-            : $today->copy()->subWeeks(8 - ($n % 3) * 2);
-
         $months = max((int) ($package->duration_months ?: 1), 1);
 
-        ClassModel::firstOrCreate(
+        // Kelas "Open" belum mulai. Kelas "Running" dibuat sedang berjalan di tengah jalan
+        // (sekitar 25% / 40% / 60% pertemuan sudah lewat), supaya status Running sesuai
+        // dengan jumlah pertemuan yang sudah terjadi (rumus per-minggu sama dengan ClassScheduleSeeder).
+        $perWeek    = (int) max(1, min(3, round(((int) $package->total_meetings) / ($months * 4))));
+        $totalWeeks = (int) ceil(max((int) $package->total_meetings, 1) / $perWeek);
+        $elapsed    = max(1, (int) round($totalWeeks * [0.25, 0.4, 0.6][$n % 3]));
+
+        $start = $open
+            ? $today->copy()->addWeeks(2)
+            : $today->copy()->subWeeks($elapsed);
+
+        // unguarded: teacher_response dkk. tidak bergantung pada $fillable ClassModel
+        ClassModel::unguarded(fn () => ClassModel::firstOrCreate(
             ['class_name' => $identity['class_name']],
             [
                 'program_package_id' => $identity['program_package_id'],
@@ -161,7 +169,10 @@ class ClassSeeder extends Seeder
                 'end_date'           => $start->copy()->addMonths($months)->toDateString(),
                 'capacity'           => (int) ($package->max_students ?: 1),
                 'status'             => $open ? 'Open' : 'Running',
+                // Kelas Open: guru baru "diberi" kelas dan harus konfirmasi. Kelas Running: sudah diterima guru.
+                'teacher_response'     => $open ? 'Pending' : 'Accepted',
+                'teacher_responded_at' => $open ? null : $start->copy()->subDays(3),
             ]
-        );
+        ));
     }
 }
