@@ -3,116 +3,7 @@
 @section('title', 'Jadwal | Pembelajaran')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/admin/jadwal.css') }}">
-    <style>
-        /* Kontrol zoom kalender kelas */
-        .zoom-bar {
-            display: flex; align-items: center; justify-content: space-between;
-            gap: 12px; flex-wrap: wrap; padding: 0 0 12px;
-        }
-        .zoom-bar-title { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; }
-        .zoom-bar-title i { color: #2563eb; }
-        .zoom-controls { display: flex; align-items: center; gap: 6px; }
-        .zoom-btn {
-            min-width: 30px; height: 30px; padding: 0 9px; cursor: pointer;
-            border: 1px solid rgba(0, 0, 0, .15); border-radius: 8px;
-            background: transparent; color: inherit; font-size: 13px;
-        }
-        .zoom-btn:hover { background: rgba(0, 0, 0, .06); }
-        .zoom-btn:disabled { opacity: .35; cursor: not-allowed; }
-        .zoom-value { min-width: 52px; text-align: center; font-weight: 600; font-size: 13px; }
-        .zoom-hint { font-size: 12px; opacity: .6; margin-right: 6px; }
-
-        /* Card jadwal available guru (di bawah kalender kelas) */
-        .avail-card { margin-top: 20px; padding: 0; overflow: hidden; }
-        .avail-head {
-            display: flex; align-items: center; justify-content: space-between;
-            gap: 12px; flex-wrap: wrap;
-            padding: 14px 18px; border-bottom: 1px solid rgba(0, 0, 0, .08);
-        }
-        .avail-title { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; }
-        .avail-title i { color: #16a34a; }
-        .avail-sub { font-size: 12.5px; opacity: .7; margin-top: 2px; }
-        .avail-scroll { overflow-x: auto; }
-        .avail-table { width: 100%; border-collapse: collapse; min-width: 760px; }
-        .avail-table th, .avail-table td {
-            padding: 10px 14px; text-align: left; vertical-align: top;
-            border-bottom: 1px solid rgba(0, 0, 0, .06);
-            border-right: 1px solid rgba(0, 0, 0, .04);
-            font-size: 13px;
-        }
-        .avail-table th { font-weight: 600; font-size: 11px; background: rgba(0, 0, 0, .025); white-space: nowrap; }
-        .avail-table th small { display: block; font-weight: 400; opacity: .6; }
-        .avail-table th.is-today { color: #16a34a; }
-        .avail-table .avail-teacher { font-weight: 600; white-space: nowrap; min-width: 150px; font-size: 13px}
-        .avail-table tr:last-child td { border-bottom: 0; }
-        .avail-chip {
-            display: inline-block; margin: 0 4px 4px 0; padding: 4px 10px;
-            border-radius: 999px; font-size: 11px; white-space: nowrap;
-            background: rgba(34, 197, 94, .14); border: 1px solid rgba(34, 197, 94, .5);
-            color: #15803d;
-        }
-        .avail-empty { opacity: .35; }
-        .avail-none { padding: 28px 20px; text-align: center; opacity: .7; font-size: 13.5px; }
-
-        /* ===== Card jadwal kelas ===== */
-
-        /* Tinggi tiap slot 30 menit (card jadi lebih panjang). Ubah angkanya untuk
-           memanjang/memendekkan semua card sekaligus. */
-        .week-grid { --slot-h: 46px; }
-        .week-grid .wg-col,
-        .week-grid .wg-time-body { min-height: calc(var(--slot-count) * var(--slot-h)); }
-
-        /* Card pas dengan kotak grid: jarak 1px yang sama di keempat sisi */
-        .week-grid .sess {
-            box-sizing: border-box;
-            display: flex; flex-direction: column; justify-content: flex-start; gap: 2px;
-            padding: 5px 8px; overflow: hidden; border-radius: 8px;
-            border-left-width: 4px; border-left-style: solid;
-            line-height: 1.25;
-        }
-        .week-grid .sess .sess-title {
-            font-size: 12.5px; font-weight: 700;
-            display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
-            overflow: hidden; word-break: break-word;
-        }
-        .week-grid .sess .sess-meta {
-            font-size: 11.5px; margin: 0;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-        .week-grid .sess.is-short { justify-content: center; padding-top: 3px; padding-bottom: 3px; }
-        .week-grid .sess.is-short .sess-title { -webkit-line-clamp: 1; }
-        .week-grid .sess.is-short .sess-time { display: none; }
-
-        /* Warna berbeda tiap kelas (Daily Activity & HSK). Private tetap 1 warna. */
-        .week-grid .sess.is-class-color {
-            background: var(--c-bg); border-color: var(--c-bd); color: var(--c-tx);
-        }
-        .week-grid .sess.is-class-color .sess-meta { color: var(--c-tx); opacity: .8; }
-
-        /* Pertemuan terakhir kelas: merah */
-        .week-grid .sess.is-last-session {
-            background: #fee2e2; border-color: #dc2626; color: #7f1d1d;
-        }
-        .week-grid .sess.is-last-session .sess-meta { color: #7f1d1d; opacity: .85; }
-
-        .class-legend {
-            display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
-            padding: 0 0 12px; font-size: 12px;
-        }
-        .class-legend-label { font-weight: 600; opacity: .7; margin-right: 2px; }
-        .class-legend-chip {
-            display: inline-flex; align-items: center; gap: 6px;
-            padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600;
-            background: var(--c-bg); color: var(--c-tx); border: 1px solid var(--c-bd);
-        }
-        .class-legend-chip::before {
-            content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--c-bd);
-        }
-        .legend-dot.dot-last { background: #dc2626; }
-        #detail_meeting.is-last { color: #dc2626; }
-    </style>
+    <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
 @endpush
 
 @section('content')
@@ -138,6 +29,53 @@
             }
 
             return "--c-bg: hsl({$hue} 85% 90%); --c-bd: hsl({$hue} 60% 48%); --c-tx: hsl({$hue} 55% 17%);";
+        };
+
+        // Private diperlakukan seperti kategori lain: satu warna lewat variabel --c-*
+        $privateColor = '--c-bg: hsl(142 85% 90%); --c-bd: hsl(142 60% 40%); --c-tx: hsl(142 55% 17%);';
+        $isPrivateKind = fn ($kind) => in_array($kind, ['Private', 'Replacement'], true);
+
+        // Warna kustom per kelas (hex dari admin, mis. #f97316). Dipakai untuk kelas
+        // yang tidak masuk kategori supaya tidak abu-abu.
+        $customColor = function (?string $hex) {
+            if (! $hex || ! preg_match('/^#[0-9a-fA-F]{6}$/', $hex)) {
+                return null;
+            }
+
+            return "--c-bg: color-mix(in srgb, {$hex} 16%, #fff); --c-bd: {$hex}; --c-tx: color-mix(in srgb, {$hex} 30%, #000);";
+        };
+
+        // Kategori yang punya warna tetap (Maochong, Jianer, Hudie, dst.)
+        $hasHue = fn (?string $category) => $category
+            && isset(\App\Http\Controllers\Admin\JadwalController::CATEGORY_HUES[$category]);
+
+        // Warna otomatis untuk kelas di luar kategori: hue diturunkan dari nama kelas,
+        // jadi tiap kelas beda warna dan tetap sama setiap kali halaman dibuka.
+        $autoColor = function (array $session) {
+            $hue = crc32((string) ($session['class_name'] ?? $session['title'] ?? '')) % 360;
+
+            return "--c-bg: hsl({$hue} 85% 90%); --c-bd: hsl({$hue} 60% 48%); --c-tx: hsl({$hue} 55% 17%);";
+        };
+
+        // Kelas yang warnanya tidak berasal dari kategori maupun Private
+        $isOwnColor = fn (array $session) => $customColor($session['color'] ?? null)
+            || (! $isPrivateKind($session['kind'] ?? null) && ! $hasHue($session['category'] ?? null));
+
+        // Urutan prioritas: warna kustom (hex) > Private > kategori program > otomatis dari nama kelas
+        $sessionColor = function (array $session) use ($customColor, $categoryColor, $privateColor, $isPrivateKind, $hasHue, $autoColor) {
+            if ($custom = $customColor($session['color'] ?? null)) {
+                return $custom;
+            }
+
+            if ($isPrivateKind($session['kind'] ?? null)) {
+                return $privateColor;
+            }
+
+            if ($hasHue($session['category'] ?? null)) {
+                return $categoryColor($session['category']);
+            }
+
+            return $autoColor($session);
         };
 
         $hasTrials = collect($trials)->flatten(1)->isNotEmpty();
@@ -254,11 +192,6 @@
             {{-- LEGENDA --}}
             <div class="legend">
                 <span class="legend-item">
-                    <span class="legend-dot dot-private"></span>
-                    Private
-                </span>
-
-                <span class="legend-item">
                     <span class="legend-dot dot-trial"></span>
                     Trial
                 </span>
@@ -345,16 +278,32 @@
                 ['Lainnya']
             );
 
-            $legendCategories = collect($sessions)
-                ->flatten(1)
+            $allSessions = collect($sessions)->flatten(1);
+
+            $legendCategories = $allSessions
+                ->reject(fn ($item) => $isOwnColor($item) || $isPrivateKind($item['kind'] ?? null))
                 ->pluck('category')
                 ->filter()
                 ->unique()
                 ->sortBy(fn ($category) => array_search($category, $categoryOrder, true))
                 ->values();
+
+            $hasPrivate = $allSessions->contains(
+                fn ($item) => $isPrivateKind($item['kind'] ?? null) && ! $customColor($item['color'] ?? null)
+            );
+
+            // Kelas di luar kategori: satu chip per kelas dengan warnanya masing-masing
+            $customLegend = $allSessions
+                ->filter(fn ($item) => $isOwnColor($item))
+                ->unique(fn ($item) => $item['class_name'] ?? $item['title'])
+                ->map(fn ($item) => [
+                    'label' => $item['class_name'] ?? $item['title'],
+                    'style' => $customColor($item['color'] ?? null) ?? $autoColor($item),
+                ])
+                ->values();
         @endphp
 
-        @if ($legendCategories->isNotEmpty())
+        @if ($legendCategories->isNotEmpty() || $hasPrivate || $customLegend->isNotEmpty())
             <div class="class-legend">
                 <span class="class-legend-label">Warna kategori:</span>
 
@@ -364,8 +313,20 @@
                     </span>
                 @endforeach
 
+                @if ($hasPrivate)
+                    <span class="class-legend-chip" style="{{ $privateColor }}">
+                        Private
+                    </span>
+                @endif
+
+                @foreach ($customLegend as $custom)
+                    <span class="class-legend-chip" style="{{ $custom['style'] }}">
+                        {{ $custom['label'] }}
+                    </span>
+                @endforeach
+
                 <span class="class-legend-chip"
-                      style="--c-bg: #fee2e2; --c-bd: #dc2626; --c-tx: #7f1d1d;">
+                      style="--c-bg: #e5e7eb; --c-bd: #6b7280; --c-tx: #1f2937;">
                     Pertemuan terakhir
                 </span>
             </div>
@@ -473,9 +434,8 @@
                                     $width = 100 / $session['lanes'];
 
                                     $isLast = ! empty($session['is_last_session']);
-                                    $useClassColor = ! $isLast
-                                        && in_array($session['kind'], ['HSK', 'Daily Activity'], true)
-                                        && ! empty($session['category']);
+                                    $cardColor = $isLast ? null : $sessionColor($session);
+                                    $useClassColor = $cardColor !== null;
                                 @endphp
 
                                 <div class="sess
@@ -489,7 +449,7 @@
                                             height: calc({{ round($height, 3) }}% - 2px);
                                             left: calc({{ round($left, 3) }}% + 1px);
                                             width: calc({{ round($width, 3) }}% - 2px);
-                                            {{ $useClassColor ? $categoryColor($session['category']) : '' }}"
+                                            {{ $useClassColor ? $cardColor : '' }}"
                                      title="{{ $session['title'] }} · {{ $teacherLabel }} · {{ $session['start_time'] }}–{{ $session['end_time'] }}{{ $isLast ? ' · Pertemuan terakhir' : '' }}"
                                      data-session="{{ json_encode($session) }}"
                                      onclick="openSessionDetail(this)">

@@ -44,6 +44,11 @@ class KelasController extends Controller
 
     private const PAYMENT_METHODS = ['Transfer Bank', 'Cash', 'QRIS'];
 
+    /** Ruangan bawaan untuk saran di form kelas dan Ubah Jadwal (Online tidak termasuk). */
+    private const BASE_ROOMS = ['Beijing', 'Basement', 'Atas', 'Kaca'];
+
+    private $roomSuggestionCache = null;
+
     public function __construct(
         private ClassScheduleService $scheduleSvc,
         private ClassSessionService $sessionSvc,
@@ -234,21 +239,66 @@ class KelasController extends Controller
         ];
     }
 
-    /** Nama ruangan tidak baku: ambil dari yang pernah dipakai sebagai saran (boleh diketik bebas). */
+    /**
+     * Saran ruangan: ruangan bawaan + yang pernah diinput admin, tanpa dobel.
+     * "Kelas Atas", "kelas atas" dan "Atas" dianggap satu ruangan; yang dipakai
+     * ejaan bawaan (kalau ada), selain itu ejaan pertama yang ditemukan.
+     */
     private function roomSuggestions()
     {
-        return collect(['Kelas Kaca', 'Kelas Beijing', 'Kelas Feixiang', 'Kelas Atas'])
-            ->merge(
-                ClassSchedule::query()
-                    ->whereNotNull('room')
-                    ->where('room', '!=', '')
-                    ->where('room', '!=', 'Online')
-                    ->distinct()
-                    ->pluck('room')
-            )
-            ->unique()
-            ->sort()
+        if ($this->roomSuggestionCache !== null) {
+            return $this->roomSuggestionCache;
+        }
+
+        $unique = [];
+
+        foreach (self::BASE_ROOMS as $room) {
+            $unique[$this->roomKey($room)] = $room;
+        }
+
+        $entered = ClassSchedule::query()
+            ->whereNotNull('room')
+            ->where('room', '!=', '')
+            ->distinct()
+            ->pluck('room')
+            ->map(fn ($r) => trim((string) $r))
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE);
+
+        foreach ($entered as $room) {
+            $key = $this->roomKey($room);
+
+            if ($key === '' || $key === 'online' || isset($unique[$key])) {
+                continue;
+            }
+
+            $unique[$key] = $room;
+        }
+
+        return $this->roomSuggestionCache = collect(array_values($unique))
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
             ->values();
+    }
+
+    /** Kunci pembanding nama ruangan: huruf kecil, spasi dirapikan, awalan "Kelas " dibuang. */
+    private function roomKey(?string $room): string
+    {
+        $room = mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', (string) $room)));
+
+        return trim((string) preg_replace('/^kelas\s+/u', '', $room));
+    }
+
+    /** Samakan ejaan ruangan dengan yang sudah ada di daftar saran (mencegah ruangan dobel). */
+    private function canonicalRoom(?string $room): ?string
+    {
+        $room = trim((string) $room);
+
+        if ($room === '' || mb_strtolower($room) === 'online') {
+            return $room === '' ? null : 'Online';
+        }
+
+        $key = $this->roomKey($room);
+
+        return $this->roomSuggestions()->first(fn ($r) => $this->roomKey($r) === $key) ?? $room;
     }
 
     /* ============================================================
@@ -548,7 +598,7 @@ class KelasController extends Controller
         // ---- Ruangan mengikuti mode kelas ----
         $schedules = [];
         foreach ($data['schedules'] as $i => $row) {
-            $row['room'] = isset($row['room']) ? trim($row['room']) : null;
+            $row['room'] = isset($row['room']) ? $this->canonicalRoom($row['room']) : null;
 
             if ($data['delivery_mode'] === 'Online') {
                 $row['room'] = 'Online';
@@ -910,14 +960,30 @@ class KelasController extends Controller
         }
     }
 
-    /** Pertemuan kelas sebagai array: status, aksi yang boleh, dan pembayarannya. */
+    /** Pertemuan kelas sebagai array: status, aksi yang boleh, pembayaran, dan jurnal mengajar. */
     private function sessionList(ClassModel $kelas)
     {
-        return ClassSession::with(['schedule', 'teacher:id,name', 'journal:id,class_session_id', 'payments'])
+        $sessions = ClassSession::with(['schedule', 'teacher:id,name', 'journal', 'payments'])
             ->where('class_id', $kelas->id)
             ->orderBy('session_date')
             ->orderBy('start_time')
-            ->get()
+            ->get();
+
+        // Muat relasi jurnal hanya kalau relasinya memang ada di model TeachingJournal
+        $journals = $sessions->pluck('journal')->filter()->values();
+
+        if ($journals->isNotEmpty()) {
+            $rels = array_values(array_filter(
+                ['material', 'substituteTeacher'],
+                fn ($r) => method_exists($journals->first(), $r)
+            ));
+
+            if ($rels) {
+                (new \Illuminate\Database\Eloquent\Collection($journals->all()))->loadMissing($rels);
+            }
+        }
+
+        return $sessions
             ->map(fn (ClassSession $s) => [
                 'id'             => $s->id,
                 'number'         => $s->session_number,
@@ -936,6 +1002,12 @@ class KelasController extends Controller
                 'can_following'  => $s->kind === 'Regular' && (bool) $s->schedule?->isCurrent(),
                 'can_complete'   => $s->canBeCompleted(),
                 'can_home_visit' => $s->canBecomeHomeVisit(),
+
+                // Pertemuan yang sudah berlangsung: sudah ditandai selesai ATAU sudah punya jurnal
+                'started'        => $s->status === 'Completed' || $s->journal !== null,
+                'is_past'        => $s->session_date->lt(today()),
+                'journal'        => $s->journal ? $this->journalPayload($s) : null,
+
                 'payments'       => $s->payments->map(fn ($p) => [
                     'type'           => $p->payment_type,
                     'amount'         => (float) $p->amount_paid,
@@ -944,6 +1016,24 @@ class KelasController extends Controller
                 ])->values(),
             ])
             ->values();
+    }
+
+    /** Ringkasan jurnal mengajar untuk satu pertemuan (admin hanya melihat). */
+    private function journalPayload(ClassSession $s): array
+    {
+        $j = $s->journal;
+
+        return [
+            'id'         => $j->id,
+            'status'     => $j->class_status,
+            'material'   => method_exists($j, 'material') ? $j->material?->title : null,
+            'substitute' => method_exists($j, 'substituteTeacher') ? $j->substituteTeacher?->name : null,
+            'teacher'    => $s->teacher?->name,
+            'activities' => $j->learning_activities,
+            'problems'   => $j->problems,
+            'solutions'  => $j->solutions,
+            'results'    => $j->results,
+        ];
     }
 
     /** Daftar pertemuan kelas (JSON). */
@@ -1026,6 +1116,10 @@ class KelasController extends Controller
                 ->startOfWeek(Carbon::MONDAY)
                 ->addDays($dayIndex)
                 ->toDateString();
+        }
+
+        if (isset($data['room'])) {
+            $data['room'] = $this->canonicalRoom($data['room']);
         }
 
         $reschedule = Arr::only($data, [

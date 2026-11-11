@@ -3,7 +3,7 @@
 @section('title', 'Tambah Kelas | Akademik')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
 @endpush
 
 @section('content')
@@ -276,11 +276,23 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+// "Kelas Atas", "kelas atas" dan "Atas" dianggap satu ruangan
+function normRoom(r) {
+    return String(r ?? '').toLowerCase().replace(/\s+/g, ' ').trim().replace(/^kelas\s+/, '');
+}
+
+function canonicalRoom(r) {
+    const key = normRoom(r);
+    return ROOM_OPTIONS.find(o => normRoom(o) === key) || r;
+}
+
 function roomOptionsHtml(selected) {
     const list = [...ROOM_OPTIONS];
 
-    if (selected && selected !== 'Online' && !list.includes(selected)) {
-        list.push(selected);
+    if (selected && selected !== 'Online') {
+        selected = canonicalRoom(selected);
+
+        if (!list.includes(selected)) list.push(selected);
     }
 
     return '<option value="">Pilih ruangan</option>' + list.map(r =>
@@ -293,7 +305,7 @@ function addRoomOption(btn) {
     if (!name) return;
 
     const existing = ROOM_OPTIONS.find(
-        r => r.toLowerCase() === name.toLowerCase()
+        r => normRoom(r) === normRoom(name)
     );
 
     const finalName = existing || name;

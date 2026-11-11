@@ -26,9 +26,16 @@ class JadwalController extends Controller
         'Active', 'Completed',
     ];
 
+    /**
+     * Ruangan bawaan (selalu tampil sebagai kolom). Ruangan lain yang diketik
+     * admin di form kelas otomatis ditambah sebagai kolom baru.
+     */
     private const ROOMS = [
         'Beijing', 'Basement', 'Atas', 'Kaca', 'Online',
     ];
+
+    /** Kolom untuk pertemuan yang ruangannya kosong (mis. Home Visit). */
+    private const OTHER_ROOM = 'Lainnya';
 
     private const SLOT_MINUTES = 30;
 
@@ -93,9 +100,13 @@ class JadwalController extends Controller
             : null;
 
         $roomFilter = $request->filled('room')
-            && in_array($request->room, self::ROOMS, true)
-                ? $request->room
-                : null;
+            ? trim((string) $request->room)
+            : null;
+
+        // "Kelas Kaca" dan "Kaca" dianggap ruangan yang sama saat memfilter
+        $roomFilterValues = $roomFilter
+            ? $this->roomVariants($roomFilter)
+            : null;
 
         /*
         |--------------------------------------------------------------------------
@@ -163,8 +174,8 @@ class JadwalController extends Controller
                 )
             )
             ->when(
-                $roomFilter,
-                fn ($q) => $q->where('room', $roomFilter)
+                $roomFilterValues,
+                fn ($q) => $q->whereIn('room', $roomFilterValues)
             )
             ->get();
 
@@ -235,8 +246,8 @@ class JadwalController extends Controller
                 )
             )
             ->when(
-                $roomFilter,
-                fn ($q) => $q->where('room', $roomFilter)
+                $roomFilterValues,
+                fn ($q) => $q->whereIn('room', $roomFilterValues)
             )
             ->orderBy('session_date')
             ->orderBy('start_time')
@@ -899,46 +910,58 @@ class JadwalController extends Controller
 
         $days = array_slice(self::DAY_ORDER, 0, $dayCount);
 
+        /*
+         * Kolom ruangan = ruangan bawaan + ruangan yang diketik admin saat
+         * membuat/mengedit kelas (class_schedules.room) + ruangan sesi minggu
+         * ini. Hanya pertemuan tanpa ruangan (mis. Home Visit) yang masuk
+         * ke kolom "Lainnya".
+         */
+        $knownRooms = $this->knownRooms($allItems->pluck('room_value'));
+
+        $roomIndex = [];
+
+        foreach ($knownRooms as $knownRoom) {
+            $roomIndex[$this->normalizeRoom($knownRoom)] = $knownRoom;
+        }
+
+        $roomKeyOf = fn (array $item) => $roomIndex[
+            $this->normalizeRoom($item['room_value'] ?? null)
+        ] ?? self::OTHER_ROOM;
+
+        $usedRooms = $allItems->map($roomKeyOf)->unique();
+        $hasBlankRoom = $usedRooms->contains(self::OTHER_ROOM);
+
         if ($roomFilter) {
-            $roomColumns = [$roomFilter];
+            $roomColumns = [
+                $roomIndex[$this->normalizeRoom($roomFilter)] ?? $roomFilter,
+            ];
         } elseif ($filteredClass && $allItems->isNotEmpty()) {
             $roomColumns = array_values(array_filter(
-                self::ROOMS,
-                fn ($room) => $allItems->contains('room', $room)
+                $knownRooms,
+                fn ($room) => $usedRooms->contains($room)
             ));
 
-            if ($allItems->contains(
-                fn ($item) => ! in_array($item['room'], self::ROOMS, true)
-            )) {
-                $roomColumns[] = 'Lainnya';
+            if ($hasBlankRoom) {
+                $roomColumns[] = self::OTHER_ROOM;
             }
         } else {
-            $hasOtherRoom = $allItems->contains(
-                fn ($item) => ! in_array($item['room'], self::ROOMS, true)
-            );
-
-            $roomColumns = $hasOtherRoom
-                ? [...self::ROOMS, 'Lainnya']
-                : self::ROOMS;
+            $roomColumns = $hasBlankRoom
+                ? [...$knownRooms, self::OTHER_ROOM]
+                : $knownRooms;
         }
+
+        $roomColumns = $this->orderRoomColumns($roomColumns ?: [self::OTHER_ROOM]);
 
         $dayRooms = [];
 
         foreach ($days as $i => $dayName) {
             if ($filteredClass && ! $roomFilter) {
-                $used = collect($byDay[$i] ?? [])
-                    ->pluck('room')
-                    ->map(
-                        fn ($room) => in_array($room, self::ROOMS, true)
-                            ? $room
-                            : 'Lainnya'
-                    )
-                    ->unique();
+                $used = collect($byDay[$i] ?? [])->map($roomKeyOf)->unique();
 
-                $cols = array_values(array_filter(
-                    [...self::ROOMS, 'Lainnya'],
+                $cols = $this->orderRoomColumns(array_values(array_filter(
+                    [...$knownRooms, self::OTHER_ROOM],
                     fn ($room) => $used->contains($room)
-                ));
+                )));
 
                 $dayRooms[$dayName] = $cols ?: [''];
             } else {
@@ -956,9 +979,7 @@ class JadwalController extends Controller
             $perRoom = [];
 
             foreach ($byDay[$i] ?? [] as $item) {
-                $roomKey = in_array($item['room'], self::ROOMS, true)
-                    ? $item['room']
-                    : 'Lainnya';
+                $roomKey = $roomKeyOf($item);
 
                 if (! in_array($roomKey, $dayRooms[$dayName], true)) {
                     continue;
@@ -1068,7 +1089,7 @@ class JadwalController extends Controller
         $programs = Program::orderBy('id')
             ->get(['id', 'program_name']);
 
-        $roomOptions = self::ROOMS;
+        $roomOptions = $knownRooms;
 
         $classOptions = ClassModel::whereIn(
             'status',
@@ -1132,6 +1153,89 @@ class JadwalController extends Controller
         }
 
         return 'Lainnya';
+    }
+
+    /**
+     * Kunci pembanding nama ruangan: huruf kecil, spasi dirapikan, awalan
+     * "Kelas " dibuang. "Kelas Kaca", "kaca" dan "Kaca" jadi satu ruangan.
+     */
+    private function normalizeRoom(?string $room): string
+    {
+        $room = mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', (string) $room)));
+
+        return trim((string) preg_replace('/^kelas\s+/u', '', $room));
+    }
+
+    /**
+     * Daftar ruangan untuk kolom jadwal dan filter: ruangan bawaan, lalu
+     * ruangan lain yang diinput admin (kelas Open/Running) dan yang dipakai
+     * sesi minggu ini, sesuai ejaan yang diketik admin.
+     */
+    private function knownRooms(iterable $weekRooms): array
+    {
+        $rooms = [];
+
+        foreach (self::ROOMS as $room) {
+            $rooms[$this->normalizeRoom($room)] = $room;
+        }
+
+        $entered = ClassSchedule::query()
+            ->whereNotNull('room')
+            ->where('room', '!=', '')
+            ->whereHas('class', fn ($c) => $c->whereIn('status', ['Open', 'Running']))
+            ->distinct()
+            ->pluck('room');
+
+        $extra = [];
+
+        foreach ($entered->merge($weekRooms) as $room) {
+            $room = trim((string) $room);
+            $key = $this->normalizeRoom($room);
+
+            if ($key === '' || isset($rooms[$key]) || isset($extra[$key])) {
+                continue;
+            }
+
+            $extra[$key] = $room;
+        }
+
+        uasort($extra, 'strnatcasecmp');
+
+        return $this->orderRoomColumns(array_values($rooms + $extra));
+    }
+
+    /** Urutan kolom: ruangan biasa, lalu "Lainnya", dan "Online" selalu paling kanan. */
+    private function orderRoomColumns(array $columns): array
+    {
+        $isOnline = fn ($room) => $this->normalizeRoom($room) === 'online';
+
+        return array_values([
+            ...array_filter($columns, fn ($r) => ! $isOnline($r) && $r !== self::OTHER_ROOM),
+            ...array_filter($columns, fn ($r) => $r === self::OTHER_ROOM),
+            ...array_filter($columns, $isOnline),
+        ]);
+    }
+
+    /** Semua ejaan ruangan di database yang sama dengan $room (untuk filter). */
+    private function roomVariants(string $room): array
+    {
+        $key = $this->normalizeRoom($room);
+
+        $fromDb = ClassSchedule::query()
+            ->whereNotNull('room')->where('room', '!=', '')
+            ->distinct()->pluck('room')
+            ->merge(
+                ClassSession::query()
+                    ->whereNotNull('room')->where('room', '!=', '')
+                    ->distinct()->pluck('room')
+            );
+
+        return $fromDb
+            ->filter(fn ($r) => $this->normalizeRoom($r) === $key)
+            ->push($room)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /** "HH:MM[:SS]" -> menit sejak 00:00. */

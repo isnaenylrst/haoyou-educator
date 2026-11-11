@@ -3,18 +3,7 @@
 @section('title', 'Detail Guru | CRM')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
-    <style>
-        .avail-panel { background: #fafafa; border: 1px solid #eee; border-radius: 12px; padding: 14px 16px; }
-        .avail-empty { font-size: 13px; color: #888; }
-        .avail-row { display: flex; gap: 14px; align-items: flex-start; padding: 5px 0; }
-        .avail-day { width: 64px; flex: none; font-size: 13px; font-weight: 600; padding-top: 3px; }
-        .avail-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-        .avail-chip { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
-        .avail-chip.ok   { background: #f0fdf4; border-color: #bbf7d0; color: #16a34a; }
-        .avail-chip.busy { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
-        .avail-legend { display: flex; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e5e5e5; }
-    </style>
+    <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
 @endpush
 
 @section('content')

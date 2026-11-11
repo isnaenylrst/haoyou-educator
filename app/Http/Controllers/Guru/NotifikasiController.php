@@ -115,10 +115,10 @@ class NotifikasiController extends Controller
             ]);
         }
 
-        // ----- 3b. Jurnal belum diisi + perubahan jadwal pertemuan (info saja) -----
+        // ----- 3b. Jurnal belum diisi + progress report jatuh tempo + perubahan jadwal pertemuan (info saja) -----
         // Sumbernya TeacherNotificationService, sama dengan bell & dashboard,
         // jadi angka di lonceng dan daftar di halaman ini selalu cocok.
-        foreach (TeacherNotificationService::for($teacher)->all()->whereIn('type', ['journal_missing', 'schedule_changed']) as $item) {
+        foreach (TeacherNotificationService::for($teacher)->all()->whereIn('type', ['journal_missing', 'schedule_changed', 'progress_due']) as $item) {
             $notifications->push($item);
         }
 

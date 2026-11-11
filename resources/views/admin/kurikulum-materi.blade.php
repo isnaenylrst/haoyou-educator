@@ -3,8 +3,7 @@
 @section('title', 'Kurikulum & Materi | Akademik')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/admin/admin-extra.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
 @endpush
 
 @section('content')

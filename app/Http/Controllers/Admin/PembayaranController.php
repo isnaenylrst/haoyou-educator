@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ClassEnrollment;
 use App\Models\Payment;
+use App\Models\ProgramCategory;
 use App\Services\PaymentInstallmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -18,6 +19,13 @@ class PembayaranController extends Controller
     private const STAGES = ['Termin 1', 'Termin 2', 'Termin 3', 'Pelunasan'];
 
     private const METHODS = ['Transfer Bank', 'Cash', 'QRIS'];
+
+    // Nilai filter "type" -> payments.payment_type untuk biaya tambahan.
+    // Di database saat ini: 'Package' dan 'Replacement' ('Home Visit' belum ada barisnya).
+    private const EXTRA_TYPES = [
+        'kelas_pengganti' => Payment::TYPE_REPLACEMENT,
+        'home_visit'      => Payment::TYPE_HOME_VISIT,
+    ];
 
     // Sama dengan PaymentInstallmentService::totalBillFor():
     // harga paket (termin: installment_price x lama paket) + pendaftaran + aktivitas - diskon, minimal 0.
@@ -34,6 +42,7 @@ class PembayaranController extends Controller
         + class_enrollments.activity_fee
         - class_enrollments.discount, 0)';
 
+    // Hanya pembayaran paket yang mengurangi tagihan paket.
     private const PAID_SQL = 'COALESCE(
         (
             select sum(amount_paid)
@@ -43,6 +52,18 @@ class PembayaranController extends Controller
                 and payments.deleted_at is null
         ),
         0
+    )';
+
+    // Kategori enrollment: paket HSK punya category_id sendiri; paket Daily Activity category_id-nya null,
+    // jadi diambil dari level kelas yang diikuti. Enrollment "Waiting Class" (belum ada kelas) => NULL.
+    private const CATEGORY_SQL = 'COALESCE(
+        (select program_packages.category_id
+           from program_packages
+          where program_packages.id = class_enrollments.program_package_id),
+        (select program_levels.category_id
+           from classes
+           join program_levels on program_levels.id = classes.level_id
+          where classes.id = class_enrollments.class_id)
     )';
 
     public function __construct(private PaymentInstallmentService $payments)
@@ -56,44 +77,62 @@ class PembayaranController extends Controller
     {
         [$from, $to] = $this->resolveRange($request);
         $period = $this->describePeriod($from, $to);
+        [$type] = $this->parseType($request);
 
-        /* ---------- Tabel (ikut filter: cari, tipe, status bayar, rentang tanggal daftar) ---------- */
-        $enrollments = $this->scopedEnrollments($request, $from, $to)
-            ->select('class_enrollments.*')
-            ->selectRaw(self::BILL_SQL . ' as total_bill')
-            ->selectRaw(self::PAID_SQL . ' as total_paid')
-            ->with([
-                'student:id,name',
-                'programPackage',   // kolom harga dibutuhkan untuk menghitung pembayaran berikutnya
-                'privatePackage',
-                'packagePayments:id,enrollment_id,payment_stage',
-            ])
-            ->when($request->payment_status === 'lunas', fn ($q) => $q->whereRaw(self::PAID_SQL . ' >= ' . self::BILL_SQL))
-            ->when($request->payment_status === 'sebagian', fn ($q) => $q->whereRaw(
-                self::PAID_SQL . ' > 0 and ' . self::PAID_SQL . ' < ' . self::BILL_SQL
-            ))
-            ->when($request->payment_status === 'belum', fn ($q) => $q->whereRaw(self::PAID_SQL . ' = 0'))
-            // yang masih punya sisa tagihan tampil duluan
-            ->orderByRaw('(' . self::BILL_SQL . ' - ' . self::PAID_SQL . ' > 0) desc')
-            ->latest('id')
-            ->paginate(10)
-            ->withQueryString();
+        // Replacement / Home Visit hanya masuk akal sebagai daftar transaksi (satu baris per invoice)
+        $view = ($request->input('view') === 'transaksi' || isset(self::EXTRA_TYPES[$type]))
+            ? 'transaksi'
+            : 'tagihan';
 
-        // Pembayaran berikutnya menurut aturan DP / Lunas / Termin (null kalau sudah lunas)
-        $enrollments->getCollection()->each(function ($enrollment) {
-            $next = $this->payments->nextPayment($enrollment);
+        $enrollments  = null;
+        $transactions = null;
 
-            $enrollment->next_stage  = $next['stage'] ?? null;
-            $enrollment->next_amount = $next['amount'] ?? null;   // null = DP (nominal bebas)
-            $enrollment->next_min    = $next['min'] ?? null;
-            $enrollment->next_exact  = $next['exact'] ?? false;
-        });
+        if ($view === 'tagihan') {
+            /* ---------- Tabel tagihan per enrollment ---------- */
+            $enrollments = $this->scopedEnrollments($request, $from, $to)
+                ->select('class_enrollments.*')
+                ->selectRaw(self::BILL_SQL . ' as total_bill')
+                ->selectRaw(self::PAID_SQL . ' as total_paid')
+                ->selectRaw('(select category_name from program_categories where program_categories.id = '
+                    . self::CATEGORY_SQL . ') as category_name')
+                ->with([
+                    'student:id,name',
+                    'programPackage',   // kolom harga dibutuhkan untuk menghitung pembayaran berikutnya
+                    'privatePackage',
+                    'packagePayments:id,enrollment_id,payment_stage',
+                ])
+                ->when($request->payment_status === 'lunas', fn ($q) => $q->whereRaw(self::PAID_SQL . ' >= ' . self::BILL_SQL))
+                ->when($request->payment_status === 'sebagian', fn ($q) => $q->whereRaw(
+                    self::PAID_SQL . ' > 0 and ' . self::PAID_SQL . ' < ' . self::BILL_SQL
+                ))
+                ->when($request->payment_status === 'belum', fn ($q) => $q->whereRaw(self::PAID_SQL . ' = 0'))
+                // yang masih punya sisa tagihan tampil duluan
+                ->orderByRaw('(' . self::BILL_SQL . ' - ' . self::PAID_SQL . ' > 0) desc')
+                ->latest('id')
+                ->paginate(10)
+                ->withQueryString();
+
+            // Pembayaran berikutnya menurut aturan DP / Lunas / Termin (null kalau sudah lunas)
+            $enrollments->getCollection()->each(function ($enrollment) {
+                $next = $this->payments->nextPayment($enrollment);
+
+                $enrollment->next_stage  = $next['stage'] ?? null;
+                $enrollment->next_amount = $next['amount'] ?? null;   // null = DP (nominal bebas)
+                $enrollment->next_min    = $next['min'] ?? null;
+                $enrollment->next_exact  = $next['exact'] ?? false;
+            });
+        } else {
+            /* ---------- Tabel transaksi (semua jenis pembayaran) ---------- */
+            $transactions = $this->transactionsQuery($request, $from, $to)
+                ->paginate(10)
+                ->withQueryString();
+        }
 
         /* ---------- Kartu statistik ----------
-           Tanpa filter tanggal dari pengguna, rentangnya otomatis bulan ini (lihat resolveRange),
-           jadi kartu menghitung per bulan. Begitu rentang kalender diubah, semua kartu ikut.
-           Filter cari nama dan tipe juga berlaku; filter "status bayar" tidak, karena
-           kartunya sendiri sudah memecah per status. */
+           Tagihan: enrollment yang daftar di rentang, ATAU ada pembayaran di rentang,
+           ATAU masih punya sisa tagihan (utang tidak hilang saat ganti bulan).
+           Terkumpul: semua jenis pembayaran (paket + biaya tambahan) menurut tanggal bayar,
+           mengikuti filter cari dan jenis. */
         $rows = $this->scopedEnrollments($request, $from, $to)
             ->select('class_enrollments.id', 'class_enrollments.student_id')
             ->selectRaw(self::BILL_SQL . ' as total_bill')
@@ -102,35 +141,22 @@ class PembayaranController extends Controller
 
         $unpaidRows = $rows->filter(fn ($e) => $e->total_bill - $e->total_paid > 0);
 
-        $paidCount    = $rows->filter(fn ($e) => $e->total_bill > 0 && $e->total_bill - $e->total_paid <= 0)->count();
-        $outstanding  = $unpaidRows->sum(fn ($e) => $e->total_bill - $e->total_paid);
-        $unpaidCount  = $unpaidRows->pluck('student_id')->unique()->count();
+        $paidCount   = $rows->filter(fn ($e) => $e->total_bill > 0 && $e->total_bill - $e->total_paid <= 0)->count();
+        $outstanding = $unpaidRows->sum(fn ($e) => $e->total_bill - $e->total_paid);
+        $unpaidCount = $unpaidRows->pluck('student_id')->unique()->count();
 
-        $collected = Payment::query()
-            ->whereHas('enrollment', function ($q) use ($request) {
-                $q->where('status', '!=', 'Cancelled');
-                $this->applyEnrollmentFilters($q, $request);
-            })
-            ->when(
-                $from,
-                fn ($q) => $q->whereDate(
-                    'payment_date',
-                    '>=',
-                    $from->toDateString()
-                )
-            )
-            ->when(
-                $to,
-                fn ($q) => $q->whereDate(
-                    'payment_date',
-                    '<=',
-                    $to->toDateString()
-                )
-            )
+        $collected = $this->transactionsQuery($request, $from, $to)
+            ->reorder()
             ->sum('amount_paid');
 
         return view('admin.pembayaran', [
+            'view'         => $view,
             'enrollments'  => $enrollments,
+            'transactions' => $transactions,
+            'categories'   => ProgramCategory::with('program:id,program_name')
+                                ->orderBy('program_id')
+                                ->orderBy('id')
+                                ->get(['id', 'program_id', 'category_name']),
             'period'       => $period,
             'from'         => $from?->toDateString(),
             'to'           => $to?->toDateString(),
@@ -233,7 +259,7 @@ class PembayaranController extends Controller
         }
 
         return redirect()
-            ->route('admin.pembayaran', $request->only(['search', 'type', 'payment_status', 'page']))
+            ->route('admin.pembayaran', $request->only(['search', 'type', 'payment_status', 'view', 'from', 'to', 'page']))
             ->with('success', 'Pembayaran berhasil dicatat.');
     }
 
@@ -241,28 +267,90 @@ class PembayaranController extends Controller
        Filter & rentang tanggal
     ============================================================ */
 
-    /** Enrollment aktif + filter cari, tipe, dan rentang tanggal daftar. */
+    /**
+     * Enrollment aktif + filter cari & jenis, dan salah satu dari:
+     *  (a) daftar di rentang, (b) ada pembayaran di rentang, (c) masih punya sisa tagihan.
+     */
     private function scopedEnrollments(Request $request, ?Carbon $from, ?Carbon $to)
     {
         $query = ClassEnrollment::query()->where('status', '!=', 'Cancelled');
 
         $this->applyEnrollmentFilters($query, $request);
 
-        return $query
-            ->when($from, fn ($q) => $q->whereDate('class_enrollments.enrollment_date', '>=', $from->toDateString()))
-            ->when($to, fn ($q) => $q->whereDate('class_enrollments.enrollment_date', '<=', $to->toDateString()));
+        return $query->where(function ($w) use ($from, $to) {
+            $w->where(function ($q) use ($from, $to) {
+                $q->when($from, fn ($x) => $x->whereDate('class_enrollments.enrollment_date', '>=', $from->toDateString()))
+                  ->when($to, fn ($x) => $x->whereDate('class_enrollments.enrollment_date', '<=', $to->toDateString()));
+            })
+            ->orWhereHas('payments', function ($p) use ($from, $to) {
+                $p->when($from, fn ($x) => $x->whereDate('payment_date', '>=', $from->toDateString()))
+                  ->when($to, fn ($x) => $x->whereDate('payment_date', '<=', $to->toDateString()));
+            })
+            ->orWhereRaw(self::BILL_SQL . ' - ' . self::PAID_SQL . ' > 0');
+        });
     }
 
-    /** Filter cari nama siswa dan tipe paket (dipakai tabel, kartu tagihan, dan kartu terkumpul). */
+    /** Filter cari nama siswa + jenis paket (reguler / kategori tertentu / private). */
     private function applyEnrollmentFilters($query, Request $request): void
     {
+        [$type, $categoryId] = $this->parseType($request);
+
         $query
             ->when($request->filled('search'), fn ($q) => $q->whereHas(
                 'student',
                 fn ($s) => $s->where('name', 'like', '%' . $request->search . '%')
             ))
-            ->when($request->type === 'Reguler', fn ($q) => $q->whereNotNull('program_package_id'))
-            ->when($request->type === 'Private', fn ($q) => $q->whereNotNull('private_package_id'));
+            ->when($type === 'reguler', fn ($q) => $q->whereNotNull('program_package_id'))
+            ->when($type === 'private', fn ($q) => $q->whereNotNull('private_package_id'))
+            ->when($categoryId, fn ($q) => $q
+                ->whereNotNull('program_package_id')
+                ->whereRaw(self::CATEGORY_SQL . ' = ?', [$categoryId]));
+    }
+
+    /**
+     * Nilai ?type= : '' | reguler | kategori:ID | private | kelas_pengganti | home_visit
+     *
+     * @return array{0: string, 1: ?int}  [jenis, id kategori]
+     */
+    private function parseType(Request $request): array
+    {
+        $t = (string) $request->input('type', '');
+
+        if (str_starts_with($t, 'kategori:')) {
+            $id = (int) substr($t, strlen('kategori:'));
+
+            return ['reguler', $id > 0 ? $id : null];
+        }
+
+        return [$t, null];
+    }
+
+    /**
+     * Satu baris per pembayaran (semua jenis: Package, Replacement, Home Visit),
+     * ikut filter cari, jenis, dan rentang tanggal bayar.
+     */
+    private function transactionsQuery(Request $request, ?Carbon $from, ?Carbon $to)
+    {
+        [$type, $categoryId] = $this->parseType($request);
+
+        return Payment::query()
+            ->with(['enrollment.student:id,name', 'enrollment.programPackage', 'enrollment.privatePackage'])
+            ->whereHas('enrollment', function ($q) use ($request) {
+                $q->where('status', '!=', 'Cancelled');
+                $this->applyEnrollmentFilters($q, $request);
+            })
+            ->when(
+                isset(self::EXTRA_TYPES[$type]),
+                fn ($q) => $q->where('payment_type', self::EXTRA_TYPES[$type])
+            )
+            ->when(
+                in_array($type, ['reguler', 'private'], true) || $categoryId !== null,
+                fn ($q) => $q->where('payment_type', Payment::TYPE_PACKAGE)
+            )
+            ->when($from, fn ($q) => $q->whereDate('payment_date', '>=', $from->toDateString()))
+            ->when($to, fn ($q) => $q->whereDate('payment_date', '<=', $to->toDateString()))
+            ->orderByDesc('payment_date')
+            ->orderByDesc('id');
     }
 
     /**

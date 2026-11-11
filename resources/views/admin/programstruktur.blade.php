@@ -3,7 +3,7 @@
 @section('title', 'Struktur Program | Program & Level')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/admin/programlevel.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
 @endpush
 
 @section('content')

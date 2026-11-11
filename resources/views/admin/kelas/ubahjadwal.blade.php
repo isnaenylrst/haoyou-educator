@@ -3,7 +3,7 @@
 @section('title', 'Ubah Jadwal | Akademik')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
 @endpush
 
 @section('content')
@@ -56,7 +56,7 @@
             <div class="uj-placeholder" id="rs_placeholder">
                 <i class="fa-solid fa-clock-rotate-left"></i>
                 Belum ada pertemuan yang dipilih.<br>
-                Klik "Ubah Jadwal" pada salah satu pertemuan di daftar.
+                Klik "Ubah Jadwal" pada pertemuan yang belum berlangsung,<br>atau "Detail Jurnal" pada pertemuan yang sudah berlangsung.
             </div>
 
             <div id="rs_form" style="display:none;">
@@ -188,6 +188,51 @@
                     </button>
                 </div>
             </div>
+
+            {{-- ===== Detail Jurnal Mengajar (pertemuan yang sudah berlangsung, hanya lihat) ===== --}}
+            <div id="jr_view" style="display:none;">
+                <h2>Jurnal Mengajar</h2>
+                <p class="uj-sub" id="jr_info">-</p>
+
+                <div class="form-grid">
+                    <div class="form-field full">
+                        <label>Status Pertemuan</label>
+                        <div id="jr_status">-</div>
+                    </div>
+                    <div class="form-field full">
+                        <label>Guru</label>
+                        <div id="jr_teacher">-</div>
+                    </div>
+                    <div class="form-field full" id="jr_sub_wrap" style="display:none;">
+                        <label>Guru Pengganti</label>
+                        <div id="jr_sub">-</div>
+                    </div>
+                    <div class="form-field full" id="jr_material_wrap" style="display:none;">
+                        <label>Materi</label>
+                        <div id="jr_material">-</div>
+                    </div>
+                    <div class="form-field full">
+                        <label>Kegiatan Belajar</label>
+                        <div id="jr_activities" style="white-space:pre-line;">-</div>
+                    </div>
+                    <div class="form-field full">
+                        <label>Kendala</label>
+                        <div id="jr_problems" style="white-space:pre-line;">-</div>
+                    </div>
+                    <div class="form-field full">
+                        <label>Solusi</label>
+                        <div id="jr_solutions" style="white-space:pre-line;">-</div>
+                    </div>
+                    <div class="form-field full">
+                        <label>Hasil</label>
+                        <div id="jr_results" style="white-space:pre-line;">-</div>
+                    </div>
+                </div>
+
+                <div class="uj-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeJournal()">Tutup</button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -204,6 +249,17 @@
     const DAY_ORDER     = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
     const SESSION_STATUS_LABEL = { Scheduled: 'Terjadwal', Completed: 'Selesai', Cancelled: 'Dibatalkan' };
     const SESSION_STATUS_BADGE = { Scheduled: 'badge-cold', Completed: 'badge-completed', Cancelled: 'badge-cancelled' };
+    const JOURNAL_STATUS_LABEL = { Conducted: 'Terlaksana', Cancelled: 'Dibatalkan', Rescheduled: 'Dijadwal ulang' };
+
+    // "Kelas Atas", "kelas atas" dan "Atas" dianggap satu ruangan
+    function normRoom(r) {
+        return String(r ?? '').toLowerCase().replace(/\s+/g, ' ').trim().replace(/^kelas\s+/, '');
+    }
+
+    function canonicalRoom(r) {
+        const key = normRoom(r);
+        return ROOM_OPTIONS.find(o => normRoom(o) === key) || r || '';
+    }
 
     const sesData = {};
     SESSIONS.forEach(s => { sesData[s.id] = s; });
@@ -242,8 +298,20 @@
             ? `<div class="ses-changed">Semula ${formatDateId(s.original_date)}${s.change_reason ? ' — ' + escapeHtml(s.change_reason) : ''}</div>`
             : '';
 
-        const action = s.can_reschedule
-            ? `<button type="button" class="btn btn-primary btn-sm" onclick="selectSession(${s.id})">Ubah Jadwal</button>`
+        // Sudah berlangsung -> lihat jurnal mengajar; belum -> boleh diubah jadwalnya
+        let action = '';
+        if (s.started) {
+            action = s.journal
+                ? `<button type="button" class="btn btn-secondary btn-sm" onclick="showJournal(${s.id})">
+                       <i class="fa-solid fa-book-open"></i> Detail Jurnal
+                   </button>`
+                : '';
+        } else if (s.can_reschedule) {
+            action = `<button type="button" class="btn btn-primary btn-sm" onclick="selectSession(${s.id})">Ubah Jadwal</button>`;
+        }
+
+        const noJournal = (! s.journal && s.is_past && s.status === 'Scheduled')
+            ? '<span class="badge badge-pending">Jurnal belum diisi</span>'
             : '';
 
         const invoices = (s.payments || []).map(p =>
@@ -258,6 +326,7 @@
                 ${changed}
             </div>
             <div class="ses-actions">
+                ${noJournal}
                 <span class="badge ${SESSION_STATUS_BADGE[s.status] || 'badge-pending'}">${escapeHtml(status)}</span>
                 ${invoices}
                 ${action}
@@ -273,12 +342,53 @@
     })();
 
     /* ============================================================
+       DETAIL JURNAL MENGAJAR (pertemuan yang sudah berlangsung, hanya lihat)
+    ============================================================ */
+    function showJournal(sessionId) {
+        const s = sesData[sessionId];
+        if (! s || ! s.journal) return;
+        const j = s.journal;
+
+        rsSession = null;
+        document.querySelectorAll('#ses_list .ms-item').forEach(el => el.classList.remove('is-selected'));
+        document.getElementById('ses_item_' + s.id)?.classList.add('is-selected');
+
+        const setText = (id, v) => { document.getElementById(id).textContent = v || '-'; };
+
+        setText('jr_info', `Pertemuan ke-${s.number ?? '-'} — ${s.date_label}, ${s.start}–${s.end}`);
+        setText('jr_status', JOURNAL_STATUS_LABEL[j.status] || j.status);
+        setText('jr_teacher', j.teacher || s.teacher);
+        setText('jr_activities', j.activities);
+        setText('jr_problems', j.problems);
+        setText('jr_solutions', j.solutions);
+        setText('jr_results', j.results);
+
+        setText('jr_sub', j.substitute);
+        document.getElementById('jr_sub_wrap').style.display = j.substitute ? '' : 'none';
+
+        setText('jr_material', j.material);
+        document.getElementById('jr_material_wrap').style.display = j.material ? '' : 'none';
+
+        document.getElementById('rs_placeholder').style.display = 'none';
+        document.getElementById('rs_form').style.display = 'none';
+        document.getElementById('jr_view').style.display = '';
+        document.getElementById('rescheduleCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function closeJournal() {
+        document.querySelectorAll('#ses_list .ms-item').forEach(el => el.classList.remove('is-selected'));
+        document.getElementById('jr_view').style.display = 'none';
+        document.getElementById('rs_placeholder').style.display = '';
+    }
+
+    /* ============================================================
        FORM UBAH JADWAL
     ============================================================ */
     function selectSession(sessionId) {
         const s = sesData[sessionId];
         if (! s) return;
         rsSession = s;
+        document.getElementById('jr_view').style.display = 'none';
 
         document.querySelectorAll('#ses_list .ms-item').forEach(el => el.classList.remove('is-selected'));
         document.getElementById('ses_item_' + s.id)?.classList.add('is-selected');
@@ -303,7 +413,7 @@
         // Ruangan hanya relevan untuk pertemuan offline (Studio)
         const isStudio = s.location_type === 'Studio';
         document.getElementById('rs_room_field').style.display = isStudio ? '' : 'none';
-        document.getElementById('rs_room').value = isStudio ? (s.room || '') : '';
+        document.getElementById('rs_room').value = isStudio ? canonicalRoom(s.room) : '';
         document.getElementById('rs_room_list').innerHTML = ROOM_OPTIONS
             .map(r => `<option value="${attrEscape(r)}"></option>`).join('');
 
@@ -467,7 +577,7 @@
             form.append('payment_method', document.getElementById('rs_pay_method').value);
             form.append('proof', proof);
         } else if (s.location_type === 'Studio') {
-            form.append('room', document.getElementById('rs_room').value.trim());
+            form.append('room', canonicalRoom(document.getElementById('rs_room').value.trim()));
         }
 
         const btn = document.getElementById('rs_submit');

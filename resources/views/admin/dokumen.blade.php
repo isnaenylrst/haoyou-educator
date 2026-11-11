@@ -3,8 +3,7 @@
 @section('title', 'Dokumen | Laporan')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/admin/admin-extra.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
     <style>
         .x-flist { display: flex; flex-direction: column; gap: 12px; }
         .x-frow {

@@ -14,6 +14,9 @@ use App\Models\Teacher;
 use App\Models\TeacherLeave;
 use App\Models\TeacherMaterial;
 use App\Models\TeachingJournal;
+use App\Notifications\JurnalMengajarReminder;
+use App\Notifications\ProgressReportReminder;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -52,7 +55,7 @@ class TeacherNotificationService
                      'report_approved', 'report_returned', 'certificate_approved', 'certificate_rejected', 'leave_result'],
         'surat' => ['document', 'sop_new'],
         'konsultasi' => ['consultation', 'consultation_pending', 'consultation_cancelled'],
-        'tugas' => ['task', 'task_done', 'class_assign', 'replacement_request', 'replacement_offer', 'home_visit', 'journal_missing', 'schedule_changed'],
+        'tugas' => ['task', 'task_done', 'class_assign', 'replacement_request', 'replacement_offer', 'home_visit', 'journal_missing', 'schedule_changed', 'progress_due'],
     ];
 
     private ?Collection $cache = null;
@@ -109,6 +112,7 @@ class TeacherNotificationService
             ['type' => 'task',                 'label' => 'Tugas dari Kurikulum',          'hint' => 'Tandai selesai di halaman Notifikasi', 'url' => route('teacher.notifikasi')],
             ['type' => 'report_returned',      'label' => 'Progress report dikembalikan',  'hint' => 'Perbaiki lalu ajukan ulang',           'url' => route('teacher.progress-report')],
             ['type' => 'journal_revision',     'label' => 'Jurnal perlu revisi',           'hint' => 'Dikembalikan Kurikulum',               'url' => route('teacher.teaching-log')],
+            ['type' => 'progress_due',         'label' => 'Progress report belum diisi',   'hint' => 'Isi sebelum batas H+3',               'url' => route('teacher.progress-report')],
             ['type' => 'journal_missing',      'label' => 'Jurnal mengajar belum diisi',   'hint' => 'Lihat sesi yang belum diisi',         'url' => route('teacher.notifikasi')],
             ['type' => 'material_rejected',    'label' => 'LP / PPT perlu direvisi',       'hint' => 'Upload ulang di menu Kelas',           'url' => route('teacher.kelas')],
             ['type' => 'certificate_rejected', 'label' => 'Sertifikat ditolak',            'hint' => 'Perbaiki di menu Sertifikat',          'url' => route('teacher.sertifikat')],
@@ -265,18 +269,63 @@ class TeacherNotificationService
                 ])->all()
         );
 
+        $journalReminders = $this->reminderTimes(JurnalMengajarReminder::class, $t->user_id);
+
         foreach ($missing as $m) {
-            $date = Carbon::parse($m['date']);
+            $date       = Carbon::parse($m['date']);
+            $remindedAt = $journalReminders[$m['key']] ?? null;
 
             $push([
                 'key' => "jmiss-{$m['key']}", 'type' => 'journal_missing',
                 'title' => "Jurnal kelas {$m['class_name']} belum diisi: "
                          . $date->translatedFormat('l, d M Y') . ", {$m['start']}–{$m['end']}",
-                'category' => 'Jurnal Mengajar Belum Diisi', 'time' => $date,
-                'note' => 'Isi jurnal dan absensi sesi ini.',
+                'category' => 'Jurnal Mengajar Belum Diisi', 'time' => $remindedAt ?? $date,
+                'note' => 'Isi jurnal dan absensi sesi ini.'
+                    . ($remindedAt ? "\nDiingatkan admin " . $remindedAt->locale('id')->diffForHumans() . '.' : ''),
                 'actionable' => true,
                 // sama seperti tautan "Perbaiki Jurnal": halaman Jurnal & Absensi dengan tanggal sesi
                 'action' => ['kind' => 'link', 'label' => 'Isi Jurnal', 'url' => route('teacher.attendance', ['date' => $m['date']])],
+            ]);
+        }
+
+        // 3c. Progress report jatuh tempo tapi belum dibuat / masih draft: tiap 3 bulan sejak siswa masuk kelas,
+        //     atau di pertemuan terakhir kalau kelas kurang dari 3 bulan (MissingProgressReportFinder, sama dengan
+        //     tab "Belum Diisi" di admin). Yang dikembalikan Kurikulum sudah punya notifikasi sendiri (blok 4),
+        //     jadi tidak diulang. Cache 60 detik per guru karena bell dipanggil di tiap halaman.
+        $dueReports = Cache::remember("teacher-{$t->id}-progress-due", 60, fn () =>
+            app(MissingProgressReportFinder::class)
+                ->find(today(), $t->id)
+                ->reject(fn ($i) => $i->state === 'Dikembalikan')
+                ->map(fn ($i) => [
+                    'key'           => $i->key,
+                    'enrollment_id' => $i->enrollment->id,
+                    'student'       => $i->student->name ?? '-',
+                    'class_name'    => $i->class->class_name ?? '-',
+                    'state'         => $i->state,
+                    'kind'          => $i->kind_label,
+                    'due'           => $i->due->toDateString(),
+                    'overdue'       => $i->overdue,
+                ])->values()->all()
+        );
+
+        $reportReminders = $this->reminderTimes(ProgressReportReminder::class, $t->user_id);
+
+        foreach ($dueReports as $d) {
+            $due        = Carbon::parse($d['due']);
+            $remindedAt = $reportReminders[$d['key']] ?? null;
+
+            $push([
+                'key' => "prdue-{$d['key']}", 'type' => 'progress_due',
+                'title' => $d['state'] === 'Draft'
+                    ? "Progress report {$d['student']} masih draft, belum dikirim ke Kurikulum"
+                    : "Progress report {$d['student']} ({$d['class_name']}) belum dibuat",
+                'category' => 'Progress Report Belum Diisi', 'time' => $remindedAt ?? $due,
+                'note' => "{$d['kind']} · jatuh tempo " . $due->translatedFormat('d M Y')
+                    . ($d['overdue'] ? ' · SUDAH LEWAT BATAS H+' . ProgressReportService::GRACE_DAYS : '')
+                    . ($remindedAt ? "\nDiingatkan admin " . $remindedAt->locale('id')->diffForHumans() . '.' : ''),
+                'actionable' => true,
+                'action' => ['kind' => 'link', 'label' => 'Isi Progress Report',
+                    'url' => route('teacher.progress-report.form', $d['enrollment_id'])],
             ]);
         }
 
@@ -565,5 +614,35 @@ class TeacherNotificationService
             }
             return ($b['time']?->timestamp ?? 0) <=> ($a['time']?->timestamp ?? 0);
         })->values();
+    }
+
+    /**
+     * key => waktu pengingat terakhir dari admin untuk guru ini (notifikasi database).
+     * Dipakai supaya pengingat admin terlihat di sisi laoshi: waktu notifikasi maju ke waktu pengingat
+     * (jadi muncul sebagai "Baru") dan catatannya menyebut "Diingatkan admin ...".
+     *
+     * @return array<string, \Illuminate\Support\Carbon>
+     */
+    private function reminderTimes(string $notificationClass, ?int $userId): array
+    {
+        if (! $userId) {
+            return [];
+        }
+
+        $map = [];
+
+        DatabaseNotification::query()
+            ->where('type', $notificationClass)
+            ->where('notifiable_id', $userId)
+            ->where('created_at', '>=', now()->subDays(90))
+            ->orderBy('created_at')
+            ->get()
+            ->each(function ($notification) use (&$map) {
+                foreach (($notification->data['keys'] ?? []) as $key) {
+                    $map[$key] = $notification->created_at;
+                }
+            });
+
+        return $map;
     }
 }

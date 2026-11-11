@@ -2582,3 +2582,1009 @@ a.icon-btn {
 input[type="date"].select-chip { font-variant-numeric: normal; }
 input[type="date"].select-chip::-webkit-datetime-edit,
 input[type="date"].select-chip::-webkit-datetime-edit-fields-wrapper { font-family: inherit; }
+
+.pkg-tabs {
+    display:flex; gap:4px; margin:24px 0 16px;
+    border-bottom:1px solid rgba(0,0,0,.08);
+}
+
+.pkg-tab {
+    display:inline-flex; align-items:center; gap:7px; padding:8px 14px;
+    background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-1px;
+    font:inherit; font-size:13px; font-weight:500; color:#8a8f98; cursor:pointer;
+    text-decoration:none; /* untuk tab berbentuk <a> */
+    transition:color .15s, border-color .15s;
+}
+.pkg-tab i { font-size:12px; }
+.pkg-tab:hover { color:#333; }
+
+.pkg-tab.active {
+    color:#111; font-weight:700;
+    border-bottom-color:#f5b800;
+}
+
+.pkg-tab-count {
+    font-size:11px; font-weight:600; line-height:1;
+    padding:3px 7px; border-radius:999px; background:rgba(0,0,0,.06);
+}
+.pkg-tab.active .pkg-tab-count { background:#ffd400; color:#111; }
+
+.pkg-tab-count-red,
+.pkg-tab.active .pkg-tab-count-red { background:#fde2e2; color:#c0392b; }
+
+
+/* =====================================================
+   JADWAL — kalender mingguan (hari × ruang, baris per 30 menit)
+===================================================== */
+
+.week-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    white-space: nowrap;
+}
+
+/* Tombol navigasi minggu (link <a>, bukan <button>) */
+.jadwal-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.jadwal-nav-btn:hover {
+    background: #f9fafb;
+}
+
+/* Tombol "Minggu Ini" saat sedang berada di minggu berjalan */
+.jadwal-nav-btn.is-active {
+    background: #ffd400;
+    border-color: #ffd400;
+    color: #111827;
+}
+
+.legend {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-left: auto;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+/* Warna kelas: Daily Activity = kuning, HSK = biru, Private = hijau */
+.dot-daily   { background: #eab308; }
+.dot-hsk     { background: #3b82f6; }
+.dot-private { background: #22c55e; }
+.dot-trial   { background: #9333ea; }
+.dot-last    { background: #6b7280; }
+
+.conflict-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #dc2626;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 16px;
+}
+
+.conflict-banner a {
+    margin-left: auto;
+    color: #dc2626;
+    text-decoration: underline;
+}
+
+.calendar-card {
+    padding: 18px;
+}
+
+/* ==========================================================
+   WARNA PER TIPE KELAS (dipakai kartu sesi)
+========================================================== */
+
+.kind-daily   { background: #fef9c3; border-left-color: #eab308; }
+.kind-hsk     { background: #dbeafe; border-left-color: #3b82f6; }
+.kind-private { background: #dcfce7; border-left-color: #22c55e; }
+
+.has-conflict {
+    outline: 2px solid #dc2626;
+    outline-offset: -2px;
+}
+
+.is-cancelled {
+    opacity: .55;
+}
+
+.session-done {
+    color: #16a34a;
+    font-size: 10px;
+}
+
+.pulse {
+    animation: pulse-conflict 1s ease-in-out 2;
+}
+
+@keyframes pulse-conflict {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    50%      { box-shadow: 0 0 0 6px rgba(220, 38, 38, .25); }
+}
+
+/* Chip trial calon siswa (hanya tanggal, tanpa jam) */
+.trial-chip {
+    display: inline-block;
+    margin: 0 6px 4px 0;
+    font-size: 11px;
+    color: #374151;
+    background: #f3e8ff;
+    border-left: 3px dashed #9333ea;
+    border-radius: 6px;
+    padding: 5px 8px;
+    cursor: pointer;
+    word-break: break-word;
+}
+
+.trial-chip:hover {
+    background: #e9d5ff;
+}
+
+.trial-chip.is-cancelled {
+    text-decoration: line-through;
+}
+
+/* ==========================================================
+   KALENDER MINGGUAN
+   CSS grid: kolom jam + kolom (hari x ruang). Tinggi kartu = durasi sesi:
+   1 baris = 30 menit = --slot-height. Header & kolom jam sticky.
+========================================================== */
+
+.week-scroll {
+    --slot-height: 46px;   /* tinggi 30 menit; kelas 1 jam = 2x nilai ini. Ubah angka ini saja untuk memanjang/memendekkan semua kartu */
+    --head1-height: 46px;
+    --head2-height: 30px;
+
+    overflow: auto;
+    max-height: calc(100vh - 280px);
+    min-height: 360px;
+    border: 1px solid #edeef1;
+    border-radius: 12px;
+}
+
+.week-grid {
+    display: grid;
+    grid-template-rows: var(--head1-height) var(--head2-height);
+    grid-auto-rows: auto;
+    width: max-content;
+    min-width: 100%;
+}
+
+/* ----- Header (sticky) ----- */
+.wg-corner,
+.wg-day,
+.wg-room {
+    position: sticky;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    background: #fff;
+    border-bottom: 1px solid #edeef1;
+    border-right: 1px solid #f0f1f3;
+    font-size: 11px;
+    font-weight: 700;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    text-align: center;
+}
+
+.wg-corner {
+    top: 0;
+    left: 0;
+    z-index: 7;
+    background: #fafafa;
+    border-right: 1px solid #edeef1;
+}
+
+.wg-day {
+    top: 0;
+    z-index: 5;
+    line-height: 1.2;
+}
+
+.wg-day.is-today {
+    background: #fef3c7;
+}
+
+.wg-day-sub {
+    margin-top: 1px;
+    font-size: 10px;
+    font-weight: 500;
+    color: #9ca3af;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.wg-room {
+    top: var(--head1-height);
+    z-index: 5;
+    font-size: 10.5px;
+    color: #6b7280;
+    background: #fafafa;
+}
+
+/* Garis pemisah antar hari */
+.day-start {
+    border-left: 2px solid #e5e7eb;
+}
+
+/* ----- Kolom jam ----- */
+.wg-time {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    box-sizing: border-box;
+    background: #fff;
+    border-right: 1px solid #edeef1;
+}
+
+.wg-time-body {
+    position: sticky;
+    height: calc(var(--slot-count) * var(--slot-height));
+}
+
+.wg-tick {
+    position: absolute;
+    left: 10px;
+    padding-top: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #9ca3af;
+}
+
+.wg-tick.is-hour {
+    font-size: 11px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.wg-trial-label {
+    padding: 10px 6px 0 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #9333ea;
+    border-bottom: 1px solid #e9eaee;
+}
+
+.wg-trial-cell {
+    box-sizing: border-box;
+    padding: 8px;
+    background: #faf5ff;
+    border-bottom: 1px solid #e9eaee;
+}
+
+/* ----- Kolom ruang: posisi relatif, kartu absolut ----- */
+.wg-col {
+    position: relative;
+    box-sizing: border-box;
+    height: calc(var(--slot-count) * var(--slot-height));
+    border-right: 1px solid #f0f1f3;
+    /* garis tiap 30 menit (tipis) + tiap 1 jam (lebih tegas) */
+    background-image:
+        linear-gradient(to bottom, #e2e4e9 1px, transparent 1px),
+        linear-gradient(to bottom, #f3f4f6 1px, transparent 1px);
+    background-size:
+        100% calc(var(--slot-height) * 2),
+        100% var(--slot-height);
+}
+
+.wg-col.is-today {
+    background-color: #fffdf3;
+}
+
+/* ----- Kartu sesi (posisi & ukuran diatur inline dari jam mulai/selesai) -----
+   Isi kartu diletakkan di tengah kotak (vertikal). */
+.sess {
+    position: absolute;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    padding: 5px 8px;
+    border-left: 4px solid transparent;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    line-height: 1.25;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+    transition: box-shadow .12s ease;
+}
+
+.sess:hover {
+    z-index: 2;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, .16);
+}
+
+.sess-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #111827;
+    word-break: break-word;
+}
+
+.sess-meta {
+    margin: 0;
+    font-size: 11.5px;
+    color: #6b7280;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Kelas 30 menit: judul 1 baris + guru, tanpa baris jam */
+.sess.is-short {
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+
+.sess.is-short .sess-title {
+    -webkit-line-clamp: 1;
+}
+
+.sess.is-short .sess-time {
+    display: none;
+}
+
+/* Warna berbeda tiap kelas (Daily Activity & HSK). Private tetap 1 warna. */
+.sess.is-class-color {
+    background: var(--c-bg);
+    border-color: var(--c-bd);
+    color: var(--c-tx);
+}
+
+.sess.is-class-color .sess-meta {
+    color: var(--c-tx);
+    opacity: .8;
+}
+
+/* Pertemuan terakhir kelas: abu-abu */
+.sess.is-last-session {
+    background: #e5e7eb;
+    border-color: #6b7280;
+    color: #1f2937;
+}
+
+.sess.is-last-session .sess-meta {
+    color: #374151;
+    opacity: .85;
+}
+
+.is-cancelled .sess-title {
+    text-decoration: line-through;
+}
+
+/* ==========================================================
+   MODAL DETAIL SESI
+========================================================== */
+
+.modal-sm {
+    max-width: 820px;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 9px 0;
+    border-bottom: 1px solid #f4f5f7;
+    font-size: 13px;
+}
+
+.detail-row span {
+    color: #6b7280;
+}
+
+.detail-row strong {
+    color: #111827;
+    font-weight: 600;
+    text-align: right;
+}
+
+.modal-foot-right {
+    display: flex;
+    gap: 10px;
+}
+
+/* Banner saat jadwal difilter ke satu kelas */
+.class-filter-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1d4ed8;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 13px;
+    margin-bottom: 16px;
+}
+
+.class-filter-banner a {
+    margin-left: auto;
+    color: #1d4ed8;
+    text-decoration: underline;
+}
+
+/* ==========================================================
+   KONTROL ZOOM KALENDER
+========================================================== */
+
+.zoom-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 0 0 12px;
+}
+
+.zoom-bar-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.zoom-bar-title i { color: #2563eb; }
+
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.zoom-btn {
+    min-width: 30px;
+    height: 30px;
+    padding: 0 9px;
+    cursor: pointer;
+    border: 1px solid rgba(0, 0, 0, .15);
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font-size: 13px;
+}
+
+.zoom-btn:hover { background: rgba(0, 0, 0, .06); }
+.zoom-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+.zoom-value {
+    min-width: 52px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.zoom-hint {
+    margin-right: 6px;
+    font-size: 12px;
+    opacity: .6;
+}
+
+/* ==========================================================
+   LEGENDA WARNA KELAS
+========================================================== */
+
+.class-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    padding: 0 0 12px;
+    font-size: 12px;
+}
+
+.class-legend-label {
+    margin-right: 2px;
+    font-weight: 600;
+    opacity: .7;
+}
+
+.class-legend-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    background: var(--c-bg);
+    color: var(--c-tx);
+    border: 1px solid var(--c-bd);
+}
+
+.class-legend-chip::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--c-bd);
+}
+
+/* ==========================================================
+   CARD JADWAL AVAILABLE GURU (di bawah kalender kelas)
+========================================================== */
+
+.avail-card {
+    margin-top: 20px;
+    padding: 0;
+    overflow: hidden;
+}
+
+.avail-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(0, 0, 0, .08);
+}
+
+.avail-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.avail-title i { color: #16a34a; }
+
+.avail-sub {
+    margin-top: 2px;
+    font-size: 12.5px;
+    opacity: .7;
+}
+
+.avail-scroll { overflow-x: auto; }
+
+.avail-table {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+}
+
+.avail-table th,
+.avail-table td {
+    padding: 10px 14px;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid rgba(0, 0, 0, .06);
+    border-right: 1px solid rgba(0, 0, 0, .04);
+    font-size: 13px;
+}
+
+.avail-table th {
+    font-weight: 600;
+    font-size: 11px;
+    background: rgba(0, 0, 0, .025);
+    white-space: nowrap;
+}
+
+.avail-table th small {
+    display: block;
+    font-weight: 400;
+    opacity: .6;
+}
+
+.avail-table th.is-today { color: #16a34a; }
+
+.avail-table .avail-teacher {
+    min-width: 150px;
+    font-weight: 600;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.avail-table tr:last-child td { border-bottom: 0; }
+
+.avail-chip {
+    display: inline-block;
+    margin: 0 4px 4px 0;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    white-space: nowrap;
+    background: rgba(34, 197, 94, .14);
+    border: 1px solid rgba(34, 197, 94, .5);
+    color: #15803d;
+}
+
+.avail-empty { opacity: .35; }
+
+.avail-none {
+    padding: 28px 20px;
+    text-align: center;
+    font-size: 13.5px;
+    opacity: .7;
+}
+
+/* Nomor pertemuan di modal detail sesi */
+#detail_meeting.is-last { color: #4b5563; }
+
+/* Responsive */
+@media (max-width: 640px) {
+    .legend {
+        margin-left: 0;
+        flex-wrap: wrap;
+    }
+}
+
+/* =====================================================
+   PEMBAYARAN
+   Tempel di akhir calonsiswa.css. Dulu ada di <style> pembayaran.blade.php.
+===================================================== */
+
+/* Alert sukses (alert-error sudah ada di bagian ALERT di atas) */
+.alert-success {
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 18px;
+    font-size: 14px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    color: #166534;
+}
+
+/* Progress terbayar */
+.pay-progress { width: 100%; height: 6px; border-radius: 999px; background: #f1f2f4; overflow: hidden; margin-top: 6px; }
+.pay-progress > span { display: block; height: 100%; background: #22c55e; }
+.pay-progress.is-partial > span { background: #f59e0b; }
+
+/* Nominal */
+.money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.money-main { font-weight: 600; }
+.money-remaining { font-weight: 700; }
+.money-remaining.is-zero { color: #15803d; }
+.money-remaining.is-due { color: #dc2626; }
+
+/* Status Tagihan (Sebagian / Belum bayar) tidak turun baris */
+.pay-status-cell,
+.pay-status-cell .badge { white-space: nowrap; }
+
+/* Tag jenis pembayaran */
+.pay-type-tag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: rgba(201,162,39,.12); color: #b8860b; font-size: 10.5px; font-weight: 700; text-transform: uppercase; }
+.pay-type-tag.no-margin { margin-left: 0; }
+.pay-type-tag.is-replacement { background: rgba(59,130,246,.12); color: #2563eb; }
+.pay-type-tag.is-homevisit { background: rgba(168,85,247,.12); color: #9333ea; }
+
+/* Modal riwayat */
+.pay-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+.pay-summary > div { background: #fafafa; border: 1px solid #edeef1; border-radius: 10px; padding: 10px 14px; }
+.pay-summary .lbl { font-size: 11px; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.pay-summary .val { font-size: 15px; font-weight: 700; color: #111827; margin-top: 2px; }
+
+.history-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.history-table th { text-align: left; font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: .04em; padding: 6px 8px; border-bottom: 1px solid #edeef1; }
+.history-table td { padding: 8px; border-bottom: 1px solid #f4f5f7; vertical-align: top; }
+.history-empty { text-align: center; color: #9ca3af; padding: 24px 0; font-size: 13px; }
+
+/* Filter rentang tanggal (flatpickr) */
+.date-range { display: flex; align-items: center; gap: 6px; }
+.date-range .date-icon { color: #9ca3af; font-size: 13px; }
+.date-range input.flatpickr-input,
+.date-range input.date-range-input {
+    height: 38px; min-width: 230px; padding: 0 12px; border: 1px solid #e5e7eb; border-radius: 10px;
+    background: #fff; font-size: 13px; color: #111827; font-family: inherit; cursor: pointer;
+}
+
+/* =====================================================
+   PROGRAM & LEVEL
+   (dipindah dari programlevel.css: badge status, section-title,
+   filter pill, ringkasan struktur, accordion program/kategori/level)
+===================================================== */
+
+.form-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #374151;
+    cursor: pointer;
+}
+
+.form-checkbox input {
+    width: 16px;
+    height: 16px;
+    accent-color: #FFDD05;
+}
+
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #111827;
+    margin: 28px 0 12px;
+}
+
+.section-title i {
+    color: #b8860b;
+    font-size: 13px;
+}
+
+.section-note {
+    margin-left: 8px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: #9ca3af;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.program-tree-desc {
+    font-size: 12.5px;
+    color: #6b7280;
+    margin: 4px 0 0;
+    line-height: 1.5;
+}
+
+.program-tree-empty {
+    font-size: 12px;
+    color: #9ca3af;
+    font-style: italic;
+}
+
+.badge-neutral {
+    background: #f3f4f6;
+    color: #4b5563;
+}
+
+.badge-active {
+    background: #f0fdf4;
+    color: #16a34a;
+}
+
+.badge-active .badge-dot {
+    background: #16a34a;
+}
+
+.badge-inactive {
+    background: #f3f4f6;
+    color: #9ca3af;
+}
+
+.badge-inactive .badge-dot {
+    background: #9ca3af;
+}
+
+.filter-pills {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.filter-pill {
+    display: inline-flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 16px;
+    border-radius: 99px;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #6b7280;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all .2s ease;
+}
+
+.filter-pill:hover {
+    border-color: #FFDD05;
+    background: #fffdf0;
+    color: #8a6d00;
+}
+
+.filter-pill.active {
+    background: #FFDD05;
+    border-color: #FFDD05;
+    color: #111827;
+}
+
+.struktur-summary-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+}
+
+.struktur-summary-text p {
+    margin-top: 6px;
+    font-size: 12.5px;
+    color: #6b7280;
+}
+
+.program-accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    margin-bottom: 8px;
+}
+
+.program-section {
+    background: #e9ebef;
+    border-radius: 16px;
+    padding: 20px 22px 22px;
+}
+
+.program-section-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.program-section-name {
+    font-weight: 700;
+    font-size: 16px;
+    color: #111827;
+}
+
+.category-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    align-items: start;
+}
+
+.category-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.category-card-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 14px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.category-card-head .cat-name {
+    font-weight: 600;
+    font-size: 13.5px;
+    color: #111827;
+    white-space: nowrap;
+}
+
+.category-card-head .cat-age {
+    font-size: 11px;
+    color: #9ca3af;
+    white-space: nowrap;
+}
+
+.category-card-head .cat-level-count {
+    margin-left: auto;
+    font-size: 11.5px;
+    color: #6b7280;
+    white-space: nowrap;
+}
+
+.chevron-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: none;
+    background: transparent;
+    color: #6b7280;
+    font-size: 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform .2s ease;
+}
+
+.category-card.open .chevron-btn {
+    transform: rotate(180deg);
+}
+
+.category-card-body {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0 14px 14px;
+    border-top: 1px solid #f0f1f3;
+    padding-top: 10px;
+}
+
+.category-card.open .category-card-body {
+    display: flex;
+}
+
+.level-chip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f9fafb;
+    border: 1px solid #f0f1f3;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12.5px;
+    color: #111827;
+}
+
+@media (max-width: 640px) {
+    .program-section {
+        padding: 16px;
+    }
+
+    .category-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Sel dua baris (teks utama + sub abu-abu), mis. Kategori / Level dan Durasi / Pertemuan */
+.cell-stack-main {
+    font-size: 13px;
+    font-weight: 500;
+    color: #111827;
+}
+
+.cell-stack-sub {
+    font-size: 12px;
+    font-weight: 400;
+    color: #9ca3af;
+    margin-top: 2px;
+}
+
+/* Sel yang tidak boleh turun baris, mis. kolom Program */
+.cell-nowrap {
+    white-space: nowrap;
+}

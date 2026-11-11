@@ -3,7 +3,7 @@
 @section('title', 'Kelas | Akademik')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
 @endpush
 
 @section('content')
@@ -15,7 +15,6 @@
             'Closed'    => 'badge-cancelled',
         ];
 
-        $hasJadwalRoute = \Illuminate\Support\Facades\Route::has('admin.jadwal');
         $hasExportRoute = \Illuminate\Support\Facades\Route::has('admin.kelas.export');
     @endphp
 
@@ -156,7 +155,7 @@
                 @forelse ($classes as $kelas)
                     @php
                         $isPrivate = ! is_null($kelas->private_package_id);
-                        $jadwalUrl = $hasJadwalRoute ? route('admin.jadwal', ['class_id' => $kelas->id]) : '#';
+                        $jadwalUrl = route('admin.jadwal.index', ['class_id' => $kelas->id]);
                         $isOnline  = $kelas->delivery_mode === 'Online';
                     @endphp
                     <tr>
@@ -231,7 +230,7 @@
 
                                 {{-- 2. Ubah jadwal pertemuan --}}
                                 <a href="{{ route('admin.kelas.ubah-jadwal', $kelas->id) }}" class="icon-btn" title="Ubah Jadwal">
-                                    <i class="fa-solid fa-clock-rotate-left"></i>
+                                    <i class="fa-solid fa-clock"></i>
                                 </a>
 
                                 {{-- 3. Lihat di halaman Jadwal --}}

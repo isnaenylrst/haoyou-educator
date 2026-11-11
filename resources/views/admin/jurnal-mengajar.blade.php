@@ -3,7 +3,7 @@
 @section('title', 'Jurnal Mengajar | Akademik')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
 @endpush
 
 @section('content')
@@ -114,14 +114,16 @@
     </form>
 
     {{-- ========================= TAB ========================= --}}
-    <div class="x-tabs">
-        <a class="x-tab {{ $tab === 'masuk' ? 'active' : '' }}"
-           href="{{ route('admin.jurnal-mengajar', array_merge($keepQuery, ['tab' => 'masuk'])) }}">
-            Jurnal Masuk <span class="x-count">{{ $stats['masuk'] }}</span>
+    <div class="pkg-tabs">
+        <a class="pkg-tab {{ $tab === 'masuk' ? 'active' : '' }}"
+        href="{{ route('admin.jurnal-mengajar', array_merge($keepQuery, ['tab' => 'masuk'])) }}">
+            <i class="fa-solid fa-book-open"></i> Jurnal Masuk
+            <span class="pkg-tab-count">{{ $stats['masuk'] }}</span>
         </a>
-        <a class="x-tab {{ $tab === 'belum' ? 'active' : '' }}"
-           href="{{ route('admin.jurnal-mengajar', array_merge($keepQuery, ['tab' => 'belum'])) }}">
-            Belum Diisi <span class="x-count {{ $stats['belum'] ? 'x-count-red' : '' }}">{{ $stats['belum'] }}</span>
+        <a class="pkg-tab {{ $tab === 'belum' ? 'active' : '' }}"
+        href="{{ route('admin.jurnal-mengajar', array_merge($keepQuery, ['tab' => 'belum'])) }}">
+            <i class="fa-solid fa-hourglass-half"></i> Belum Diisi
+            <span class="pkg-tab-count {{ $stats['belum'] ? 'pkg-tab-count-red' : '' }}">{{ $stats['belum'] }}</span>
         </a>
     </div>
 
@@ -131,12 +133,11 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Tanggal</th>
                         <th>Kelas</th>
                         <th>Laoshi</th>
-                        <th>Materi</th>
-                        <th>Status</th>
-                        <th>Kehadiran</th>
+                        <th style="text-align: center; vertical-align: middle;">Pertemuan</th>
+                        <th style="text-align: center; vertical-align: middle;">Status</th>
+                        <th style="text-align: center; vertical-align: middle;">Kehadiran</th>
                         <th width="80" style="text-align:center;">Aksi</th>
                     </tr>
                 </thead>
@@ -150,13 +151,20 @@
                                 : '-';
                             $presentCount = $j->attendances->where('status', 'Present')->count();
 
+                            $meetingNo  = $j->meeting_number ?? $j->material?->meeting_number;
+                            $meetingSub = $j->material?->title ?? $j->material_taught;
+
                             $detail = [
                                 'date'       => $j->session_date->copy()->locale('id')->translatedFormat('l, d F Y'),
                                 'class'      => $j->class?->class_name ?? '-',
                                 'teacher'    => $j->teacher?->name ?? '-',
                                 'substitute' => $j->is_substitute ? ($j->substituteTeacher?->name ?? 'Ya') : null,
                                 'schedule'   => $scheduleText . ($schedule?->room ? ' · ' . $schedule->room : ''),
-                                'material'   => $j->material ? 'Pertemuan ' . $j->material->meeting_number . ' — ' . $j->material->title : '-',
+                                'meeting'    => $meetingNo
+                                                    ? 'Pertemuan ' . $meetingNo
+                                                        . ($meetingSub ? ' — ' . $meetingSub : '')
+                                                        . ($j->is_last_meeting ? ' (Pertemuan terakhir)' : '')
+                                                    : '-',
                                 'status'     => $statusLabel,
                                 'activities' => $j->learning_activities,
                                 'problems'   => $j->problems,
@@ -172,10 +180,6 @@
                         @endphp
                         <tr>
                             <td>
-                                {{ $j->session_date->format('d M Y') }}
-                                <div class="cand-sub">{{ $scheduleText }}</div>
-                            </td>
-                            <td>
                                 <div class="cand-name">{{ $j->class?->class_name ?? '-' }}</div>
                                 <div class="cand-sub">{{ $programOf($j->class) }}@if ($j->class?->level) · {{ $j->class->level->level_name }}@endif</div>
                             </td>
@@ -188,26 +192,29 @@
                                     @endif
                                 @endif
                             </td>
-                            <td>
-                                @if ($j->material)
-                                    Pertemuan {{ $j->material->meeting_number }}
-                                    <div class="cand-sub">{{ \Illuminate\Support\Str::limit($j->material->title, 36) }}</div>
+                            <td style="text-align: center; vertical-align: middle;">
+                                @if ($meetingNo)
+                                    Pertemuan {{ $meetingNo }}
+                                    @if ($j->is_last_meeting)
+                                        <span class="badge badge-warning" style="margin-left:4px;">Terakhir</span>
+                                    @endif
                                 @else
-                                    -
+                                    <span class="x-muted">-</span>
                                 @endif
+                                <div class="cand-sub">{{ $j->session_date->copy()->locale('id')->translatedFormat('d M Y') }}</div>
                             </td>
-                            <td>
+                            <td style="text-align: center; vertical-align: middle;">
                                 <span class="badge {{ $statusClass }}"><span class="badge-dot"></span>{{ $statusLabel }}</span>
                             </td>
-                            <td>
+                            <td style="text-align: center; vertical-align: middle;">
                                 @if ($j->attendances->count())
                                     {{ $presentCount }}/{{ $j->attendances->count() }} hadir
                                 @else
                                     <span class="x-muted">-</span>
                                 @endif
                             </td>
-                            <td>
-                                <div class="row-actions">
+                            <td style="text-align: center; vertical-align: middle;">
+                                <div class="row-actions" style="display: flex; justify-content: center; align-items: center;">
                                     <button type="button" class="icon-btn" title="Lihat detail"
                                             data-journal="{{ json_encode($detail) }}"
                                             onclick="openJournalModal(this)">
@@ -218,7 +225,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="x-empty">
+                            <td colspan="6" class="x-empty">
                                 <i class="fa-regular fa-folder-open"></i>
                                 Belum ada jurnal pada periode ini.
                             </td>
@@ -272,22 +279,17 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Tanggal Sesi</th>
                         <th>Kelas</th>
                         <th>Laoshi</th>
-                        <th>Jadwal</th>
-                        <th>Keterlambatan</th>
-                        <th>Pengingat</th>
+                        <th style="text-align: center; vertical-align: middle;">Pertemuan</th>
+                        <th style="text-align: center; vertical-align: middle;">Keterlambatan</th>
+                        <th style="text-align: center; vertical-align: middle;">Pengingat</th>
                         <th width="110" style="text-align:center;">Aksi</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse ($missingPage as $m)
                         <tr>
-                            <td>
-                                {{ $m->date->format('d M Y') }}
-                                <div class="cand-sub">{{ $m->date->copy()->locale('id')->translatedFormat('l') }}</div>
-                            </td>
                             <td>
                                 <div class="cand-name">{{ $m->class->class_name }}</div>
                                 <div class="cand-sub">{{ $programOf($m->class) }}@if ($m->class->level) · {{ $m->class->level->level_name }}@endif</div>
@@ -298,27 +300,24 @@
                                     <span class="badge badge-warning" style="margin-left:4px;">Pengganti</span>
                                 @endif
                             </td>
-                            <td>
-                                {{ $m->schedule->day }}
-                                {{ substr($m->schedule->start_time, 0, 5) }}–{{ substr($m->schedule->end_time, 0, 5) }}
-                                @if ($m->schedule->room)
-                                    <div class="cand-sub">{{ $m->schedule->room }}</div>
-                                @endif
+                            <td style="text-align: center; vertical-align: middle;">
+                                Pertemuan {{ $m->meeting_number }}
+                                <div class="cand-sub">{{ $m->date->copy()->locale('id')->translatedFormat('d M Y') }}</div>
                             </td>
-                            <td>
+                            <td style="text-align: center; vertical-align: middle;">
                                 <span class="{{ $m->days_late >= 3 ? 'x-late' : '' }}">
                                     {{ $m->days_late === 0 ? 'Hari ini' : $m->days_late . ' hari' }}
                                 </span>
                             </td>
-                            <td>
+                            <td style="text-align: center; vertical-align: middle;">
                                 @if ($m->reminded_at)
                                     <span class="x-muted"><i class="fa-solid fa-check"></i> {{ $m->reminded_at->locale('id')->diffForHumans() }}</span>
                                 @else
                                     <span class="x-muted">Belum diingatkan</span>
                                 @endif
                             </td>
-                            <td>
-                                <div class="row-actions">
+                            <td style="text-align: center; vertical-align: middle;">
+                                <div class="row-actions" style="display: flex; justify-content: center; align-items: center;">
                                     <form method="POST" action="{{ route('admin.jurnal-mengajar.remind') }}" class="x-inline-form">
                                         @csrf
                                         <input type="hidden" name="teacher_id" value="{{ $m->teacher->id }}">
@@ -334,7 +333,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="x-empty is-ok">
+                            <td colspan="6" class="x-empty is-ok">
                                 <i class="fa-solid fa-circle-check"></i>
                                 Semua jurnal pada periode ini sudah terisi.
                             </td>
@@ -369,7 +368,7 @@
                     <div class="full" id="jr_substitute_wrap" style="display:none;">
                         <div class="x-detail-label">Guru Pengganti</div><div class="x-detail-value" id="jr_substitute">-</div>
                     </div>
-                    <div class="full"><div class="x-detail-label">Materi</div><div class="x-detail-value" id="jr_material">-</div></div>
+                    <div class="full"><div class="x-detail-label">Pertemuan</div><div class="x-detail-value" id="jr_meeting">-</div></div>
                 </div>
 
                 <div class="form-section">
@@ -440,7 +439,7 @@
             setText('jr_schedule', d.schedule);
             setText('jr_teacher', d.teacher);
             setText('jr_status', d.status);
-            setText('jr_material', d.material);
+            setText('jr_meeting', d.meeting);
             setText('jr_activities', d.activities);
             setText('jr_problems', d.problems);
             setText('jr_solutions', d.solutions);

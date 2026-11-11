@@ -3,15 +3,7 @@
 @section('title', 'Program & Level | Pengaturan')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/admin/programlevel.css') }}">
-    <style>
-        .pkg-tabs { display:flex; gap:8px; margin:24px 0 16px; border-bottom:1px solid rgba(0,0,0,.1); }
-        .pkg-tab { display:inline-flex; align-items:center; gap:8px; padding:10px 18px; background:none; border:none;
-                   border-bottom:3px solid transparent; font:inherit; font-weight:600; color:#777; cursor:pointer; margin-bottom:-1px; }
-        .pkg-tab:hover { color:#333; }
-        .pkg-tab.active { color:#111; border-bottom-color:#f5b800; }
-        .pkg-tab-count { font-size:12px; padding:2px 8px; border-radius:999px; background:rgba(0,0,0,.07); }
-    </style>
+    <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
 @endpush
 
 @section('content')
@@ -119,35 +111,41 @@
                 <thead>
                     <tr>
                         <th>Nama Paket</th>
-                        <th>Program</th>
-                        <th>Kategori</th>
-                        <th>Level</th>
-                        <th>Durasi</th>
-                        <th>Pertemuan</th>
-                        <th>Kapasitas</th>
-                        <th>Harga</th>
-                        <th>Status</th>
-                        <th width="110" style="text-align:right;">Aksi</th>
+                        <th style="text-align: center; vertical-align: middle;">Program</th>
+                        <th style="text-align: center; vertical-align: middle;">Kategori / Level</th>
+                        <th style="text-align: center; vertical-align: middle;">Durasi / Pertemuan</th>
+                        <th style="text-align: center; vertical-align: middle;">Kapasitas</th>
+                        <th style="text-align: center; vertical-align: middle;">Harga</th>
+                        <th style="text-align: center; vertical-align: middle;">Status</th>
+                        <th width="110" style="text-align:center;">Aksi</th>
                     </tr>
                 </thead>
                 <tbody id="regulerTbody">
                     @forelse ($packages as $package)
                         <tr class="reguler-row" data-program-id="{{ $package->program_id }}">
                             <td class="cell-name">{{ $package->package_name }}</td>
-                            <td>{{ $package->program->program_name ?? '—' }}</td>
-                            <td>{{ $package->category->category_name ?? '—' }}</td>
-                            <td>{{ $package->level->level_name ?? '—' }}</td>
-                            <td>{{ $package->duration_minutes }} menit</td>
-                            <td>{{ $package->total_meetings }}x</td>
-                            <td>{{ $package->min_students }}–{{ $package->max_students }} siswa</td>
+                            <td class="cell-nowrap" style="text-align: center; vertical-align: middle;">
+                                {{ $package->program->program_name ?? '-' }}
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                <div class="cell-stack-main">{{ $package->category->category_name ?? '-' }}</div>
+                                @if ($package->level)
+                                    <div class="cell-stack-sub">{{ $package->level->level_name }}</div>
+                                @endif
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                <div class="cell-stack-main">{{ $package->duration_minutes }} menit</div>
+                                <div class="cell-stack-sub">{{ $package->total_meetings }}x pertemuan</div>
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">{{ $package->min_students }}–{{ $package->max_students }} siswa</td>
                             <td>Rp{{ number_format($package->price, 0, ',', '.') }}</td>
-                            <td>
+                            <td style="text-align: center; vertical-align: middle;">
                                 <span class="badge {{ $package->is_active ? 'badge-active' : 'badge-inactive' }}">
                                     <span class="badge-dot"></span>
                                     {{ $package->is_active ? 'Aktif' : 'Nonaktif' }}
                                 </span>
                             </td>
-                            <td>
+                            <td style="text-align: center; vertical-align: middle;">
                                 <div class="row-actions">
                                     <button type="button" class="icon-btn" title="Edit"
                                             onclick="openEditPackageModal({{ $package->id }})">
@@ -167,14 +165,14 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="10" style="text-align:center;padding:50px;color:#888;">
+                            <td colspan="8" style="text-align:center;padding:50px;color:#888;">
                                 Belum ada paket reguler.
                             </td>
                         </tr>
                     @endforelse
 
                     <tr id="regulerFilterEmpty" style="display:none;">
-                        <td colspan="10" style="text-align:center;padding:50px;color:#888;">
+                        <td colspan="8" style="text-align:center;padding:50px;color:#888;">
                             Belum ada paket untuk program ini.
                         </td>
                     </tr>
@@ -197,29 +195,39 @@
                 <thead>
                     <tr>
                         <th>Nama Paket</th>
-                        <th>Durasi</th>
-                        <th>Pertemuan</th>
-                        <th>Kapasitas</th>
-                        <th>Harga</th>
-                        <th>Status</th>
-                        <th width="110" style="text-align:right;">Aksi</th>
+                        <th style="text-align: center; vertical-align: middle;">Durasi</th>
+                        <th style="text-align: center; vertical-align: middle;">Pertemuan</th>
+                        <th style="text-align: center; vertical-align: middle;">Kapasitas</th>
+                        <th style="text-align: center; vertical-align: middle;">Harga</th>
+                        <th style="text-align: center; vertical-align: middle;">Status</th>
+                        <th width="110" style="text-align:center;">Aksi</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse ($privatePackages as $pkg)
                         <tr>
-                            <td class="cell-name">{{ $pkg->package_name }}</td>
-                            <td>{{ $pkg->duration_minutes }} menit</td>
-                            <td>{{ $pkg->total_meetings }}x</td>
-                            <td>{{ $pkg->min_students }}–{{ $pkg->max_students }} siswa</td>
-                            <td>Rp{{ number_format($pkg->price, 0, ',', '.') }}</td>
-                            <td>
+                            <td class="cell-name">
+                                {{ $pkg->package_name }}
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                {{ $pkg->duration_minutes }} menit
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                {{ $pkg->total_meetings }}x
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                {{ $pkg->min_students }}–{{ $pkg->max_students }} siswa
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                Rp{{ number_format($pkg->price, 0, ',', '.') }}
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
                                 <span class="badge {{ $pkg->is_active ? 'badge-active' : 'badge-inactive' }}">
                                     <span class="badge-dot"></span>
                                     {{ $pkg->is_active ? 'Aktif' : 'Nonaktif' }}
                                 </span>
                             </td>
-                            <td>
+                            <td style="text-align: center; vertical-align: middle;">
                                 <div class="row-actions">
                                     <button type="button" class="icon-btn" title="Edit"
                                             onclick="openEditPrivateModal({{ $pkg->id }})">
@@ -249,7 +257,7 @@
         </div>
     </div>
 
-    {{-- ========================= MODAL — TAMBAH PAKET REGULER ========================= --}}
+    {{-- ========================= MODAL - TAMBAH PAKET REGULER ========================= --}}
     <div class="modal-overlay" id="addPackageModalOverlay">
         <div class="modal">
             <form action="{{ route('admin.program-level.paket.store') }}" method="POST">
@@ -278,13 +286,13 @@
                             <div class="form-field">
                                 <label>Kategori</label>
                                 <select name="category_id" id="category_id" onchange="onCategoryChange(this.value, '')">
-                                    <option value="">— Tidak ada —</option>
+                                    <option value="">- Tidak ada -</option>
                                 </select>
                             </div>
                             <div class="form-field full">
                                 <label>Level</label>
                                 <select name="level_id" id="level_id">
-                                    <option value="">— Tidak ada —</option>
+                                    <option value="">- Tidak ada -</option>
                                 </select>
                             </div>
                         </div>
@@ -336,7 +344,7 @@
         </div>
     </div>
 
-    {{-- ========================= MODAL — EDIT PAKET REGULER ========================= --}}
+    {{-- ========================= MODAL - EDIT PAKET REGULER ========================= --}}
     <div class="modal-overlay" id="editPackageModalOverlay">
         <div class="modal">
             <form id="editPackageForm" method="POST">
@@ -367,13 +375,13 @@
                             <div class="form-field">
                                 <label>Kategori</label>
                                 <select name="category_id" id="edit_category_id" onchange="onCategoryChange(this.value, '', true)">
-                                    <option value="">— Tidak ada —</option>
+                                    <option value="">- Tidak ada -</option>
                                 </select>
                             </div>
                             <div class="form-field full">
                                 <label>Level</label>
                                 <select name="level_id" id="edit_level_id">
-                                    <option value="">— Tidak ada —</option>
+                                    <option value="">- Tidak ada -</option>
                                 </select>
                             </div>
                         </div>
@@ -424,7 +432,7 @@
         </div>
     </div>
 
-    {{-- ========================= MODAL — TAMBAH PAKET PRIVATE ========================= --}}
+    {{-- ========================= MODAL - TAMBAH PAKET PRIVATE ========================= --}}
     <div class="modal-overlay" id="addPrivateModalOverlay">
         <div class="modal">
             <form action="{{ route('admin.program-level.private.store') }}" method="POST">
@@ -484,7 +492,7 @@
         </div>
     </div>
 
-    {{-- ========================= MODAL — EDIT PAKET PRIVATE ========================= --}}
+    {{-- ========================= MODAL - EDIT PAKET PRIVATE ========================= --}}
     <div class="modal-overlay" id="editPrivateModalOverlay">
         <div class="modal">
             <form id="editPrivateForm" method="POST">
@@ -567,27 +575,6 @@
     });
 @endphp
 
-@push('scripts')
-@php
-    $programTreeData = $programs->map(function ($p) {
-        return [
-            'id' => $p->id,
-            'categories' => $p->categories->map(function ($c) {
-                return [
-                    'id' => $c->id,
-                    'name' => $c->category_name,
-                    'levels' => $c->levels->map(function ($l) {
-                        return [
-                            'id' => $l->id,
-                            'name' => $l->level_name,
-                        ];
-                    }),
-                ];
-            }),
-        ];
-    });
-@endphp
-
 <script>
     const programTree = @json($programTreeData);
 
@@ -615,9 +602,9 @@
         const categories = program ? program.categories : [];
 
         if (categories.length === 0) {
-            // Program tanpa kategori (mis. Daily Activity) — kunci ke null.
-            fillSelect(categorySelect, [], '— Tidak ada —', '');
-            fillSelect(levelSelect, [], '— Tidak ada —', '');
+            // Program tanpa kategori (mis. Daily Activity) - kunci ke null.
+            fillSelect(categorySelect, [], '- Tidak ada -', '');
+            fillSelect(levelSelect, [], '- Tidak ada -', '');
             categorySelect.disabled = true;
             levelSelect.disabled = true;
         } else {
@@ -632,7 +619,7 @@
         const levelSelect = document.getElementById(prefix + 'level_id');
 
         if (!categoryId) {
-            fillSelect(levelSelect, [], '— Tidak ada —', '');
+            fillSelect(levelSelect, [], '- Tidak ada -', '');
             levelSelect.disabled = true;
             return;
         }
