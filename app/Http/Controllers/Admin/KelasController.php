@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use App\Http\Controllers\Controller;
 use App\Models\ClassModel;
 use App\Models\ClassSchedule;
+use App\Models\ClassTeacherOffer;
 use App\Models\PrivatePackage;
 use App\Models\Program;
 use App\Models\ProgramLevel;
@@ -15,11 +16,20 @@ use App\Models\TeacherAvailability;
 use App\Models\TeacherLeave;
 use App\Models\TeachingJournal;
 use App\Models\ClassEnrollment;
+use App\Models\ClassSession;
+use App\Models\Payment;
 use App\Models\Student;
-use App\Models\User;
-use App\Notifications\AppNotification;
+use App\Services\ClassOfferService;
+use App\Services\ClassScheduleService;
+use App\Services\ClassSessionRescheduleService;
+use App\Services\ClassSessionService;
+use App\Services\ExtraFeeService;
+use App\Services\TeacherAvailabilityService;
+use App\Services\ClassCapacityService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -32,45 +42,268 @@ class KelasController extends Controller
 
     private const COUNTED_ENROLLMENT_STATUSES = ['Active', 'Completed'];
 
+    private const PAYMENT_METHODS = ['Transfer Bank', 'Cash', 'QRIS'];
+
+    /** Ruangan bawaan untuk saran di form kelas dan Ubah Jadwal (Online tidak termasuk). */
+    private const BASE_ROOMS = ['Beijing', 'Basement', 'Atas', 'Kaca'];
+
+    private $roomSuggestionCache = null;
+
+    public function __construct(
+        private ClassScheduleService $scheduleSvc,
+        private ClassSessionService $sessionSvc,
+        private ClassSessionRescheduleService $rescheduleSvc,
+        private ClassOfferService $offerSvc,
+    ) {
+    }
+
+    /* ============================================================
+       CREATE
+    ============================================================ */
+    public function create()
+    {
+        return view('admin.kelas.tambah', $this->formLookups());
+    }
+
+    /* ============================================================
+       EDIT (halaman penuh: data kelas + kelola siswa)
+    ============================================================ */
+    public function edit($id)
+    {
+        $kelas = ClassModel::query()
+            ->with(['schedules', 'programPackage.program', 'privatePackage', 'teacher:id,name'])
+            ->withCount([
+                'enrollments as students_count' => fn ($q) => $q->whereIn('status', self::COUNTED_ENROLLMENT_STATUSES),
+            ])
+            ->findOrFail($id);
+
+        // Sudah punya pertemuan bertanggal -> jadwal mingguan, tanggal & mode terkunci (diubah lewat "Ubah Jadwal")
+        $hasSessions = ClassSession::where('class_id', $kelas->id)->exists();
+
+        // Panel "Ajukan ke Guru" (kelas belum punya guru) / "Ganti Guru" (kelas sudah punya guru)
+        [$offerFit, $offerOthers] = $this->offerCandidates($kelas);
+
+        return view('admin.kelas.edit', array_merge(
+            $this->formLookups(),
+            compact('kelas', 'hasSessions', 'offerFit', 'offerOthers')
+        ));
+    }
+
+    /* ============================================================
+       UBAH JADWAL (halaman penuh: daftar pertemuan + form ubah jadwal)
+    ============================================================ */
+    public function ubahJadwal($id)
+    {
+        $kelas = ClassModel::with(['teacher:id,name', 'level', 'schedules'])->findOrFail($id);
+
+        return view('admin.kelas.ubahjadwal', [
+            'kelas'           => $kelas,
+            'sessionsData'    => $this->sessionList($kelas),
+            'roomSuggestions' => $this->roomSuggestions(),
+            'payers'          => $this->payersFor($kelas),
+            'homeVisitFee'    => ExtraFeeService::FEE_HOME_VISIT,
+        ]);
+    }
+
+    /** Calon pembayar home visit: siswa Active di kelas ini. */
+    private function payersFor(ClassModel $kelas)
+    {
+        return ClassEnrollment::with('student:id,name')
+            ->where('class_id', $kelas->id)
+            ->where('status', 'Active')
+            ->get()
+            ->filter(fn ($e) => $e->student)
+            ->map(fn ($e) => ['enrollment_id' => $e->id, 'name' => $e->student->name])
+            ->values();
+    }
+
+    /* ============================================================
+       AJUKAN KE GURU (panel di halaman Edit; di halaman Tambah ikut tersimpan bersama kelas)
+       Kelas dibuat tanpa guru. classes.teacher_id baru terisi setelah ada guru yang menerima.
+    ============================================================ */
+
+    /** Guru aktif beserta kecocokannya dengan jadwal kelas. [yang cocok (di atas), yang lain] */
+    private function offerCandidates(ClassModel $kelas): array
+    {
+        $kelas->loadMissing('schedules');
+
+        $existing = ClassTeacherOffer::where('class_id', $kelas->id)->get()->keyBy('teacher_id');
+
+        $teachers = Teacher::with('availabilities')
+            ->where('status', 'Active')
+            ->when($kelas->teacher_id, fn ($q) => $q->where('id', '!=', $kelas->teacher_id))
+            ->orderBy('name')
+            ->get()
+            ->map(function (Teacher $t) use ($kelas, $existing) {
+                $slots = TeacherAvailabilityService::sortSlots($t->availabilities);
+                $clash = TeacherAvailabilityService::conflictWith($t->id, $kelas);
+                $fits  = TeacherAvailabilityService::coversClass($slots, $kelas) && ! $clash;
+                $offer = $existing->get($t->id);
+
+                return (object) [
+                    'id'     => $t->id,
+                    'name'   => $t->name,
+                    'fits'   => $fits,
+                    'reason' => $clash
+                        ? "Bentrok dengan kelas {$clash}"
+                        : ($fits ? null : 'Di luar jadwal tersedia'),
+                    'status' => $offer?->status,
+                    'note'   => $offer?->response_note,
+                ];
+            });
+
+        return [
+            $teachers->where('fits', true)->values(),
+            $teachers->where('fits', false)->values(),
+        ];
+    }
+
+    /** Tombol Ajukan di halaman Edit. */
+    public function storeOffer(Request $request, $id)
+    {
+        $kelas = ClassModel::with(['schedules', 'teacher:id,name'])->findOrFail($id);
+
+        $data = $request->validate([
+            'mode'          => ['required', Rule::in(['selected', 'matching', 'all'])],
+            'teacher_ids'   => ['required_if:mode,selected', 'nullable', 'array'],
+            'teacher_ids.*' => ['integer', 'exists:teachers,id'],
+        ]);
+
+        $names = $this->offerSvc->offer($kelas, $data['mode'], $data['teacher_ids'] ?? []);
+
+        return back()->with('success', $this->offerMessage($names, $kelas->teacher?->name));
+    }
+
+    private function offerMessage($names, ?string $currentTeacher = null): string
+    {
+        $list = $names->take(5)->implode(', ') . ($names->count() > 5 ? ', ...' : '');
+
+        return $currentTeacher
+            ? "Kelas diajukan ke {$names->count()} guru: {$list}. {$currentTeacher} tetap menjadi guru sampai ada yang menerima."
+            : "Kelas diajukan ke {$names->count()} guru: {$list}. Guru kelas terisi setelah ada yang menerima.";
+    }
+
+    /** Data pendukung form kelas (dipakai halaman Tambah & Edit). */
+    private function formLookups(): array
+    {
+        $teachers = Teacher::orderBy('name')->get(['id', 'name', 'status']);
+
+        // Ketersediaan guru: { teacher_id: [ {day, start, end}, ... ] }
+        $teacherAvailabilities = TeacherAvailability::orderBy('start_time')
+            ->get()
+            ->groupBy('teacher_id')
+            ->map(fn ($group) => $group->map(fn ($a) => [
+                'day'   => $a->day,
+                'start' => substr($a->start_time, 0, 5),
+                'end'   => substr($a->end_time, 0, 5),
+            ])->values());
+
+        // Slot guru yang sudah terpakai kelas aktif: { teacher_id: [ {class_id, class_name, day, start, end}, ... ] }
+        $teacherBusy = ClassModel::query()
+            ->whereIn('status', self::ACTIVE_STATUSES)
+            ->whereNotNull('teacher_id')
+            ->with('schedules')
+            ->get(['id', 'class_name', 'teacher_id'])
+            ->groupBy('teacher_id')
+            ->map(fn ($classes) => $classes->flatMap(fn ($k) => $k->schedules->map(fn ($sc) => [
+                'class_id'   => $k->id,
+                'class_name' => $k->class_name,
+                'day'        => $sc->day,
+                'start'      => substr($sc->start_time, 0, 5),
+                'end'        => substr($sc->end_time, 0, 5),
+            ]))->values());
+
+        $programPackages = ProgramPackage::with('program')
+            ->orderBy('program_id')
+            ->orderBy('id')
+            ->get();
+
+        $privatePackages = PrivatePackage::orderBy('id')->get();
+
+        $levels = ProgramLevel::query()
+            ->leftJoin('program_categories', 'program_levels.category_id', '=', 'program_categories.id')
+            ->select('program_levels.*', 'program_categories.category_name')
+            ->orderBy('program_levels.program_id')
+            ->orderBy('program_levels.category_id')
+            ->orderBy('program_levels.sort_order')
+            ->get();
+
+        return [
+            'teachers'              => $teachers,
+            'teacherAvailabilities' => $teacherAvailabilities,
+            'teacherBusy'           => $teacherBusy,
+            'programPackages'       => $programPackages,
+            'privatePackages'       => $privatePackages,
+            'roomSuggestions'       => $this->roomSuggestions(),
+            'levels'                => $levels,
+        ];
+    }
+
+    /**
+     * Saran ruangan: ruangan bawaan + yang pernah diinput admin, tanpa dobel.
+     * "Kelas Atas", "kelas atas" dan "Atas" dianggap satu ruangan; yang dipakai
+     * ejaan bawaan (kalau ada), selain itu ejaan pertama yang ditemukan.
+     */
+    private function roomSuggestions()
+    {
+        if ($this->roomSuggestionCache !== null) {
+            return $this->roomSuggestionCache;
+        }
+
+        $unique = [];
+
+        foreach (self::BASE_ROOMS as $room) {
+            $unique[$this->roomKey($room)] = $room;
+        }
+
+        $entered = ClassSchedule::query()
+            ->whereNotNull('room')
+            ->where('room', '!=', '')
+            ->distinct()
+            ->pluck('room')
+            ->map(fn ($r) => trim((string) $r))
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE);
+
+        foreach ($entered as $room) {
+            $key = $this->roomKey($room);
+
+            if ($key === '' || $key === 'online' || isset($unique[$key])) {
+                continue;
+            }
+
+            $unique[$key] = $room;
+        }
+
+        return $this->roomSuggestionCache = collect(array_values($unique))
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+    }
+
+    /** Kunci pembanding nama ruangan: huruf kecil, spasi dirapikan, awalan "Kelas " dibuang. */
+    private function roomKey(?string $room): string
+    {
+        $room = mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', (string) $room)));
+
+        return trim((string) preg_replace('/^kelas\s+/u', '', $room));
+    }
+
+    /** Samakan ejaan ruangan dengan yang sudah ada di daftar saran (mencegah ruangan dobel). */
+    private function canonicalRoom(?string $room): ?string
+    {
+        $room = trim((string) $room);
+
+        if ($room === '' || mb_strtolower($room) === 'online') {
+            return $room === '' ? null : 'Online';
+        }
+
+        $key = $this->roomKey($room);
+
+        return $this->roomSuggestions()->first(fn ($r) => $this->roomKey($r) === $key) ?? $room;
+    }
+
     /* ============================================================
        INDEX
     ============================================================ */
-    public function export(Request $request)
-    {
-        $classes = ClassModel::query()
-            ->with(['teacher', 'programPackage.program', 'level'])
-            ->orderBy('class_name')
-            ->get();
-
-        $headers = [
-            'Content-Type'        => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="data-kelas-' . date('Ymd-His') . '.csv"',
-        ];
-
-        $callback = function () use ($classes) {
-            $handle = fopen('php://output', 'w');
-            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF)); // BOM UTF-8
-            fputcsv($handle, ['ID', 'Nama Kelas', 'Tipe', 'Program / Level', 'Guru Pengajar', 'Mode', 'Kapasitas', 'Status', 'Tanggal Mulai']);
-
-            foreach ($classes as $c) {
-                fputcsv($handle, [
-                    $c->id,
-                    $c->class_name,
-                    $c->private_package_id ? 'Private' : 'Reguler',
-                    $c->programPackage?->program?->program_name ?? $c->level?->level_name ?? '-',
-                    $c->teacher?->name ?? 'Belum Ditugaskan',
-                    $c->delivery_mode,
-                    $c->capacity,
-                    $c->status,
-                    $c->start_date ? $c->start_date->format('Y-m-d') : '-',
-                ]);
-            }
-            fclose($handle);
-        };
-
-        return response()->stream($callback, 200, $headers);
-    }
-
     public function index(Request $request)
     {
         $classes = ClassModel::query()
@@ -87,7 +320,7 @@ class KelasController extends Controller
             ->when($request->type === 'Private', fn ($q) => $q->whereNotNull('private_package_id'))
             ->when($request->filled('teacher_id'), fn ($q) => $q->where('teacher_id', $request->teacher_id))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
-            ->orderByRaw(DB::getDriverName() === 'mysql' ? "FIELD(status, 'Running', 'Open', 'Completed', 'Closed')" : "CASE status WHEN 'Running' THEN 1 WHEN 'Open' THEN 2 WHEN 'Completed' THEN 3 WHEN 'Closed' THEN 4 ELSE 5 END")
+            ->orderByRaw("FIELD(status, 'Running', 'Open', 'Completed', 'Closed')")
             ->orderBy('class_name')
             ->paginate(10)
             ->withQueryString();
@@ -123,75 +356,15 @@ class KelasController extends Controller
             ->reject($isHsk)
             ->count();
 
-        // ---- Data untuk filter & form ----
+        // ---- Data untuk filter ----
         $programs = Program::orderBy('id')->get(['id', 'program_name']);
         $teachers = Teacher::orderBy('name')->get(['id', 'name', 'status']);
 
-        // Ketersediaan guru: { teacher_id: [ {day, start, end}, ... ] } -> dipakai form untuk menandai guru yang cocok
-        $teacherAvailabilities = TeacherAvailability::orderBy('start_time')
-            ->get()
-            ->groupBy('teacher_id')
-            ->map(fn ($group) => $group->map(fn ($a) => [
-                'day'   => $a->day,
-                'start' => substr($a->start_time, 0, 5),
-                'end'   => substr($a->end_time, 0, 5),
-            ])->values());
-
-        // Slot guru yang sudah terpakai kelas aktif lain: { teacher_id: [ {class_id, class_name, day, start, end}, ... ] }
-        $teacherBusy = ClassModel::query()
-            ->whereIn('status', self::ACTIVE_STATUSES)
-            ->whereNotNull('teacher_id')
-            ->with('schedules')
-            ->get(['id', 'class_name', 'teacher_id'])
-            ->groupBy('teacher_id')
-            ->map(fn ($classes) => $classes->flatMap(fn ($k) => $k->schedules->map(fn ($sc) => [
-                'class_id'   => $k->id,
-                'class_name' => $k->class_name,
-                'day'        => $sc->day,
-                'start'      => substr($sc->start_time, 0, 5),
-                'end'        => substr($sc->end_time, 0, 5),
-            ]))->values());
-
-        $programPackages = ProgramPackage::with('program')
-            ->orderBy('program_id')
-            ->orderBy('id')
-            ->get();
-
-        $privatePackages = PrivatePackage::orderBy('id')->get();
-
-        // Nama ruangan tidak baku: ambil dari yang pernah dipakai sebagai saran (boleh diketik bebas)
-        $roomSuggestions = collect(['Kelas Kaca', 'Kelas Beijing', 'Kelas Feixiang', 'Kelas Atas'])
-        ->merge(
-        ClassSchedule::query()
-            ->whereNotNull('room')
-            ->where('room', '!=', '')
-            ->where('room', '!=', 'Online')
-            ->distinct()
-            ->pluck('room')
-             )
-    ->unique()
-    ->sort()
-    ->values();
-
-        $levels = ProgramLevel::query()
-            ->leftJoin('program_categories', 'program_levels.category_id', '=', 'program_categories.id')
-            ->select('program_levels.*', 'program_categories.category_name')
-            ->orderBy('program_levels.program_id')
-            ->orderBy('program_levels.category_id')
-            ->orderBy('program_levels.sort_order')
-            ->get();
-
-        return view('admin.kelas', compact(
+        return view('admin.kelas.index', compact(
             'classes',
             'meetingProgress',
             'programs',
             'teachers',
-            'teacherAvailabilities',
-            'teacherBusy',
-            'programPackages',
-            'privatePackages',
-            'roomSuggestions',
-            'levels',
             'kelasAktif',
             'kelasDailyActivity',
             'kelasHsk',
@@ -201,23 +374,22 @@ class KelasController extends Controller
 
     /* ============================================================
        STORE
+       Kelas selalu dibuat tanpa guru (teacher_id kosong), lalu admin diarahkan ke halaman
+       "Ajukan ke Guru". Guru baru tersimpan di kelas setelah ada yang menerima.
     ============================================================ */
     public function store(Request $request)
     {
         $data = $this->validated($request);
-        $broadcast = $request->boolean('broadcast_to_all');
-        $teacherId = $broadcast ? null : ($data['teacher_id'] ?? null);
 
-        $kelas = null;
-        DB::transaction(function () use ($data, $broadcast, $teacherId, &$kelas) {
+        $offered = null;
+
+        $kelas = DB::transaction(function () use ($data, $request, &$offered) {
             $kelas = new ClassModel();
             $kelas->forceFill([
                 'program_package_id' => $data['program_package_id'],
                 'private_package_id' => $data['private_package_id'],
                 'level_id'           => $data['level_id'],
-                'teacher_id'         => $teacherId,
-                'broadcast_to_all'   => $broadcast,
-                'teacher_response'   => 'Pending',
+                'teacher_id'         => null,
                 'class_name'         => $data['class_name'],
                 'delivery_mode'      => $data['delivery_mode'],
                 'start_date'         => $data['start_date'],
@@ -228,39 +400,28 @@ class KelasController extends Controller
                 'zoom_passcode'      => $data['zoom_passcode'],
             ])->save();
 
-            foreach ($data['schedules'] as $row) {
-                $this->createSchedule($kelas, $row);
+            $this->scheduleSvc->createSchedules($kelas, $data['schedules']);
+
+            // Bangkitkan pertemuan bertanggal (class_sessions) supaya kelas muncul di Jadwal.
+            // Kalau jadwal bentrok (guru/ruang), seluruh transaksi dibatalkan.
+            $this->generateSessions($kelas, ! $request->filled('end_date'));
+
+            // Ajukan ke guru dalam transaksi yang sama: kalau pengajuannya gagal (mis. tidak ada guru
+            // yang dicentang), kelas ikut dibatalkan dan admin diminta memperbaiki pilihannya.
+            $mode = $data['offer_mode'] ?? 'none';
+
+            if ($mode !== 'none') {
+                $offered = $this->offerSvc->offer($kelas, $mode, $data['offer_teacher_ids'] ?? []);
             }
+
+            return $kelas;
         });
 
-        // Notifikasi ke guru (Poin 11)
-        if ($broadcast) {
-            $teachers = Teacher::with('user')->where('status', 'Active')->get();
-            foreach ($teachers as $t) {
-                if ($t->user) {
-                    $t->user->notify(new AppNotification(
-                        title: "Tawaran Kelas Baru: {$kelas->class_name}",
-                        message: "Admin membuka penawaran jadwal kelas {$kelas->class_name} untuk semua guru aktif. Guru pertama yang menerima akan mengunci jadwal.",
-                        url: url('/guru/schedule'),
-                        type: 'jadwal',
-                        icon: 'fa-bullhorn'
-                    ));
-                }
-            }
-        } elseif ($teacherId) {
-            $assignedTeacher = Teacher::with('user')->find($teacherId);
-            if ($assignedTeacher?->user) {
-                $assignedTeacher->user->notify(new AppNotification(
-                    title: "Penugasan Jadwal Kelas: {$kelas->class_name}",
-                    message: "Admin menugaskan jadwal kelas {$kelas->class_name} kepada Anda. Silakan buka menu Schedule untuk konfirmasi Terima atau Tolak.",
-                    url: url('/guru/schedule'),
-                    type: 'jadwal',
-                    icon: 'fa-calendar-check'
-                ));
-            }
-        }
+        $message = 'Kelas berhasil ditambahkan. ' . ($offered
+            ? $this->offerMessage($offered)
+            : 'Belum diajukan ke guru, ajukan lewat halaman Edit kelas.');
 
-        return redirect()->route('admin.kelas')->with('success', 'Kelas berhasil ditambahkan.' . ($broadcast ? ' Tawaran jadwal telah dikirimkan ke semua guru aktif.' : ''));
+        return redirect()->route('admin.kelas')->with('success', $message);
     }
 
     /* ============================================================
@@ -269,64 +430,31 @@ class KelasController extends Controller
     public function update(Request $request, $id)
     {
         $kelas = ClassModel::findOrFail($id);
-        $data  = $this->validated($request, $kelas);
-        $broadcast = $request->boolean('broadcast_to_all');
-        $teacherId = $broadcast ? null : ($data['teacher_id'] ?? null);
 
-        $teacherChanged = ($kelas->teacher_id != $teacherId) || ((bool) $kelas->broadcast_to_all !== $broadcast);
+        // Kelas yang sudah punya pertemuan bertanggal: jadwal mingguan, tanggal mulai, dan mode kelas
+        // dikunci. Perubahan jadwal dilakukan lewat "Ubah Jadwal" di daftar pertemuan kelas.
+        $hasSessions    = ClassSession::where('class_id', $kelas->id)->exists();
+        $data        = $this->validated($request, $kelas, $hasSessions);
 
-        DB::transaction(function () use ($kelas, $data, $broadcast, $teacherId, $teacherChanged) {
-            $updateData = [
-                'level_id'          => $data['level_id'],
-                'teacher_id'        => $teacherId,
-                'broadcast_to_all'  => $broadcast,
-                'class_name'        => $data['class_name'],
-                'delivery_mode'     => $data['delivery_mode'],
-                'start_date'        => $data['start_date'],
-                'end_date'          => $data['end_date'],
-                'capacity'          => $data['capacity'],
-                'status'            => $data['status'],
-                'zoom_link'         => $data['zoom_link'],
-                'zoom_passcode'     => $data['zoom_passcode'],
-            ];
+        DB::transaction(function () use ($kelas, $data, $hasSessions) {
+            // Tipe & paket sengaja TIDAK diubah setelah kelas dibuat.
+            $kelas->forceFill([
+                'level_id'      => $data['level_id'],
+                // teacher_id sengaja TIDAK diubah di sini: guru hanya berubah setelah menerima pengajuan
+                'class_name'    => $data['class_name'],
+                'delivery_mode' => $data['delivery_mode'],
+                'start_date'    => $data['start_date'],
+                'end_date'      => $data['end_date'],
+                'capacity'      => $data['capacity'],
+                'status'        => $data['status'],
+                'zoom_link'     => $data['zoom_link'],
+                'zoom_passcode' => $data['zoom_passcode'],
+            ])->save();
 
-            if ($teacherChanged) {
-                $updateData['teacher_response']      = 'Pending';
-                $updateData['teacher_response_note'] = null;
-                $updateData['teacher_responded_at']  = null;
+            if (! $hasSessions) {
+                $this->syncSchedules($kelas, $data['schedules']);
             }
-
-            $kelas->forceFill($updateData)->save();
-            $this->syncSchedules($kelas, $data['schedules']);
         });
-
-        if ($teacherChanged) {
-            if ($broadcast) {
-                $teachers = Teacher::with('user')->where('status', 'Active')->get();
-                foreach ($teachers as $t) {
-                    if ($t->user) {
-                        $t->user->notify(new AppNotification(
-                            title: "Tawaran Kelas Baru: {$kelas->class_name}",
-                            message: "Admin membuka penawaran jadwal kelas {$kelas->class_name} untuk semua guru aktif. Guru pertama yang menerima akan mengunci jadwal.",
-                            url: url('/guru/schedule'),
-                            type: 'jadwal',
-                            icon: 'fa-bullhorn'
-                        ));
-                    }
-                }
-            } elseif ($teacherId) {
-                $assignedTeacher = Teacher::with('user')->find($teacherId);
-                if ($assignedTeacher?->user) {
-                    $assignedTeacher->user->notify(new AppNotification(
-                        title: "Penugasan Jadwal Kelas: {$kelas->class_name}",
-                        message: "Admin menugaskan jadwal kelas {$kelas->class_name} kepada Anda. Silakan buka menu Schedule untuk konfirmasi Terima atau Tolak.",
-                        url: url('/guru/schedule'),
-                        type: 'jadwal',
-                        icon: 'fa-calendar-check'
-                    ));
-                }
-            }
-        }
 
         return redirect()->route('admin.kelas')->with('success', 'Kelas berhasil diperbarui.');
     }
@@ -334,8 +462,29 @@ class KelasController extends Controller
     /* ============================================================
        VALIDASI (dipakai store & update)
     ============================================================ */
-    private function validated(Request $request, ?ClassModel $kelas = null): array
+    private function validated(Request $request, ?ClassModel $kelas = null, bool $lockSchedule = false): array
     {
+        // Admin tidak boleh mengisi guru langsung: input teacher_id diabaikan. Kelas baru tanpa guru;
+        // kelas yang sudah punya guru dicek terhadap guru yang sekarang (bukan guru dari form).
+        $request->merge(['teacher_id' => $kelas?->teacher_id]);
+
+        // Kelas yang sudah punya pertemuan: pakai jadwal, tanggal mulai, dan mode yang tersimpan
+        // (input form diabaikan). Cek guru di bawah tetap jalan terhadap jadwal yang berlaku.
+        if ($kelas && $lockSchedule) {
+            $request->merge([
+                'delivery_mode' => $kelas->delivery_mode,
+                'start_date'    => Carbon::parse($kelas->start_date)->toDateString(),
+                'end_date'      => $kelas->end_date ? Carbon::parse($kelas->end_date)->toDateString() : null,
+                'schedules'     => $kelas->schedules()->get()->map(fn ($sc) => [
+                    'id'         => $sc->id,
+                    'day'        => $sc->day,
+                    'start_time' => substr($sc->start_time, 0, 5),
+                    'end_time'   => substr($sc->end_time, 0, 5),
+                    'room'       => $sc->room,
+                ])->all(),
+            ]);
+        }
+
         // Saat edit, tipe & paket diambil dari data kelas yang sudah ada.
         if ($kelas) {
             $request->merge([
@@ -355,9 +504,11 @@ class KelasController extends Controller
             'start_date'    => ['required', 'date'],
             'end_date'      => ['nullable', 'date', 'after_or_equal:start_date'],
             'status'        => [$kelas ? 'required' : 'nullable', Rule::in(['Open', 'Running', 'Completed', 'Closed'])],
-            'teacher_id'       => ['nullable', 'exists:teachers,id'],
-            'broadcast_to_all' => ['nullable', 'boolean'],
-            'zoom_link'        => ['nullable', 'url', 'max:255', 'regex:/^https:\/\/([a-z0-9-]+\.)?zoom\.us\//i'],
+            'teacher_id'    => ['nullable', 'exists:teachers,id'],
+            'offer_mode'          => ['nullable', Rule::in(['selected', 'matching', 'all', 'none'])],
+            'offer_teacher_ids'   => ['nullable', 'array'],
+            'offer_teacher_ids.*' => ['integer', 'exists:teachers,id'],
+            'zoom_link'     => ['nullable', 'url', 'max:255', 'regex:/^https:\/\/([a-z0-9-]+\.)?zoom\.us\//i'],
             'zoom_passcode' => ['nullable', 'string', 'max:50'],
 
             'program_package_id' => [Rule::requiredIf(! $isPrivate), 'nullable', 'exists:program_packages,id'],
@@ -424,18 +575,30 @@ class KelasController extends Controller
             }
         }
 
-        // ---- Kapasitas tidak boleh di bawah jumlah siswa saat ini (edit) ----
+        // ---- Edit: kapasitas & syarat membuka kelas ----
         if ($kelas) {
             $enrolled = $kelas->enrollments()->whereIn('status', self::COUNTED_ENROLLMENT_STATUSES)->count();
+
+            // Kapasitas tidak boleh di bawah jumlah siswa saat ini
             if ($data['capacity'] < $enrolled) {
                 $errors['capacity'] = "Kapasitas tidak boleh di bawah jumlah siswa saat ini ({$enrolled} siswa).";
+            }
+
+            // Kelas hanya boleh dibuka (status Running) kalau siswa sudah memenuhi minimum paket.
+            // Dicek hanya saat status BERUBAH menjadi Running; kelas yang sudah berjalan tidak ikut terblokir.
+            if (($data['status'] ?? null) === 'Running'
+                && $kelas->status !== 'Running'
+                && ! app(ClassCapacityService::class)->meetsMinimum($kelas)
+            ) {
+                $min = $package->min_students ?? 1;
+                $errors['status'] = "Kelas belum bisa dibuka: minimal {$min} siswa, saat ini {$enrolled} siswa.";
             }
         }
 
         // ---- Ruangan mengikuti mode kelas ----
         $schedules = [];
         foreach ($data['schedules'] as $i => $row) {
-            $row['room'] = isset($row['room']) ? trim($row['room']) : null;
+            $row['room'] = isset($row['room']) ? $this->canonicalRoom($row['room']) : null;
 
             if ($data['delivery_mode'] === 'Online') {
                 $row['room'] = 'Online';
@@ -503,16 +666,16 @@ class KelasController extends Controller
         $data['program_package_id'] = $data['program_package_id'] ?? null;
         $data['private_package_id'] = $data['private_package_id'] ?? null;
         $data['teacher_id'] = $data['teacher_id'] ?? null;
-        $data['end_date'] = $data['end_date'] ?? $this->resolveEndDate($package, $data['start_date'], $schedules);
+        $data['end_date'] = $data['end_date'] ?? $this->scheduleSvc->resolveEndDate($package, $data['start_date'], $schedules);
         $data['status'] = $data['status'] ?? 'Open';
 
         if ($data['delivery_mode'] === 'Offline') {
-        $data['zoom_link'] = null;
-        $data['zoom_passcode'] = null;
-    } else {
-        $data['zoom_link'] = $data['zoom_link'] ?? null;
-        $data['zoom_passcode'] = $data['zoom_passcode'] ?? null;
-    }
+            $data['zoom_link'] = null;
+            $data['zoom_passcode'] = null;
+        } else {
+            $data['zoom_link'] = $data['zoom_link'] ?? null;
+            $data['zoom_passcode'] = $data['zoom_passcode'] ?? null;
+        }
 
         return $data;
     }
@@ -761,6 +924,9 @@ class KelasController extends Controller
                     'private_package_id' => $isPrivate ? $locked->private_package_id : null,
                     'enrollment_date'    => now()->toDateString(),
                     'status'             => 'Active',
+                    'notes'              => ($locked->status === 'Running' || Carbon::parse($locked->start_date)->lte(today()))
+                                            ? 'Daftar di tengah kelas'
+                                            : null,
                 ]);
             }
         });
@@ -768,29 +934,308 @@ class KelasController extends Controller
         return response()->json(['success' => true]);
     }
 
-    private function resolveEndDate($package, string $startDate, array $schedules): ?string
+    /* ============================================================
+       PERTEMUAN KELAS (class_sessions)
+    ============================================================ */
+
+    /** Bangkitkan pertemuan bertanggal sebanyak total_meetings paket kelas. */
+    private function generateSessions(ClassModel $kelas, bool $fillEndDate): void
     {
-        $meetings = (int) ($package->total_meetings ?? 0);
-        if ($meetings < 1 || empty($schedules)) {
-            return null;
+        $package = $kelas->private_package_id
+            ? PrivatePackage::find($kelas->private_package_id)
+            : ProgramPackage::find($kelas->program_package_id);
+
+        $total = (int) ($package?->total_meetings ?? 0);
+
+        if ($total < 1) {
+            return;
         }
 
-        $dayMap = [
-            'Senin' => Carbon::MONDAY, 'Selasa' => Carbon::TUESDAY, 'Rabu' => Carbon::WEDNESDAY,
-            'Kamis' => Carbon::THURSDAY, 'Jumat' => Carbon::FRIDAY, 'Sabtu' => Carbon::SATURDAY,
-            'Minggu' => Carbon::SUNDAY,
-        ];
-        $weekdays = array_unique(array_map(fn ($s) => $dayMap[$s['day']], $schedules));
+        $sessions = $this->sessionSvc->generateForNewClass($kelas, $total);
+        $last     = $sessions->last();
 
-        $date  = Carbon::parse($startDate);
-        $count = 0;
-        for ($i = 0; $i < 3650; $i++) { // batas pengaman ±10 tahun
-            if (in_array($date->dayOfWeek, $weekdays, true) && ++$count === $meetings) {
-                return $date->toDateString();
+        // Tanggal selesai mengikuti pertemuan terakhir yang benar-benar terbentuk
+        if ($fillEndDate && $last) {
+            $kelas->forceFill(['end_date' => $last->session_date->toDateString()])->save();
+        }
+    }
+
+    /** Pertemuan kelas sebagai array: status, aksi yang boleh, pembayaran, dan jurnal mengajar. */
+    private function sessionList(ClassModel $kelas)
+    {
+        $sessions = ClassSession::with(['schedule', 'teacher:id,name', 'journal', 'payments'])
+            ->where('class_id', $kelas->id)
+            ->orderBy('session_date')
+            ->orderBy('start_time')
+            ->get();
+
+        // Muat relasi jurnal hanya kalau relasinya memang ada di model TeachingJournal
+        $journals = $sessions->pluck('journal')->filter()->values();
+
+        if ($journals->isNotEmpty()) {
+            $rels = array_values(array_filter(
+                ['material', 'substituteTeacher'],
+                fn ($r) => method_exists($journals->first(), $r)
+            ));
+
+            if ($rels) {
+                (new \Illuminate\Database\Eloquent\Collection($journals->all()))->loadMissing($rels);
             }
-            $date->addDay();
         }
 
-        return null;
+        return $sessions
+            ->map(fn (ClassSession $s) => [
+                'id'             => $s->id,
+                'number'         => $s->session_number,
+                'date'           => $s->session_date->toDateString(),
+                'date_label'     => $s->session_date->locale('id')->translatedFormat('D, j M Y'),
+                'original_date'  => $s->original_date?->toDateString(),
+                'start'          => substr($s->start_time, 0, 5),
+                'end'            => substr($s->end_time, 0, 5),
+                'room'           => $s->room,
+                'location_type'  => $s->location_type,
+                'teacher'        => $s->teacher?->name,
+                'status'         => $s->status,
+                'deviates'       => $s->deviatesFromPattern(),
+                'change_reason'  => $s->change_reason,
+                'can_reschedule' => $s->canBeRescheduled(),
+                'can_following'  => $s->kind === 'Regular' && (bool) $s->schedule?->isCurrent(),
+                'can_complete'   => $s->canBeCompleted(),
+                'can_home_visit' => $s->canBecomeHomeVisit(),
+
+                // Pertemuan yang sudah berlangsung: sudah ditandai selesai ATAU sudah punya jurnal
+                'started'        => $s->status === 'Completed' || $s->journal !== null,
+                'is_past'        => $s->session_date->lt(today()),
+                'journal'        => $s->journal ? $this->journalPayload($s) : null,
+
+                'payments'       => $s->payments->map(fn ($p) => [
+                    'type'           => $p->payment_type,
+                    'amount'         => (float) $p->amount_paid,
+                    'invoice_number' => $p->invoice_number,
+                    'invoice_url'    => route('admin.pembayaran.invoice', $p->id),
+                ])->values(),
+            ])
+            ->values();
+    }
+
+    /** Ringkasan jurnal mengajar untuk satu pertemuan (admin hanya melihat). */
+    private function journalPayload(ClassSession $s): array
+    {
+        $j = $s->journal;
+
+        return [
+            'id'         => $j->id,
+            'status'     => $j->class_status,
+            'material'   => method_exists($j, 'material') ? $j->material?->title : null,
+            'substitute' => method_exists($j, 'substituteTeacher') ? $j->substituteTeacher?->name : null,
+            'teacher'    => $s->teacher?->name,
+            'activities' => $j->learning_activities,
+            'problems'   => $j->problems,
+            'solutions'  => $j->solutions,
+            'results'    => $j->results,
+        ];
+    }
+
+    /** Daftar pertemuan kelas (JSON). */
+    public function sessions($id)
+    {
+        $kelas = ClassModel::findOrFail($id);
+
+        return response()->json([
+            'kelas'    => ['id' => $kelas->id, 'class_name' => $kelas->class_name],
+            'sessions' => $this->sessionList($kelas),
+            'payers'   => $this->payersFor($kelas),
+            'fees'     => ['home_visit' => ExtraFeeService::FEE_HOME_VISIT],
+        ]);
+    }
+
+    /**
+     * Ubah jadwal: satu pertemuan saja ("one") atau pertemuan ini dan seterusnya ("following").
+     * Opsional (hanya "one"): jadikan pertemuan ini Home Visit. Dibayar dulu, lalu dijadwalkan,
+     * dalam satu transaksi: kalau salah satu gagal, dua-duanya dibatalkan.
+     */
+    public function rescheduleSession(Request $request, ClassSession $classSession)
+    {
+        $wantsHv = $request->boolean('home_visit');
+
+        $data = $request->validate([
+            'scope'                        => ['required', Rule::in(['one', 'following'])],
+            'session_date'                 => ['required_if:scope,one', 'nullable', 'date'],
+            'day'                          => ['required_if:scope,following', 'nullable', Rule::in(self::DAYS)],
+            'start_time'                   => ['required', 'date_format:H:i'],
+            'room'                         => ['nullable', 'string', 'max:255'],
+            'reason'                       => ['nullable', 'string', 'max:255'],
+            'confirm_outside_availability' => ['nullable', 'boolean'],
+
+            // Home visit (opsional)
+            'home_visit'          => ['nullable', 'boolean'],
+            'payer_enrollment_id' => [Rule::requiredIf($wantsHv), 'nullable', 'integer', 'exists:class_enrollments,id'],
+            'payment_date'        => [Rule::requiredIf($wantsHv), 'nullable', 'date', 'before_or_equal:today'],
+            'payment_method'      => [Rule::requiredIf($wantsHv), 'nullable', Rule::in(self::PAYMENT_METHODS)],
+            'proof'               => [Rule::requiredIf($wantsHv), 'nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'],
+        ], [
+            'proof.required'               => 'Bukti pembayaran home visit wajib diunggah.',
+            'payer_enrollment_id.required' => 'Pilih siswa yang membayar home visit.',
+            'payment_date.required'        => 'Tanggal pembayaran home visit wajib diisi.',
+            'payment_method.required'      => 'Metode pembayaran home visit wajib dipilih.',
+        ]);
+
+        $payer = null;
+
+        if ($wantsHv) {
+            // Biaya per pertemuan -> hanya untuk "Pertemuan ini saja"
+            if ($data['scope'] !== 'one') {
+                throw ValidationException::withMessages([
+                    'home_visit' => 'Home visit dikenakan per pertemuan, jadi hanya bisa dipilih untuk "Pertemuan ini saja".',
+                ]);
+            }
+
+            $payer = ClassEnrollment::where('class_id', $classSession->class_id)
+                ->where('status', 'Active')
+                ->find($data['payer_enrollment_id']);
+
+            if (! $payer) {
+                throw ValidationException::withMessages([
+                    'payer_enrollment_id' => 'Pembayar harus siswa aktif di kelas ini.',
+                ]);
+            }
+
+            if (! $classSession->canBecomeHomeVisit()) {
+                throw ValidationException::withMessages([
+                    'home_visit' => 'Pertemuan ini tidak bisa dijadikan home visit.',
+                ]);
+            }
+        }
+
+        // "Seterusnya": admin memilih hari. Tanggal pertemuan yang diklik = hari itu di minggu yang sama
+        // (pertemuan sesudahnya mengikuti di service dengan aturan yang sama).
+        if ($data['scope'] === 'following') {
+            $dayIndex = array_search($data['day'], self::DAYS, true);
+
+            $data['session_date'] = $classSession->session_date->copy()
+                ->startOfWeek(Carbon::MONDAY)
+                ->addDays($dayIndex)
+                ->toDateString();
+        }
+
+        if (isset($data['room'])) {
+            $data['room'] = $this->canonicalRoom($data['room']);
+        }
+
+        $reschedule = Arr::only($data, [
+            'scope', 'session_date', 'day', 'start_time', 'room', 'reason', 'confirm_outside_availability',
+        ]);
+
+        $proofPath = $wantsHv ? $request->file('proof')->store('payment-proofs', 'public') : null;
+        $count     = 1;
+
+        try {
+            DB::transaction(function () use ($wantsHv, $classSession, $payer, $data, $proofPath, $reschedule, &$count) {
+                // Bayar dulu, baru dijadwalkan
+                if ($wantsHv) {
+                    $this->sessionSvc->makeHomeVisitMany([$classSession->id], $payer, [
+                        'payment_date'       => $data['payment_date'],
+                        'payment_method'     => $data['payment_method'],
+                        'payment_proof_path' => $proofPath,
+                        'amount'             => null, // service memakai tarif FEE_HOME_VISIT
+                    ]);
+                    $classSession->refresh();
+                }
+
+                if ($data['scope'] === 'one') {
+                    $this->rescheduleSvc->rescheduleOne($classSession, $reschedule);
+                } else {
+                    $count = $this->rescheduleSvc->rescheduleFollowing($classSession, $reschedule);
+                }
+            });
+        } catch (\Throwable $e) {
+            if ($proofPath) {
+                Storage::disk('public')->delete($proofPath); // jangan tinggalkan file yatim
+            }
+            throw $e;
+        }
+
+        $message = $data['scope'] === 'one'
+            ? 'Jadwal pertemuan berhasil diubah.'
+            : "Jadwal {$count} pertemuan (ini dan seterusnya) berhasil diubah.";
+
+        if ($wantsHv) {
+            $message .= ' Pertemuan dijadikan Home Visit, Rp'
+                . number_format((float) ExtraFeeService::FEE_HOME_VISIT, 0, ',', '.')
+                . ' tercatat lunas. Invoice ada di daftar pertemuan.';
+        }
+
+        // Dipanggil lewat fetch dari halaman Ubah Jadwal: balas JSON, pesan sukses tampil setelah halaman dimuat ulang
+        if ($request->expectsJson()) {
+            session()->flash('success', $message);
+
+            return response()->json(['message' => $message]);
+        }
+
+        return back()->with('success', $message);
+    }
+
+    /** Tandai pertemuan selesai. */
+    public function completeSession(ClassSession $classSession)
+    {
+        $this->sessionSvc->complete($classSession);
+
+        return back()->with('success', 'Pertemuan ditandai selesai.');
+    }
+
+    /**
+     * Jadikan pertemuan kelas ini Home Visit. Dibayar dulu: Rp50.000 per pertemuan,
+     * satu baris pembayaran dan satu invoice per pertemuan. Pertemuan lain tidak kena biaya.
+     */
+    public function makeHomeVisit(Request $request, $id)
+    {
+        $kelas = ClassModel::findOrFail($id);
+
+        $data = $request->validate([
+            'session_ids'         => ['required', 'array', 'min:1'],
+            'session_ids.*'       => ['integer', 'distinct'],
+            'payer_enrollment_id' => ['required', 'integer', 'exists:class_enrollments,id'],
+            'payment_date'        => ['required', 'date', 'before_or_equal:today'],
+            'payment_method'      => ['required', Rule::in(self::PAYMENT_METHODS)],
+            'amount'              => ['nullable', 'numeric', 'min:1'],
+            'proof'               => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'],
+        ], [
+            'session_ids.required' => 'Pilih minimal satu pertemuan.',
+            'session_ids.min'      => 'Pilih minimal satu pertemuan.',
+        ]);
+
+        // Semua pertemuan harus milik kelas ini
+        $sessionIds = ClassSession::where('class_id', $kelas->id)
+            ->whereIn('id', $data['session_ids'])
+            ->pluck('id')
+            ->all();
+
+        if (count($sessionIds) !== count($data['session_ids'])) {
+            throw ValidationException::withMessages([
+                'session_ids' => 'Ada pertemuan yang bukan milik kelas ini.',
+            ]);
+        }
+
+        $payer     = ClassEnrollment::findOrFail($data['payer_enrollment_id']);
+        $proofPath = $request->file('proof')->store('payment-proofs', 'public');
+
+        try {
+            $sessions = $this->sessionSvc->makeHomeVisitMany($sessionIds, $payer, [
+                'payment_date'       => $data['payment_date'],
+                'payment_method'     => $data['payment_method'],
+                'payment_proof_path' => $proofPath,
+                'amount'             => $data['amount'] ?? null,
+            ]);
+        } catch (\Throwable $e) {
+            Storage::disk('public')->delete($proofPath); // jangan tinggalkan file yatim
+            throw $e;
+        }
+
+        $total = Payment::whereIn('class_session_id', $sessionIds)
+            ->where('payment_type', Payment::TYPE_HOME_VISIT)
+            ->sum('amount_paid');
+
+        return back()->with('success', $sessions->count() . ' pertemuan dijadikan Home Visit. Pembayaran Rp'
+            . number_format((float) $total, 0, ',', '.') . ' tercatat lunas (satu invoice per pertemuan).');
     }
 }

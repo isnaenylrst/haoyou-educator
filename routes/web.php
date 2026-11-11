@@ -516,6 +516,10 @@ Route::middleware(['auth', 'role:Curriculum'])
         Route::delete('/ketersediaan-guru/{availability}', [KetersediaanGuruController::class, 'destroy'])
             ->name('ketersediaan.destroy');
 
+        // Ajukan kelas pengganti yang menunggu guru
+        Route::post('/ketersediaan-guru/pengganti/{classSession}/ajukan', [KetersediaanGuruController::class, 'offerReplacement'])
+            ->name('ketersediaan.pengganti.ajukan');
+
         /*
         |--------------------------------------------------------------------------
         | VIDEO PEMBELAJARAN (upload -> siswa bisa menonton)
@@ -711,6 +715,9 @@ Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
         // Terima / tolak kelas yang diberikan Kurikulum
         Route::post('/kelas-diberikan/{class}/respond', [GuruAvailabilityController::class, 'respondClass'])->name('class.respond');
 
+        // Guru kelas pengganti
+        Route::post('/kelas-pengganti/{classSession}/respond', [ReplacementOfferController::class, 'respond'])->name('pengganti.respond');
+
         // Surat dari Kurikulum
         Route::get('/surat', [GuruSuratController::class, 'index'])->name('surat');
         Route::patch('/surat/baca-semua', [GuruSuratController::class, 'readAll'])->name('surat.read-all');
@@ -871,6 +878,8 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
             ->name('siswa.update');
         Route::get('/{siswa}', [SiswaController::class, 'show'])
             ->name('siswa.show');
+        Route::get('/{siswa}/detail', [SiswaController::class, 'detail'])
+        ->name('siswa.detail');
 
         // SISWA: LANJUT PROGRAM
         Route::get('/{siswa}/continue', fn (\App\Models\Student $siswa) => redirect()->route('admin.siswa.continue.program', $siswa))
@@ -899,6 +908,18 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
             \App\Http\Controllers\Admin\CalonSiswa\RegistrationFormController::class,
             'download'
         ])->name('siswa.formulir');
+
+        // SISWA: KELAS PENGGANTI
+        Route::get('/kelas-pengganti/guru', [SiswaController::class, 'replacementTeachers'])
+            ->name('siswa.replacement.teachers');
+        Route::get('/{siswa}/kelas-pengganti', [SiswaController::class, 'replacementPage'])
+            ->name('siswa.replacement');
+        Route::post('/{siswa}/kelas-pengganti', [SiswaController::class, 'storeReplacement'])
+            ->name('siswa.replacement.store');
+        Route::post('/{siswa}/kelas-pengganti/{classSession}/ajukan-ulang', [SiswaController::class, 'reofferReplacement'])
+            ->name('siswa.replacement.reoffer');
+        Route::post('/{siswa}/kelas-pengganti/{classSession}/batal', [SiswaController::class, 'cancelReplacement'])
+            ->name('siswa.replacement.cancel');
     });
 
     // ENROLLMENTS
@@ -939,18 +960,41 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
     Route::prefix('kelas')->group(function () {
         Route::get('/', [KelasController::class, 'index'])
             ->name('kelas');
-        Route::get('/export', [KelasController::class, 'export'])
-            ->name('kelas.export');
+        Route::get('/create', [KelasController::class, 'create'])
+            ->name('kelas.create');
         Route::post('/', [KelasController::class, 'store'])
             ->name('kelas.store');
+
+        // BARU: halaman penuh Edit Kelas (+ kelola siswa) dan Ubah Jadwal
+        Route::get('/{id}/edit', [KelasController::class, 'edit'])
+            ->name('kelas.edit');
+        Route::get('/{id}/ubah-jadwal', [KelasController::class, 'ubahJadwal'])
+            ->name('kelas.ubah-jadwal');
+
         Route::put('/{id}', [KelasController::class, 'update'])
             ->name('kelas.update');
+
+        // Siswa kelas
         Route::get('/{id}/siswa', [KelasController::class, 'students'])
             ->name('kelas.students');
         Route::get('/{id}/siswa/cari', [KelasController::class, 'searchStudents'])
             ->name('kelas.students.search');
         Route::post('/{id}/siswa', [KelasController::class, 'enrollStudent'])
             ->name('kelas.students.store');
+
+        // Pertemuan kelas (class_sessions)
+        Route::get('/{id}/pertemuan', [KelasController::class, 'sessions'])
+            ->name('kelas.sessions');
+        Route::put('/pertemuan/{classSession}/jadwal', [KelasController::class, 'rescheduleSession'])
+            ->name('kelas.sessions.reschedule');
+        Route::post('/pertemuan/{classSession}/selesai', [KelasController::class, 'completeSession'])
+            ->name('kelas.sessions.complete');
+        Route::post('/{id}/home-visit', [KelasController::class, 'makeHomeVisit'])
+            ->name('kelas.home-visit');
+        
+        // Ajukan kelas
+        Route::post('/{id}/ajukan', [KelasController::class, 'storeOffer'])
+            ->name('kelas.offer.store');
     });
 
     // PROGRAM & LEVEL
@@ -1081,15 +1125,14 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
     // PROGRESS REPORT
     Route::get('/progress-report', [ProgressReportController::class, 'index'])
         ->name('progress-report');
-
-    Route::get('/progress-report/{report}/lihat', [ProgressReportController::class, 'lihat'])
-        ->name('progress-report.lihat');
-
-    Route::get('/progress-report/{report}/unduh', [ProgressReportController::class, 'unduh'])
-        ->name('progress-report.unduh');
-
+    Route::post('/progress-report/remind', [ProgressReportController::class, 'remind'])
+        ->name('progress-report.remind');
     Route::patch('/progress-report/{report}/follow-up', [ProgressReportController::class, 'followUp'])
         ->name('progress-report.follow-up');
+    Route::get('/progress-report/{report}/lihat', [ProgressReportController::class, 'lihat'])
+        ->name('progress-report.lihat');
+    Route::get('/progress-report/{report}/unduh', [ProgressReportController::class, 'unduh'])
+        ->name('progress-report.unduh');
 
     // DOKUMEN
     Route::get('/dokumen', [DokumenController::class, 'index'])

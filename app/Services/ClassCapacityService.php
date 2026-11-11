@@ -40,4 +40,29 @@ class ClassCapacityService
             ]);
         }
     }
+
+    /**
+     * cek minimum kelas 
+     */
+    public function meetsMinimum(ClassModel $class): bool
+    {
+        $min = $class->privatePackage?->min_students
+            ?? $class->programPackage?->min_students
+            ?? 1;
+
+        return $this->activeEnrollmentCount($class) >= $min;
+    }
+
+    public function assertMeetsMinimum(ClassModel $class): void
+    {
+        if (! $this->meetsMinimum($class)) {
+            $min = $class->privatePackage?->min_students
+                ?? $class->programPackage?->min_students
+                ?? 1;
+
+            throw ValidationException::withMessages([
+                'class_id' => "Kelas \"{$class->class_name}\" belum bisa berjalan, minimal {$min} siswa.",
+            ]);
+        }
+    }
 }

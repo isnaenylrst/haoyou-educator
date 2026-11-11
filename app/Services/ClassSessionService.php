@@ -8,6 +8,7 @@ use App\Models\ClassSchedule;
 use App\Models\ClassSession;
 use App\Models\Payment;
 use Carbon\Carbon;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -183,8 +184,11 @@ class ClassSessionService
      * 1. Replacement.
      * 2. Home Visit.
      *
+     * teacher_id opsional: kosong = pertemuan menunggu guru (lihat ClassSessionOfferService).
+     *
      * Data pembayaran yang diterima:
-     * payment_date, payment_method, payment_proof_path, amount (opsional).
+     * payment_date, payment_method, payment_proof_path, amount (opsional,
+     * hanya untuk biaya kelas pengganti; Home Visit selalu memakai tarif default).
      */
     public function createReplacement(array $data): ClassSession
     {
@@ -254,23 +258,28 @@ class ClassSessionService
                 ]);
             }
 
-            $this->schedules->assertTeacherAvailable(
-                (int) $data['teacher_id'],
-                [[
-                    'day' => ClassScheduleService::DAYS[
-                        $date->dayOfWeekIso - 1
-                    ],
-                    'start_time' => substr($start, 0, 5),
-                    'end_time' => substr($end, 0, 5),
-                ]]
-            );
+            // Admin tidak menentukan guru: pertemuan dibuat tanpa guru lalu diajukan lewat
+            // ClassSessionOfferService. Pengecekan guru hanya jalan kalau teacher_id diberikan,
+            // dan pengecekan bentrok dilakukan lagi saat guru menerima.
+            if (! empty($data['teacher_id'])) {
+                $this->schedules->assertTeacherAvailable(
+                    (int) $data['teacher_id'],
+                    [[
+                        'day' => ClassScheduleService::DAYS[
+                            $date->dayOfWeekIso - 1
+                        ],
+                        'start_time' => substr($start, 0, 5),
+                        'end_time' => substr($end, 0, 5),
+                    ]]
+                );
 
-            $this->schedules->assertTeacherFreeOn(
-                (int) $data['teacher_id'],
-                $date,
-                $start,
-                $end
-            );
+                $this->schedules->assertTeacherFreeOn(
+                    (int) $data['teacher_id'],
+                    $date,
+                    $start,
+                    $end
+                );
+            }
 
             if ($type === 'Studio') {
                 $this->schedules->assertRoomFreeOn(
@@ -291,7 +300,7 @@ class ClassSessionService
                 'start_time' => $start,
                 'end_time' => $end,
                 'room' => $room,
-                'teacher_id' => $data['teacher_id'],
+                'teacher_id' => $data['teacher_id'] ?? null,
                 'location_type' => $type,
                 'status' => 'Scheduled',
             ]);
@@ -310,7 +319,7 @@ class ClassSessionService
                     $enrollment,
                     Payment::TYPE_HOME_VISIT,
                     $session,
-                    $pay
+                    Arr::except($pay, 'amount')
                 );
             }
 

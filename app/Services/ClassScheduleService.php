@@ -80,14 +80,18 @@ class ClassScheduleService
     public function assertTeacherFree(int $teacherId, array $schedules, ?int $exceptClassId = null): void
     {
         foreach ($schedules as $row) {
+            // Normalisasi ke H:i:s supaya aman walau input berformat H:i maupun H:i:s.
+            $start = substr($row['start_time'], 0, 5) . ':00';
+            $end   = substr($row['end_time'], 0, 5) . ':00';
+
             $clash = ClassModel::query()
                 ->where('teacher_id', $teacherId)
                 ->whereIn('status', self::ACTIVE_STATUSES)
                 ->when($exceptClassId, fn ($q) => $q->where('id', '!=', $exceptClassId))
                 ->whereHas('schedules', fn ($q) => $q
                     ->where('day', $row['day'])
-                    ->where('start_time', '<', $row['end_time'] . ':00')
-                    ->where('end_time', '>', $row['start_time'] . ':00'))
+                    ->where('start_time', '<', $end)
+                    ->where('end_time', '>', $start))
                 ->first(['id', 'class_name']);
 
             if ($clash) {
@@ -242,7 +246,11 @@ class ClassScheduleService
         }
     }
 
-    /** Tanggal pertemuan ke-N (N = total_meetings paket) sesuai jadwal mingguan. */
+    /**
+     * Tanggal pertemuan ke-N (N = total_meetings paket) sesuai jadwal mingguan.
+     * Satu pola = satu pertemuan, jadi hari yang punya dua pola dihitung dua kali
+     * (sama seperti ClassSessionService::generate).
+     */
     public function resolveEndDate($package, string $startDate, array $schedules): ?string
     {
         $meetings = (int) ($package->total_meetings ?? 0);
@@ -255,12 +263,20 @@ class ClassScheduleService
             'Kamis' => Carbon::THURSDAY, 'Jumat' => Carbon::FRIDAY, 'Sabtu' => Carbon::SATURDAY,
             'Minggu' => Carbon::SUNDAY,
         ];
-        $weekdays = array_unique(array_map(fn ($s) => $dayMap[$s['day']], $schedules));
+
+        // Jumlah pola per hari dalam seminggu (dayOfWeek Carbon: 0 = Minggu).
+        $perDay = [];
+        foreach ($schedules as $s) {
+            $dow = $dayMap[$s['day']];
+            $perDay[$dow] = ($perDay[$dow] ?? 0) + 1;
+        }
 
         $date = Carbon::parse($startDate);
         $count = 0;
         for ($i = 0; $i < 3650; $i++) {
-            if (in_array($date->dayOfWeek, $weekdays, true) && ++$count === $meetings) {
+            $count += $perDay[$date->dayOfWeek] ?? 0;
+
+            if ($count >= $meetings) {
                 return $date->toDateString();
             }
             $date->addDay();

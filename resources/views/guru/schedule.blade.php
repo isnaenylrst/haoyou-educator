@@ -142,6 +142,9 @@
                                             {{ $c->teacher_name ?? 'Belum ada guru' }} · {{ $c->students }} siswa · {{ $c->delivery_mode }}
                                         </small>
                                         <small class="d-block">{{ $c->time }}{{ $c->room ? ' · ' . $c->room : '' }}</small>
+                                        @if(!empty($c->moved_note))
+                                            <small class="d-block fst-italic">{{ $c->moved_note }}</small>
+                                        @endif
                                         @if($c->is_mine && $c->is_filled)
                                             <small class="d-block fw-bold">✓ Jurnal terisi</small>
                                         @endif
@@ -223,6 +226,57 @@
                                 </button>
                                 <button name="decision" value="Rejected" class="btn btn-outline-secondary btn-sm">Lewati</button>
                             @endif
+                        </form>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    </div>
+    @endif
+
+    {{-- KELAS PENGGANTI DIAJUKAN KEPADA SAYA --}}
+    @if($replacementOffers->isNotEmpty())
+    <div class="card shadow-sm border-0 rounded-4 mb-3" style="border:2px solid #198754 !important">
+        <div class="card-body">
+            <h5 class="fw-bold mb-1">Kelas Pengganti Menunggu Jawaban Anda</h5>
+            <p class="text-muted small">
+                Satu pertemuan pengganti untuk siswa. Siapa yang menerima lebih dulu menjadi gurunya.
+                Terima atau tolak (alasan wajib jika menolak).
+            </p>
+
+            @foreach($replacementOffers as $ro)
+                @php $rs = $ro->session; @endphp
+                <div class="border rounded-3 p-3 mb-2">
+                    <div class="d-flex justify-content-between flex-wrap gap-2">
+                        <div>
+                            <div class="fw-semibold">
+                                {{ $rs->enrollment?->student?->name ?? '-' }}
+                                @if($rs->enrollment?->class)
+                                    <span class="text-muted fw-normal">· {{ $rs->enrollment->class->class_name }}</span>
+                                @endif
+                            </div>
+                            <div class="small text-muted">
+                                {{ $rs->session_date->translatedFormat('l, d M Y') }},
+                                {{ substr($rs->start_time, 0, 5) }}–{{ substr($rs->end_time, 0, 5) }}
+                                · {{ $rs->location_type }}{{ $rs->location_type === 'Studio' && $rs->room ? ' · ' . $rs->room : '' }}
+                                @if($rs->location_type === 'Home Visit') (guru datang ke rumah siswa) @endif
+                            </div>
+                            @if($ro->clash)
+                                <div class="small text-danger">Bentrok dengan jadwal Anda di jam ini</div>
+                            @elseif($ro->fits)
+                                <div class="small text-success">Sesuai ketersediaan Anda</div>
+                            @else
+                                <div class="small text-warning">Di luar ketersediaan yang Anda isi</div>
+                            @endif
+                        </div>
+
+                        <form method="POST" action="{{ route('teacher.pengganti.respond', $rs->id) }}"
+                              class="d-flex flex-wrap gap-2 align-items-start">
+                            @csrf
+                            <input type="text" name="note" maxlength="1000" class="form-control form-control-sm"
+                                   placeholder="Alasan jika menolak" style="min-width:200px">
+                            <button name="decision" value="Accepted" class="btn btn-success btn-sm" @disabled($ro->clash)>Terima</button>
+                            <button name="decision" value="Rejected" class="btn btn-outline-danger btn-sm">Tolak</button>
                         </form>
                     </div>
                 </div>

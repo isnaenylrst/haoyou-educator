@@ -6,6 +6,7 @@ use App\Models\ClassEnrollment;
 use App\Models\ClassModel;
 use App\Models\Student;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Carbon;
 
 class ClassEnrollmentSeeder extends Seeder
 {
@@ -46,15 +47,33 @@ class ClassEnrollmentSeeder extends Seeder
             // (enrollment_date <= session_date). Kalau kelas belum mulai
             // (start_date di masa depan), pakai hari ini sebagai batas bawah.
             $rangeStart = $class->start_date->isFuture() ? now() : $class->start_date;
-            $enrollmentDate = fake()->dateTimeBetween($rangeStart, 'now')->format('Y-m-d');
 
-            ClassEnrollment::factory()->create([
+            // Kelas yang sudah berakhir: siswa tidak mungkin mendaftar SETELAH
+            // end_date, jadi batas atasnya end_date (bukan hari ini).
+            $rangeEnd = ($class->end_date && Carbon::parse($class->end_date)->isPast())
+                ? Carbon::parse($class->end_date)
+                : now();
+
+            if ($rangeStart->gt($rangeEnd)) {
+                $rangeStart = $rangeEnd->copy();
+            }
+
+            $enrollmentDate = fake()->dateTimeBetween($rangeStart, $rangeEnd)->format('Y-m-d');
+
+            $attributes = [
                 'student_id' => $studentId,
                 'class_id' => $class->id,
                 'program_package_id' => $class->program_package_id,
                 'private_package_id' => $class->private_package_id,
                 'enrollment_date' => $enrollmentDate,
-            ]);
+            ];
+
+            // Enrollment di kelas yang sudah selesai ikut berstatus Completed
+            if ($class->status === 'Completed') {
+                $attributes['status'] = 'Completed';
+            }
+
+            ClassEnrollment::factory()->create($attributes);
 
             $class->active_enrollments_count++;
         }
