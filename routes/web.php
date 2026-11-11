@@ -15,6 +15,7 @@ use App\Http\Controllers\Siswa\VocabController;
 use App\Http\Controllers\ProfilController;
 use App\Http\Controllers\VocabGuideVideoController;
 use App\Http\Controllers\Siswa\GrammarController;
+use App\Http\Controllers\Siswa\BelajarMandiriController;
 
 // ===== KURIKULUM =====
 use App\Http\Controllers\Kurikulum\DashboardController;
@@ -178,6 +179,10 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
 
     Route::get('/video/{video}/stream', [SiswaLearningController::class, 'streamVideo'])
         ->name('video.stream');
+
+    // BELAJAR MANDIRI (hub)
+    Route::get('/belajar-mandiri', [BelajarMandiriController::class, 'index'])
+        ->name('student.mandiri.index');
 
     // BELAJAR VOCAB
     Route::prefix('student/belajar-vocab')->name('student.vocab.')->group(function () {

@@ -233,6 +233,12 @@
         height: 100%;
         object-fit: cover;
     }
+
+    /* ---------- TAB BELAJAR MANDIRI (vocab / grammar) ---------- */
+    .mt-tabs{display:flex;gap:4px;border-bottom:1px solid #E6E4DC;margin:18px 0 22px;overflow-x:auto;white-space:nowrap}
+    .mt-tab{padding:10px 16px;font-size:14px;font-weight:500;color:#6b6652;text-decoration:none;border-bottom:3px solid transparent;margin-bottom:-1px;transition:.15s}
+    .mt-tab:hover{color:#1d1a0f}
+    .mt-tab.is-active{color:#1d1a0f;font-weight:700;border-bottom-color:#FFE135}
 </style>
 @endpush
 
@@ -298,7 +304,6 @@
                 <span class="ico">🗓️</span> Booking Kelas
             </a>
             --}}
-
           
             <a href="{{ route('progresreport.index') }}"
                class="side-link {{ request()->routeIs('progresreport.*') ? 'is-active' : '' }}">
@@ -310,138 +315,27 @@
                 <span class="ico">🏅</span> Sertifikat
             </a> --}}
 
-            {{-- ============ SERTIFIKAT ============ --}}
+            {{-- ============ SERTIFIKAT KELAS ============ --}}
             @php
-                $inSertifikat = request()->routeIs('sertifikat.*');
-                $tabMandiri   = request('tab') === 'mandiri';
+                $tabMandiri = request('tab') === 'mandiri';
+                $inSertifikatKelas = request()->routeIs('sertifikat.*') && !$tabMandiri;
+
+                // Belajar mandiri aktif juga saat membuka halaman vocab / grammar / sertifikat mandiri
+                $inMandiri = request()->routeIs('student.mandiri.*', 'student.vocab.*', 'student.grammar.*')
+                    || (request()->routeIs('sertifikat.*') && $tabMandiri);
             @endphp
 
-            <div id="grpSertifikat" class="side-group {{ $inSertifikat ? 'open' : '' }}">
-                <button type="button"
-                        data-side-toggle="grpSertifikat"
-                        aria-expanded="{{ $inSertifikat ? 'true' : 'false' }}"
-                        class="side-link w-full {{ $inSertifikat ? 'is-active' : '' }}"
-                        style="border:0;cursor:pointer;text-align:left">
-                    <span class="ico">🏅</span>
-                    Sertifikat
-                    <svg class="side-chev" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="m9 5 7 7-7 7"/>
-                    </svg>
-                </button>
+            <a href="{{ route('sertifikat.index') }}"
+               class="side-link {{ $inSertifikatKelas ? 'is-active' : '' }}">
+                <span class="ico">🏅</span> Sertifikat Kelas
+            </a>
 
-                <div class="side-subwrap">
-                    <a href="{{ route('sertifikat.index') }}"
-                      class="side-sub {{ $inSertifikat && !$tabMandiri ? 'is-active' : '' }}">
-                        <span>🎓</span> Sertifikat Kelas
-                    </a>
-                    <a href="{{ route('sertifikat.index', ['tab' => 'mandiri']) }}"
-                      class="side-sub {{ $inSertifikat && $tabMandiri ? 'is-active' : '' }}">
-                        <span>👩‍🎓</span> Belajar Mandiri
-                    </a>
-                </div>
-            </div>
+            {{-- ============ BELAJAR MANDIRI ============ --}}
+            <a href="{{ route('student.mandiri.index') }}"
+               class="side-link alumni-restricted {{ $inMandiri ? 'is-active' : '' }}">
+                <span class="ico">🚀</span> Belajar Mandiri
+            </a>
 
-            {{-- ============ BELAJAR VOCAB ============ --}}
-            @php
-                $inVocab = request()->routeIs('student.vocab.*');
-            @endphp
-
-            <div id="grpVocab" class="side-group {{ $inVocab ? 'open' : '' }}">
-
-                <button type="button"
-                        data-side-toggle="grpVocab"
-                        aria-expanded="{{ $inVocab ? 'true' : 'false' }}"
-                        class="side-link alumni-restricted w-full"
-                        style="border:0;background:none;cursor:pointer;text-align:left">
-
-                    <span class="ico">📖</span>
-                    Belajar Vocab
-
-                    <svg class="side-chev"
-                         width="14"
-                         height="14"
-                         viewBox="0 0 24 24"
-                         fill="none"
-                         stroke="currentColor"
-                         stroke-width="2.4"
-                         stroke-linecap="round"
-                         stroke-linejoin="round">
-                        <path d="m9 5 7 7-7 7"/>
-                    </svg>
-                </button>
-
-                <div class="side-subwrap">
-
-                    <a href="{{ route('student.vocab.guide') }}"
-                       class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.guide') ? 'is-active' : '' }}">
-                        <span>📘</span> Panduan
-                    </a>
-
-                    <a href="{{ route('student.vocab.plan') }}"
-                       class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.plan') ? 'is-active' : '' }}">
-                        <span>📅</span> Study Plan
-                    </a>
-
-                    <a href="{{ route('student.vocab.list') }}"
-                       class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.list') ? 'is-active' : '' }}">
-                        <span>📖</span> Vocab List
-                    </a>
-
-                    <a href="{{ route('student.vocab.test') }}"
-                       class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.test*') ? 'is-active' : '' }}">
-                        <span>✍️</span> Test
-                    </a>
-
-                    <a href="{{ route('student.vocab.traps') }}"
-                       class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.traps*') ? 'is-active' : '' }}">
-                        <span>⚠️</span> Vocab Traps
-                    </a>
-
-                </div>
-            </div>
-            {{-- ============ BELAJAR GRAMMAR ============ --}}
-            @php $inGrammar = request()->routeIs('student.grammar.*'); @endphp
-
-            <div id="grpGrammar" class="side-group {{ $inGrammar ? 'open' : '' }}">
-
-                <button type="button"
-                        data-side-toggle="grpGrammar"
-                        aria-expanded="{{ $inGrammar ? 'true' : 'false' }}"
-                        class="side-link alumni-restricted w-full"
-                        style="border:0;background:none;cursor:pointer;text-align:left">
-
-                    <span class="ico">📝</span>
-                    Belajar Grammar
-
-                    <svg class="side-chev" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="m9 5 7 7-7 7"/>
-                    </svg>
-                </button>
-
-                <div class="side-subwrap">
-                <a href="{{ route('student.grammar.guide') }}"
-                class="side-sub alumni-restricted {{ request()->routeIs('student.grammar.guide') ? 'is-active' : '' }}">
-                    <span>📘</span> Panduan
-                </a>
-
-                <a href="{{ route('student.grammar.list') }}"
-                class="side-sub alumni-restricted {{ request()->routeIs('student.grammar.list') ? 'is-active' : '' }}">
-                    <span>📖</span> Grammar List
-                </a>
-
-                <a href="{{ route('student.grammar.traps') }}"
-                class="side-sub alumni-restricted {{ request()->routeIs('student.grammar.traps') ? 'is-active' : '' }}">
-                    <span>⚠️</span> Grammar Traps
-                </a>
-
-                <a href="{{ route('student.grammar.test') }}"
-                class="side-sub alumni-restricted {{ request()->routeIs('student.grammar.test*') ? 'is-active' : '' }}">
-                    <span>✍️</span> Test
-                </a>
-            </div>
-        </div>
         </nav>
 
         {{-- Dekorasi garis berwarna di dasar sidebar --}}
@@ -605,30 +499,66 @@
         {{-- PERUBAHAN: bg-white dihapus dari <main> dan diganti bg-transparent --}}
         <main class="flex-1 bg-transparent px-5 py-6 md:px-10 md:py-8">
 
+            @php
+                // Halaman di dalam Belajar mandiri: breadcrumb + judul + tab otomatis
+                $mandiriKind = request()->routeIs('student.vocab.*') ? 'vocab'
+                             : (request()->routeIs('student.grammar.*') ? 'grammar' : null);
+
+                $mandiriTabs = [
+                    'vocab' => [
+                        ['Panduan',     'student.vocab.guide',  'student.vocab.guide'],
+                        ['Study plan',  'student.vocab.plan',   'student.vocab.plan'],
+                        ['Vocab list',  'student.vocab.list',   'student.vocab.list'],
+                        ['Test',        'student.vocab.test',   'student.vocab.test*'],
+                        ['Vocab traps', 'student.vocab.traps',  'student.vocab.traps*'],
+                    ],
+                    'grammar' => [
+                        ['Panduan',       'student.grammar.guide', 'student.grammar.guide'],
+                        ['Grammar list',  'student.grammar.list',  'student.grammar.list'],
+                        ['Test',          'student.grammar.test',  'student.grammar.test*'],
+                        ['Grammar traps', 'student.grammar.traps', 'student.grammar.traps*'],
+                    ],
+                ];
+            @endphp
+
             <div class="mb-7">
 
-                <div class="text-sm text-[#6b6652]">
-                    Home &nbsp;›&nbsp;
-                    <span class="font-semibold text-[#1d1a0f]">
-                        {{ $title ?? 'Dashboard' }}
-                    </span>
-                </div>
-
-                @hasSection('page-heading')
-                    @yield('page-heading')
-                @else
+                @if($mandiriKind)
+                    <div class="text-sm text-[#6b6652]">
+                        Home &nbsp;›&nbsp;
+                        <a href="{{ route('student.mandiri.index') }}" class="hover:underline">Belajar mandiri</a>
+                        &nbsp;›&nbsp;
+                        <span class="font-semibold text-[#1d1a0f]">{{ ucfirst($mandiriKind) }}</span>
+                    </div>
 
                     <h1 class="mt-2 text-[28px] md:text-[34px] font-bold leading-tight">
-                        {{ $title ?? 'Dashboard' }}
+                        Belajar {{ $mandiriKind }}
                     </h1>
 
-                    @if(!empty($subtitle))
-                        <p class="text-sm text-[#6b6652] mt-1">
-                            {{ $subtitle }}
-                        </p>
-                    @endif
+                    <nav class="mt-tabs" aria-label="Menu belajar {{ $mandiriKind }}">
+                        @foreach($mandiriTabs[$mandiriKind] as [$label, $routeName, $pattern])
+                            <a href="{{ route($routeName) }}"
+                               class="mt-tab alumni-restricted {{ request()->routeIs($pattern) ? 'is-active' : '' }}">
+                                {{ $label }}
+                            </a>
+                        @endforeach
+                    </nav>
+                @else
+                    <div class="text-sm text-[#6b6652]">
+                        Home &nbsp;›&nbsp;
+                        <span class="font-semibold text-[#1d1a0f]">{{ $title ?? 'Dashboard' }}</span>
+                    </div>
 
+                    @hasSection('page-heading')
+                        @yield('page-heading')
+                    @else
+                        <h1 class="mt-2 text-[28px] md:text-[34px] font-bold leading-tight">{{ $title ?? 'Dashboard' }}</h1>
+                        @if(!empty($subtitle))
+                            <p class="text-sm text-[#6b6652] mt-1">{{ $subtitle }}</p>
+                        @endif
+                    @endif
                 @endif
+
             </div>
 
             @yield('dashboard-content')
@@ -665,7 +595,7 @@
         });
     })();
 
-    // ---------- Buka/tutup submenu Belajar Vocab ----------
+    // ---------- Buka/tutup grup submenu (jika ada) ----------
     document.querySelectorAll('[data-side-toggle]').forEach(function(b){
         b.addEventListener('click', function(){
             var g = document.getElementById(b.dataset.sideToggle);
