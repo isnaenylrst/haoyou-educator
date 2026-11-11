@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Siswa;
 
 use App\Http\Controllers\Controller;
+use App\Models\ClassEnrollment;
+use App\Models\Material;
 use App\Models\VocabStudyPlan;
 use App\Models\VocabTestResult;
 use App\Models\VocabTrap;
@@ -11,6 +13,7 @@ use App\Models\VocabWord;
 use App\Services\VocabTestEvaluator;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class VocabController extends Controller
 {
@@ -220,11 +223,83 @@ class VocabController extends Controller
     }
 
     /* ============================ MATERI HUAHUA ============================ */
+    /**
+     * Mengambil level dan program/kategori dari enrollment aktif siswa.
+     */
+    private function getStudentEnrollmentScope(): array
+    {
+        $student = auth()->user()?->student;
+        if (! $student) {
+            return [[], []];
+        }
+
+        $enrollments = ClassEnrollment::with(['class.level.category', 'class.programPackage.category'])
+            ->where('student_id', $student->id)
+            ->where('status', 'Active')
+            ->get();
+
+        $levelIds = $enrollments->flatMap(fn ($e) => [
+            $e->class?->level_id,
+            $e->class?->programPackage?->level_id,
+            $e->programPackage?->level_id,
+        ])->filter()->unique()->values()->all();
+
+        $categoryIds = $enrollments->flatMap(fn ($e) => [
+            $e->class?->level?->category_id,
+            $e->class?->programPackage?->category_id,
+            $e->programPackage?->category_id,
+        ])->filter()->unique()->values()->all();
+
+        return [$levelIds, $categoryIds];
+    }
+
+    /**
+     * Memeriksa otorisasi materi Huahua untuk siswa yang sedang login.
+     */
+    private function authorizeHuahuaMaterial(Material $material): void
+    {
+        abort_unless($material->audience === 'Huahua', 404);
+
+        [$levelIds, $categoryIds] = $this->getStudentEnrollmentScope();
+
+        $isAllowed = false;
+        // Materi tanpa program dan tanpa level (Umum) boleh terlihat jika audience Huahua
+        if (is_null($material->program_id) && is_null($material->level_id)) {
+            $isAllowed = true;
+        } elseif ($material->level_id && in_array($material->level_id, $levelIds, true)) {
+            $isAllowed = true;
+        } elseif (is_null($material->level_id) && $material->program_id && in_array($material->program_id, $categoryIds, true)) {
+            $isAllowed = true;
+        }
+
+        abort_unless($isAllowed, 403, 'Materi Huahua ini bukan untuk program atau level kelasmu.');
+        abort_unless($material->file_exists, 404, 'File materi tidak ditemukan.');
+    }
+
     public function materi(Request $r)
     {
-        $materials = \App\Models\Material::forHuahua()
+        [$levelIds, $categoryIds] = $this->getStudentEnrollmentScope();
+
+        $query = Material::forHuahua()
             ->with(['program', 'level'])
             ->withCount('huahuaWords')
+            ->where(function ($q) use ($levelIds, $categoryIds) {
+                if (! empty($levelIds)) {
+                    $q->whereIn('level_id', $levelIds);
+                }
+                if (! empty($categoryIds)) {
+                    $q->orWhere(function ($sub) use ($categoryIds) {
+                        $sub->whereIn('program_id', $categoryIds)
+                            ->whereNull('level_id');
+                    });
+                }
+                // Materi umum (tanpa program & tanpa level)
+                $q->orWhere(function ($sub) {
+                    $sub->whereNull('program_id')->whereNull('level_id');
+                });
+            });
+
+        $materials = $query
             ->orderByRaw('program_id IS NULL DESC, program_id ASC')
             ->orderBy('meeting_number')
             ->get();
@@ -237,28 +312,27 @@ class VocabController extends Controller
         ]);
     }
 
-    public function materiLihat(\App\Models\Material $material)
+    public function materiLihat(Material $material)
     {
-        abort_unless($material->audience === 'Huahua', 404);
-        abort_unless($material->file_exists, 404, 'File materi tidak ditemukan.');
+        $this->authorizeHuahuaMaterial($material);
 
         if (! $material->is_pdf) {
             return $this->materiUnduh($material);
         }
 
-        return response()->file(
-            storage_path('app/public/' . $material->material_file_path),
+        return Storage::disk('public')->response(
+            $material->material_file_path,
+            null,
             ['Content-Type' => 'application/pdf']
         );
     }
 
-    public function materiUnduh(\App\Models\Material $material)
+    public function materiUnduh(Material $material)
     {
-        abort_unless($material->audience === 'Huahua', 404);
-        abort_unless($material->file_exists, 404, 'File materi tidak ditemukan.');
+        $this->authorizeHuahuaMaterial($material);
 
         $name = (\Illuminate\Support\Str::slug($material->title) ?: 'materi-' . $material->id) . '.' . $material->file_extension;
 
-        return response()->download(storage_path('app/public/' . $material->material_file_path), $name);
+        return Storage::disk('public')->download($material->material_file_path, $name);
     }
 }

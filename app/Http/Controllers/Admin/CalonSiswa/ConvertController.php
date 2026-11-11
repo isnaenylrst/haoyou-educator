@@ -147,6 +147,7 @@ class ConvertController extends Controller
             'delivery_mode'          => [Rule::requiredIf($isPrivate), 'nullable', Rule::in(['Offline', 'Online'])],
             'start_date'             => [Rule::requiredIf($isPrivate), 'nullable', 'date'],
             'end_date'               => ['nullable', 'date', 'after_or_equal:start_date'],
+            'request_material'       => ['nullable', 'string', 'max:2000'],
             'schedules'              => [Rule::requiredIf($isPrivate), 'nullable', 'array', 'min:1'],
             'schedules.*.day'        => ['required', Rule::in(ClassScheduleService::DAYS)],
             'schedules.*.start_time' => ['required', 'date_format:H:i'],
@@ -394,9 +395,54 @@ class ConvertController extends Controller
                     'activity_fee'     => $activityFee,
                     'discount'         => $discount,
                     'notes'            => filled($validated['notes'] ?? null) ? trim($validated['notes']) : null,
+                    'request_material' => ($isPrivate && filled($draft['request_material'] ?? null)) ? trim($draft['request_material']) : null,
                     // Skema bayar menentukan total tagihan (Lunas = price, Termin = installment_price x lama paket)
                     'payment_scheme'   => $scheme,
                 ]);
+
+                // Sinkronkan ke student_learning_requests jika siswa private mengisi request_material
+                if ($isPrivate && filled($enrollment->request_material)) {
+                    \App\Models\StudentLearningRequest::create([
+                        'student_id'         => $student->id,
+                        'class_id'           => $classId,
+                        'topic'              => 'Request Program Private: ' . ($privatePackage->package_name ?? 'Private'),
+                        'consultation_notes' => $enrollment->request_material,
+                        'created_by'         => \Illuminate\Support\Facades\Auth::id() ?? $student->user_id,
+                    ]);
+
+                    // Kirim notifikasi ke Kurikulum dan Guru Pengajar
+                    $notifTitle   = "Request Belajar Siswa Private: {$student->name}";
+                    $notifMessage = "Siswa {$student->name} (Kelas Private) meminta request belajar: " . \Illuminate\Support\Str::limit($enrollment->request_material, 120);
+
+                    // 1. Notifikasi ke Kurikulum
+                    $curriculums = User::whereHas('level', fn ($q) => $q->whereIn('nama_level', ['Curriculum', 'Kurikulum']))->get();
+                    foreach ($curriculums as $curr) {
+                        $curr->notify(new \App\Notifications\AppNotification(
+                            title: $notifTitle,
+                            message: $notifMessage,
+                            url: url('/kurikulum/request-belajar'),
+                            type: 'request_belajar',
+                            icon: 'fa-book-open-reader'
+                        ));
+                    }
+
+                    // 2. Notifikasi ke Guru pengajar jika kelas ditentukan
+                    if (!empty($draft['teacher_id'])) {
+                        $guruUser = User::where('id', function ($q) use ($draft) {
+                            $q->select('user_id')->from('teachers')->where('id', $draft['teacher_id']);
+                        })->first();
+
+                        if ($guruUser) {
+                            $guruUser->notify(new \App\Notifications\AppNotification(
+                                title: $notifTitle,
+                                message: $notifMessage,
+                                url: url('/guru/request-belajar'),
+                                type: 'request_belajar',
+                                icon: 'fa-book-open-reader'
+                            ));
+                        }
+                    }
+                }
 
                 $amountPaid = (float) $validated['amount_paid'];
 

@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Guru;
 
 use App\Http\Controllers\Controller;
 use App\Models\Material;
+use App\Models\ProgramCategory;
+use App\Models\ProgramLevel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class MaterialController extends Controller
@@ -13,7 +16,7 @@ class MaterialController extends Controller
     /*
     | Guru hanya BISA LIHAT & DOWNLOAD materi + silabus yang sudah
     | disiapkan Kurikulum. Tidak ada upload/edit/hapus di sisi Guru.
-    | Guru melihat materi untuk program/kelas yang dia ajar plus materi "Umum".
+    | SEMUA guru dapat melihat SEMUA materi audience = Guru dari seluruh program.
     */
 
     public function index(Request $request)
@@ -21,21 +24,67 @@ class MaterialController extends Controller
         $user = Auth::user();
         $teacher = $user?->teacher;
 
-        // Ambil kelas yang diajar guru
+        // Ambil kelas yang diajar guru ini untuk penanda "Kelas Anda"
         $teacherClasses = $teacher
             ? $teacher->classes()->with(['level.category', 'programPackage.category'])->get()
             : collect();
 
-        // Ambil category_id / program_id & level_id yang diajar guru
         $taughtProgramIds = $teacherClasses->flatMap(function ($c) {
             return [
                 $c->level?->category_id,
                 $c->programPackage?->category_id,
             ];
-        })->filter()->unique()->values();
+        })->filter()->unique()->values()->all();
 
-        $taughtLevelIds = $teacherClasses->pluck('level_id')->filter()->unique()->values();
+        $taughtLevelIds = $teacherClasses->pluck('level_id')->filter()->unique()->values()->all();
 
+        // 1. Program-program yang memiliki materi Guru (untuk tab/chip & dropdown)
+        // Hitung jumlah materi Guru per program_id (termasuk program_id NULL = Umum)
+        $materialCountsByProgram = Material::forGuru()
+            ->selectRaw('program_id, COUNT(*) as total')
+            ->groupBy('program_id')
+            ->get();
+
+        $hasUmum = $materialCountsByProgram->contains(fn ($row) => is_null($row->program_id));
+        $umumCount = (int) ($materialCountsByProgram->firstWhere(fn ($row) => is_null($row->program_id))?->total ?? 0);
+
+        $assignedProgramIds = $materialCountsByProgram->pluck('program_id')->filter()->values()->all();
+
+        // Ambil data ProgramCategory yang punya materi Guru
+        $programCategories = ProgramCategory::with(['levels' => fn ($lq) => $lq->orderBy('sort_order')])
+            ->whereIn('id', $assignedProgramIds)
+            ->get();
+
+        // Bentuk list program tabs: program yang diajar guru diutamakan lebih dulu, lalu program lain, lalu Umum
+        $programTabs = $programCategories->map(function ($cat) use ($materialCountsByProgram, $taughtProgramIds) {
+            $count = (int) ($materialCountsByProgram->firstWhere('program_id', $cat->id)?->total ?? 0);
+            $isTaught = in_array($cat->id, $taughtProgramIds, true);
+            return [
+                'id'        => (string) $cat->id,
+                'name'      => $cat->category_name,
+                'count'     => $count,
+                'is_taught' => $isTaught,
+                'levels'    => $cat->levels->map(fn ($lvl) => [
+                    'id'   => $lvl->id,
+                    'name' => $lvl->level_name,
+                ])->toArray(),
+            ];
+        })->sortByDesc('is_taught')->values();
+
+        // Tab "Umum" jika ada materi umum
+        if ($hasUmum || $umumCount > 0) {
+            $programTabs->push([
+                'id'        => 'umum',
+                'name'      => 'Umum',
+                'count'     => $umumCount,
+                'is_taught' => false,
+                'levels'    => [],
+            ]);
+        }
+
+        $totalGuruMaterials = Material::forGuru()->count();
+
+        // 2. Query data materi untuk guru (SEMUA program yang audience = Guru)
         $query = Material::forGuru()->with([
             'program',
             'level.category',
@@ -44,55 +93,72 @@ class MaterialController extends Controller
             'vocabularies',
         ]);
 
-        // Guru melihat materi untuk program/kelas yang dia ajar plus materi "Umum"
-        $query->where(function ($q) use ($taughtProgramIds, $taughtLevelIds) {
-            $q->whereNull('program_id'); // Materi "Umum"
-
-            if ($taughtProgramIds->isNotEmpty()) {
-                $q->orWhereIn('program_id', $taughtProgramIds);
+        // Filter Program
+        $selectedProgram = $request->query('program');
+        if ($selectedProgram !== null && $selectedProgram !== '') {
+            if ($selectedProgram === 'umum') {
+                $query->whereNull('program_id');
+            } else {
+                $query->where('program_id', $selectedProgram);
             }
+        }
 
-            if ($taughtLevelIds->isNotEmpty()) {
-                $q->orWhereIn('level_id', $taughtLevelIds);
-            }
-        });
+        // Filter Level
+        $selectedLevel = $request->query('level_id');
+        if ($request->filled('level_id')) {
+            $query->where('level_id', (int) $selectedLevel);
+        }
 
-        // Filter pencarian judul
+        // Pencarian Judul / Silabus / Deskripsi / Pertemuan
         if ($request->filled('q')) {
             $term = trim($request->q);
             $query->where(function ($q) use ($term) {
                 $q->where('title', 'like', "%{$term}%")
                   ->orWhere('syllabus', 'like', "%{$term}%")
                   ->orWhere('description', 'like', "%{$term}%");
+
+                if (ctype_digit($term)) {
+                    $q->orWhere('meeting_number', (int) $term);
+                }
             });
         }
 
-        // Filter program spesifik dari query request
-        if ($request->filled('program')) {
-            $progFilter = $request->query('program');
-            if ($progFilter === 'Umum') {
-                $query->whereNull('program_id');
-            } else {
-                $query->whereHas('program', fn ($pq) => $pq->where('category_name', $progFilter));
-            }
-        }
-
+        // Urutan:
+        // Program yang diajar guru ditaruh di awal, lalu program lain, lalu Umum (program_id IS NULL).
+        // Di dalam tiap program: urut level_id lalu meeting_number.
         $materials = $query
-            ->orderByRaw('program_id IS NULL DESC, program_id ASC')
+            ->orderByRaw('program_id IS NULL ASC') // Program spesifik dulu, baru Umum
+            ->orderBy('program_id')
+            ->orderByRaw('level_id IS NULL ASC')
             ->orderBy('level_id')
             ->orderBy('meeting_number')
-            ->get();
+            ->paginate(50)
+            ->withQueryString();
 
-        // Kelompokkan per program (label program atau "Umum")
-        $groupedMaterials = $materials->groupBy(fn ($m) => $m->program_name);
+        // Kelompokkan per Program -> per Level untuk struktur tampilan accordion
+        // Urutan kelompok program: program yang diajar guru di paling atas
+        $groupedMaterials = $materials->getCollection()
+            ->groupBy(function ($m) {
+                return $m->program_id ? (string) $m->program_id : 'umum';
+            })
+            ->sortBy(function ($items, $progKey) use ($taughtProgramIds) {
+                if ($progKey === 'umum') {
+                    return 9999;
+                }
+                $isTaught = in_array((int) $progKey, $taughtProgramIds, true);
+                return $isTaught ? 0 : 1;
+            });
 
-        // Daftar program yang tersedia untuk tab/filter
-        $availablePrograms = $materials
-            ->map(fn ($m) => $m->program_name)
-            ->unique()
-            ->values();
-
-        return view('guru.materi', compact('materials', 'groupedMaterials', 'availablePrograms'));
+        return view('guru.materi', compact(
+            'materials',
+            'groupedMaterials',
+            'programTabs',
+            'selectedProgram',
+            'selectedLevel',
+            'totalGuruMaterials',
+            'taughtProgramIds',
+            'taughtLevelIds'
+        ));
     }
 
     public function show(Material $material)
@@ -105,8 +171,9 @@ class MaterialController extends Controller
             return $this->download($material);
         }
 
-        return response()->file(
-            storage_path('app/public/' . $material->material_file_path),
+        return Storage::disk('public')->response(
+            $material->material_file_path,
+            null,
             ['Content-Type' => 'application/pdf']
         );
     }
@@ -121,6 +188,7 @@ class MaterialController extends Controller
         $name = (Str::slug($material->title) ?: 'materi-' . $material->id)
             . '.' . $material->file_extension;
 
-        return response()->download(storage_path('app/public/' . $material->material_file_path), $name);
+        return Storage::disk('public')->download($material->material_file_path, $name);
     }
 }
+

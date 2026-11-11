@@ -105,17 +105,18 @@ class ReviewPengajuanController extends Controller
         );
 
         $lateEnrollments = $this->lateEnrollments();
+        $lateJournals    = $this->lateJournals();
 
         $totals = [
             'material'   => $materials->total(),
-            'jurnal'     => $journals->total(),
+            'jurnal'     => $journals->total() + $lateJournals->count(),
             'report'     => $reports->total() + $lateEnrollments->count(),
             'cuti'       => $leaves->total(),
             'sertifikat' => $certificates->total(),
             'pengajuan'  => $submissions->total(),
         ];
 
-        $totalPending = $materials->total() + $journals->total() + $reports->total()
+        $totalPending = $materials->total() + $journals->total() + $lateJournals->count() + $reports->total()
             + $leaves->total() + $certificates->total() + $submissions->total();
 
         // Tab aktif: yang diminta (?tab=), atau tab pertama yang punya antrian
@@ -126,7 +127,7 @@ class ReviewPengajuanController extends Controller
 
         return view('kurikulum.review-pengajuan', compact(
             'todaySchedules', 'totalSessionToday', 'filledToday', 'unfilledToday', 'teacherNamesToday',
-            'materials', 'journals', 'reports', 'leaves', 'certificates', 'submissions', 'lateEnrollments',
+            'materials', 'journals', 'reports', 'leaves', 'certificates', 'submissions', 'lateEnrollments', 'lateJournals',
             'totals', 'totalPending', 'tab'
         ));
     }
@@ -481,6 +482,56 @@ class ReviewPengajuanController extends Controller
 
     // ------------------------------------------------------------------ HELPER
 
+    /**
+     * Sesi mengajar yang terlambat (> 24 jam) dan belum diisi jurnalnya,
+     * termasuk permohonan buka kunci yang dikirim oleh guru.
+     */
+    private function lateJournals()
+    {
+        $from = now()->subDays(60);
+        $to   = now();
+
+        $finder = app(\App\Services\MissingJournalFinder::class);
+        $missing = $finder->find($from, $to);
+
+        if ($missing->isEmpty()) {
+            return collect();
+        }
+
+        // Ambil unlock records yang terkait
+        $scheduleIds = $missing->pluck('schedule.id')->unique()->values();
+        $unlocks = \App\Models\ScheduleJournalUnlock::with(['requester', 'unlocker'])
+            ->whereIn('class_schedule_id', $scheduleIds)
+            ->whereDate('session_date', '>=', $from->toDateString())
+            ->get()
+            ->keyBy(fn ($u) => $u->class_schedule_id . '|' . $u->session_date->format('Y-m-d'));
+
+        return $missing->map(function ($item) use ($unlocks) {
+            $key = $item->schedule->id . '|' . $item->date->format('Y-m-d');
+            $unlock = $unlocks->get($key);
+            $sessionEnd = Carbon::parse($item->date->format('Y-m-d') . ' ' . $item->schedule->end_time);
+            $deadline = $sessionEnd->copy()->addHours(24);
+            $isPast = now()->gt($deadline);
+
+            return (object) [
+                'schedule'       => $item->schedule,
+                'class'          => $item->class,
+                'teacher'        => $item->teacher,
+                'is_substitute'  => $item->is_substitute,
+                'session_date'   => $item->date,
+                'deadline'       => $deadline,
+                'days_late'      => $item->days_late,
+                'is_past'        => $isPast,
+                'unlock_record'  => $unlock,
+                'is_unlocked'    => $unlock && $unlock->is_open,
+                'has_request'    => $unlock && $unlock->status === 'Pending',
+            ];
+        })->filter(function ($item) {
+            // Hanya tampilkan yang memang sudah lewat batas 24 jam
+            return $item->is_past;
+        })->values();
+    }
+
     /** Siswa yang kelasnya selesai > H+3 tapi belum ada report terkirim. */
     private function lateEnrollments()
     {
@@ -624,8 +675,10 @@ class ReviewPengajuanController extends Controller
                 'session_date'      => $request->session_date,
             ],
             [
-                'unlocked_until'    => now()->addHours(24),
-                'unlocked_by'       => Auth::id(),
+                'status'         => 'Unlocked',
+                'unlocked_until' => now()->addHours(24),
+                'unlocked_by'    => Auth::id(),
+                'rejection_note' => null,
             ]
         );
 
@@ -641,5 +694,43 @@ class ReviewPengajuanController extends Controller
         }
 
         return back()->with('success', 'Kunci pengisian jurnal berhasil dibuka untuk 24 jam ke depan, dan guru telah diberi notifikasi.');
+    }
+
+    /** Tolak permohonan buka kunci jurnal yang diajukan guru */
+    public function rejectUnlockJournal(Request $request)
+    {
+        $request->validate([
+            'class_schedule_id' => ['required', 'exists:class_schedules,id'],
+            'session_date'      => ['required', 'date'],
+            'rejection_note'    => ['required', 'string', 'max:1000'],
+        ], [
+            'rejection_note.required' => 'Alasan penolakan pembukaan kunci wajib diisi.',
+        ]);
+
+        \App\Models\ScheduleJournalUnlock::updateOrCreate(
+            [
+                'class_schedule_id' => $request->class_schedule_id,
+                'session_date'      => $request->session_date,
+            ],
+            [
+                'status'         => 'Rejected',
+                'rejection_note' => $request->rejection_note,
+                'unlocked_until' => null,
+                'unlocked_by'    => Auth::id(),
+            ]
+        );
+
+        $schedule = \App\Models\ClassSchedule::with('class.teacher.user')->find($request->class_schedule_id);
+        if ($schedule?->class?->teacher?->user) {
+            $schedule->class->teacher->user->notify(new \App\Notifications\AppNotification(
+                title: "Permohonan Buka Kunci Jurnal Ditolak",
+                message: "Permohonan buka kunci jurnal untuk kelas {$schedule->class->class_name} pada tanggal " . \Illuminate\Support\Carbon::parse($request->session_date)->translatedFormat('d M Y') . " ditolak Kurikulum. Alasan: {$request->rejection_note}",
+                url: url('/guru/attendance?date=' . $request->session_date),
+                type: 'jurnal',
+                icon: 'fa-circle-xmark'
+            ));
+        }
+
+        return back()->with('success', 'Permohonan buka kunci jurnal telah ditolak dan guru telah diberitahu.');
     }
 }

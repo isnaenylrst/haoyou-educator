@@ -225,7 +225,16 @@
                         </td> --}}
 
                         <td>
-                            {{ $candidate->consultation_date ? \Carbon\Carbon::parse($candidate->consultation_date)->format('d M Y') : '-' }}
+                            @if ($candidate->consultation_date)
+                                <div class="fw-semibold text-dark">{{ \Carbon\Carbon::parse($candidate->consultation_date)->format('d M Y') }}</div>
+                            @else
+                                <span class="text-muted">-</span>
+                            @endif
+                            @if (!empty($candidate->consultation_notes))
+                                <div class="mt-1" style="font-size: 11.5px; color: #4b5563; max-width: 220px; line-height: 1.3;" title="{{ $candidate->consultation_notes }}">
+                                    <i class="fa-solid fa-comment-dots text-warning me-1"></i><strong>Req:</strong> {{ \Illuminate\Support\Str::limit($candidate->consultation_notes, 60) }}
+                                </div>
+                            @endif
                         </td>
 
                         {{-- Action --}}
@@ -452,11 +461,21 @@
                                 <input type="date" name="consultation_date">
                             </div>
                             <div class="form-field full">
-                                <label>Catatan Siswa</label>
-                                <textarea name="consultation_notes" rows="2"></textarea>
+                                <label>Request Belajar / Catatan Konsultasi</label>
+                                <textarea name="consultation_notes" rows="2" placeholder="Contoh: Fokus percakapan bisnis, persiapan interview kerja, atau materi khusus yang diminta..."></textarea>
                             </div>
                         </div>
                     </div>                   
+
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-note-sticky"></i> Catatan Khusus</div>
+                        <div class="form-grid">
+                            <div class="form-field full">
+                                <label>Catatan Tambahan</label>
+                                <textarea name="notes" rows="2" placeholder="Contoh: Masuk dipertengahan kelas"></textarea>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="form-section">
                         <div class="form-section-title"><i class="fa-solid fa-calendar-week"></i> Jadwal Tersedia</div>
@@ -658,17 +677,17 @@
                                 </select>
                             </div>
                             <div class="form-field full">
-                                <label>Catatan Siswa</label>
-                                <textarea name="consultation_notes" id="edit_consultation_notes" rows="2"></textarea>
+                                <label>Request Belajar / Catatan Konsultasi</label>
+                                <textarea name="consultation_notes" id="edit_consultation_notes" rows="2" placeholder="Contoh: Fokus percakapan bisnis, persiapan interview kerja, atau materi khusus yang diminta..."></textarea>
                             </div>
                         </div>
                     </div>
 
                     <div class="form-section">
-                        <div class="form-section-title"><i class="fa-solid fa-note-sticky"></i> Catatan</div>
+                        <div class="form-section-title"><i class="fa-solid fa-note-sticky"></i> Catatan Khusus</div>
                         <div class="form-grid">
                             <div class="form-field full">
-                                <label>Catatan Siswa</label>
+                                <label>Catatan Tambahan</label>
                                 <textarea name="notes" id="edit_notes" rows="3" placeholder="Contoh: Masuk dipertengahan kelas"></textarea>
                             </div>
                         </div>

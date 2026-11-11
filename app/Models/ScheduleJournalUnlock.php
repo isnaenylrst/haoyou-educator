@@ -14,12 +14,18 @@ class ScheduleJournalUnlock extends Model
     protected $fillable = [
         'class_schedule_id',
         'session_date',
+        'status',          // 'Pending', 'Unlocked', 'Rejected'
+        'request_reason',
+        'requested_at',
+        'requested_by',
         'unlocked_until',
         'unlocked_by',
+        'rejection_note',
     ];
 
     protected $casts = [
         'session_date'   => 'date',
+        'requested_at'   => 'datetime',
         'unlocked_until' => 'datetime',
     ];
 
@@ -33,9 +39,13 @@ class ScheduleJournalUnlock extends Model
         return $this->belongsTo(User::class, 'unlocked_by');
     }
 
+    public function requester()
+    {
+        return $this->belongsTo(User::class, 'requested_by');
+    }
+
     public function getIsOpenAttribute(): bool
     {
-        return $this->unlocked_until && $this->unlocked_until->isFuture();
+        return $this->status === 'Unlocked' && $this->unlocked_until && $this->unlocked_until->isFuture();
     }
 }
-

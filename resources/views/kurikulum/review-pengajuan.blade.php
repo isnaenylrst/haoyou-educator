@@ -220,7 +220,13 @@
     <div class="mb-3 d-flex flex-wrap gap-2" id="docTabs">
         @foreach ($docTabs as $key => [$label, $count])
             <button type="button" class="doc-pill {{ $tab === $key ? 'active' : '' }}" data-tab="{{ $key }}">
-                {{ $label }} ({{ $count }}{{ $key === 'report' && $lateEnrollments->isNotEmpty() ? ', ' . $lateEnrollments->count() . ' terlambat' : '' }})
+                {{ $label }} ({{ $count }}
+                @if ($key === 'jurnal' && !empty($lateJournals) && $lateJournals->isNotEmpty())
+                    , {{ $lateJournals->count() }} terlambat
+                @elseif ($key === 'report' && $lateEnrollments->isNotEmpty())
+                    , {{ $lateEnrollments->count() }} terlambat
+                @endif
+                )
             </button>
         @endforeach
     </div>
@@ -360,6 +366,86 @@
 
                 @if ($journals->hasPages())
                     <div class="list-group-item">{{ $journals->links() }}</div>
+                @endif
+
+                {{-- Sesi Terlambat / Terkunci & Permohonan Buka Kunci dari Guru --}}
+                @if (!empty($lateJournals) && $lateJournals->isNotEmpty())
+                    <div class="list-group-item bg-light fw-bold small text-danger d-flex justify-content-between align-items-center">
+                        <span><i class="fa-solid fa-lock me-1"></i> Jurnal Terlambat / Terkunci (> 24 Jam) ({{ $lateJournals->count() }})</span>
+                        <span class="text-muted fw-normal">Kurikulum dapat menyetujui pembukaan kunci selama 24 jam</span>
+                    </div>
+
+                    @foreach ($lateJournals as $late)
+                        @php
+                            $uRec = $late->unlock_record;
+                            $hasPendingRequest = $late->has_request;
+                            $isUnlocked = $late->is_unlocked;
+                        @endphp
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                <div>
+                                    <div class="fw-semibold">
+                                        {{ $late->teacher->name ?? '-' }} — Kelas {{ $late->class->class_name ?? '-' }}
+                                        @if ($late->is_substitute)
+                                            <span class="badge bg-secondary ms-1">Guru Pengganti</span>
+                                        @endif
+                                        @if ($hasPendingRequest)
+                                            <span class="badge bg-warning text-dark ms-1"><i class="fa-solid fa-bell me-1"></i> Mengajukan Buka Kunci</span>
+                                        @elseif ($isUnlocked)
+                                            <span class="badge bg-success ms-1"><i class="fa-solid fa-lock-open me-1"></i> Terbuka hingga {{ $uRec->unlocked_until?->translatedFormat('d M, H:i') }}</span>
+                                        @else
+                                            <span class="badge bg-danger ms-1"><i class="fa-solid fa-lock me-1"></i> Terkunci</span>
+                                        @endif
+                                    </div>
+                                    <small class="text-muted d-block">
+                                        Sesi: <strong>{{ $late->session_date->translatedFormat('d M Y') }}</strong> ({{ \Illuminate\Support\Carbon::parse($late->schedule->start_time)->format('H:i') }} - {{ \Illuminate\Support\Carbon::parse($late->schedule->end_time)->format('H:i') }})
+                                        &middot; Terlambat: <span class="text-danger fw-bold">{{ $late->days_late }} hari</span>
+                                        &middot; Batas 24 jam lewat pada {{ $late->deadline->translatedFormat('d M Y, H:i') }}
+                                    </small>
+
+                                    @if ($uRec && $uRec->request_reason)
+                                        <div class="note-box mt-2 py-2 px-3 border border-warning bg-warning-subtle text-dark">
+                                            <strong>Alasan Keterlambatan Guru:</strong>
+                                            <em>"{{ $uRec->request_reason }}"</em>
+                                            <small class="text-muted d-block mt-1">Diajukan: {{ $uRec->requested_at?->diffForHumans() }}</small>
+                                        </div>
+                                    @endif
+
+                                    @if ($uRec && $uRec->status === 'Rejected')
+                                        <div class="small text-danger mt-1">
+                                            <i class="fa-solid fa-circle-xmark me-1"></i> Pernah ditolak: {{ $uRec->rejection_note }}
+                                        </div>
+                                    @endif
+                                </div>
+
+                                <div class="d-flex gap-2 flex-wrap review-actions">
+                                    {{-- FORM BUKA KUNCI --}}
+                                    <form action="{{ route('kurikulum.review-pengajuan.unlock-journal') }}" method="POST"
+                                          onsubmit="return confirm('Buka kunci pengisian jurnal kelas {{ $late->class->class_name }} sesi {{ $late->session_date->translatedFormat('d M Y') }} untuk 24 jam ke depan?')">
+                                        @csrf
+                                        <input type="hidden" name="class_schedule_id" value="{{ $late->schedule->id }}">
+                                        <input type="hidden" name="session_date" value="{{ $late->session_date->format('Y-m-d') }}">
+                                        <button class="btn btn-primary btn-sm">
+                                            <i class="fa-solid fa-lock-open me-1"></i> Buka Kunci (+24 Jam)
+                                        </button>
+                                    </form>
+
+                                    {{-- FORM TOLAK PERMOHONAN JIKA ADA REQUEST --}}
+                                    @if ($hasPendingRequest)
+                                        <form action="{{ route('kurikulum.review-pengajuan.reject-unlock-journal') }}" method="POST" class="d-flex gap-1"
+                                              onsubmit="return confirm('Tolak permohonan buka kunci ini?')">
+                                            @csrf
+                                            <input type="hidden" name="class_schedule_id" value="{{ $late->schedule->id }}">
+                                            <input type="hidden" name="session_date" value="{{ $late->session_date->format('Y-m-d') }}">
+                                            <input type="text" name="rejection_note" maxlength="1000" required
+                                                   class="form-control form-control-sm" placeholder="Alasan tolak (wajib)" style="min-width:170px">
+                                            <button class="btn btn-outline-danger btn-sm">Tolak</button>
+                                        </form>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
                 @endif
             </div>
 

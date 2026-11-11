@@ -896,6 +896,7 @@
             $oldDeliveryMode = old('delivery_mode', $draft['delivery_mode'] ?? 'Offline');
             $oldStartDate    = old('start_date', $draft['start_date'] ?? '');
             $oldEndDate      = old('end_date', '');
+            $defaultRequestMaterial = old('request_material', $draft['request_material'] ?? ($candidateStudent->consultation_notes ?? ''));
         @endphp
 
         <div class="convert-layout">
@@ -1050,6 +1051,16 @@
                                     <div class="form-field full">
                                         <label>Jadwal Tersedia Guru</label>
                                         <div id="teacher-availability" class="teacher-availability"></div>
+                                    </div>
+
+                                    <div class="form-field full">
+                                        <label>Request Belajar Siswa (Khusus Private)</label>
+                                        <textarea name="request_material" id="request_material" rows="3" class="form-control"
+                                                  placeholder="Tuliskan permintaan materi/topik khusus siswa (contoh: fokus percakapan bisnis, persiapan interview, tes HSK, dll)">{{ $defaultRequestMaterial }}</textarea>
+                                        <span class="form-section-note" style="margin-top:2px;">
+                                            <i class="fa-solid fa-circle-info"></i>
+                                            Terisi otomatis dari catatan konsultasi calon siswa. Request ini akan langsung dapat dilihat oleh Tim Kurikulum dan Guru Pengajar.
+                                        </span>
                                     </div>
 
                                     <div class="form-field full">

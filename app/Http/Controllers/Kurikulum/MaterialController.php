@@ -261,10 +261,14 @@ class MaterialController extends Controller
             $levelLabel  = $material->level ? ' - Level ' . $material->level->level_name : '';
             $fullLabel   = $programName . $levelLabel;
 
-            // 1. Target Guru: yang mengajar program & level ini, atau semua guru jika umum
+            // 1. Target Guru: jika audience = Guru, kirim ke SEMUA guru aktif. Jika audience = Siswa, kirim ke guru kelas terkait.
             $guruUserIds = collect();
-            if ($material->audience === 'Guru' || $material->audience === 'Siswa') {
-                $guruQuery = User::whereHas('teacher');
+            if ($material->audience === 'Guru') {
+                $guruUserIds = User::whereHas('teacher', function ($tq) {
+                    $tq->where('status', 'Active');
+                })->pluck('id');
+            } elseif ($material->audience === 'Siswa') {
+                $guruQuery = User::whereHas('teacher', fn ($tq) => $tq->where('status', 'Active'));
                 if ($material->level_id) {
                     $guruQuery->whereHas('teacher.classes', function ($q) use ($material) {
                         $q->where('level_id', $material->level_id);
@@ -280,34 +284,26 @@ class MaterialController extends Controller
                 $guruUserIds = $guruQuery->pluck('id');
             }
 
-            // 2. Target Siswa: yang ada di program & level ini, atau semua siswa jika umum
+            // 2. Target Siswa: yang ada di program & level ini (dari enrollment aktif), atau semua siswa jika umum
             $siswaUserIds = collect();
             if ($material->audience === 'Siswa' || $material->audience === 'Huahua') {
                 $siswaQuery = User::whereHas('student');
                 if ($material->level_id) {
-                    $siswaQuery->whereHas('student', function ($sq) use ($material) {
-                        $sq->where(function ($sub) use ($material) {
-                            $sub->whereHas('enrollments', function ($eq) use ($material) {
-                                $eq->whereIn('status', ['Active', 'Waiting Class', 'Completed'])
-                                    ->where(function ($cq) use ($material) {
-                                        $cq->whereHas('class', fn ($c) => $c->where('level_id', $material->level_id))
-                                            ->orWhereHas('programPackage', fn ($p) => $p->where('level_id', $material->level_id));
-                                    });
-                            })->orWhere('current_level_id', $material->level_id);
-                        });
+                    $siswaQuery->whereHas('student.enrollments', function ($eq) use ($material) {
+                        $eq->where('status', 'Active')
+                            ->where(function ($cq) use ($material) {
+                                $cq->whereHas('class', fn ($c) => $c->where('level_id', $material->level_id))
+                                    ->orWhereHas('programPackage', fn ($p) => $p->where('level_id', $material->level_id));
+                            });
                     });
                 } elseif ($material->program_id) {
-                    $siswaQuery->whereHas('student', function ($sq) use ($material) {
-                        $sq->where(function ($sub) use ($material) {
-                            $sub->whereHas('enrollments', function ($eq) use ($material) {
-                                $eq->whereIn('status', ['Active', 'Waiting Class', 'Completed'])
-                                    ->where(function ($cq) use ($material) {
-                                        $cq->whereHas('class.level', fn ($l) => $l->where('category_id', $material->program_id))
-                                            ->orWhereHas('class.programPackage', fn ($p) => $p->where('category_id', $material->program_id))
-                                            ->orWhereHas('programPackage', fn ($p) => $p->where('category_id', $material->program_id));
-                                    });
-                            })->orWhereHas('currentLevel', fn ($l) => $l->where('category_id', $material->program_id));
-                        });
+                    $siswaQuery->whereHas('student.enrollments', function ($eq) use ($material) {
+                        $eq->where('status', 'Active')
+                            ->where(function ($cq) use ($material) {
+                                $cq->whereHas('class.level', fn ($l) => $l->where('category_id', $material->program_id))
+                                    ->orWhereHas('class.programPackage', fn ($p) => $p->where('category_id', $material->program_id))
+                                    ->orWhereHas('programPackage', fn ($p) => $p->where('category_id', $material->program_id));
+                            });
                     });
                 }
                 $siswaUserIds = $siswaQuery->pluck('id');

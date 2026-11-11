@@ -8,19 +8,44 @@ use App\Models\User;
 class TrainingMaterialPolicy
 {
     /**
-     * Boleh melihat daftar materi training: Owner, Curriculum, Teacher/Guru.
+     * Boleh melihat daftar materi training: Owner, Admin, Curriculum, Teacher/Guru. Siswa DITOLAK.
      */
     public function viewAny(User $user): bool
     {
-        return in_array($user->level?->nama_level, ['Owner', 'Curriculum', 'Kurikulum', 'Teacher', 'Guru']);
+        $roleName = $user->level?->nama_level;
+
+        return in_array($roleName, ['Owner', 'Admin', 'Curriculum', 'Kurikulum', 'Teacher', 'Guru'], true);
     }
 
     /**
-     * Boleh melihat detail materi training.
+     * Boleh melihat detail / file / video materi training:
+     * - Owner: boleh semua
+     * - Admin: hanya jika materi ditujukan ke Admin
+     * - Curriculum: hanya jika materi ditujukan ke Curriculum
+     * - Teacher: hanya jika materi ditujukan ke Teacher
+     * - Lainnya / Siswa: Ditolak (false)
      */
     public function view(User $user, TrainingMaterial $material): bool
     {
-        return $this->viewAny($user);
+        $roleName = $user->level?->nama_level;
+
+        if ($roleName === 'Owner') {
+            return true;
+        }
+
+        if (in_array($roleName, ['Teacher', 'Guru'], true)) {
+            return $material->hasRole('Teacher');
+        }
+
+        if (in_array($roleName, ['Curriculum', 'Kurikulum'], true)) {
+            return $material->hasRole('Curriculum');
+        }
+
+        if ($roleName === 'Admin') {
+            return $material->hasRole('Admin');
+        }
+
+        return false;
     }
 
     /**
@@ -47,4 +72,3 @@ class TrainingMaterialPolicy
         return $user->level?->nama_level === 'Owner';
     }
 }
-
