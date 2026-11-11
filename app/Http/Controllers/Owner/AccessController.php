@@ -26,7 +26,7 @@ class AccessController extends Controller
     {
         session(['owner_view_teacher_id' => $teacher->id]);
 
-        return redirect()->route('guru.dashboard');
+        return redirect()->route('teacher.dashboard');
     }
 
     /** Ganti guru dari bar Owner (tetap di halaman yang sama). */

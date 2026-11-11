@@ -58,7 +58,7 @@ class StudentLearningRequestController extends Controller
         $notifMessage = "Siswa {$student->name} menginginkan topik: '{$data['topic']}'. Catatan Admin: " . Str::limit($data['consultation_notes'] ?? '-', 100);
 
         // 1. Notifikasi ke Kurikulum
-        $curriculums = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Curriculum'))->get();
+        $curriculums = User::whereHas('level', fn ($q) => $q->whereIn('nama_level', ['Curriculum', 'Kurikulum']))->get();
         foreach ($curriculums as $curr) {
             $curr->notify(new AppNotification(
                 title: $notifTitle,

@@ -412,11 +412,21 @@
                                 <input type="date" name="consultation_date">
                             </div>
                             <div class="form-field full">
-                                <label>Catatan Siswa</label>
-                                <textarea name="consultation_notes" rows="2"></textarea>
+                                <label>Request Belajar / Catatan Konsultasi</label>
+                                <textarea name="consultation_notes" rows="2" placeholder="Contoh: Fokus percakapan bisnis, persiapan interview kerja, atau materi khusus yang diminta..."></textarea>
                             </div>
                         </div>
                     </div>                   
+
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-note-sticky"></i> Catatan Khusus</div>
+                        <div class="form-grid">
+                            <div class="form-field full">
+                                <label>Catatan Tambahan</label>
+                                <textarea name="notes" rows="2" placeholder="Contoh: Masuk dipertengahan kelas"></textarea>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="form-section">
                         <div class="form-section-title"><i class="fa-solid fa-calendar-week"></i> Jadwal Tersedia</div>
@@ -618,17 +628,17 @@
                                 </select>
                             </div>
                             <div class="form-field full">
-                                <label>Catatan Siswa</label>
-                                <textarea name="consultation_notes" id="edit_consultation_notes" rows="2"></textarea>
+                                <label>Request Belajar / Catatan Konsultasi</label>
+                                <textarea name="consultation_notes" id="edit_consultation_notes" rows="2" placeholder="Contoh: Fokus percakapan bisnis, persiapan interview kerja, atau materi khusus yang diminta..."></textarea>
                             </div>
                         </div>
                     </div>
 
                     <div class="form-section">
-                        <div class="form-section-title"><i class="fa-solid fa-note-sticky"></i> Catatan</div>
+                        <div class="form-section-title"><i class="fa-solid fa-note-sticky"></i> Catatan Khusus</div>
                         <div class="form-grid">
                             <div class="form-field full">
-                                <label>Catatan Siswa</label>
+                                <label>Catatan Tambahan</label>
                                 <textarea name="notes" id="edit_notes" rows="3" placeholder="Contoh: Masuk dipertengahan kelas"></textarea>
                             </div>
                         </div>

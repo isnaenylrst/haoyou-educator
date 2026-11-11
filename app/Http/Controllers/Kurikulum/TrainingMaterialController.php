@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Kurikulum;
 use App\Http\Controllers\Controller;
 use App\Models\TrainingMaterial;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 
 class TrainingMaterialController extends Controller
@@ -14,21 +15,23 @@ class TrainingMaterialController extends Controller
      */
     public function index(Request $request)
     {
+        Gate::authorize('viewAny', TrainingMaterial::class);
+
         $type     = $request->query('type', 'all');
         $level    = $request->query('level');
         $category = $request->query('category');
         $q        = trim($request->query('q', ''));
 
-        // Kurikulum hanya melihat materi untuk Curriculum atau All
-        $query = TrainingMaterial::with('uploader')
-            ->whereIn('target_role', ['Curriculum', 'Kurikulum', 'All'])
+        // Kurikulum hanya melihat materi untuk Curriculum/Kurikulum
+        $query = TrainingMaterial::with(['uploader', 'roles'])
+            ->forRole('Curriculum')
             ->latest();
 
-        if ($type && in_array($type, ['document', 'video'])) {
+        if ($type && in_array($type, ['document', 'video'], true)) {
             $query->where('type', $type);
         }
 
-        if ($level && in_array($level, ['Umum', 'Dasar', 'Menengah', 'Lanjutan'])) {
+        if ($level && in_array($level, ['Umum', 'Dasar', 'Menengah', 'Lanjutan'], true)) {
             $query->where('level', $level);
         }
 
@@ -46,7 +49,7 @@ class TrainingMaterialController extends Controller
         }
 
         $materials = $query->paginate(12)->withQueryString();
-        $categories = TrainingMaterial::whereIn('target_role', ['Curriculum', 'Kurikulum', 'All'])
+        $categories = TrainingMaterial::forRole('Curriculum')
             ->distinct()
             ->pluck('category')
             ->filter()
@@ -62,6 +65,7 @@ class TrainingMaterialController extends Controller
     public function download($id)
     {
         $material = TrainingMaterial::findOrFail($id);
+        Gate::authorize('view', $material);
 
         abort_unless($material->file_path && Storage::disk('public')->exists($material->file_path), 404, 'File lampiran tidak ditemukan.');
 
@@ -74,12 +78,14 @@ class TrainingMaterialController extends Controller
     public function streamVideo($id)
     {
         $material = TrainingMaterial::findOrFail($id);
+        Gate::authorize('view', $material);
 
         if ($material->video_path && Storage::disk('public')->exists($material->video_path)) {
-            $fullPath = Storage::disk('public')->path($material->video_path);
-            return response()->file($fullPath, [
-                'Content-Type' => 'video/mp4',
-            ]);
+            return Storage::disk('public')->response(
+                $material->video_path,
+                null,
+                ['Content-Type' => 'video/mp4']
+            );
         }
 
         if ($material->video_url) {
@@ -89,4 +95,3 @@ class TrainingMaterialController extends Controller
         abort(404, 'Video tidak ditemukan.');
     }
 }
-

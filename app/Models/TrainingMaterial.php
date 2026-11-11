@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TrainingMaterial extends Model
 {
@@ -14,7 +15,7 @@ class TrainingMaterial extends Model
     protected $table = 'training_materials';
 
     public const LEVELS = ['Umum', 'Dasar', 'Menengah', 'Lanjutan'];
-    public const ROLES  = ['All', 'Admin', 'Curriculum', 'Teacher'];
+    public const ROLES  = ['Admin', 'Curriculum', 'Teacher'];
     public const TYPES  = ['document', 'video'];
 
     protected $fillable = [
@@ -33,6 +34,55 @@ class TrainingMaterial extends Model
     ];
 
     /**
+     * Relasi ke role penerima (pivot/tabel peran)
+     */
+    public function roles(): HasMany
+    {
+        return $this->hasMany(TrainingMaterialRole::class, 'training_material_id');
+    }
+
+    /**
+     * Array role-role penerima
+     */
+    public function getTargetRolesListAttribute(): array
+    {
+        if ($this->relationLoaded('roles')) {
+            $roles = $this->roles->pluck('role')->all();
+            if (!empty($roles)) {
+                return $roles;
+            }
+        }
+
+        // Fallback jika belum load relation atau legacy
+        $direct = $this->roles()->pluck('role')->all();
+        if (!empty($direct)) {
+            return $direct;
+        }
+
+        return match ($this->target_role) {
+            'Admin'                 => ['Admin'],
+            'Curriculum', 'Kurikulum' => ['Curriculum'],
+            'Teacher', 'Guru'       => ['Teacher'],
+            default                 => ['Admin', 'Curriculum', 'Teacher'],
+        };
+    }
+
+    /**
+     * Cek apakah materi ditujukan ke peran tertentu
+     */
+    public function hasRole(string $role): bool
+    {
+        $normalized = match ($role) {
+            'Admin'                   => 'Admin',
+            'Curriculum', 'Kurikulum' => 'Curriculum',
+            'Teacher', 'Guru'         => 'Teacher',
+            default                   => $role,
+        };
+
+        return in_array($normalized, $this->target_roles_list, true);
+    }
+
+    /**
      * Relasi ke user yang mengunggah (Owner)
      */
     public function uploader(): BelongsTo
@@ -41,18 +91,27 @@ class TrainingMaterial extends Model
     }
 
     /**
-     * Scope filter per peran (tiap peran hanya melihat miliknya atau yang ditujukan ke All)
+     * Scope filter per peran: periksa tabel roles atau legacy target_role
      */
     public function scopeForRole(Builder $query, string $role): Builder
     {
         $normalized = match ($role) {
-            'Admin'                 => ['Admin', 'All'],
-            'Curriculum', 'Kurikulum' => ['Curriculum', 'Kurikulum', 'All'],
-            'Teacher', 'Guru'       => ['Teacher', 'Guru', 'All'],
-            default                 => ['All'],
+            'Admin'                   => 'Admin',
+            'Curriculum', 'Kurikulum' => 'Curriculum',
+            'Teacher', 'Guru'         => 'Teacher',
+            default                   => $role,
         };
 
-        return $query->whereIn('target_role', $normalized);
+        return $query->where(function ($q) use ($normalized) {
+            $q->whereHas('roles', fn ($rq) => $rq->where('role', $normalized))
+              ->orWhere(function ($sub) use ($normalized) {
+                  $sub->whereDoesntHave('roles')
+                      ->where(function ($w) use ($normalized) {
+                          $w->where('target_role', $normalized)
+                            ->orWhere('target_role', 'All');
+                      });
+              });
+        });
     }
 
     /**

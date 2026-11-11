@@ -453,6 +453,10 @@ Route::middleware(['auth', 'role:Curriculum'])
         Route::post('/review-pengajuan/unlock-journal', [ReviewPengajuanController::class, 'unlockJournal'])
             ->name('review-pengajuan.unlock-journal');
 
+        // Tolak permohonan buka kunci jurnal
+        Route::post('/review-pengajuan/reject-unlock-journal', [ReviewPengajuanController::class, 'rejectUnlockJournal'])
+            ->name('review-pengajuan.reject-unlock-journal');
+
         // Review Reimburse & Pembelian Bahan Ajar (Poin 5)
         Route::patch('/review-pengajuan/submission/{submission}', [ReviewPengajuanController::class, 'reviewSubmission'])
             ->name('review-pengajuan.submission');
@@ -660,6 +664,9 @@ Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
         Route::get('/attendance', [GuruAttendanceController::class, 'index'])
             ->name('attendance');
 
+        Route::post('/attendance/request-unlock', [GuruAttendanceController::class, 'requestUnlock'])
+            ->name('attendance.request-unlock');
+
         Route::post('/attendance/{classSchedule}', [GuruAttendanceController::class, 'store'])
             ->name('attendance.store');
 
@@ -830,6 +837,8 @@ Route::middleware(['auth', 'role:Owner'])
             ->name('training.destroy');
         Route::get('/training/{id}/download', [OwnerTrainingMaterialController::class, 'download'])
             ->name('training.download');
+        Route::get('/training/{id}/preview', [OwnerTrainingMaterialController::class, 'preview'])
+            ->name('training.preview');
         Route::get('/training/{id}/stream', [OwnerTrainingMaterialController::class, 'streamVideo'])
             ->name('training.stream');
     });

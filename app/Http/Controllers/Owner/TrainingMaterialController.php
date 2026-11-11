@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreTrainingMaterialRequest;
 use App\Http\Requests\UpdateTrainingMaterialRequest;
 use App\Models\TrainingMaterial;
+use App\Models\TrainingMaterialRole;
 use App\Models\User;
 use App\Notifications\AppNotification;
 use Illuminate\Http\Request;
@@ -13,7 +14,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class TrainingMaterialController extends Controller
 {
@@ -30,7 +30,7 @@ class TrainingMaterialController extends Controller
 
     /**
      * Tampilkan daftar materi training untuk Owner (Full Access)
-     * Mendukung tab per peran, level, tipe (video vs dokumen), dan pencarian
+     * Memisahkan galeri video dan daftar dokumen/SOP, mendukung filter role, level, type, category, dan pencarian.
      */
     public function index(Request $request)
     {
@@ -42,26 +42,16 @@ class TrainingMaterialController extends Controller
         $category = $request->query('category');
         $q        = trim($request->query('q', ''));
 
-        $query = TrainingMaterial::with('uploader')->latest();
+        $query = TrainingMaterial::with(['uploader', 'roles'])->latest();
 
-        if ($roleTab !== 'All') {
-            $query->where(function ($sub) use ($roleTab) {
-                $sub->where('target_role', $roleTab)
-                    ->orWhere('target_role', 'All');
-            });
+        if ($roleTab && $roleTab !== 'All') {
+            $query->forRole($roleTab);
         }
 
         if ($typeTab === 'video') {
-            $query->where(function ($sub) {
-                $sub->where('type', 'video')
-                    ->orWhereNotNull('video_url')
-                    ->orWhereNotNull('video_path');
-            });
+            $query->where('type', 'video');
         } elseif ($typeTab === 'document') {
-            $query->where(function ($sub) {
-                $sub->where('type', 'document')
-                    ->orWhereNotNull('file_path');
-            });
+            $query->where('type', 'document');
         }
 
         if ($level) {
@@ -86,17 +76,27 @@ class TrainingMaterialController extends Controller
         $existingCategories = TrainingMaterial::distinct()->pluck('category')->filter()->values()->toArray();
         $categories = array_values(array_unique(array_merge(self::PRESET_CATEGORIES, $existingCategories)));
 
+        // Data riil untuk kartu ringkasan
         $stats = [
-            'total'           => TrainingMaterial::count(),
-            'admin'           => TrainingMaterial::whereIn('target_role', ['Admin', 'All'])->count(),
-            'curriculum'      => TrainingMaterial::whereIn('target_role', ['Curriculum', 'All'])->count(),
-            'teacher'         => TrainingMaterial::whereIn('target_role', ['Teacher', 'All'])->count(),
-            'with_video'      => TrainingMaterial::where(fn ($q) => $q->where('type', 'video')->orWhereNotNull('video_url')->orWhereNotNull('video_path'))->count(),
-            'with_file'       => TrainingMaterial::where(fn ($q) => $q->where('type', 'document')->orWhereNotNull('file_path'))->count(),
-            'total_categories'=> count($categories),
+            'total'            => TrainingMaterial::count(),
+            'admin'            => TrainingMaterial::forRole('Admin')->count(),
+            'curriculum'       => TrainingMaterial::forRole('Curriculum')->count(),
+            'teacher'          => TrainingMaterial::forRole('Teacher')->count(),
+            'with_video'       => TrainingMaterial::where('type', 'video')->count(),
+            'with_file'        => TrainingMaterial::where('type', 'document')->count(),
+            'total_categories' => count($categories),
         ];
 
-        return view('owner.training', compact('materials', 'categories', 'stats', 'roleTab', 'typeTab', 'level', 'category', 'q'));
+        return view('owner.training', compact(
+            'materials',
+            'categories',
+            'stats',
+            'roleTab',
+            'typeTab',
+            'level',
+            'category',
+            'q'
+        ));
     }
 
     /**
@@ -124,10 +124,13 @@ class TrainingMaterialController extends Controller
                 $thumbnailPath = $request->file('thumbnail')->store('training-materials/thumbnails', 'public');
             }
 
+            $targetRoles = array_values(array_unique($validated['target_roles'] ?? []));
+            $legacyTargetRole = count($targetRoles) === 1 ? $targetRoles[0] : (count($targetRoles) === 3 ? 'All' : implode(',', $targetRoles));
+
             $mat = TrainingMaterial::create([
                 'title'          => trim($validated['title']),
                 'category'       => trim($validated['category']),
-                'target_role'    => $validated['target_role'],
+                'target_role'    => $legacyTargetRole,
                 'level'          => $validated['level'],
                 'type'           => $validated['type'],
                 'version'        => !empty($validated['version']) ? trim($validated['version']) : 'v1.0',
@@ -139,26 +142,41 @@ class TrainingMaterialController extends Controller
                 'uploaded_by'    => Auth::id(),
             ]);
 
-            // Notifikasi HANYA ke peran yang dituju (sesuai instruksi)
-            $targetRoles = match ($mat->target_role) {
-                'Admin'      => ['Admin'],
-                'Curriculum' => ['Curriculum', 'Kurikulum'],
-                'Teacher'    => ['Teacher', 'Guru'],
-                default      => ['Admin', 'Curriculum', 'Kurikulum', 'Teacher', 'Guru'],
-            };
+            // Simpan ke pivot/tabel roles
+            foreach ($targetRoles as $r) {
+                TrainingMaterialRole::create([
+                    'training_material_id' => $mat->id,
+                    'role'                 => $r,
+                ]);
+            }
+
+            // Notifikasi HANYA ke pengguna dari peran yang dituju
+            $levelNames = [];
+            foreach ($targetRoles as $r) {
+                if ($r === 'Admin') {
+                    $levelNames[] = 'Admin';
+                } elseif ($r === 'Curriculum') {
+                    $levelNames[] = 'Curriculum';
+                    $levelNames[] = 'Kurikulum';
+                } elseif ($r === 'Teacher') {
+                    $levelNames[] = 'Teacher';
+                    $levelNames[] = 'Guru';
+                }
+            }
+            $levelNames = array_unique($levelNames);
 
             $recipients = User::query()
-                ->whereHas('level', function ($q) use ($targetRoles) {
-                    $q->whereIn('nama_level', $targetRoles);
+                ->whereHas('level', function ($q) use ($levelNames) {
+                    $q->whereIn('nama_level', $levelNames);
                 })
                 ->get();
 
             foreach ($recipients as $recipient) {
                 $roleName = $recipient->level?->nama_level;
                 $targetUrl = match ($roleName) {
-                    'Admin'                 => url('/admin/training'),
+                    'Admin'                   => url('/admin/training'),
                     'Curriculum', 'Kurikulum' => url('/kurikulum/training'),
-                    default                 => url('/guru/training'),
+                    default                   => url('/guru/training'),
                 };
 
                 $recipient->notify(new AppNotification(
@@ -173,8 +191,8 @@ class TrainingMaterialController extends Controller
             return $mat;
         });
 
-        return redirect()->route('owner.training.index', ['role' => $material->target_role])
-            ->with('success', 'Materi training berhasil diunggah dan notifikasi telah dikirim ke peran terkait (' . $material->target_role . ').');
+        return redirect()->route('owner.training.index')
+            ->with('success', 'Materi training berhasil diunggah dan notifikasi telah dikirim ke peran terkait (' . implode(', ', $material->target_roles_list) . ').');
     }
 
     /**
@@ -188,10 +206,13 @@ class TrainingMaterialController extends Controller
         $validated = $request->validated();
 
         DB::transaction(function () use ($request, $validated, $material) {
+            $targetRoles = array_values(array_unique($validated['target_roles'] ?? []));
+            $legacyTargetRole = count($targetRoles) === 1 ? $targetRoles[0] : (count($targetRoles) === 3 ? 'All' : implode(',', $targetRoles));
+
             $data = [
                 'title'       => trim($validated['title']),
                 'category'    => trim($validated['category']),
-                'target_role' => $validated['target_role'],
+                'target_role' => $legacyTargetRole,
                 'level'       => $validated['level'],
                 'type'        => $validated['type'],
                 'version'     => !empty($validated['version']) ? trim($validated['version']) : $material->version,
@@ -221,6 +242,15 @@ class TrainingMaterialController extends Controller
             }
 
             $material->update($data);
+
+            // Sync peran di tabel training_material_roles
+            $material->roles()->delete();
+            foreach ($targetRoles as $r) {
+                TrainingMaterialRole::create([
+                    'training_material_id' => $material->id,
+                    'role'                 => $r,
+                ]);
+            }
         });
 
         return redirect()->route('owner.training.index')
@@ -248,6 +278,7 @@ class TrainingMaterialController extends Controller
                 Storage::disk('public')->delete($material->thumbnail_path);
             }
 
+            $material->roles()->delete();
             $material->delete();
         });
 
@@ -278,12 +309,11 @@ class TrainingMaterialController extends Controller
 
         abort_unless($material->file_path && Storage::disk('public')->exists($material->file_path), 404, 'File dokumen tidak ditemukan.');
 
-        $fullPath = Storage::disk('public')->path($material->file_path);
-
-        return response()->file($fullPath, [
-            'Content-Type'        => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="' . $material->file_name . '"',
-        ]);
+        return Storage::disk('public')->response(
+            $material->file_path,
+            $material->file_name,
+            ['Content-Type' => 'application/pdf']
+        );
     }
 
     /**
@@ -295,10 +325,11 @@ class TrainingMaterialController extends Controller
         Gate::authorize('view', $material);
 
         if ($material->video_path && Storage::disk('public')->exists($material->video_path)) {
-            $fullPath = Storage::disk('public')->path($material->video_path);
-            return response()->file($fullPath, [
-                'Content-Type' => 'video/mp4',
-            ]);
+            return Storage::disk('public')->response(
+                $material->video_path,
+                null,
+                ['Content-Type' => 'video/mp4']
+            );
         }
 
         if ($material->video_url) {

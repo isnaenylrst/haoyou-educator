@@ -107,6 +107,13 @@ class Document extends Model
         return $query->whereIn('document_type', self::LETTER_TYPES);
     }
 
+    /** Apakah dokumen ini SOP yang ditujukan untuk guru. */
+    public function isSopForTeachers(): bool
+    {
+    return $this->document_type === 'SOP'
+        && $this->visibility === 'Teacher';
+    }
+
     // ------------------------------------------------------------ INFO FILE & LABEL
 
     public function getFileExistsAttribute(): bool

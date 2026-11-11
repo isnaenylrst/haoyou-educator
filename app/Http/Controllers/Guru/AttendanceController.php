@@ -68,18 +68,17 @@ class AttendanceController extends Controller
 
         $unlocks = ScheduleJournalUnlock::whereIn('class_schedule_id', $schedules->pluck('id'))
             ->whereDate('session_date', $date->toDateString())
-            ->where('unlocked_until', '>', now())
             ->get()
             ->keyBy('class_schedule_id');
 
         $build = function ($schedule) use ($journals, $unlocks, $date) {
-            $journal    = $journals->get($schedule->id);
-            $unlock     = $unlocks->get($schedule->id);
-            $sessionEnd = Carbon::parse($date->toDateString() . ' ' . $schedule->end_time);
-            $deadline   = $sessionEnd->copy()->addHours(24);
-            $isPast     = now()->gt($deadline);
-            $isUnlocked = ($unlock !== null);
-            $isLocked   = $isPast && !$isUnlocked && !$journal;
+            $journal       = $journals->get($schedule->id);
+            $unlockRecord  = $unlocks->get($schedule->id);
+            $sessionEnd    = Carbon::parse($date->toDateString() . ' ' . $schedule->end_time);
+            $deadline      = $sessionEnd->copy()->addHours(24);
+            $isPast        = now()->gt($deadline);
+            $isUnlocked    = ($unlockRecord && $unlockRecord->is_open);
+            $isLocked      = $isPast && !$isUnlocked && !$journal;
 
             $status = !$journal
                 ? ($isLocked ? 'terlambat' : 'belum_diisi')
@@ -101,7 +100,8 @@ class AttendanceController extends Controller
                 'deadline'            => $deadline,
                 'is_past_deadline'    => $isPast,
                 'is_unlocked'         => $isUnlocked,
-                'unlocked_until'      => $unlock?->unlocked_until,
+                'unlocked_until'      => $unlockRecord?->unlocked_until,
+                'unlock_record'       => $unlockRecord,
                 'auto_meeting_number' => max(1, $autoMeetingNumber),
             ];
         };
@@ -252,11 +252,12 @@ class AttendanceController extends Controller
 
         $unlocked = ScheduleJournalUnlock::where('class_schedule_id', $classSchedule->id)
             ->whereDate('session_date', $data['session_date'])
+            ->where('status', 'Unlocked')
             ->where('unlocked_until', '>', now())
             ->first();
 
         if ($isPast && !$unlocked) {
-            return back()->withInput()->with('error', 'Batas waktu pengisian jurnal (24 jam setelah jam mengajar selesai) telah lewat. Form terkunci. Silakan hubungi Kurikulum untuk membuka kunci.');
+            return back()->withInput()->with('error', 'Batas waktu pengisian jurnal (24 jam setelah jam mengajar selesai) telah lewat. Form terkunci. Silakan ajukan permohonan buka kunci kepada Kurikulum.');
         }
 
         $alreadyFilled = TeachingJournal::where('class_schedule_id', $classSchedule->id)
@@ -387,6 +388,70 @@ class AttendanceController extends Controller
             ->route('teacher.attendance', ['date' => $journal->session_date->toDateString()])
             ->with('success', 'Revisi jurnal berhasil dikirim ulang ke Kurikulum.')
             ->with('pdf_url', route('teacher.attendance.pdf', $journal));
+    }
+
+    // ------------------------------------------------------------------ PERMOHONAN BUKA KUNCI JURNAL
+
+    public function requestUnlock(Request $request)
+    {
+        $data = $request->validate([
+            'class_schedule_id' => ['required', 'exists:class_schedules,id'],
+            'session_date'      => ['required', 'date'],
+            'request_reason'    => ['required', 'string', 'max:1000'],
+        ], [
+            'request_reason.required' => 'Alasan keterlambatan wajib diisi agar Kurikulum dapat mempertimbangkan pembukaan kunci.',
+        ]);
+
+        $schedule = ClassSchedule::with('class.teacher')->findOrFail($data['class_schedule_id']);
+        $teacher = $this->teacher();
+        $user = Auth::user();
+
+        // Pastikan guru bersangkutan yang mengajar atau berhak atas sesi ini
+        $isTeacher = (int) $schedule->class->teacher_id === $teacher->id;
+        if (! $isTeacher) {
+            // Bisa jadi dia guru pengganti
+            $isSub = \App\Models\TeacherLeave::where('class_schedule_id', $schedule->id)
+                ->whereDate('leave_date', $data['session_date'])
+                ->where('replacement_teacher_id', $teacher->id)
+                ->where('status', 'Approved')
+                ->exists();
+
+            if (! $isSub) {
+                return back()->with('error', 'Anda tidak memiliki hak akses untuk meminta buka kunci kelas ini.');
+            }
+        }
+
+        $unlock = ScheduleJournalUnlock::updateOrCreate(
+            [
+                'class_schedule_id' => $schedule->id,
+                'session_date'      => $data['session_date'],
+            ],
+            [
+                'status'         => 'Pending',
+                'request_reason' => $data['request_reason'],
+                'requested_at'   => now(),
+                'requested_by'   => $user->id,
+                'rejection_note' => null,
+            ]
+        );
+
+        // Kirim notifikasi ke tim Kurikulum
+        $curriculums = \App\Models\User::whereHas('level', fn ($q) => $q->where('nama_level', 'Kurikulum'))->get();
+        $className = $schedule->class->class_name ?? 'Kelas';
+        $sessionFormatted = Carbon::parse($data['session_date'])->translatedFormat('d M Y');
+
+        foreach ($curriculums as $curr) {
+            $curr->notify(new \App\Notifications\AppNotification(
+                title: "Permohonan Buka Kunci Jurnal: {$className}",
+                message: "Guru {$teacher->name} meminta pembukaan kunci jurnal kelas {$className} untuk sesi {$sessionFormatted}. Alasan: {$data['request_reason']}",
+                url: url('/kurikulum/review-pengajuan?tab=jurnal'),
+                type: 'jurnal',
+                icon: 'fa-lock-open',
+                actionLabel: 'Review & Buka Kunci'
+            ));
+        }
+
+        return back()->with('success', 'Permohonan buka kunci jurnal berhasil dikirim ke Kurikulum. Mohon menunggu konfirmasi/ACC dari Kurikulum.');
     }
 
     // ------------------------------------------------------------------ PDF

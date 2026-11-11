@@ -220,25 +220,32 @@ class SiswaDashboardController extends Controller
             'class.programPackage.category',
         ])
             ->where('student_id', $student->id)
-            ->whereIn('status', ['Active', 'Completed', 'Waiting Class'])
+            ->where('status', 'Active')
             ->get();
 
         $levelIds = $this->resolveLevelIds($student, $enrollments);
         $categoryIds = $this->resolveCategoryIds($student, $enrollments);
 
-        // Hanya materi bertujuan Siswa untuk program/kelas milik siswa + materi Umum
+        // Hanya materi bertujuan Siswa untuk program/level kelas aktif milik siswa + materi Umum (tanpa program & tanpa level)
         $materials = Material::query()
             ->where('audience', 'Siswa')
-            ->with(['level.program', 'program', 'vocabs'])
+            ->with(['level.category', 'program', 'vocabs'])
             ->where(function ($q) use ($levelIds, $categoryIds) {
-                if ($categoryIds->isNotEmpty()) {
-                    $q->whereIn('program_id', $categoryIds);
-                }
+                // Materi spesifik level siswa
                 if ($levelIds->isNotEmpty()) {
-                    $q->orWhereIn('level_id', $levelIds);
+                    $q->whereIn('level_id', $levelIds);
                 }
-                // Materi lama berlabel "Umum" tetap bisa diakses
-                $q->orWhereNull('program_id');
+                // Materi program siswa yang tidak terikat ke level tertentu (level_id null)
+                if ($categoryIds->isNotEmpty()) {
+                    $q->orWhere(function ($sub) use ($categoryIds) {
+                        $sub->whereIn('program_id', $categoryIds)
+                            ->whereNull('level_id');
+                    });
+                }
+                // Materi tanpa program atau level (Umum)
+                $q->orWhere(function ($sub) {
+                    $sub->whereNull('program_id')->whereNull('level_id');
+                });
             })
             ->orderByRaw('program_id IS NULL DESC, program_id ASC')
             ->orderBy('meeting_number')
@@ -280,18 +287,19 @@ class SiswaDashboardController extends Controller
 
         $enrollments = ClassEnrollment::with(['class.programPackage.category', 'class.level.category'])
             ->where('student_id', $student->id)
-            ->whereIn('status', ['Active', 'Completed', 'Waiting Class'])
+            ->where('status', 'Active')
             ->get();
 
         $levelIds = $this->resolveLevelIds($student, $enrollments);
         $categoryIds = $this->resolveCategoryIds($student, $enrollments);
 
         $isAllowed = false;
+        // Materi tanpa program atau level (Umum)
         if (is_null($material->program_id) && is_null($material->level_id)) {
-            $isAllowed = true; // Materi Umum
+            $isAllowed = true;
         } elseif ($material->level_id && $levelIds->contains($material->level_id)) {
             $isAllowed = true;
-        } elseif ($material->program_id && $categoryIds->contains($material->program_id)) {
+        } elseif (is_null($material->level_id) && $material->program_id && $categoryIds->contains($material->program_id)) {
             $isAllowed = true;
         }
 
@@ -312,8 +320,9 @@ class SiswaDashboardController extends Controller
             return $this->materiUnduh($material);
         }
 
-        return response()->file(
-            storage_path('app/public/' . $material->material_file_path),
+        return Storage::disk('public')->response(
+            $material->material_file_path,
+            null,
             ['Content-Type' => 'application/pdf']
         );
     }
@@ -324,11 +333,11 @@ class SiswaDashboardController extends Controller
 
         $name = (Str::slug($material->title) ?: 'materi-' . $material->id) . '.' . $material->file_extension;
 
-        return response()->download(storage_path('app/public/' . $material->material_file_path), $name);
+        return Storage::disk('public')->download($material->material_file_path, $name);
     }
 
     /**
-     * Mengambil level yang terkait dengan siswa.
+     * Mengambil level yang terkait dengan siswa (dari kelas enrollment aktif).
      */
     private function resolveLevelIds(Student $student, $enrollments)
     {
@@ -338,14 +347,13 @@ class SiswaDashboardController extends Controller
                 $enrollment->class?->programPackage?->level_id,
                 $enrollment->programPackage?->level_id,
             ])
-            ->push($student->current_level_id)
             ->filter()
             ->unique()
             ->values();
     }
 
     /**
-     * Mengambil program/kategori yang terkait dengan siswa.
+     * Mengambil program/kategori yang terkait dengan siswa (dari kelas enrollment aktif).
      */
     private function resolveCategoryIds(Student $student, $enrollments)
     {
@@ -355,7 +363,6 @@ class SiswaDashboardController extends Controller
                 $enrollment->class?->programPackage?->category_id,
                 $enrollment->programPackage?->category_id,
             ])
-            ->push($student->currentLevel?->category_id)
             ->filter()
             ->unique()
             ->values();

@@ -29,6 +29,7 @@
     $deadline = $item['deadline'] ?? null;
     $isPastDeadline = $item['is_past_deadline'] ?? false;
     $isUnlocked = $item['is_unlocked'] ?? false;
+    $unlockRecord = $item['unlock_record'] ?? null;
     $autoMeetingNumber = $item['auto_meeting_number'] ?? 1;
 @endphp
 
@@ -293,16 +294,55 @@
         @elseif ($item['status'] === 'terlambat')
 
             <div class="alert alert-danger p-4 rounded-4 mb-0">
-                <div class="d-flex align-items-center gap-3">
-                    <div class="rounded-circle bg-danger-subtle text-danger p-3 d-flex align-items-center justify-content-center" style="width:50px; height:50px;">
+                <div class="d-flex align-items-start gap-3">
+                    <div class="rounded-circle bg-danger-subtle text-danger p-3 d-flex align-items-center justify-content-center flex-shrink-0" style="width:50px; height:50px;">
                         <i class="fa-solid fa-lock fs-4"></i>
                     </div>
-                    <div>
-                        <h6 class="fw-bold mb-1 text-danger">Form Terkunci — Terlambat / Tidak Diisi</h6>
-                        <p class="small text-muted mb-0">
-                            Batas waktu pengisian jurnal (24 jam setelah jam mengajar berakhir pada {{ $deadline?->translatedFormat('d M Y H:i') }}) telah lewat.
-                            Sesuai SOP, form otomatis terkunci. Silakan hubungi <strong>Tim Kurikulum</strong> untuk meminta pembukaan kunci pengisian jurnal.
+                    <div class="flex-grow-1">
+                        <h6 class="fw-bold mb-1 text-danger">Form Terkunci — Terlambat Mengisi Jurnal</h6>
+                        <p class="small text-muted mb-2">
+                            Batas waktu pengisian jurnal (24 jam setelah sesi selesai pada {{ $deadline?->translatedFormat('d M Y, H:i') }}) telah lewat.
+                            Sesuai ketentuan, form pengisian dikunci secara otomatis.
                         </p>
+
+                        @if ($unlockRecord && $unlockRecord->status === 'Pending')
+                            <div class="alert alert-warning py-2 px-3 small mb-0 rounded-3">
+                                <i class="fa-solid fa-hourglass-half me-1"></i>
+                                <strong>Permohonan buka kunci telah terkirim ke Kurikulum</strong> pada {{ $unlockRecord->requested_at?->translatedFormat('d M Y, H:i') }}.
+                                <div class="mt-1 text-secondary">Alasan: "<em>{{ $unlockRecord->request_reason }}</em>"</div>
+                                <span class="text-muted d-block mt-1">Silakan menunggu persetujuan Kurikulum.</span>
+                            </div>
+                        @elseif ($unlockRecord && $unlockRecord->status === 'Rejected')
+                            <div class="alert alert-danger py-2 px-3 small mb-2 rounded-3">
+                                <i class="fa-solid fa-circle-xmark me-1"></i>
+                                <strong>Permohonan buka kunci ditolak Kurikulum:</strong> {{ $unlockRecord->rejection_note ?: 'Tidak memenuhi syarat pembukaan kembali.' }}
+                            </div>
+                            <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-3" data-bs-toggle="collapse" data-bs-target="#requestUnlockForm-{{ $sid }}">
+                                <i class="fa-solid fa-paper-plane me-1"></i> Ajukan Permohonan Ulang
+                            </button>
+                        @else
+                            <button type="button" class="btn btn-primary btn-sm rounded-pill px-3" data-bs-toggle="collapse" data-bs-target="#requestUnlockForm-{{ $sid }}">
+                                <i class="fa-solid fa-lock-open me-1"></i> Minta Buka Kunci ke Kurikulum
+                            </button>
+                        @endif
+
+                        <div class="collapse mt-3" id="requestUnlockForm-{{ $sid }}">
+                            <form action="{{ route('teacher.attendance.request-unlock') }}" method="POST" class="p-3 bg-white rounded-3 border">
+                                @csrf
+                                <input type="hidden" name="class_schedule_id" value="{{ $sid }}">
+                                <input type="hidden" name="session_date" value="{{ $date->format('Y-m-d') }}">
+
+                                <label class="form-label fw-bold small mb-1">Alasan Keterlambatan Pengisian Jurnal <span class="text-danger">*</span></label>
+                                <textarea name="request_reason" class="form-control form-control-sm mb-2" rows="2" required
+                                          placeholder="Contoh: Mengalami kendala jaringan internet saat kelas malam selesai, mohon izin untuk mengisi jurnal..."></textarea>
+                                <div class="d-flex justify-content-end gap-2">
+                                    <button type="button" class="btn btn-sm btn-light" data-bs-toggle="collapse" data-bs-target="#requestUnlockForm-{{ $sid }}">Batal</button>
+                                    <button type="submit" class="btn btn-sm btn-primary">
+                                        <i class="fa-solid fa-paper-plane me-1"></i> Kirim Permohonan
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>

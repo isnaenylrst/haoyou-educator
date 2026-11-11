@@ -474,6 +474,50 @@ class ConvertController extends Controller
                     'payment_scheme'   => $scheme,
                 ]);
 
+                // Sinkronkan ke student_learning_requests jika siswa private mengisi requested_material
+                if ($isPrivate && filled($enrollment->requested_material)) {
+                    \App\Models\StudentLearningRequest::create([
+                        'student_id'         => $student->id,
+                        'class_id'           => $classId,
+                        'topic'              => 'Request Program Private: ' . ($privatePackage->package_name ?? 'Private'),
+                        'consultation_notes' => $enrollment->requested_material,
+                        'created_by'         => \Illuminate\Support\Facades\Auth::id() ?? $student->user_id,
+                    ]);
+
+                    // Kirim notifikasi ke Kurikulum dan Guru Pengajar
+                    $notifTitle   = "Request Belajar Siswa Private: {$student->name}";
+                    $notifMessage = "Siswa {$student->name} (Kelas Private) meminta request belajar: " . \Illuminate\Support\Str::limit($enrollment->requested_material, 120);
+
+                    // 1. Notifikasi ke Kurikulum
+                    $curriculums = User::whereHas('level', fn ($q) => $q->whereIn('nama_level', ['Curriculum', 'Kurikulum']))->get();
+                    foreach ($curriculums as $curr) {
+                        $curr->notify(new \App\Notifications\AppNotification(
+                            title: $notifTitle,
+                            message: $notifMessage,
+                            url: url('/kurikulum/request-belajar'),
+                            type: 'request_belajar',
+                            icon: 'fa-book-open-reader'
+                        ));
+                    }
+
+                    // 2. Notifikasi ke Guru pengajar jika kelas ditentukan
+                    if (!empty($draft['teacher_id'])) {
+                        $guruUser = User::where('id', function ($q) use ($draft) {
+                            $q->select('user_id')->from('teachers')->where('id', $draft['teacher_id']);
+                        })->first();
+
+                        if ($guruUser) {
+                            $guruUser->notify(new \App\Notifications\AppNotification(
+                                title: $notifTitle,
+                                message: $notifMessage,
+                                url: url('/guru/request-belajar'),
+                                type: 'request_belajar',
+                                icon: 'fa-book-open-reader'
+                            ));
+                        }
+                    }
+                }
+
                 $amountPaid = (float) $validated['amount_paid'];
 
                 // Service menghitung remaining_bill, status Paid/Partial, dan nomor invoice
