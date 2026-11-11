@@ -17,6 +17,8 @@ class ClassTask extends Model
         'status',
         'done_at',
         'teacher_note',
+        'attachment_path',
+        'attachment_name',
         'created_by',
     ];
 

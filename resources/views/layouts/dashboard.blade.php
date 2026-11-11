@@ -93,12 +93,12 @@
       <a href="{{ route('kelassaya.index') }}" class="side-link alumni-restricted {{ request()->routeIs('kelassaya.*') ? 'is-active' : '' }}">
         <span class="ico">🎓</span> Kelas Saya
       </a>
-      <a href="{{ route('booking.index') }}" class="side-link alumni-restricted {{ request()->routeIs('booking.*') ? 'is-active' : '' }}">
+      {{-- <a href="{{ route('booking.index') }}" class="side-link alumni-restricted {{ request()->routeIs('booking.*') ? 'is-active' : '' }}">
         <span class="ico">🗓️</span> Booking Kelas
-      </a>
-      <a href="{{ route('video.index') }}" class="side-link alumni-restricted {{ request()->routeIs('video.*') ? 'is-active' : '' }}">
+      </a> --}}
+      {{-- <a href="{{ route('video.index') }}" class="side-link alumni-restricted {{ request()->routeIs('video.*') ? 'is-active' : '' }}">
         <span class="ico">🎬</span> Video
-      </a>
+      </a> --}}
       <a href="{{ route('progresreport.index') }}" class="side-link {{ request()->routeIs('progresreport.*') ? 'is-active' : '' }}">
         <span class="ico">📊</span> Progress Report
       </a>
@@ -119,6 +119,7 @@
           <a href="{{ route('student.vocab.list') }}"  class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.list') ? 'is-active' : '' }}"><span>📖</span> Vocab List</a>
           <a href="{{ route('student.vocab.test') }}"  class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.test*') ? 'is-active' : '' }}"><span>✍️</span> Test</a>
           <a href="{{ route('student.vocab.traps') }}" class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.traps*') ? 'is-active' : '' }}"><span>⚠️</span> Vocab Traps</a>
+                    <a href="{{ route('student.vocab.materi') }}" class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.materi*') ? 'is-active' : '' }}"><span>🌸</span> Materi Huahua</a>
         </div>
       </div>
     </nav>
@@ -170,7 +171,7 @@
               </div>
               <div class="min-w-0">
                   <div class="font-bold text-[15px] leading-tight truncate">{{ $username }}</div>
-                  <div class="text-[13px] text-[#6b6652]">HSK 2 · Hybrid</div>
+                  <div class="text-[13px] text-[#6b6652]">{{ $levelAktif ?? 'Belum ada kelas aktif' }}</div>
                   </div>
             </div>
 

@@ -572,13 +572,17 @@ class TeacherNotificationService
                 'action' => ['kind' => 'link', 'label' => 'Buka SOP', 'url' => route('teacher.sop') . '#sop-' . $d->id],
             ]));
 
-        // 11. Jadwal konsultasi (LP & PPT / Direktur / Trial Teaching)
-        Consultation::with('teacherMaterial')->where('teacher_id', $t->id)
+                // 11. Jadwal konsultasi (Materi / Materi Baru / LP & PPT / Direktur / Trial Teaching)
+        Consultation::with(['teacherMaterial', 'class'])->where('teacher_id', $t->id)
             ->whereIn('status', ['Belum Terjadwal', 'Terjadwal', 'Dibatalkan'])->get()
             ->each(function ($c) use ($push) {
-                $label   = $c->type_label;
-                $related = $c->teacherMaterial?->ppt_title ? 'Terkait pengajuan: ' . $c->teacherMaterial->ppt_title : null;
-                $note    = trim(implode("\n", array_filter([$related, $c->notes])));
+                $label = $c->type_label;
+                $note  = $c->context_note;
+
+                // Konsultasi materi mengarah ke Schedule (kelas), jenis lain ke halaman Kelas (pengajuan LP & PPT)
+                $link = in_array($c->type, ['Materi', 'Materi_Baru'], true)
+                    ? ['kind' => 'link', 'label' => 'Lihat Jadwal Kelas', 'url' => route('teacher.schedule')]
+                    : ['kind' => 'link', 'label' => 'Lihat Pengajuan', 'url' => route('teacher.kelas')];
 
                 if ($c->status === 'Terjadwal' && $c->scheduled_at) {
                     // Masih tampil sampai 2 jam setelah waktu mulai; setelah itu dianggap lewat.
@@ -588,21 +592,24 @@ class TeacherNotificationService
                     $push([
                         'key' => "kons-{$c->id}", 'type' => 'consultation',
                         'title' => "{$label}: " . $c->scheduled_at->translatedFormat('l, d F Y') . ' pukul ' . $c->scheduled_at->format('H:i'),
-                        'category' => 'Jadwal Konsultasi', 'time' => $c->updated_at, 'note' => $note ?: null,
+                        'category' => 'Jadwal Konsultasi', 'time' => $c->updated_at, 'note' => $note,
                         'actionable' => true,
-                        'action' => ['kind' => 'link', 'label' => 'Lihat Pengajuan', 'url' => route('teacher.kelas')],
+                        'action' => $link,
                     ]);
                 } elseif ($c->status === 'Belum Terjadwal') {
+                    $late = $c->deadline_state === 'late';
                     $push([
                         'key' => "kons-{$c->id}", 'type' => 'consultation_pending',
-                        'title' => "Pengajuan {$label} menunggu jadwal dari Kurikulum",
-                        'category' => 'Jadwal Konsultasi', 'time' => $c->created_at, 'note' => $note ?: null,
+                        'title' => $late
+                            ? "{$label}: deadline sudah lewat, menunggu jadwal dari Kurikulum"
+                            : "{$label} menunggu jadwal dari Kurikulum",
+                        'category' => 'Jadwal Konsultasi', 'time' => $c->created_at, 'note' => $note,
                     ]);
                 } elseif ($c->status === 'Dibatalkan') {
                     $push([
                         'key' => "kons-{$c->id}", 'type' => 'consultation_cancelled',
                         'title' => "{$label} dibatalkan",
-                        'category' => 'Jadwal Konsultasi', 'time' => $c->updated_at, 'note' => $note ?: null,
+                        'category' => 'Jadwal Konsultasi', 'time' => $c->updated_at, 'note' => $note,
                     ]);
                 }
             });

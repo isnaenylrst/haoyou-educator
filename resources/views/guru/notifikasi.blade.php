@@ -56,6 +56,17 @@
                         </div>
                     @endif
 
+                    @if (!empty($notif['attachment_path']))
+                        <div class="mt-2">
+                            <a href="{{ Storage::url($notif['attachment_path']) }}"
+                               target="_blank"
+                               class="btn btn-outline-secondary btn-sm">
+                                <i class="bi bi-paperclip me-1"></i>
+                                {{ $notif['attachment_name'] ?? 'Unduh Lampiran' }}
+                            </a>
+                        </div>
+                    @endif
+
                     @if (($notif['action']['kind'] ?? null) === 'task')
                         <form method="POST" action="{{ $notif['action']['url'] }}" class="d-flex gap-2 mt-2">
                             @csrf

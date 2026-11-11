@@ -38,6 +38,7 @@ class ScheduleController extends Controller
     public function index(Request $request)
     {
         $teacher = Auth::user()->teacher;
+        abort_if(!$teacher, 403, 'Akun Anda belum terhubung dengan data guru.');
 
         try {
             $weekStart = $request->filled('week')
@@ -64,11 +65,32 @@ class ScheduleController extends Controller
 
         $q = clone $base;
         if ($scope === 'mine') {
-            $q->where('c.teacher_id', $teacher->id)->where('c.teacher_response', 'Accepted');
+            $repScheduleIds = DB::table('teacher_leaves')
+                ->where('replacement_teacher_id', $teacher->id)
+                ->where('status', 'Approved')
+                ->whereBetween('leave_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+                ->pluck('class_schedule_id')
+                ->all();
+
+            $q->where(function ($sub) use ($teacher, $repScheduleIds) {
+                $sub->where(function ($own) use ($teacher) {
+                    $own->where('c.teacher_id', $teacher->id)->where('c.teacher_response', 'Accepted');
+                });
+                if (!empty($repScheduleIds)) {
+                    $sub->orWhereIn('cs.id', $repScheduleIds);
+                }
+            });
         } elseif ($teacherFilterId) {
             $q->where('c.teacher_id', $teacherFilterId);
         }
         $rows = $q->orderBy('cs.start_time')->get();
+
+        // Cek data cuti & guru pengganti minggu ini
+        $leavesThisWeek = DB::table('teacher_leaves')
+            ->where('status', 'Approved')
+            ->whereBetween('leave_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+            ->get()
+            ->keyBy(fn ($l) => $l->class_schedule_id . '|' . Carbon::parse($l->leave_date)->toDateString());
 
         // jurnal yang sudah diisi minggu ini (untuk tanda "terisi")
         $filled = DB::table('teaching_journals')
@@ -93,6 +115,21 @@ class ScheduleController extends Controller
 
         $cells = [];
         foreach ($entries as $e) {
+            // Penanda cuti / guru pengganti (dari Kurikulum)
+            $leave = $leavesThisWeek->get($e->id . '|' . $e->date);
+
+            $e->is_replacement = false;
+            $e->is_on_leave    = false;
+
+            if ($leave) {
+                if ((int) $leave->replacement_teacher_id === (int) $teacher->id) {
+                    $e->is_replacement = true;
+                    $e->is_mine        = true;
+                } elseif ((int) $e->teacher_id === (int) $teacher->id) {
+                    $e->is_on_leave = true;
+                }
+            }
+
             $cells[substr($e->start_time, 0, 5)][$e->day][] = $e;
         }
 
@@ -111,12 +148,13 @@ class ScheduleController extends Controller
         );
         $days = TeacherAvailability::DAYS;
 
-        // Kelas yang diberikan Kurikulum dan menunggu jawaban saya
+        // Kelas yang menunggu jawaban saya: ditugaskan langsung, diajukan Kurikulum, atau tawaran broadcast
         $pendingClasses = ClassModel::with('schedules')
             ->whereIn('status', ['Open', 'Running'])
             ->where(function ($q) use ($teacher) {
                 $q->where(fn ($q) => $q->where('teacher_id', $teacher->id)->where('teacher_response', 'Pending'))
-                ->orWhereHas('teacherOffers', fn ($o) => $o->where('teacher_id', $teacher->id)->where('status', 'Pending'));
+                  ->orWhereHas('teacherOffers', fn ($o) => $o->where('teacher_id', $teacher->id)->where('status', 'Pending'))
+                  ->orWhere(fn ($q) => $q->where('broadcast_to_all', true)->whereNull('teacher_id'));
             })
             ->orderBy('class_name')
             ->get()

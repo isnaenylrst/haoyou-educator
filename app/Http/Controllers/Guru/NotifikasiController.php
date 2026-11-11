@@ -214,6 +214,8 @@ class NotifikasiController extends Controller
                 'note' => $task->description,
                 'model' => $task,
                 'type' => 'task',
+                'attachment_path' => $task->attachment_path,
+                'attachment_name' => $task->attachment_name,
                 'action' => $task->status === 'Open'
                     ? ['kind' => 'task', 'url' => route('teacher.tugas.complete', $task)]
                     : ['kind' => 'done'],
@@ -328,10 +330,10 @@ class NotifikasiController extends Controller
         }
 
                 // ----- Jadwal konsultasi dari Kurikulum -----
-        $consultations = \App\Models\Consultation::with('teacherMaterial')
+        $consultations = \App\Models\Consultation::with(['teacherMaterial', 'class'])
             ->where('teacher_id', $teacher->id)
             ->where(function ($q) {
-                $q->where('status', 'Terjadwal')
+                $q->whereIn('status', ['Belum Terjadwal', 'Terjadwal'])
                   ->orWhere(function ($q2) {
                       $q2->whereIn('status', ['Selesai', 'Dibatalkan'])
                          ->where('updated_at', '>=', now()->subDays(14));
@@ -343,24 +345,20 @@ class NotifikasiController extends Controller
             $when = $c->scheduled_at ? $c->scheduled_at->translatedFormat('l, d F Y \p\u\k\u\l H:i') : '-';
 
             $title = match ($c->status) {
-                'Terjadwal'  => "Jadwal {$c->type_label}: {$when}",
-                'Selesai'    => "{$c->type_label} sudah selesai",
-                default      => "{$c->type_label} dibatalkan — silakan ajukan ulang jika diperlukan",
+                'Terjadwal'       => "Jadwal {$c->type_label}: {$when}",
+                'Belum Terjadwal' => "{$c->type_label}: jadwal menunggu dari Kurikulum",
+                'Selesai'         => "{$c->type_label} sudah selesai",
+                default           => "{$c->type_label} dibatalkan — silakan ajukan ulang jika diperlukan",
             };
-
-            $note = collect([
-                $c->notes,
-                $c->teacherMaterial ? 'Terkait pengajuan: ' . $c->teacherMaterial->ppt_title : null,
-            ])->filter()->implode(' · ');
 
             $notifications->push([
                 'title'    => $title,
                 'category' => 'Jadwal Konsultasi',
                 'time'     => $c->updated_at,
-                'note'     => $note ?: null,
+                'note'     => $c->context_note,
                 'model'    => $c,
                 'type'     => 'consultation',
-                'action'   => $c->status === 'Terjadwal' ? null : ['kind' => 'done'],
+                'action'   => in_array($c->status, ['Selesai', 'Dibatalkan'], true) ? ['kind' => 'done'] : null,
             ]);
         }
 

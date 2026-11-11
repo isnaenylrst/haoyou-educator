@@ -67,10 +67,18 @@ class DashboardController extends Controller
             ->whereMonth("ce.$enrollDate", $now->month)->whereYear("ce.$enrollDate", $now->year)
             ->distinct()->count('ce.student_id');
 
+        $startOfMonth = $now->copy()->startOfMonth()->toDateTimeString();
+        $endOfMonth   = $now->copy()->endOfMonth()->toDateTimeString();
+
         $sessionsMonth = DB::table('teaching_journals')
             ->where('teacher_id', $teacher->id)->where('class_status', 'Conducted')
-            ->whereRaw('YEAR(COALESCE(session_date, DATE(created_at))) = ?', [$now->year])
-            ->whereRaw('MONTH(COALESCE(session_date, DATE(created_at))) = ?', [$now->month])
+            ->where(function ($q) use ($startOfMonth, $endOfMonth) {
+                $q->whereBetween('session_date', [substr($startOfMonth, 0, 10), substr($endOfMonth, 0, 10)])
+                  ->orWhere(function ($sub) use ($startOfMonth, $endOfMonth) {
+                      $sub->whereNull('session_date')
+                          ->whereBetween('created_at', [$startOfMonth, $endOfMonth]);
+                  });
+            })
             ->count();
 
         $pendingLeaves = DB::table('teacher_leaves')

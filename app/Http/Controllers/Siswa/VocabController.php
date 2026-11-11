@@ -77,7 +77,7 @@ class VocabController extends Controller
             ->whereIn('vocab_word_id', $words->pluck('id'))
             ->selectRaw('vocab_word_id, count(*) c')->groupBy('vocab_word_id')->pluck('c', 'vocab_word_id');
 
-        $total   = VocabWord::count();
+        $total   = VocabWord::where('trap_only', false)->count();
         $learned = VocabTestResult::where('user_id', $uid)->where('status', 'hafal')
             ->distinct()->count('vocab_word_id');
 
@@ -217,5 +217,48 @@ class VocabController extends Controller
             'understood' => ! $row,
             'done' => VocabTrapUnderstood::where('user_id', auth()->id())->count(),
         ]);
+    }
+
+    /* ============================ MATERI HUAHUA ============================ */
+    public function materi(Request $r)
+    {
+        $materials = \App\Models\Material::forHuahua()
+            ->with(['program', 'level'])
+            ->withCount('huahuaWords')
+            ->orderByRaw('program_id IS NULL DESC, program_id ASC')
+            ->orderBy('meeting_number')
+            ->get();
+
+        $groups = $materials->groupBy(fn ($m) => $m->program_name);
+
+        return view('Siswa.vocab.materi', [
+            'title'  => 'Belajar Vocab › Materi Huahua',
+            'groups' => $groups,
+        ]);
+    }
+
+    public function materiLihat(\App\Models\Material $material)
+    {
+        abort_unless($material->audience === 'Huahua', 404);
+        abort_unless($material->file_exists, 404, 'File materi tidak ditemukan.');
+
+        if (! $material->is_pdf) {
+            return $this->materiUnduh($material);
+        }
+
+        return response()->file(
+            storage_path('app/public/' . $material->material_file_path),
+            ['Content-Type' => 'application/pdf']
+        );
+    }
+
+    public function materiUnduh(\App\Models\Material $material)
+    {
+        abort_unless($material->audience === 'Huahua', 404);
+        abort_unless($material->file_exists, 404, 'File materi tidak ditemukan.');
+
+        $name = (\Illuminate\Support\Str::slug($material->title) ?: 'materi-' . $material->id) . '.' . $material->file_extension;
+
+        return response()->download(storage_path('app/public/' . $material->material_file_path), $name);
     }
 }

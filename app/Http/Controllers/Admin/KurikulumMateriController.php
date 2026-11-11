@@ -57,8 +57,11 @@ class KurikulumMateriController extends Controller
 
             $data['levels'] = $levels;
             $data['selectedLevel'] = $selected;
+            // Admin hanya melihat materi bertujuan Guru (materi Siswa/Huahua tidak ikut)
             $data['materials'] = $selected
-                ? Material::with(['uploader.curriculum', 'vocabs'])
+                ? Material::query()
+                    ->where('audience', 'Guru')
+                    ->with(['uploader.curriculum', 'vocabs'])
                     ->where('level_id', $selected->id)
                     ->orderBy('meeting_number')
                     ->get()
@@ -74,12 +77,10 @@ class KurikulumMateriController extends Controller
             return back()->with('error', 'File materi belum tersedia di penyimpanan (belum diunggah tim kurikulum).');
         }
 
-        $ext = pathinfo($material->material_file_path, PATHINFO_EXTENSION) ?: 'pdf';
+        $ext  = pathinfo($material->material_file_path, PATHINFO_EXTENSION) ?: 'pdf';
+        $name = (Str::slug($material->title) ?: 'materi-' . $material->id) . '.' . $ext;
 
-        return Storage::disk('public')->download(
-            $material->material_file_path,
-            Str::slug($material->title) . '.' . $ext
-        );
+        return response()->download(storage_path('app/public/' . $material->material_file_path), $name);
     }
 
     /* ------------------------------------------------------------------ */
@@ -144,7 +145,9 @@ class KurikulumMateriController extends Controller
             ->get()
             ->keyBy('class_schedule_id');
 
-        $materials = Material::withCount('vocabs')
+        $materials = Material::query()
+            ->where('audience', 'Guru')
+            ->withCount('vocabs')
             ->whereIn('level_id', $levelIds)
             ->get()
             ->groupBy('level_id')

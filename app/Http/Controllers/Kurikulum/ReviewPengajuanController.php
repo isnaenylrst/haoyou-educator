@@ -7,9 +7,12 @@ use App\Models\Certificate;
 use App\Models\ClassEnrollment;
 use App\Models\ClassSchedule;
 use App\Models\ProgressReport;
+use App\Models\Submission;
 use App\Models\TeacherLeave;
 use App\Models\TeacherMaterial;
 use App\Models\TeachingJournal;
+use App\Models\User;
+use App\Notifications\AppNotification;
 use App\Services\ProgressReportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -22,7 +25,7 @@ use Illuminate\Validation\Rule;
 class ReviewPengajuanController extends Controller
 {
     private const PER_PAGE = 10;
-    private const TABS     = ['material', 'jurnal', 'report', 'cuti', 'sertifikat'];
+    private const TABS     = ['material', 'jurnal', 'report', 'cuti', 'sertifikat', 'pengajuan'];
 
     private const DAYS = [
         'Sunday' => 'Minggu', 'Monday' => 'Senin', 'Tuesday' => 'Selasa',
@@ -96,6 +99,11 @@ class ReviewPengajuanController extends Controller
             'sertifikat_page', 'sertifikat'
         );
 
+        $submissions = $page(
+            Submission::with(['teacher', 'creator'])->whereIn('status', ['Diajukan', 'Review Kurikulum'])->oldest(),
+            'submission_page', 'pengajuan'
+        );
+
         $lateEnrollments = $this->lateEnrollments();
 
         $totals = [
@@ -104,10 +112,11 @@ class ReviewPengajuanController extends Controller
             'report'     => $reports->total() + $lateEnrollments->count(),
             'cuti'       => $leaves->total(),
             'sertifikat' => $certificates->total(),
+            'pengajuan'  => $submissions->total(),
         ];
 
         $totalPending = $materials->total() + $journals->total() + $reports->total()
-            + $leaves->total() + $certificates->total();
+            + $leaves->total() + $certificates->total() + $submissions->total();
 
         // Tab aktif: yang diminta (?tab=), atau tab pertama yang punya antrian
         $requested = $request->query('tab');
@@ -117,22 +126,26 @@ class ReviewPengajuanController extends Controller
 
         return view('kurikulum.review-pengajuan', compact(
             'todaySchedules', 'totalSessionToday', 'filledToday', 'unfilledToday', 'teacherNamesToday',
-            'materials', 'journals', 'reports', 'leaves', 'certificates', 'lateEnrollments',
+            'materials', 'journals', 'reports', 'leaves', 'certificates', 'submissions', 'lateEnrollments',
             'totals', 'totalPending', 'tab'
         ));
     }
 
     // ------------------------------------------------------------------ BERKAS (aman, butuh login)
 
-    public function file(string $type, int $id)
+        public function file(string $type, int $id)
     {
+        if ($type === 'report') {
+            return redirect()->route('progress-report.document.pdf', ProgressReport::findOrFail($id));
+        }
         $path = match ($type) {
             'lp'     => TeacherMaterial::findOrFail($id)->lp_file_path,
             'ppt'    => TeacherMaterial::findOrFail($id)->ppt_file_path,
             'report' => ProgressReport::findOrFail($id)->file_path,
-            'cert'   => Certificate::findOrFail($id)->file_path,
-            'cuti'   => TeacherLeave::findOrFail($id)->supporting_document,
-            default  => abort(404),
+            'cert'    => Certificate::findOrFail($id)->file_path,
+            'cuti'    => TeacherLeave::findOrFail($id)->supporting_document,
+            'receipt' => Submission::findOrFail($id)->receipt_path,
+            default   => abort(404),
         };
 
         abort_unless($path && Storage::disk('public')->exists($path), 404, 'Berkas tidak ditemukan.');
@@ -177,18 +190,50 @@ class ReviewPengajuanController extends Controller
             'note.required_if' => 'Isi alasan saat mengembalikan LP & PPT agar guru tahu apa yang harus diperbaiki.',
         ]);
 
-        if ($teacherMaterial->status !== 'Pending') {
+        if (!in_array($teacherMaterial->status, ['Pending', 'Diajukan'])) {
             return back()->with('error', 'Pengajuan LP & PPT ini sudah direview.');
         }
 
-        $teacherMaterial->update([
-            'status'      => $data['decision'],
-            'review_note' => $data['decision'] === 'Rejected' ? $data['note'] : null,
-            'approved_by' => Auth::id(),
-            'approved_at' => now(),
-        ]);
+        $finalStatus = $data['decision'] === 'Approved' ? 'Disetujui' : 'Perlu Revisi';
 
-        return back()->with('success', 'LP & PPT berhasil ' . ($data['decision'] === 'Approved' ? 'di-ACC' : 'dikembalikan ke guru') . '.');
+        DB::transaction(function () use ($teacherMaterial, $data, $finalStatus) {
+            $teacherMaterial->update([
+                'status'      => $finalStatus,
+                'review_note' => $data['decision'] === 'Rejected' ? $data['note'] : null,
+                'approved_by' => Auth::id(),
+                'approved_at' => now(),
+            ]);
+
+            // Update catatan review pada versi dokumen terbaru
+            $latestVersion = $teacherMaterial->versions()->latest('version_number')->first();
+            if ($latestVersion) {
+                $latestVersion->update([
+                    'status'      => $finalStatus,
+                    'review_note' => $data['decision'] === 'Rejected' ? $data['note'] : null,
+                    'reviewed_by' => Auth::id(),
+                    'reviewed_at' => now(),
+                ]);
+            }
+
+            // Notifikasi dua arah ke Guru bersangkutan
+            $teacher = $teacherMaterial->teacher;
+            if ($teacher?->user) {
+                $className = $teacherMaterial->class?->class_name ?? 'Kelas';
+                $isApproved = $data['decision'] === 'Approved';
+
+                $teacher->user->notify(new AppNotification(
+                    title: $isApproved ? "Dokumen Kelas Disetujui: {$className}" : "Dokumen Kelas Perlu Revisi: {$className}",
+                    message: $isApproved
+                        ? "Kurikulum telah menyetujui Lesson Plan & PPT untuk kelas {$className}."
+                        : "Kurikulum meminta perbaikan LP & PPT kelas {$className}. Catatan: {$data['note']}",
+                    url: url('/guru/kelas'),
+                    type: 'dokumen_kelas',
+                    icon: $isApproved ? 'fa-circle-check' : 'fa-circle-exclamation'
+                ));
+            }
+        });
+
+        return back()->with('success', 'LP & PPT berhasil ' . ($data['decision'] === 'Approved' ? 'di-ACC' : 'dikembalikan ke guru untuk revisi') . '.');
     }
 
     // ------------------------------------------------------------------ JURNAL ONLINE
@@ -234,12 +279,51 @@ class ReviewPengajuanController extends Controller
         }
 
         if ($data['decision'] === 'Approved') {
+            $user = Auth::user();
+
+            if (empty($user->signature_path) || !Storage::disk('public')->exists($user->signature_path)) {
+                return redirect()->route('profil.index')
+                    ->with('error', 'Anda harus memiliki tanda tangan digital terlebih dahulu sebelum melakukan ACC. Silakan gambar atau unggah tanda tangan Anda di menu Profil & Tanda Tangan.');
+            }
+
+            $ownerSig = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Owner'))
+                ->whereNotNull('signature_path')
+                ->value('signature_path');
+
             $progressReport->update([
-                'reviewed_by' => Auth::id(),
-                'reviewed_at' => now(),
-                'review_note' => null,
-                'returned_at' => null,
+                'status'                    => 'Published',
+                'reviewed_by'               => $user->id,
+                'reviewed_at'               => now(),
+                'published_at'              => now(),
+                'curriculum_signature_path' => $user->signature_path,
+                'owner_signature_path'      => null, // TTD Owner baru ditempel saat Owner menandatangani di Antrean TTD
+                'review_note'               => null,
+                'returned_at'               => null,
             ]);
+
+                \App\Services\ProgressReportDocument::store($progressReport->refresh());
+
+            // Notifikasi ke Siswa
+            if ($progressReport->student?->user) {
+                $progressReport->student->user->notify(new AppNotification(
+                    title: "Progress Report Telah Terbit",
+                    message: "Laporan perkembangan belajar Anda untuk kelas " . ($progressReport->enrollment?->class?->class_name ?? '') . " telah resmi diterbitkan oleh Kurikulum.",
+                    url: url('/progress-report'),
+                    type: 'progress_report',
+                    icon: 'fa-chart-column'
+                ));
+            }
+
+            // Notifikasi ke Guru
+            if ($progressReport->teacher?->user) {
+                $progressReport->teacher->user->notify(new AppNotification(
+                    title: "Progress Report Di-ACC",
+                    message: "Progress Report untuk siswa " . ($progressReport->student?->name ?? '') . " telah di-ACC dan terbit.",
+                    url: url('/guru/progress-report'),
+                    type: 'progress_report',
+                    icon: 'fa-circle-check'
+                ));
+            }
         } else {
             $progressReport->update([
                 'status'         => 'Draft',
@@ -301,23 +385,63 @@ class ReviewPengajuanController extends Controller
         ]);
 
         if ($teacherLeave->status !== 'Pending') {
-            return back()->with('error', 'Pengajuan ini sudah direview.');
+            return back()->with('error', 'Pengajuan ini sudah direview secara final.');
         }
 
-        if ($data['decision'] === 'Approved'
-            && $teacherLeave->replacement_teacher_id
-            && $teacherLeave->replacement_response !== 'Accepted') {
-            return back()->with('error', 'Guru pengganti belum menerima permintaan ini.');
+        $teacherLeave->load(['teacher.user', 'replacementTeacher.user', 'classSchedule.class']);
+        $className = $teacherLeave->classSchedule?->class?->class_name ?? 'Kelas';
+        $currUser = Auth::user();
+
+        if ($data['decision'] === 'Approved') {
+            $repAccepted = empty($teacherLeave->replacement_teacher_id) || $teacherLeave->replacement_response === 'Accepted';
+            $finalStatus = $repAccepted ? 'Approved' : 'Pending';
+
+            $teacherLeave->update([
+                'curriculum_response' => 'Accepted',
+                'status'              => $finalStatus,
+                'review_note'         => $data['note'] ?? null,
+                'approved_by'         => $currUser->id,
+                'approved_at'         => now(),
+            ]);
+
+            // Notifikasi ke guru pemohon
+            if ($teacherLeave->teacher?->user) {
+                $msg = $repAccepted
+                    ? "Pengajuan {$teacherLeave->request_type} untuk {$className} telah disetujui penuh."
+                    : "Kurikulum telah menyetujui pengajuan {$teacherLeave->request_type} untuk {$className}. Menunggu konfirmasi penerimaan dari guru pengganti.";
+
+                $teacherLeave->teacher->user->notify(new AppNotification(
+                    title: "Persetujuan {$teacherLeave->request_type}: {$className}",
+                    message: $msg,
+                    url: url('/guru/cuti'),
+                    type: 'cuti',
+                    icon: 'fa-circle-check'
+                ));
+            }
+
+            return back()->with('success', 'Persetujuan Kurikulum berhasil disimpan.' . ($repAccepted ? ' Pengajuan telah disetujui penuh.' : ' Menunggu konfirmasi dari guru pengganti.'));
         }
 
+        // Jika Ditolak Kurikulum
         $teacherLeave->update([
-            'status'      => $data['decision'],
-            'review_note' => $data['decision'] === 'Rejected' ? $data['note'] : null,
-            'approved_by' => Auth::id(),
-            'approved_at' => now(),
+            'curriculum_response' => 'Rejected',
+            'status'              => 'Rejected',
+            'review_note'         => $data['note'] ?? 'Ditolak oleh Kurikulum',
+            'approved_by'         => $currUser->id,
+            'approved_at'         => now(),
         ]);
 
-        return back()->with('success', 'Pengajuan berhasil ' . ($data['decision'] === 'Approved' ? 'disetujui' : 'ditolak') . '.');
+        if ($teacherLeave->teacher?->user) {
+            $teacherLeave->teacher->user->notify(new AppNotification(
+                title: "Pengajuan {$teacherLeave->request_type} Ditolak",
+                message: "Pengajuan {$teacherLeave->request_type} untuk {$className} ditolak Kurikulum. Alasan: " . ($data['note'] ?? '-'),
+                url: url('/guru/cuti'),
+                type: 'cuti',
+                icon: 'fa-circle-xmark'
+            ));
+        }
+
+        return back()->with('success', 'Pengajuan berhasil ditolak oleh Kurikulum.');
     }
 
     // ------------------------------------------------------------------ SERTIFIKAT
@@ -333,6 +457,14 @@ class ReviewPengajuanController extends Controller
 
         if ($certificate->status !== 'Pending') {
             return back()->with('error', 'Sertifikat ini sudah pernah direview.');
+        }
+
+        if ($data['decision'] === 'Approved') {
+            $user = Auth::user();
+            if (empty($user->signature_path) || !Storage::disk('public')->exists($user->signature_path)) {
+                return redirect()->route('profil.index')
+                    ->with('error', 'Anda harus memiliki tanda tangan digital terlebih dahulu sebelum melakukan ACC. Silakan gambar atau unggah tanda tangan Anda di menu Profil & Tanda Tangan.');
+            }
         }
 
         $certificate->update([
@@ -398,5 +530,116 @@ class ReviewPengajuanController extends Controller
         }
 
         return $late;
+    }
+
+    // ------------------------------------------------------------------ PENGAJUAN (REIMBURSE & PEMBELIAN)
+
+    public function reviewSubmission(Request $request, Submission $submission)
+    {
+        $data = $request->validate([
+            'decision' => ['required', Rule::in(['Approved', 'Rejected'])],
+            'note'     => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $user = Auth::user();
+
+        if ($data['decision'] === 'Approved') {
+            if (empty($user->signature_path) || !Storage::disk('public')->exists($user->signature_path)) {
+                return redirect()->route('profil.index')
+                    ->with('error', 'Anda harus memiliki tanda tangan digital terlebih dahulu sebelum melakukan ACC. Silakan gambar atau unggah tanda tangan Anda di menu Profil & Tanda Tangan.');
+            }
+
+            // Sesuai alur Poin 4: Kurikulum + TTD -> diteruskan ke Admin untuk verifikasi
+            $submission->update([
+                'status'                    => 'Review Admin',
+                'curriculum_id'             => $user->id,
+                'curriculum_note'           => $data['note'] ?? null,
+                'curriculum_approved_at'    => now(),
+                'curriculum_signature_path' => $user->signature_path,
+            ]);
+
+            if ($submission->teacher?->user) {
+                $submission->teacher->user->notify(new AppNotification(
+                    title: "Pengajuan {$submission->type} Disetujui Kurikulum",
+                    message: "Pengajuan {$submission->item_name} telah disetujui Kurikulum (+ TTD) dan diteruskan ke Admin untuk verifikasi pembayaran.",
+                    url: url('/guru/pengajuan'),
+                    type: 'pengajuan',
+                    icon: 'fa-circle-check'
+                ));
+            }
+
+            // Notifikasi ke seluruh tim Admin
+            $admins = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Admin'))->get();
+            foreach ($admins as $admin) {
+                $admin->notify(new AppNotification(
+                    title: "Verifikasi Pengajuan Reimburse: {$submission->item_name}",
+                    message: "Kurikulum telah menyetujui pengajuan {$submission->type} dari {$submission->teacher?->name} sebesar {$submission->formatted_amount}. Silakan diverifikasi.",
+                    url: url('/admin/pengajuan'),
+                    type: 'pengajuan',
+                    icon: 'fa-receipt'
+                ));
+            }
+
+            return back()->with('success', 'Pengajuan berhasil disetujui Kurikulum, TTD telah ditempel, dan berkas diteruskan ke Admin untuk verifikasi.');
+        }
+
+        $submission->update([
+            'status'          => 'Ditolak',
+            'curriculum_id'   => $user->id,
+            'curriculum_note' => $data['note'] ?? 'Pengajuan ditolak oleh Kurikulum',
+        ]);
+
+        if ($submission->teacher?->user) {
+            $submission->teacher->user->notify(new AppNotification(
+                title: "Pengajuan {$submission->type} Ditolak",
+                message: "Pengajuan {$submission->item_name} ditolak Kurikulum. Catatan: " . ($data['note'] ?? '-'),
+                url: url('/guru/pengajuan'),
+                type: 'pengajuan',
+                icon: 'fa-circle-xmark'
+            ));
+        }
+
+        return back()->with('success', 'Pengajuan telah ditolak.');
+    }
+
+    /** Cetak / preview dokumen pengajuan dengan TTD Kurikulum & Owner */
+    public function printSubmission(Submission $submission)
+    {
+        \Illuminate\Support\Facades\Gate::authorize('view', $submission);
+
+        return view('kurikulum.cetak-pengajuan', compact('submission'));
+    }
+
+    /** Buka kunci pengisian jurnal yang terlambat (> 24 jam) untuk guru */
+    public function unlockJournal(Request $request)
+    {
+        $request->validate([
+            'class_schedule_id' => ['required', 'exists:class_schedules,id'],
+            'session_date'      => ['required', 'date'],
+        ]);
+
+        \App\Models\ScheduleJournalUnlock::updateOrCreate(
+            [
+                'class_schedule_id' => $request->class_schedule_id,
+                'session_date'      => $request->session_date,
+            ],
+            [
+                'unlocked_until'    => now()->addHours(24),
+                'unlocked_by'       => Auth::id(),
+            ]
+        );
+
+        $schedule = \App\Models\ClassSchedule::with('class.teacher.user')->find($request->class_schedule_id);
+        if ($schedule?->class?->teacher?->user) {
+            $schedule->class->teacher->user->notify(new \App\Notifications\AppNotification(
+                title: "Kunci Jurnal Dibuka Kurikulum",
+                message: "Kurikulum telah membuka kunci pengisian jurnal untuk kelas {$schedule->class->class_name} pada tanggal " . \Illuminate\Support\Carbon::parse($request->session_date)->translatedFormat('d M Y') . ". Silakan isi jurnal dalam 24 jam ke depan.",
+                url: url('/guru/attendance?date=' . $request->session_date),
+                type: 'jurnal',
+                icon: 'fa-lock-open'
+            ));
+        }
+
+        return back()->with('success', 'Kunci pengisian jurnal berhasil dibuka untuk 24 jam ke depan, dan guru telah diberi notifikasi.');
     }
 }

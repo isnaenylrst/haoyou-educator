@@ -156,6 +156,8 @@
         ['label' => 'Akademik', 'items' => [
             ['SOP',              'fa-book',        '/guru/sop',     'guru/sop*'],
             ['Materi & Silabus', 'fa-folder-open', '/guru/materi',  'guru/materi*'],
+            ['Video Pembelajaran', 'fa-circle-play', '/guru/video', 'guru/video*'],
+            ['Materi Training',  'fa-graduation-cap', '/guru/training', 'guru/training*'],
             ['Kelas',            'fa-chalkboard',  '/guru/kelas',   'guru/kelas*'],
         ]],
         ['label' => 'Mengajar', 'items' => [
@@ -164,12 +166,19 @@
             ['Sertifikat',           'fa-certificate',   '/guru/sertifikat',      'guru/sertifikat*'],
             ['Schedule',             'fa-calendar-days', '/guru/schedule',        'guru/schedule*'],
             ['Teaching Log',         'fa-clipboard-list','/guru/teaching-log',    'guru/teaching-log*'],
+            ['Request Belajar',      'fa-book-open-reader', '/guru/request-belajar', 'guru/request-belajar*'],
         ]],
-        ['label' => 'Pengajuan', 'items' => [
+        ['label' => 'Pengajuan & Evaluasi', 'items' => [
+            ['Pengajuan Reimburse & Bahan', 'fa-receipt', '/guru/pengajuan', 'guru/pengajuan*'],
             ['Cuti / Ganti Kelas', 'fa-plane-departure', '/guru/cuti', 'guru/cuti*'],
+            ['Observasi Mengajar', 'fa-magnifying-glass-chart', '/guru/observasi', 'guru/observasi*'],
+            ['Hasil Konsultasi',   'fa-comments', '/guru/hasil-konsultasi', 'guru/hasil-konsultasi*'],
         ]],
         ['label' => 'Komunikasi', 'items' => [
             ['Surat', 'fa-envelope', '/guru/surat', 'guru/surat*'],
+        ]],
+        ['label' => 'Akun', 'items' => [
+            ['Profil Saya', 'fa-user-gear', '/profil', 'profil*'],
         ]],
     ];
 
@@ -178,7 +187,7 @@
     $userName  = $teacher->name ?? $authUser->username ?? 'User';
     $initials  = strtoupper(mb_substr($authUser->username ?? $userName, 0, 2));
     $roleLabel = 'Teacher';
-    $profileUrl = \Illuminate\Support\Facades\Route::has('profile.edit') ? route('profile.edit') : '#';
+    $profileUrl = route('profil.index');
 
     // ====== LONCENG NOTIFIKASI ======
     // $bell disuplai oleh App\View\Composers\GuruBellComposer (didaftarkan di AppServiceProvider)
@@ -229,11 +238,13 @@
     </nav>
 
     <div class="sidebar-user">
-        <div class="avatar">{{ $initials }}</div>
-        <div class="user-meta">
-            <div class="n">{{ $userName }}</div>
-            <div class="r">{{ $roleLabel }}</div>
-        </div>
+        <a href="{{ $profileUrl }}" class="d-flex align-items-center gap-2 text-decoration-none text-reset flex-fill overflow-hidden" title="Lihat & Edit Profil">
+            <div class="avatar">{{ $initials }}</div>
+            <div class="user-meta">
+                <div class="n">{{ $userName }}</div>
+                <div class="r">{{ $roleLabel }} <i class="fa-solid fa-pen-to-square ms-1" style="font-size:10px;"></i></div>
+            </div>
+        </a>
         <button type="button" class="collapse-btn" id="collapseBtn" title="Ciutkan sidebar">
             <i class="fa-solid fa-chevron-left" style="font-size:12px"></i>
         </button>
@@ -262,19 +273,35 @@
             <div class="dropdown">
                 <button class="icon-btn" data-bs-toggle="dropdown" aria-expanded="false" title="Notifikasi">
                     <i class="fa-regular fa-bell"></i>
-                    @if($bell['total'] > 0)<span class="dot"></span>@endif
+                    @if((($unreadNotificationsCount ?? 0) + $bell['total']) > 0)<span class="dot"></span>@endif
                 </button>
-                <div class="dropdown-menu dropdown-menu-end p-0" style="width:320px">
-                    <div class="px-3 py-3 fw-bold border-bottom">
-                        Notifikasi
-                        @if($bell['total'] > 0)<span class="badge text-bg-warning ms-1">{{ $bell['total'] }}</span>@endif
+                <div class="dropdown-menu dropdown-menu-end p-0 shadow rounded-4" style="width:340px; max-height:450px; overflow-y:auto;">
+                    <div class="px-3 py-2 fw-bold border-bottom d-flex justify-content-between align-items-center bg-light">
+                        <span>Notifikasi @if((($unreadNotificationsCount ?? 0) + $bell['total']) > 0)<span class="badge bg-warning text-dark ms-1">{{ ($unreadNotificationsCount ?? 0) + $bell['total'] }}</span>@endif</span>
+                        @if(($unreadNotificationsCount ?? 0) > 0)
+                            <form action="{{ route('notifications.mark-all-read') }}" method="POST" class="m-0">
+                                @csrf
+                                <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none text-muted" style="font-size:11px;">Tandai semua dibaca</button>
+                            </form>
+                        @endif
                     </div>
 
-                    @if($bell['total'] === 0)
-                        <div class="p-4 text-center text-muted small">Tidak ada yang perlu ditindaklanjuti 🎉</div>
-                    @else
+                    @if(!empty($unreadNotifications) && $unreadNotifications->count() > 0)
+                        @foreach($unreadNotifications as $notif)
+                            <a class="notif-item border-bottom d-flex align-items-start gap-2 text-decoration-none text-dark p-2" href="{{ route('notifications.read', $notif->id) }}">
+                                <div class="badge-num mt-1"><i class="fa-solid {{ $notif->data['icon'] ?? 'fa-bell' }}"></i></div>
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold small">{{ $notif->data['title'] ?? 'Pemberitahuan' }}</div>
+                                    <div class="text-muted" style="font-size:12px; line-height:1.2;">{{ Str::limit($notif->data['message'] ?? '', 75) }}</div>
+                                    <div class="text-secondary" style="font-size:10px;">{{ $notif->created_at->diffForHumans() }}</div>
+                                </div>
+                            </a>
+                        @endforeach
+                    @endif
+
+                    @if($bell['total'] > 0)
                         @foreach($bell['rows'] as $row)
-                            <a class="notif-item" href="{{ $row['url'] }}">
+                            <a class="notif-item border-bottom" href="{{ $row['url'] }}">
                                 <div class="badge-num">{{ $row['count'] }}</div>
                                 <div>
                                     <div class="fw-semibold small">{{ $row['label'] }}</div>
@@ -284,7 +311,14 @@
                         @endforeach
                     @endif
 
-                    <a href="{{ url('/guru/notifikasi') }}" class="d-block text-center py-2 small fw-semibold border-top text-decoration-none">Lihat semua notifikasi →</a>
+                    @if(($unreadNotificationsCount ?? 0) === 0 && $bell['total'] === 0)
+                        <div class="p-4 text-center text-muted small">
+                            <i class="fa-regular fa-bell-slash fs-4 d-block mb-2 text-secondary"></i>
+                            Tidak ada notifikasi baru 🎉
+                        </div>
+                    @endif
+
+                    <a href="{{ url('/guru/notifikasi') }}" class="d-block text-center py-2 small fw-semibold border-top text-decoration-none bg-light">Lihat semua notifikasi →</a>
                 </div>
             </div>
 

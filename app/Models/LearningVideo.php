@@ -10,20 +10,24 @@ class LearningVideo extends Model
 
     protected $fillable = [
         'program_level_id',
+        'category_id',
         'title',
         'description',
         'source_type',
         'youtube_url',
         'youtube_id',
         'file_path',
+        'thumbnail_path',
         'mime_type',
         'file_size',
         'is_published',
+        'is_active',
         'uploaded_by',
     ];
 
     protected $casts = [
         'is_published' => 'boolean',
+        'is_active'    => 'boolean',
     ];
 
     public function level()
@@ -31,32 +35,42 @@ class LearningVideo extends Model
         return $this->belongsTo(ProgramLevel::class, 'program_level_id');
     }
 
+    public function category()
+    {
+        return $this->belongsTo(ProgramCategory::class, 'category_id');
+    }
+
     public function uploader()
     {
         return $this->belongsTo(User::class, 'uploaded_by');
     }
 
-    /** Hanya video yang sudah dipublikasikan Kurikulum. */
-    public function scopePublished($query)
+    /** Hanya video aktif/dipublikasikan. */
+    public function scopeActive($query)
     {
-        return $query->where('is_published', true);
+        return $query->where('is_published', true)->where('is_active', true);
     }
 
     /**
-     * Video yang boleh dilihat siswa: yang untuk semua level (NULL)
-     * atau yang levelnya sama dengan kelas aktif siswa.
+     * Video yang boleh dilihat sesuai kategori / level kelas.
      */
-    public function scopeVisibleToLevels($query, array $levelIds)
+    public function scopeVisibleToCategoriesAndLevels($query, array $categoryIds = [], array $levelIds = [])
     {
-        return $query->published()->where(function ($q) use ($levelIds) {
-            $q->whereNull('program_level_id');
+        return $query->active()->where(function ($q) use ($categoryIds, $levelIds) {
+            // Video umum (tanpa kategori dan tanpa level)
+            $q->where(function ($sub) {
+                $sub->whereNull('category_id')->whereNull('program_level_id');
+            });
+
+            if (!empty($categoryIds)) {
+                $q->orWhereIn('category_id', $categoryIds);
+            }
+
             if (!empty($levelIds)) {
                 $q->orWhereIn('program_level_id', $levelIds);
             }
         });
     }
-
-    // ------------------------------------------------------------------ YOUTUBE
 
     public function getIsYoutubeAttribute(): bool
     {
@@ -77,9 +91,15 @@ class LearningVideo extends Model
 
     public function getThumbnailUrlAttribute(): ?string
     {
-        return $this->is_youtube
-            ? 'https://img.youtube.com/vi/' . $this->youtube_id . '/hqdefault.jpg'
-            : null;
+        if ($this->thumbnail_path) {
+            return asset('storage/' . $this->thumbnail_path);
+        }
+
+        if ($this->is_youtube) {
+            return 'https://img.youtube.com/vi/' . $this->youtube_id . '/hqdefault.jpg';
+        }
+
+        return asset('assets/img/video-placeholder.png');
     }
 
     public static function watchUrlFor(string $id): string
@@ -87,10 +107,6 @@ class LearningVideo extends Model
         return 'https://www.youtube.com/watch?v=' . $id;
     }
 
-    /**
-     * Mengambil ID video (11 karakter) dari berbagai bentuk link YouTube
-     * (watch?v=, youtu.be, shorts, embed, live). Null jika tidak valid.
-     */
     public static function extractYoutubeId(?string $url): ?string
     {
         $url = trim((string) $url);
@@ -98,43 +114,20 @@ class LearningVideo extends Model
             return null;
         }
 
-        if (!preg_match('~^https?://~i', $url)) {
-            $url = 'https://' . $url;
+        if (preg_match('/^[A-Za-z0-9_-]{11}$/', $url)) {
+            return $url;
         }
 
-        $parts = parse_url($url);
-        $host  = strtolower(preg_replace('/^(www\.|m\.)/', '', $parts['host'] ?? ''));
-        $path  = $parts['path'] ?? '';
-        $id    = null;
+        $patterns = [
+            '/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|v\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i',
+        ];
 
-        if ($host === 'youtu.be') {
-            $id = trim($path, '/');
-        } elseif (in_array($host, ['youtube.com', 'youtube-nocookie.com'], true)) {
-            if ($path === '/watch') {
-                parse_str($parts['query'] ?? '', $query);
-                $id = $query['v'] ?? null;
-            } elseif (preg_match('~^/(embed|shorts|live|v)/([^/?]+)~', $path, $m)) {
-                $id = $m[2];
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $url, $matches)) {
+                return $matches[1];
             }
         }
 
-        return ($id && preg_match('/^[A-Za-z0-9_-]{11}$/', $id)) ? $id : null;
-    }
-
-    public function getSizeLabelAttribute(): string
-    {
-        if ($this->source_type === 'youtube') {
-            return 'Link YouTube';
-        }
-
-        $bytes = (int) $this->file_size;
-
-        if ($bytes <= 0) {
-            return '-';
-        }
-
-        return $bytes >= 1048576
-            ? round($bytes / 1048576, 1) . ' MB'
-            : round($bytes / 1024) . ' KB';
+        return null;
     }
 }

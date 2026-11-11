@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Guru;
 
 use App\Http\Controllers\Controller;
 use App\Models\Document;
+use App\Models\LetterType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -30,7 +31,7 @@ class SuratController extends Controller
     {
         $this->guard();
 
-        abort_unless(in_array($document->document_type, Document::LETTER_TYPES, true), 404);
+        abort_unless(in_array($document->document_type, Document::letterTypeCodes(), true), 404);
 
         $isRecipient = DB::table('document_recipients')
             ->where('document_id', $document->id)
@@ -62,9 +63,12 @@ class SuratController extends Controller
     {
         $this->guard();
 
+        $letterTypes  = LetterType::where('is_active', true)->get();
+        $allowedCodes = Document::letterTypeCodes();
+
         $request->validate([
             'status' => ['nullable', Rule::in(['unread'])],
-            'type'   => ['nullable', Rule::in(Document::LETTER_TYPES)],
+            'type'   => ['nullable', Rule::in($allowedCodes)],
         ]);
 
         $status = $request->query('status');
@@ -84,7 +88,7 @@ class SuratController extends Controller
 
         $unreadCount = Document::unreadLettersFor(Auth::id());
 
-        return view('guru.surat', compact('letters', 'unreadCount', 'status', 'type'));
+        return view('guru.surat', compact('letters', 'unreadCount', 'status', 'type', 'letterTypes'));
     }
 
     // ------------------------------------------------------------------ BUKA / UNDUH

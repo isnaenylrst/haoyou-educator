@@ -3,197 +3,141 @@
 namespace App\Http\Controllers\Kurikulum;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-
-use App\Models\Teacher;
-use App\Models\ClassSchedule;
-use App\Models\TeachingJournal;
 use App\Models\Attendance;
+use App\Models\ClassSchedule;
 use App\Models\ProgressReport;
+use App\Models\Teacher;
+use App\Models\TeachingJournal;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class MonitoringController extends Controller
 {
     public function index(Request $request)
     {
-        /*
-        |--------------------------------------------------------------------------
-        | FILTER
-        |--------------------------------------------------------------------------
-        */
-
         $teacherId = $request->teacher_id;
-        $status = $request->status;
-        $date = $request->date ?? now()->toDateString();
+        $status    = $request->status;
+        $date      = $request->date ?? now()->toDateString();
+        $periode   = $request->periode ?? 'bulan'; // minggu | bulan | semester
+
+        // Tentukan rentang tanggal periode untuk ranking keaktifan mengajar
+        $startDate = match ($periode) {
+            'minggu'   => Carbon::now()->startOfWeek()->toDateString(),
+            'semester' => Carbon::now()->subMonths(6)->startOfMonth()->toDateString(),
+            default    => Carbon::now()->startOfMonth()->toDateString(),
+        };
+        $endDate = Carbon::now()->endOfDay()->toDateString();
 
         /*
         |--------------------------------------------------------------------------
-        | DATA GURU
+        | RANKING: GURU PALING AKTIF MENGAJAR (Poin 7) - Dioptimalkan Bebas N+1
         |--------------------------------------------------------------------------
         */
+        $allTeachers = Teacher::with(['classes'])->where('status', 'Active')->get();
 
+        // Eager aggregation untuk mencegah N+1 query
+        $journalsSummary = TeachingJournal::query()
+            ->whereIn('teacher_id', $allTeachers->pluck('id'))
+            ->whereBetween('session_date', [$startDate, $endDate])
+            ->selectRaw('teacher_id, count(*) as total, sum(case when class_status = "Conducted" then 1 else 0 end) as conducted')
+            ->groupBy('teacher_id')
+            ->get()
+            ->keyBy('teacher_id');
+
+        $activeRankings = $allTeachers->map(function ($teacher) use ($journalsSummary) {
+            $summary = $journalsSummary->get($teacher->id);
+            $pertemuanDiajar = (int) ($summary?->conducted ?? 0);
+            $totalSesiJadwal = (int) ($summary?->total ?? 0);
+            $kelasDiampu     = $teacher->classes->count(); // Menggunakan collection loaded, bukan query ulang
+
+            $denominator = max($totalSesiJadwal, $pertemuanDiajar, 1);
+            $persentase = round(($pertemuanDiajar / $denominator) * 100, 1);
+            if ($pertemuanDiajar > 0 && $persentase < 1) {
+                $persentase = 100.0;
+            }
+
+            return (object) [
+                'id'                   => $teacher->id,
+                'name'                 => $teacher->name,
+                'phone'                => $teacher->phone,
+                'pertemuan_diajar'     => $pertemuanDiajar,
+                'kelas_diampu'         => $kelasDiampu,
+                'total_sesi'           => $totalSesiJadwal,
+                'persentase_kehadiran' => min($persentase, 100.0),
+            ];
+        })->sortByDesc('pertemuan_diajar')->values();
+
+        /*
+        |--------------------------------------------------------------------------
+        | DATA GURU DENGAN FILTER
+        |--------------------------------------------------------------------------
+        */
         $teachers = Teacher::with([
             'classes.programPackage',
             'classes.schedules',
             'teachingJournals.attendances',
             'progressReports',
         ])
-        ->when($teacherId, function ($query) use ($teacherId) {
-            $query->where('id', $teacherId);
-        })
-        ->when($status, function ($query) use ($status) {
-            $query->where('status', $status);
-        })
-        ->get();
-
-        /*
-        |--------------------------------------------------------------------------
-        | TOTAL GURU
-        |--------------------------------------------------------------------------
-        */
+        ->when($teacherId, fn ($q) => $q->where('id', $teacherId))
+        ->when($status, fn ($q) => $q->where('status', $status))
+        ->paginate(15);
 
         $totalTeacher = Teacher::count();
+        $totalSession = TeachingJournal::where('class_status', 'Conducted')->count();
 
-        /*
-        |--------------------------------------------------------------------------
-        | TOTAL SESI MENGAJAR
-        |--------------------------------------------------------------------------
-        */
-
-        $totalSession = TeachingJournal::count();
-
-        /*
-        |--------------------------------------------------------------------------
-        | TOTAL JAM MENGAJAR
-        |--------------------------------------------------------------------------
-        */
-
+        // Total jam mengajar
         $totalHour = 0;
-
         $schedules = ClassSchedule::all();
-
         foreach ($schedules as $schedule) {
-
-            if (
-                $schedule->start_time &&
-                $schedule->end_time
-            ) {
-
+            if ($schedule->start_time && $schedule->end_time) {
                 $start = strtotime($schedule->start_time);
-                $end = strtotime($schedule->end_time);
-
+                $end   = strtotime($schedule->end_time);
                 if ($end > $start) {
                     $totalHour += ($end - $start) / 3600;
                 }
             }
         }
-
         $totalHour = round($totalHour, 1);
+        $averageHour = $totalTeacher > 0 ? round($totalHour / $totalTeacher, 1) : 0;
 
-        /*
-        |--------------------------------------------------------------------------
-        | RATA-RATA JAM / GURU
-        |--------------------------------------------------------------------------
-        */
+        $guruHadirHariIni = TeachingJournal::whereDate('session_date', $date)
+            ->where('class_status', 'Conducted')
+            ->distinct('teacher_id')
+            ->count('teacher_id');
 
-        $averageHour = $totalTeacher > 0
-            ? round($totalHour / $totalTeacher, 1)
-            : 0;
+        $totalAttendanceToday = Attendance::whereDate('attendance_date', $date)->count();
 
-        /*
-        |--------------------------------------------------------------------------
-        | GURU YANG MEMILIKI JURNAL HARI INI
-        |--------------------------------------------------------------------------
-        */
+        $totalTidakHadirHariIni = Attendance::whereDate('attendance_date', $date)
+            ->whereIn('status', ['Absent', 'Sick', 'Permission'])
+            ->count();
 
-        $guruHadirHariIni = TeachingJournal::whereHas(
-            'attendances',
-            function ($query) use ($date) {
-                $query->whereDate(
-                    'attendance_date',
-                    $date
-                );
-            }
-        )
-        ->distinct('teacher_id')
-        ->count('teacher_id');
+        $progressReportPending = ProgressReport::whereIn('status', ['Draft', 'Submitted'])
+            ->whereNull('reviewed_at')
+            ->count();
 
-        /*
-        |--------------------------------------------------------------------------
-        | TOTAL ABSENSI HARI INI
-        |--------------------------------------------------------------------------
-        */
+        $weeklySchedules = ClassSchedule::with(['class.teacher', 'class.programPackage'])
+            ->orderBy('day')
+            ->orderBy('start_time')
+            ->get();
 
-        $totalAttendanceToday = Attendance::whereDate(
-            'attendance_date',
-            $date
-        )->count();
-
-        /*
-        |--------------------------------------------------------------------------
-        | TOTAL TIDAK HADIR HARI INI
-        |--------------------------------------------------------------------------
-        */
-
-        $totalTidakHadirHariIni = Attendance::whereDate(
-            'attendance_date',
-            $date
-        )
-        ->whereIn('status', [
-            'Absent',
-            'Sick',
-            'Permission'
-        ])
-        ->count();
-
-        /*
-        |--------------------------------------------------------------------------
-        | PROGRESS REPORT PENDING
-        |--------------------------------------------------------------------------
-        */
-
-        $progressReportPending = ProgressReport::whereIn(
-            'status',
-            [
-                'pending',
-                'draft'
-            ]
-        )->count();
-
-        /*
-        |--------------------------------------------------------------------------
-        | JADWAL MINGGUAN
-        |--------------------------------------------------------------------------
-        */
-
-        $weeklySchedules = ClassSchedule::with([
-            'class.teacher',
-            'class.programPackage'
-        ])
-        ->orderBy('day')
-        ->orderBy('start_time')
-        ->get();
-
-        /*
-        |--------------------------------------------------------------------------
-        | RETURN VIEW
-        |--------------------------------------------------------------------------
-        */
-
-        return view(
-            'kurikulum.monitoring',
-            compact(
-                'teachers',
-                'totalTeacher',
-                'totalSession',
-                'totalHour',
-                'averageHour',
-                'guruHadirHariIni',
-                'totalAttendanceToday',
-                'totalTidakHadirHariIni',
-                'progressReportPending',
-                'weeklySchedules',
-                'date'
-            )
-        );
+        return view('kurikulum.monitoring', compact(
+            'teachers',
+            'allTeachers',
+            'activeRankings',
+            'periode',
+            'totalTeacher',
+            'totalSession',
+            'totalHour',
+            'averageHour',
+            'guruHadirHariIni',
+            'totalAttendanceToday',
+            'totalTidakHadirHariIni',
+            'progressReportPending',
+            'weeklySchedules',
+            'date',
+            'teacherId',
+            'status'
+        ));
     }
 }
