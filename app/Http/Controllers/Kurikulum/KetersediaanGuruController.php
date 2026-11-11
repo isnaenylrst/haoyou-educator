@@ -107,10 +107,10 @@ class KetersediaanGuruController extends Controller
         $notFilled   = $teachers->filter(fn ($t) => $t->availabilities->isEmpty())->values();
         $filledCount = $teachers->count() - $notFilled->count();
 
-        return view('kurikulum.ketersediaan-guru', compact(
-            'teachers', 'needsAction', 'waiting', 'fit', 'load', 'days',
-            'availabilityGrid', 'notFilled', 'filledCount'
-        ));
+    return view('kurikulum.ketersediaan-guru', compact(
+    'teachers', 'needsAction', 'waiting', 'fit', 'load', 'days',
+    'availabilityGrid', 'notFilled', 'filledCount', 'replacementsWaiting'
+    ));
     }
 
     // ------------------------------------------------------------------ KETERSEDIAAN
