@@ -5,14 +5,14 @@
 <div class="bg-white border border-line rounded-2xl p-5 mb-5">
   <h3 class="font-semibold mb-4">Sertifikat Saya</h3>
 
-  <div class="bg-pale rounded-xl px-4 py-3 text-xs text-oliveDark mb-4">
+  <div class="bg-[#d5dfcc] rounded-xl px-4 py-3 text-xs text-oliveDark mb-4">
     Sertifikat tampil di sini setelah <strong>disetujui Kurikulum</strong>.
   </div>
 
   @forelse ($sertifikat as $item)
     <div class="flex items-center justify-between gap-3 py-3 border-b border-line last:border-0">
       <div class="flex items-center gap-3">
-        <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg">🏅</div>
+        <div class="w-11 h-11 rounded-xl bg-[#ffe135] flex items-center justify-center text-lg">🏅</div>
         <div>
           <div class="text-sm font-medium">
             Sertifikat — {{ $item->course_name ?: (optional(optional($item->enrollment)->class)->class_name ?? 'Kelas') }}

@@ -38,8 +38,11 @@
   <div class="vb-chip">Centang kotak di kolom <b>contoh kalimat</b> untuk melihat semua contohnya langsung di bawah kata.</div>
 </div>
 
+{{-- filter: bab (dropdown) + pencarian + status belajar, tepat di atas tabel --}}
 <form method="GET" class="vb-card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:14px 16px">
   <input type="hidden" name="filter" value="{{ $filter }}">
+  <input type="hidden" name="bab" value="{{ request('bab') }}">
+  @include('Siswa.vocab._chapters')
   <input class="vb-input" style="flex:1;min-width:200px" type="text" name="q" value="{{ $q }}" placeholder="Cari hanzi, pinyin, atau arti">
   @foreach(['all' => 'Semua', 'belum' => 'Belum dipelajari', 'sudah' => 'Sudah dipelajari'] as $k => $l)
     <a class="vb-fchip {{ $filter === $k ? 'on' : '' }}" href="{{ request()->fullUrlWithQuery(['filter' => $k, 'page' => null]) }}">{{ $l }}</a>
@@ -89,7 +92,7 @@
   </div>
 </div>
 
-<div style="margin-top:12px">{{ $words->links() }}</div>
+<div style="margin-top:12px">{{ $words->links('Siswa.vocab._pagination') }}</div>
 
 <script>
   document.querySelectorAll('.vb-extoggle').forEach(cb => cb.addEventListener('change', () => {

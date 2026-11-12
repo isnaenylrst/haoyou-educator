@@ -19,8 +19,8 @@
 <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-7">
 
   {{-- TOTAL POIN --}}
-  <div class="bg-white border border-[#F0EBDD] rounded-3xl p-6 shadow-[0_4px_18px_rgba(31,27,22,.08)]">
-    <div class="w-11 h-11 rounded-2xl bg-[#FFF3B8] flex items-center justify-center text-xl">⭐</div>
+  <div class="bg-white border border-[#d5dfcc] rounded-3xl p-6 shadow-[0_4px_18px_rgba(31,27,22,.08)]">
+    <div class="w-11 h-11 rounded-2xl bg-[#ffe135] flex items-center justify-center text-xl">⭐</div>
     <div class="text-[40px] font-bold leading-none mt-4">
       {{ number_format($stats['total_poin'], 0, ',', '.') }}
     </div>
@@ -28,8 +28,8 @@
   </div>
 
   {{-- RANKING --}}
-  <div class="bg-white border border-[#F0EBDD] rounded-3xl p-6 shadow-[0_4px_18px_rgba(31,27,22,.08)]">
-    <div class="w-11 h-11 rounded-2xl bg-[#FFF3B8] flex items-center justify-center text-xl">🏆</div>
+  <div class="bg-white border border-[#d5dfcc] rounded-3xl p-6 shadow-[0_4px_18px_rgba(31,27,22,.08)]">
+    <div class="w-11 h-11 rounded-2xl bg-[#ffe135] flex items-center justify-center text-xl">🏆</div>
     <div class="text-[40px] font-bold leading-none mt-4">
       #{{ $stats['peringkat'] }}
     </div>
@@ -37,8 +37,8 @@
   </div>
 
   {{-- KELAS MINGGU INI --}}
-  <div class="bg-white border border-[#F0EBDD] rounded-3xl p-6 shadow-[0_4px_18px_rgba(31,27,22,.08)]">
-    <div class="w-11 h-11 rounded-2xl bg-[#FFF3B8] flex items-center justify-center text-xl">📅</div>
+  <div class="bg-white border border-[#d5dfcc] rounded-3xl p-6 shadow-[0_4px_18px_rgba(31,27,22,.08)]">
+    <div class="w-11 h-11 rounded-2xl bg-[#ffe135] flex items-center justify-center text-xl">📅</div>
     <div class="text-[40px] font-bold leading-none mt-4">
       {{ $stats['kelas_minggu_ini'] }}
     </div>
@@ -50,21 +50,21 @@
 {{-- =========================================================
     JADWAL TERDEKAT
 ========================================================== --}}
-<div class="bg-white border border-[#F0EBDD] rounded-3xl p-6 md:p-7 mb-7 shadow-[0_4px_18px_rgba(31,27,22,.08)]">
+<div class="bg-white border border-[#d5dfcc] rounded-3xl p-6 md:p-7 mb-7 shadow-[0_4px_18px_rgba(31,27,22,.08)]">
 
   <div class="flex items-center justify-between mb-3">
     <h3 class="text-xl font-bold">Jadwal Terdekat</h3>
     <a href="{{ route('kelassaya.index') }}"
-       class="text-sm font-semibold text-[#7a5c00] min-h-[44px] flex items-center hover:underline">
+       class="text-sm font-semibold text-[#2d291a] min-h-[44px] flex items-center hover:underline">
       Lihat semua →
     </a>
   </div>
 
   @forelse ($jadwalTerdekat as $jadwal)
-    <div class="flex items-center justify-between py-3.5 border-b border-[#EEE9DC] last:border-0">
+    <div class="flex items-center justify-between py-3.5 border-b border-[#d5dfcc] last:border-0">
       <div class="flex items-center gap-3.5">
         {{-- ICON --}}
-        <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-xl bg-[#FFF3B8]">
+        <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-xl bg-[#ffe135]">
           {{ $jadwal['platform'] === 'online' ? '🀄' : '📖' }}
         </div>
         {{-- INFORMASI KELAS --}}
@@ -82,7 +82,7 @@
     </div>
   @empty
     <div class="py-9 flex flex-col items-center gap-3.5">
-      <div class="w-[72px] h-[72px] rounded-3xl bg-[#FFF3B8] flex items-center justify-center text-4xl">📅</div>
+      <div class="w-[72px] h-[72px] rounded-3xl bg-[#ffe135] flex items-center justify-center text-4xl">📅</div>
       <p class="text-[15px] text-[#6b6652]">Belum ada jadwal kelas.</p>
     </div>
   @endforelse
@@ -92,7 +92,7 @@
 {{-- =========================================================
     LEADERBOARD
 ========================================================== --}}
-<div class="bg-white border border-[#F0EBDD] rounded-3xl p-6 md:p-7 shadow-[0_4px_18px_rgba(31,27,22,.08)]">
+<div class="bg-white border border-[#d5dfcc] rounded-3xl p-6 md:p-7 shadow-[0_4px_18px_rgba(31,27,22,.08)]">
 
   <h3 class="text-xl font-bold mb-4">Leaderboard Poin</h3>
 

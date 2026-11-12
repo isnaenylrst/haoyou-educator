@@ -2,6 +2,8 @@
 
 use Illuminate\Support\Facades\Route;
 
+
+// ===== siswa =====
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\CalonSiswa\PendaftaranController;
@@ -11,6 +13,9 @@ use App\Http\Controllers\Siswa\BookingController;
 use App\Http\Controllers\Siswa\StudentCertificateController;
 use App\Http\Controllers\Siswa\VocabController;
 use App\Http\Controllers\ProfilController;
+use App\Http\Controllers\Siswa\VocabGuideVideoController;
+use App\Http\Controllers\Siswa\GrammarController;
+use App\Http\Controllers\Siswa\BelajarMandiriController;
 use App\Http\Controllers\NotificationController;
 
 // ===== KURIKULUM =====
@@ -74,6 +79,7 @@ use App\Http\Controllers\Guru\ObservationController as GuruObservationController
 use App\Http\Controllers\Guru\TrainingMaterialController as GuruTrainingMaterialController;
 use App\Http\Controllers\Guru\ConsultationResultController as GuruConsultationResultController;
 use App\Http\Controllers\Guru\RequestBelajarController as GuruRequestBelajarController;
+use App\Http\Controllers\Guru\ReplacementOfferController;
 
 // ===== OWNER =====
 use App\Http\Controllers\Owner\DashboardController as OwnerDashboardController;
@@ -238,8 +244,14 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
     Route::get('/video/{video}/stream', [SiswaLearningController::class, 'streamVideo'])
         ->name('video.stream');
 
+    // BELAJAR MANDIRI (hub)
+    Route::get('/belajar-mandiri', [BelajarMandiriController::class, 'index'])
+        ->name('student.mandiri.index');
+
     // BELAJAR VOCAB
     Route::prefix('student/belajar-vocab')->name('student.vocab.')->group(function () {
+
+        Route::get('panduan', [VocabController::class, 'guide'])->name('guide');
 
         Route::get('study-plan', [VocabController::class, 'plan'])->name('plan');
         Route::post('study-plan', [VocabController::class, 'planSave'])->name('plan.save');
@@ -259,6 +271,18 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
         Route::get('materi/{material}/lihat', [VocabController::class, 'materiLihat'])->name('materi.lihat');
         Route::get('materi/{material}/unduh', [VocabController::class, 'materiUnduh'])->name('materi.unduh');
     });
+
+    //BELAJAR GRAMMAR
+    Route::prefix('student/grammar')->name('student.grammar.')->group(function () {
+    Route::get('/guide', [GrammarController::class, 'guide'])->name('guide');
+    Route::get('/list',  [GrammarController::class, 'list'])->name('list');
+    Route::post('/list/{no}/toggle', [GrammarController::class, 'toggle'])->name('toggle');
+
+    Route::get('/traps', [GrammarController::class, 'traps'])->name('traps');
+
+    Route::get('/test',  [GrammarController::class, 'test'])->name('test');
+    Route::post('/test/{no}/answer', [GrammarController::class, 'answer'])->name('test.answer');
+});
 
     // BOOKING KELAS
     Route::get('/booking', [BookingController::class, 'index'])
@@ -542,15 +566,14 @@ Route::middleware(['auth', 'role:Curriculum'])
         Route::delete('/video/{video}', [KurikulumVideoController::class, 'destroy'])
             ->name('video.destroy');
 
-        Route::get('/video/{video}/stream', [KurikulumVideoController::class, 'stream'])
+         Route::get('/video/{video}/stream', [KurikulumVideoController::class, 'stream'])
             ->name('video.stream');
+
+        Route::get('/video-panduan', [VocabGuideVideoController::class, 'edit'])->name('video-panduan');
+        Route::post('/video-panduan', [VocabGuideVideoController::class, 'save'])->name('video-panduan.save');
 
         Route::post('/video/kategori', [KurikulumVideoController::class, 'storeCategory'])
             ->name('video.category.store');
-
-        Route::delete('/video/kategori/{category}', [KurikulumVideoController::class, 'destroyCategory'])
-            ->name('video.category.destroy');
-
         /*
         |--------------------------------------------------------------------------
         | OBSERVASI GURU & KELAS (Poin 9)
@@ -600,7 +623,7 @@ Route::middleware(['auth', 'role:Curriculum'])
             ->name('hasil-konsultasi.revisi.accept');
         Route::patch('/hasil-konsultasi/revisi/{revisionConsultation}/complete', [KurikulumConsultationResultController::class, 'completeRevision'])
             ->name('hasil-konsultasi.revisi.complete');
-        Route::get('/hasil-konsultasi/revisi/{revisionConsultation}/download', [KurikulumConsultationResultController::class, 'downloadRevision'])
+         Route::get('/hasil-konsultasi/revisi/{revisionConsultation}/download', [KurikulumConsultationResultController::class, 'downloadRevision'])
             ->name('hasil-konsultasi.revisi.download');
     });
 
@@ -781,6 +804,9 @@ Route::middleware(['auth', 'role:Owner'])
 
         Route::post('/guru/{teacher}/lihat', [OwnerAccessController::class, 'view'])
             ->name('guru.view');
+       
+        Route::get('/video-panduan', [VocabGuideVideoController::class, 'edit'])->name('video-panduan');
+        Route::post('/video-panduan', [VocabGuideVideoController::class, 'save'])->name('video-panduan.save');
 
         // Konsultasi Owner (Hasil, Jadwal, dan Revisi)
         Route::get('/konsultasi', [OwnerConsultationController::class, 'index'])
@@ -839,6 +865,7 @@ Route::middleware(['auth', 'role:Owner'])
             ->name('training.download');
         Route::get('/training/{id}/preview', [OwnerTrainingMaterialController::class, 'preview'])
             ->name('training.preview');
+       
         Route::get('/training/{id}/stream', [OwnerTrainingMaterialController::class, 'streamVideo'])
             ->name('training.stream');
     });
@@ -1130,7 +1157,7 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
 
     Route::get('/kurikulum-materi/{material}/unduh', [KurikulumMateriController::class, 'unduh'])
         ->name('kurikulum-materi.unduh');
-
+    
     // PROGRESS REPORT
     Route::get('/progress-report', [ProgressReportController::class, 'index'])
         ->name('progress-report');

@@ -1,4 +1,4 @@
-@extends('layouts.dashboard') {{-- ganti dengan nama layout dashboard kamu --}}
+@extends('layouts.dashboard') 
 
 @section('page-heading')
   <h1 class="mt-2 text-[28px] md:text-[34px] font-bold leading-tight">Vocab test</h1>
@@ -10,16 +10,22 @@
 @section('dashboard-content')
 @php
   $meta = [
-    'reading'   => ['Reading test',   'Lihat hanzi, lalu ketik artinya (Indonesia atau Inggris).', 'Kamu hanya perlu isi kolom “Arti” ya!'],
-    'listening' => ['Listening test', 'Klik tombol putar, dengarkan, lalu ketik artinya.',        'Klik tombol putar, lalu isi kolom “Arti” ya!'],
-    'writing'   => ['Writing test',   'Dari arti yang diberikan, tulis sendiri pinyin dan hanzi-nya.', 'Isi kolom “Pinyin” dan “Hanzi” ya!'],
+    'reading'   => ['Reading test',   'Lihat hanzi, lalu tulis pinyin, nada, dan artinya (Indonesia atau Inggris).', 'Isi kolom “Pinyin”, “Nada”, dan “Arti” ya!'],
+    'listening' => ['Listening test', 'Klik tombol putar, dengarkan, lalu tulis pinyin, nada, dan artinya.',        'Klik tombol putar, lalu isi “Pinyin”, “Nada”, dan “Arti” ya!'],
+    'writing'   => ['Writing test',   'Dari arti yang diberikan, tulis sendiri hanzi, pinyin, dan nadanya.',         'Isi kolom “Hanzi”, “Pinyin”, dan “Nada” ya!'],
   ][$type];
+
+  // kolom input per tes (urutan = urutan kolom di tabel)
+  $fields = \App\Services\VocabTestEvaluator::FIELDS[$type];
+  $label  = ['pinyin' => 'Pinyin', 'tone' => 'Nada ke-berapa', 'hanzi' => 'Hanzi', 'meaning' => 'Arti'];
+  $ph     = ['pinyin' => 'tulis pinyin...', 'tone' => 'cth: 3 2', 'hanzi' => 'tulis hanzi...', 'meaning' => 'tulis arti...'];
+
   $firstNo = $words->firstItem();
 @endphp
 
 <div class="vb-tabs">
   @foreach(['reading' => 'Reading', 'listening' => 'Listening', 'writing' => 'Writing'] as $k => $l)
-    <a class="vb-tab {{ $type === $k ? 'on' : '' }}" href="{{ route('student.vocab.test', $k) }}">{{ $l }}</a>
+    <a class="vb-tab {{ $type === $k ? 'on' : '' }}" href="{{ route('student.vocab.test', $k) }}{{ $bab ? '?bab='.$bab : '' }}">{{ $l }}</a>
   @endforeach
 </div>
 
@@ -29,6 +35,11 @@
     <div style="display:flex;align-items:flex-end;gap:6px"><div class="vb-bubble">{{ $meta[2] }}</div>@include('Siswa.vocab._star', ['size' => 52])</div>
   </div>
 
+  <div class="vb-sub" style="margin-top:8px">
+    Nada: tulis angka 1–4 untuk tiap suku kata, nada netral = 5. Contoh 你好 (nǐ hǎo) → <b>3 2</b>.
+    Jawaban disimpan otomatis saat kamu pindah ke baris lain (atau tekan Enter).
+  </div>
+
   {{-- garis progres penuh + bintang --}}
   <div class="vb-bar" style="margin-top:16px"><div id="bar"></div></div>
   <div class="vb-counter">
@@ -36,13 +47,21 @@
     <div class="note" id="note"></div>
   </div>
 
-  <div class="vb-wrap" style="margin-top:14px">
+  {{-- pilih bab, tepat di atas tabel --}}
+  <div style="margin-top:14px">@include('Siswa.vocab._chapters')</div>
+
+  <div class="vb-wrap" style="margin-top:10px">
     <table class="vb-table">
       <thead><tr>
         <th style="width:40px">No</th>
-        @if($type === 'reading')<th>Hanzi</th><th>Arti</th>
-        @elseif($type === 'listening')<th>Pinyin</th><th style="width:70px">Audio</th><th>Arti</th>
-        @else<th>Arti Indonesia</th><th>Meaning English</th><th>Pinyin</th><th>Hanzi</th>@endif
+        @if($type === 'reading')
+          <th>Hanzi</th>
+        @elseif($type === 'listening')
+          <th style="width:70px">Audio</th>
+        @else
+          <th>Arti Indonesia</th><th>Meaning English</th>
+        @endif
+        @foreach($fields as $f)<th>{{ $label[$f] }}</th>@endforeach
         <th style="width:60px;text-align:center">Ragu</th><th style="width:100px">Status</th>
       </tr></thead>
       <tbody>
@@ -52,16 +71,22 @@
           <td>{{ $firstNo + $i }}</td>
           @if($type === 'reading')
             <td class="vb-hanzi">{{ $w->hanzi }}</td>
-            <td><input class="vb-input vb-in" value="{{ $r->answer ?? '' }}" placeholder="tulis arti..."></td>
           @elseif($type === 'listening')
-            <td>{{ $w->pinyin }}</td>
             <td><button type="button" class="vb-audio" data-hanzi="{{ $w->hanzi }}" data-src="{{ $w->audio_path ? asset('storage/'.$w->audio_path) : '' }}" aria-label="Putar audio">▶</button></td>
-            <td><input class="vb-input vb-in" value="{{ $r->answer ?? '' }}" placeholder="tulis arti..."></td>
           @else
             <td>{{ $w->meaning_id }}</td><td>{{ $w->meaning_en }}</td>
-            <td><input class="vb-input vb-in" value="{{ $r->answer ?? '' }}" placeholder="tulis pinyin..."></td>
-            <td><input class="vb-input vb-in" value="{{ $r->answer_extra ?? '' }}" placeholder="tulis hanzi..."></td>
           @endif
+
+          @foreach($fields as $f)
+            <td>
+              <input class="vb-input vb-in" data-f="{{ $f }}"
+                     value="{{ $r->{'answer_'.$f} ?? '' }}"
+                     placeholder="{{ $ph[$f] }}" autocomplete="off"
+                     @if($f === 'hanzi') lang="zh" @endif
+                     style="{{ $f === 'tone' ? 'min-width:90px;max-width:130px' : '' }}">
+            </td>
+          @endforeach
+
           <td style="text-align:center"><input type="checkbox" class="vb-ragu" @checked($r && $r->is_ragu) aria-label="Ragu"></td>
           <td class="vb-st"><span class="vb-pill s-{{ $st }}">{{ ['hafal'=>'HAFAL','ragu'=>'RAGU','salah'=>'SALAH'][$st] ?? '-' }}</span></td>
         </tr>
@@ -69,7 +94,7 @@
       </tbody>
     </table>
   </div>
-  <div style="margin-top:12px">{{ $words->links() }}</div>
+  <div style="margin-top:12px">{{ $words->links('Siswa.vocab._pagination') }}</div>
 </div>
 
 <div class="vb-sum">
@@ -88,7 +113,7 @@
     <span class="vb-fchip on" data-f="all">Semua</span><span class="vb-fchip" data-f="ragu">Ragu</span><span class="vb-fchip" data-f="salah">Salah</span>
   </div>
   <div class="vb-wrap"><table class="vb-table">
-    <thead><tr><th style="width:40px">No</th><th>{{ ['reading'=>'Hanzi','listening'=>'Pinyin','writing'=>'Arti'][$type] }}</th><th>Jawabanmu</th><th style="width:100px">Status</th></tr></thead>
+    <thead><tr><th style="width:40px">No</th><th>{{ ['reading'=>'Hanzi','listening'=>'Audio','writing'=>'Arti'][$type] }}</th><th>Jawabanmu</th><th style="width:100px">Status</th></tr></thead>
     <tbody id="pendBody"></tbody>
   </table></div>
   <div id="pendEmpty" style="display:none;text-align:center;color:#9CA294;padding:18px;font-size:13px">belum ada kata di kategori ini</div>
@@ -124,17 +149,27 @@
       td().textContent=x.answer; td().appendChild(pill(x.status,x.label)); b.appendChild(tr);
     });
   }
+
+  // simpan per baris: saat fokus keluar dari baris (atau Enter), atau saat "Ragu" diubah
   document.querySelectorAll('tr[data-word]').forEach(tr=>{
+    let dirty=false;
     const send=async()=>{
-      const ins=tr.querySelectorAll('.vb-in');
+      dirty=false;
+      const body={word_id:tr.dataset.word,ragu:tr.querySelector('.vb-ragu').checked?1:0};
+      tr.querySelectorAll('.vb-in').forEach(i=>{body[i.dataset.f]=i.value});
       try{
-        const j=await req(U.answer,'POST',{word_id:tr.dataset.word,answer:ins[0].value,answer_extra:ins[1]?ins[1].value:'',ragu:tr.querySelector('.vb-ragu').checked?1:0});
+        const j=await req(U.answer,'POST',body);
         const st=tr.querySelector('.vb-st'); st.innerHTML=''; st.appendChild(pill(j.status,j.label)); paint(j);
-      }catch(e){toast('Gagal menyimpan, coba lagi')}
+      }catch(e){dirty=true;toast('Gagal menyimpan, coba lagi')}
     };
-    tr.querySelectorAll('.vb-in').forEach(i=>i.addEventListener('change',send));
+    tr.querySelectorAll('.vb-in').forEach(i=>{
+      i.addEventListener('input',()=>{dirty=true});
+      i.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();i.blur();} });
+    });
+    tr.addEventListener('focusout',e=>{ if(dirty && !tr.contains(e.relatedTarget)) send(); });
     tr.querySelector('.vb-ragu').addEventListener('change',send);
   });
+
   $('flt').querySelectorAll('.vb-fchip').forEach(c=>c.addEventListener('click',()=>{
     $('flt').querySelectorAll('.vb-fchip').forEach(x=>x.classList.remove('on')); c.classList.add('on'); flt=c.dataset.f; renderPend();
   }));

@@ -5,7 +5,7 @@
 <div class="bg-white border border-line rounded-2xl p-5 mb-5">
 
     {{-- Informasi Progress Report --}}
-    <div class="bg-pale rounded-xl px-4 py-3 text-xs text-oliveDark mb-4">
+    <div class="bg-[#d5dfcc] rounded-xl px-4 py-3 text-xs text-oliveDark mb-4">
         Progress report tampil di sini setelah <strong>disetujui Kurikulum</strong>.
         Laporan yang masih diisi guru atau sedang direview belum ditampilkan.
         Laporan diterbitkan berkala — setiap <strong>3 bulan</strong> untuk kelas Reguler,
@@ -21,7 +21,7 @@
             {{-- Icon + Informasi --}}
             <div class="flex items-center gap-3">
 
-                <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg flex-shrink-0">
+                <div class="w-11 h-11 rounded-xl bg-[#ffe135] flex items-center justify-center text-lg flex-shrink-0">
                     📊
                 </div>
 
@@ -68,7 +68,7 @@
 
             <div class="flex items-center gap-3">
 
-                <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg">
+                <div class="w-11 h-11 rounded-xl bg-[#ffe135] flex items-center justify-center text-lg">
                     📊
                 </div>
 
@@ -98,7 +98,7 @@
 
         <div class="flex items-center gap-3">
 
-            <div class="w-11 h-11 rounded-xl bg-pale flex items-center justify-center text-lg">
+            <div class="w-11 h-11 rounded-xl bg-[#ffe135] flex items-center justify-center text-lg">
                 ⏳
             </div>
 

@@ -31,7 +31,7 @@
                     {{-- ICON + INFORMASI KELAS --}}
                     <div class="flex items-center gap-3">
 
-                        <div class="w-11 h-11 rounded-xl bg-[#fff4b8] flex items-center justify-center text-lg">
+                        <div class="w-11 h-11 rounded-xl bg-[#ffe135] flex items-center justify-center text-lg">
                             {{ strtolower($kelas->delivery_mode) === 'online' ? '🀄' : '📖' }}
                         </div>
 

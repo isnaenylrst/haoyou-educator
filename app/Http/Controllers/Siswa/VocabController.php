@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Siswa;
 use App\Http\Controllers\Controller;
 use App\Models\ClassEnrollment;
 use App\Models\Material;
+use App\Models\VocabChapter;
 use App\Models\VocabStudyPlan;
 use App\Models\VocabTestResult;
 use App\Models\VocabTrap;
 use App\Models\VocabTrapUnderstood;
 use App\Models\VocabWord;
+use App\Models\VocabSetting;
 use App\Services\VocabTestEvaluator;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -19,31 +21,58 @@ class VocabController extends Controller
 {
     private const TYPES = ['reading', 'listening', 'writing'];
 
+    /**
+     * Level (HSK 1/2/3...) milik siswa yang sedang login.
+     * !!! SESUAIKAN baris ini dengan struktur project kamu !!!
+     * Contoh lain: auth()->user()->student->program_level_id
+     * Jika null => semua kata tampil (tidak difilter).
+     */
+    private function levelId(): ?int
+    {
+        return auth()->user()->program_level_id ?? null;
+    }
+
+    /** Daftar bab untuk level siswa + bab yang sedang dipilih (?bab=2). */
+    private function chapterContext(Request $r): array
+    {
+        $chapters = VocabChapter::withCount('words')
+            ->when($this->levelId(), fn ($q, $lvl) => $q->whereIn('program_level_id', VocabWord::equivalentLevelIds($lvl)))
+            ->orderBy('number')->get();
+
+        $chapter = $chapters->firstWhere('number', (int) $r->query('bab'));
+
+        return [$chapters, $chapter?->number, $chapter?->id];
+    }
+
     /* ============================ STUDY PLAN ============================ */
     public function plan()
-{
-    $uid = auth()->id();
-    $plan = VocabStudyPlan::where('user_id', $uid)->first();
+    {
+        return view('Siswa.vocab.plan', [
+            'title'   => 'Belajar Vocab › Study Plan',
+            'plan'    => VocabStudyPlan::where('user_id', auth()->id())->first(),
+            'total'   => VocabWord::forLevel($this->levelId())->count(),
+            'minutes' => [5 => '5 menit', 10 => '10 menit', 15 => '15 menit', 20 => '20 menit', 30 => '30 menit',
+                          45 => '45 menit', 60 => '1 jam', 90 => '1,5 jam', 120 => '2 jam', 180 => '3 jam'],
+        ]);
+    }
 
-    $hafalQuery = VocabTestResult::where('user_id', $uid)->where('status', 'hafal');
+    public function guide()
+    {
+        $uid   = auth()->id();
+        $hafal = VocabTestResult::where('user_id', $uid)->where('status', 'hafal');
 
-    return view('Siswa.vocab.plan', [
-        'title'   => 'Belajar Vocab › Study Plan',
-        'plan'    => $plan,
-        'total'   => VocabWord::count(),
-        'minutes' => [5 => '5 menit', 10 => '10 menit', 15 => '15 menit', 20 => '20 menit', 30 => '30 menit',
-                      45 => '45 menit', 60 => '1 jam', 90 => '1,5 jam', 120 => '2 jam', 180 => '3 jam'],
-
-        // dipakai untuk menandai langkah mana yang sudah selesai
-        'progress' => [
-            'plan'    => (bool) $plan,
-            'tested'  => VocabTestResult::where('user_id', $uid)->count(),
-            'learned' => (clone $hafalQuery)->distinct()->count('vocab_word_id'),
-            'stars'   => (clone $hafalQuery)->count(),
-            'paham'   => VocabTrapUnderstood::where('user_id', $uid)->count(),
-        ],
-    ]);
-}
+        return view('Siswa.vocab.guide', [
+            'title'   => 'Belajar Vocab › Panduan',
+            'videoId' => VocabSetting::youtubeId(VocabSetting::read('guide_video')),
+            'progress' => [
+                'plan'    => VocabStudyPlan::where('user_id', $uid)->exists(),
+                'tested'  => VocabTestResult::where('user_id', $uid)->count(),
+                'learned' => (clone $hafal)->distinct()->count('vocab_word_id'),
+                'stars'   => (clone $hafal)->count(),
+                'paham'   => VocabTrapUnderstood::where('user_id', $uid)->count(),
+            ],
+        ]);
+    }
 
     public function planSave(Request $r)
     {
@@ -62,10 +91,15 @@ class VocabController extends Controller
     /* ============================ VOCAB LIST ============================ */
     public function list(Request $r)
     {
-        $uid = auth()->id();
+        $uid   = auth()->id();
+        $level = $this->levelId();
         $hafal = fn ($q) => $q->where('user_id', $uid)->where('status', 'hafal');
 
-        $q = VocabWord::with('examples')->orderBy('order_number');
+        [$chapters, $bab, $chapterId] = $this->chapterContext($r);
+
+        $q = VocabWord::forLevel($level)->with('examples')->orderBy('order_number');
+        if ($chapterId) $q->where('vocab_chapter_id', $chapterId);
+
         if ($s = trim((string) $r->q)) {
             $q->where(fn ($w) => $w->where('hanzi', 'like', "%$s%")->orWhere('pinyin', 'like', "%$s%")
                 ->orWhere('meaning_id', 'like', "%$s%")->orWhere('meaning_en', 'like', "%$s%"));
@@ -80,8 +114,10 @@ class VocabController extends Controller
             ->whereIn('vocab_word_id', $words->pluck('id'))
             ->selectRaw('vocab_word_id, count(*) c')->groupBy('vocab_word_id')->pluck('c', 'vocab_word_id');
 
-        $total   = VocabWord::where('trap_only', false)->count();
+        // progres dihitung per LEVEL (bukan per bab)
+        $total   = VocabWord::forLevel($level)->where('trap_only', false)->count();
         $learned = VocabTestResult::where('user_id', $uid)->where('status', 'hafal')
+            ->whereHas('word', fn ($w) => $w->forLevel($level))
             ->distinct()->count('vocab_word_id');
 
         // status kemajuan dibanding Study Plan
@@ -99,15 +135,21 @@ class VocabController extends Controller
             'total' => $total, 'learned' => $learned, 'state' => $state,
             'stage' => $pct < 25 ? 0 : ($pct < 50 ? 1 : ($pct < 75 ? 2 : 3)),
             'pct'   => $pct,
+            'chapters' => $chapters, 'bab' => $bab,
         ]);
     }
 
     /* ================================ TEST ================================ */
-    public function test(string $type = 'reading')
+    public function test(Request $r, string $type = 'reading')
     {
         abort_unless(in_array($type, self::TYPES), 404);
 
-        $words = VocabWord::where('trap_only', false)->orderBy('order_number')->paginate(20);
+        [$chapters, $bab, $chapterId] = $this->chapterContext($r);
+
+        $words = VocabWord::forLevel($this->levelId())->where('trap_only', false)
+            ->when($chapterId, fn ($q) => $q->where('vocab_chapter_id', $chapterId))
+            ->orderBy('order_number')->paginate(20)->withQueryString();
+
         $results = VocabTestResult::where('user_id', auth()->id())->where('test_type', $type)
             ->whereIn('vocab_word_id', $words->pluck('id'))->get()->keyBy('vocab_word_id');
 
@@ -115,6 +157,7 @@ class VocabController extends Controller
             'title' => 'Belajar Vocab › Test',
             'type' => $type, 'words' => $words, 'results' => $results,
             'init' => $this->payload($type),
+            'chapters' => $chapters, 'bab' => $bab,
         ]);
     }
 
@@ -123,19 +166,31 @@ class VocabController extends Controller
         abort_unless(in_array($type, self::TYPES), 404);
         $d = $r->validate([
             'word_id' => 'required|exists:vocab_words,id',
-            'answer' => 'nullable|string|max:255', 'answer_extra' => 'nullable|string|max:255',
-            'ragu' => 'nullable|boolean',
+            'pinyin'  => 'nullable|string|max:255',
+            'tone'    => 'nullable|string|max:50',
+            'hanzi'   => 'nullable|string|max:255',
+            'meaning' => 'nullable|string|max:255',
+            'ragu'    => 'nullable|boolean',
         ]);
 
-        $word   = VocabWord::where('trap_only', false)->findOrFail($d['word_id']);
-        $status = VocabTestEvaluator::evaluate($type, $word, $d['answer'] ?? null, $d['answer_extra'] ?? null, (bool) ($d['ragu'] ?? false));
+        // siswa hanya boleh menjawab kata dari level-nya sendiri
+        $word = VocabWord::forLevel($this->levelId())->where('trap_only', false)->findOrFail($d['word_id']);
+
+        // hanya ambil kolom yang memang dipakai tes ini
+        $ans = [];
+        foreach (VocabTestEvaluator::FIELDS[$type] as $f) $ans[$f] = $d[$f] ?? null;
+
+        $status = VocabTestEvaluator::evaluate($type, $word, $ans, (bool) ($d['ragu'] ?? false));
         $key    = ['user_id' => auth()->id(), 'vocab_word_id' => $word->id, 'test_type' => $type];
 
         if ($status === null) {
             VocabTestResult::where($key)->delete();
         } else {
             VocabTestResult::updateOrCreate($key, [
-                'answer' => $d['answer'] ?? null, 'answer_extra' => $d['answer_extra'] ?? null,
+                'answer_pinyin'  => $ans['pinyin']  ?? null,
+                'answer_tone'    => $ans['tone']    ?? null,
+                'answer_hanzi'   => $ans['hanzi']   ?? null,
+                'answer_meaning' => $ans['meaning'] ?? null,
                 'is_ragu' => $status === 'ragu', 'status' => $status,
             ]);
         }
@@ -155,7 +210,9 @@ class VocabController extends Controller
     {
         abort_unless(in_array($type, self::TYPES), 404);
         VocabTestResult::where('user_id', auth()->id())->where('test_type', $type)
-            ->whereIn('status', ['ragu', 'salah'])->delete();
+            ->whereIn('status', ['ragu', 'salah'])
+            ->whereHas('word', fn ($w) => $w->forLevel($this->levelId()))
+            ->delete();
         return response()->json($this->payload($type));
     }
 
@@ -166,26 +223,33 @@ class VocabController extends Controller
 
     private function payload(string $type, bool $shuffle = false): array
     {
-        $uid    = auth()->id();
+        $uid   = auth()->id();
+        $level = $this->levelId();
+        $inLevel = fn ($w) => $w->forLevel($level);
+
         $counts = VocabTestResult::where('user_id', $uid)->where('test_type', $type)
+            ->whereHas('word', $inLevel)
             ->selectRaw('status, count(*) c')->groupBy('status')->pluck('c', 'status');
 
         $rows = VocabTestResult::with('word')->where('user_id', $uid)->where('test_type', $type)
+            ->whereHas('word', $inLevel)
             ->whereIn('status', ['ragu', 'salah'])->latest('updated_at')->get();
         if ($shuffle) $rows = $rows->shuffle();
+
+        $fields = VocabTestEvaluator::FIELDS[$type];
 
         $pending = $rows->values()->map(fn ($x) => [
             'prompt' => match ($type) {
                 'reading'   => $x->word->hanzi,
-                'listening' => '🔊 ' . $x->word->pinyin,
+                'listening' => '🔊 ' . $x->word->hanzi,
                 default     => $x->word->meaning_id,
             },
-            'answer' => collect([$x->answer, $x->answer_extra])->filter()->implode(' / ') ?: '-',
+            'answer' => collect($fields)->map(fn ($f) => $x->{'answer_' . $f})->filter()->implode(' / ') ?: '-',
             'status' => $x->status, 'label' => $this->label($x->status),
         ]);
 
         return [
-            'total'   => VocabWord::where('trap_only', false)->count(),
+            'total'   => VocabWord::forLevel($level)->where('trap_only', false)->count(),
             'counts'  => ['hafal' => (int) ($counts['hafal'] ?? 0), 'ragu' => (int) ($counts['ragu'] ?? 0), 'salah' => (int) ($counts['salah'] ?? 0)],
             'pending' => $pending,
         ];
@@ -194,11 +258,14 @@ class VocabController extends Controller
     /* ============================ VOCAB TRAPS ============================ */
     public function traps(Request $r)
     {
-        $uid = auth()->id();
-        $s   = trim((string) $r->q);
+        $uid   = auth()->id();
+        $level = $this->levelId();
+        $s     = trim((string) $r->q);
+
         $get = fn ($type) => VocabTrap::with('word.examples')->where('type', $type)
-            ->when($s, fn ($q) => $q->whereHas('word', fn ($w) => $w->where('hanzi', 'like', "%$s%")
-                ->orWhere('pinyin', 'like', "%$s%")->orWhere('meaning_id', 'like', "%$s%")))
+            ->whereHas('word', fn ($w) => $w->forLevel($level))
+            ->when($s, fn ($q) => $q->whereHas('word', fn ($w) => $w->where(fn ($x) => $x
+                ->where('hanzi', 'like', "%$s%")->orWhere('pinyin', 'like', "%$s%")->orWhere('meaning_id', 'like', "%$s%"))))
             ->orderBy('sort_order')->get();
 
         $understood = VocabTrapUnderstood::where('user_id', $uid)->pluck('vocab_word_id')->all();
@@ -206,11 +273,13 @@ class VocabController extends Controller
         return view('Siswa.vocab.traps', [
             'title' => 'Belajar Vocab › Vocab Traps',
             'sameMeaning' => $get('same_meaning'), 'sameHanzi' => $get('same_hanzi'),
-            'understood' => $understood, 'totalTrap' => VocabTrap::count(), 'done' => count($understood),
+            'understood' => $understood,
+            'totalTrap' => VocabTrap::whereHas('word', fn ($w) => $w->forLevel($level))->count(),
+            'done' => count($understood),
         ]);
     }
 
-    public function understood(VocabWord $word)
+  public function understood(VocabWord $word)
     {
         $key = ['user_id' => auth()->id(), 'vocab_word_id' => $word->id];
         $row = VocabTrapUnderstood::where($key)->first();
@@ -253,10 +322,11 @@ class VocabController extends Controller
         return [$levelIds, $categoryIds];
     }
 
+
     /**
      * Memeriksa otorisasi materi Huahua untuk siswa yang sedang login.
      */
-    private function authorizeHuahuaMaterial(Material $material): void
+     private function authorizeHuahuaMaterial(Material $material): void
     {
         abort_unless($material->audience === 'Huahua', 404);
 
@@ -336,3 +406,4 @@ class VocabController extends Controller
         return Storage::disk('public')->download($material->material_file_path, $name);
     }
 }
+
