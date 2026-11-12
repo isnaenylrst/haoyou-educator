@@ -34,10 +34,27 @@ class SiswaDashboardController extends Controller
 
         $totalPoin = $student->points ?? 0;
 
-        $peringkat = Student::where('status', 'Active')
-            ->where('points', '>', $totalPoin)
-            ->count() + 1;
+        // Satu sumber urutan untuk peringkat kartu & leaderboard
+        $ranking = Student::where('status', 'Active')
+            ->orderByRaw('COALESCE(points, 0) DESC')
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get(['id', 'name', 'points']);
 
+        $posisi = $ranking->search(fn ($s) => $s->id === $student->id);
+        $peringkat = $posisi === false ? $ranking->count() + 1 : $posisi + 1;
+
+        $leaderboard = $ranking
+            ->take(10)
+            ->map(fn ($item, $i) => [
+                'id'   => $item->id,
+                'rank' => $i + 1,
+                'nama' => $item->name,
+                'poin' => $item->points ?? 0,
+            ])
+            ->values()
+            ->all();
+    
         $enrollments = ClassEnrollment::with([
             'class.teacher',
             'class.schedules',
@@ -78,17 +95,6 @@ class SiswaDashboardController extends Controller
                 'platform' => $s['platform'],
             ])
             ->values()
-            ->all();
-
-        $leaderboard = Student::where('status', 'Active')
-            ->orderByDesc('points')
-            ->take(10)
-            ->get()
-            ->map(fn ($item, $i) => [
-                'rank' => $i + 1,
-                'nama' => $item->name,
-                'poin' => $item->points ?? 0,
-            ])
             ->all();
 
         $progressReports = ProgressReport::approved()

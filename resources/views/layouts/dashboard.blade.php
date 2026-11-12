@@ -277,7 +277,7 @@
                  class="w-[68px] h-[68px] object-contain">
         </div>
 
-      {{-- ============ BELAJAR VOCAB (BARU) ============ --}}
+      {{-- ============ BELAJAR VOCAB (BARU) ============
       @php $inVocab = request()->routeIs('student.vocab.*'); @endphp
       <div id="grpVocab" class="side-group {{ $inVocab ? 'open' : '' }}">
         <button type="button" data-side-toggle="grpVocab" aria-expanded="{{ $inVocab ? 'true' : 'false' }}"
@@ -293,7 +293,7 @@
         <a href="{{ route('student.vocab.materi') }}" class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.materi*') ? 'is-active' : '' }}"><span>🌸</span> Materi Huahua</a>
         </div>
 
-        <nav class="relative z-10 flex-1 p-3.5 pt-5">
+        <nav class="relative z-10 flex-1 p-3.5 pt-5"> --}}
 
             <a href="{{ route('dashboard') }}"
                class="side-link alumni-restricted {{ request()->routeIs('dashboard') ? 'is-active' : '' }}">
@@ -528,7 +528,7 @@
                         ['Vocab list',  'student.vocab.list',   'student.vocab.list'],
                         ['Test',        'student.vocab.test',   'student.vocab.test*'],
                         ['Vocab traps', 'student.vocab.traps',  'student.vocab.traps*'],
-                        ['Materi Huahua', 'student.vocab.materi', 'student.vocab.materi*'],
+                        // ['Materi Huahua', 'student.vocab.materi', 'student.vocab.materi*'],
                     ],
                     'grammar' => [
                         ['Panduan',       'student.grammar.guide', 'student.grammar.guide'],
