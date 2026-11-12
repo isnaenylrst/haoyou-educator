@@ -99,10 +99,10 @@
                     <span class="label">Calon Siswa</span>
                 </a>
 
-                <a href="{{ route('admin.request-belajar.index') }}" class="nav-item {{ request()->routeIs('admin.request-belajar.*') ? 'active' : '' }}">
+                {{-- <a href="{{ route('admin.request-belajar.index') }}" class="nav-item {{ request()->routeIs('admin.request-belajar.*') ? 'active' : '' }}">
                     <i class="fa-solid fa-book-open-reader nav-icon" title="Request Belajar Siswa"></i>
                     <span class="label">Request Belajar</span>
-                </a>
+                </a> --}}
             </div>
 
             {{-- AKADEMIK --}}
@@ -175,10 +175,10 @@
                     <span class="label">Dokumen</span>
                 </a>
 
-                <a href="{{ route('admin.training.index') }}" class="nav-item {{ request()->routeIs('admin.training*') ? 'active' : '' }}">
+                {{-- <a href="{{ route('admin.training.index') }}" class="nav-item {{ request()->routeIs('admin.training*') ? 'active' : '' }}">
                     <i class="fa-solid fa-graduation-cap nav-icon" title="Materi Training"></i>
                     <span class="label">Materi Training</span>
-                </a>
+                </a> --}}
             </div>
 
             {{-- PENGATURAN --}}

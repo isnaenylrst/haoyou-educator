@@ -14,8 +14,12 @@
         .title { font-size: 18px; font-weight: bold; text-decoration: underline; text-align: center; text-transform: uppercase; margin-bottom: 5px; }
         .doc-no { text-align: center; font-size: 13px; margin-bottom: 25px; color: #555; }
         .table-detail td { padding: 8px 12px; }
-        .sig-box { min-height: 90px; display: flex; align-items: center; justify-content: center; }
-        .sig-box img { max-height: 80px; max-width: 160px; object-fit: contain; }
+        .sig-row { page-break-inside: avoid; }
+        .sig-head { font-size: 14px; font-weight: 600; white-space: nowrap; }
+        .sig-role { font-size: 12px; color: #6b7280; margin-bottom: 6px; }
+        .sig-box { height: 90px; display: flex; align-items: center; justify-content: center; }
+        .sig-name { min-height: 24px; font-weight: bold; text-decoration: underline; }
+        .sig-box img { max-height: 80px; max-width: 130px; object-fit: contain; }
         @media print {
             body { background: none; }
             .sheet { border: 0; box-shadow: none; margin: 0; padding: 0; max-width: 100%; }
@@ -99,6 +103,12 @@
                 <td><em>"{{ $submission->curriculum_note }}"</em></td>
             </tr>
             @endif
+            @if($submission->admin_note)
+            <tr>
+                <td class="bg-light fw-bold">Catatan Admin</td>
+                <td><em>"{{ $submission->admin_note }}"</em></td>
+            </tr>
+            @endif
             @if($submission->owner_note)
             <tr>
                 <td class="bg-light fw-bold">Catatan Owner</td>
@@ -160,19 +170,21 @@
         @endif
     </div>
 
-    {{-- TANDA TANGAN OTOMATIS --}}
-    <div class="row mt-5 text-center">
-        <div class="col-4">
-            <div class="small fw-semibold">Diajukan Oleh:</div>
-            <div class="sig-box">
-                <div class="text-muted small fst-italic">Tenaga Pengajar</div>
-            </div>
-            <div class="fw-bold text-decoration-underline">{{ $submission->teacher->name ?? $submission->creator->display_name ?? 'Guru' }}</div>
+    {{-- TANDA TANGAN: judul 1 baris + jabatan di bawahnya, tinggi kotak TTD seragam supaya lurus --}}
+    <div class="row mt-5 text-center sig-row">
+        {{-- GURU --}}
+        <div class="col-3">
+            <div class="sig-head">Diajukan Oleh</div>
+            <div class="sig-role">Tenaga Pengajar</div>
+            <div class="sig-box"></div>
+            <div class="sig-name">{{ $submission->teacher->name ?? $submission->creator->display_name ?? 'Guru' }}</div>
             <div class="small text-muted">Tanggal: {{ $submission->date->translatedFormat('d/m/Y') }}</div>
         </div>
 
-        <div class="col-4">
-            <div class="small fw-semibold">Disetujui Oleh (Kurikulum):</div>
+        {{-- KURIKULUM --}}
+        <div class="col-3">
+            <div class="sig-head">Disetujui Oleh</div>
+            <div class="sig-role">Kurikulum</div>
             <div class="sig-box">
                 @if($submission->curriculum_signature_path)
                     <img src="{{ asset('storage/' . $submission->curriculum_signature_path) }}" alt="TTD Kurikulum">
@@ -185,14 +197,38 @@
                     <div class="text-muted small fst-italic">Menunggu Persetujuan</div>
                 @endif
             </div>
-            <div class="fw-bold text-decoration-underline">{{ $submission->curriculum->display_name ?? 'Bagian Kurikulum' }}</div>
+            <div class="sig-name">{{ $submission->curriculum->display_name ?? 'Bagian Kurikulum' }}</div>
             <div class="small text-muted">
                 Tanggal: {{ $submission->curriculum_approved_at ? $submission->curriculum_approved_at->translatedFormat('d/m/Y') : '-' }}
             </div>
         </div>
 
-        <div class="col-4">
-            <div class="small fw-semibold">Mengetahui (Owner):</div>
+        {{-- ADMIN --}}
+        <div class="col-3">
+            <div class="sig-head">Diverifikasi Oleh</div>
+            <div class="sig-role">Admin</div>
+            <div class="sig-box">
+                @if($submission->admin_signature_path)
+                    <img src="{{ asset('storage/' . $submission->admin_signature_path) }}" alt="TTD Admin">
+                @elseif($submission->admin_verified_at)
+                    <div class="text-success small fw-semibold">
+                        <i class="fa-solid fa-circle-check fs-4 d-block mb-1"></i>
+                        TERVERIFIKASI
+                    </div>
+                @else
+                    <div class="text-muted small fst-italic">{{ in_array($submission->status, ['Review Admin', 'Verifikasi Admin']) ? 'Menunggu Verifikasi' : '-' }}</div>
+                @endif
+            </div>
+            <div class="sig-name">{{ $submission->admin_signer_name ?: ($submission->admin->display_name ?? 'Bagian Admin') }}</div>
+            <div class="small text-muted">
+                Tanggal: {{ $submission->admin_verified_at ? $submission->admin_verified_at->translatedFormat('d/m/Y') : '-' }}
+            </div>
+        </div>
+
+        {{-- OWNER --}}
+        <div class="col-3">
+            <div class="sig-head">Mengetahui</div>
+            <div class="sig-role">Owner</div>
             <div class="sig-box">
                 @if($submission->owner_signature_path)
                     <img src="{{ asset('storage/' . $submission->owner_signature_path) }}" alt="TTD Owner">
@@ -205,7 +241,7 @@
                     <div class="text-muted small fst-italic">{{ $submission->status === 'Review Owner' ? 'Menunggu Review' : '-' }}</div>
                 @endif
             </div>
-            <div class="fw-bold text-decoration-underline">{{ $submission->owner?->name ?? ($submission->owner?->display_name ?? 'Joy Limmunandar') }}</div>
+            <div class="sig-name">{{ $submission->owner?->name ?? ($submission->owner?->display_name ?? 'Joy Limmunandar') }}</div>
             <div class="small text-muted">
                 Tanggal: {{ $submission->owner_approved_at ? $submission->owner_approved_at->translatedFormat('d/m/Y') : '-' }}
             </div>
@@ -215,4 +251,3 @@
 
 </body>
 </html>
-

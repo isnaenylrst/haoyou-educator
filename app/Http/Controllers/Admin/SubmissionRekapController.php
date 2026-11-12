@@ -8,10 +8,13 @@ use App\Models\Submission;
 use App\Models\Teacher;
 use App\Models\User;
 use App\Notifications\AppNotification;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class SubmissionRekapController extends Controller
 {
@@ -23,13 +26,30 @@ class SubmissionRekapController extends Controller
         $type      = $request->query('type');
         $teacherId = $request->query('teacher_id');
 
+        // Filter periode (berdasarkan tanggal pengajuan). Rentang tanggal lebih diutamakan daripada bulan.
+        $bulan    = preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', (string) $request->query('bulan')) ? $request->query('bulan') : null;
+        $dateFrom = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->query('date_from')) ? $request->query('date_from') : null;
+        $dateTo   = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->query('date_to')) ? $request->query('date_to') : null;
+
         $isOwner = (Auth::user()->level?->nama_level === 'Owner');
-        $layout  = $isOwner ? 'layouts.owner' : 'admin.app';
 
         $query = Submission::with(['teacher', 'curriculum', 'admin', 'owner'])
             ->when($status, fn ($q) => $q->where('status', $status))
             ->when($type, fn ($q) => $q->where('type', $type))
-            ->when($teacherId, fn ($q) => $q->where('teacher_id', $teacherId));
+            ->when($teacherId, fn ($q) => $q->where('teacher_id', $teacherId))
+            ->when(
+                $dateFrom || $dateTo,
+                function ($q) use ($dateFrom, $dateTo) {
+                    $q->when($dateFrom, fn ($qq) => $qq->whereDate('date', '>=', $dateFrom))
+                      ->when($dateTo, fn ($qq) => $qq->whereDate('date', '<=', $dateTo));
+                },
+                function ($q) use ($bulan) {
+                    $q->when($bulan, function ($qq) use ($bulan) {
+                        [$y, $m] = explode('-', $bulan);
+                        $qq->whereYear('date', (int) $y)->whereMonth('date', (int) $m);
+                    });
+                }
+            );
 
         if ($isOwner) {
             // Hanya yang sudah ACC Kurikulum yang muncul untuk Owner
@@ -39,23 +59,41 @@ class SubmissionRekapController extends Controller
             });
         }
 
+        // Semua kartu dihitung dari $query yang sama, jadi ikut berubah mengikuti filter
         $totalCount       = (clone $query)->count();
-        $totalNominal     = (clone $query)->whereIn('status', ['Disetujui', 'Dibayar', 'Selesai'])->sum('amount');
-        $totalPending     = (clone $query)->whereIn('status', ['Diajukan', 'Review Kurikulum', 'Review Admin', 'Review Owner'])->count();
+        $totalPengeluaran = (float) (clone $query)->whereIn('status', ['Disetujui', 'Dibayar', 'Selesai'])->sum('amount');
+        $totalVerifikasi  = (clone $query)->where('status', 'Review Admin')->count();
         $totalApproved    = (clone $query)->whereIn('status', ['Disetujui', 'Dibayar', 'Selesai'])->count();
 
-        // Kartu Keuangan: Total Pemasukan, Total Pengeluaran, dan Saldo
-        $totalPemasukan   = (float) \App\Models\Payment::whereIn('status', ['Paid', 'Partial'])->sum('amount_paid');
-        $totalPengeluaran = (float) $totalNominal;
-        $saldo            = $totalPemasukan - $totalPengeluaran;
+        // Label periode untuk ditampilkan di atas kartu
+        if ($dateFrom || $dateTo) {
+            $periodLabel = ($dateFrom ? Carbon::parse($dateFrom)->translatedFormat('d M Y') : '...')
+                . ' - '
+                . ($dateTo ? Carbon::parse($dateTo)->translatedFormat('d M Y') : '...');
+        } elseif ($bulan) {
+            $periodLabel = Carbon::createFromFormat('!Y-m', $bulan)->translatedFormat('F Y');
+        } else {
+            $periodLabel = 'Semua periode';
+        }
 
-        $submissions = $query->latest('date')->paginate(12)->withQueryString();
+        // Urutan tabel: yang perlu ditindaklanjuti peran ini paling atas, sisanya mengikuti alur
+        $priority = $isOwner
+            ? ['Review Owner', 'Disetujui', 'Review Admin', 'Review Kurikulum', 'Diajukan', 'Dibayar', 'Selesai', 'Ditolak']
+            : ['Review Admin', 'Review Kurikulum', 'Diajukan', 'Review Owner', 'Disetujui', 'Dibayar', 'Selesai', 'Ditolak'];
+
+        $orderCase = 'CASE status';
+        foreach ($priority as $i => $st) {
+            $orderCase .= " WHEN '" . $st . "' THEN " . ($i + 1);
+        }
+        $orderCase .= ' ELSE 99 END';
+
+        $submissions = $query->orderByRaw($orderCase)->latest('date')->latest('id')->paginate(12)->withQueryString();
         $teachers    = Teacher::where('status', 'Active')->orderBy('name')->get();
 
         return view('admin.pengajuan.index', compact(
-            'submissions', 'teachers', 'totalCount', 'totalNominal',
-            'totalPending', 'totalApproved', 'totalPemasukan', 'totalPengeluaran', 'saldo',
-            'status', 'type', 'teacherId', 'isOwner', 'layout'
+            'submissions', 'teachers', 'totalCount', 'totalPengeluaran',
+            'totalVerifikasi', 'totalApproved', 'periodLabel',
+            'status', 'type', 'teacherId', 'bulan', 'dateFrom', 'dateTo', 'isOwner'
         ));
     }
 
@@ -65,19 +103,30 @@ class SubmissionRekapController extends Controller
         Gate::authorize('verifyAdmin', $submission);
 
         $request->validate([
-            'decision' => ['required', 'in:Approved,Rejected'],
-            'note'     => ['nullable', 'string', 'max:1000'],
+            'decision'  => ['required', 'in:Approved,Rejected'],
+            'note'      => ['nullable', 'string', 'max:1000'],
+            // TTD digambar langsung per pengajuan (data URL PNG dari canvas)
+            'signature' => ['required_if:decision,Approved', 'nullable', 'string', 'max:700000'],
+            // Nama yang dicetak di bawah TTD pada dokumen
+            'signer_name' => ['required_if:decision,Approved', 'nullable', 'string', 'max:120'],
+        ], [
+            'signer_name.required_if' => 'Nama penandatangan wajib diisi.',
+            'signature.required_if' => 'Tanda tangan Admin wajib diisi untuk memverifikasi pengajuan ini.',
         ]);
 
         $admin = Auth::user();
 
         return DB::transaction(function () use ($request, $submission, $admin) {
             if ($request->decision === 'Approved') {
+                $signaturePath = $this->storeAdminSignature($request->signature, $submission);
+
                 $submission->update([
-                    'status'            => 'Review Owner',
-                    'admin_id'          => $admin->id,
-                    'admin_note'        => $request->note,
-                    'admin_verified_at' => now(),
+                    'status'               => 'Review Owner',
+                    'admin_id'             => $admin->id,
+                    'admin_note'           => $request->note,
+                    'admin_verified_at'    => now(),
+                    'admin_signature_path' => $signaturePath,
+                    'admin_signer_name'    => trim($request->signer_name),
                 ]);
 
                 // Notifikasi ke seluruh tim Owner
@@ -114,6 +163,31 @@ class SubmissionRekapController extends Controller
 
             return back()->with('success', 'Pengajuan telah ditolak oleh Admin.');
         });
+    }
+
+    /**
+     * Simpan TTD Admin (data URL PNG dari canvas) sebagai file khusus pengajuan ini.
+     * Mengembalikan path relatif di disk "public".
+     */
+    private function storeAdminSignature(?string $dataUrl, Submission $submission): string
+    {
+        if (! $dataUrl || ! preg_match('#^data:image/png;base64,([A-Za-z0-9+/=]+)$#', $dataUrl, $m)) {
+            throw ValidationException::withMessages(['signature' => 'Format tanda tangan tidak valid.']);
+        }
+
+        $binary = base64_decode($m[1], true);
+
+        // Pastikan benar-benar PNG dan ukurannya wajar (maks 500 KB)
+        if ($binary === false
+            || strncmp($binary, "\x89PNG\r\n\x1a\n", 8) !== 0
+            || strlen($binary) > 500 * 1024) {
+            throw ValidationException::withMessages(['signature' => 'File tanda tangan tidak valid atau terlalu besar.']);
+        }
+
+        $path = 'signatures/submissions/' . $submission->id . '-admin-' . now()->format('YmdHis') . '.png';
+        Storage::disk('public')->put($path, $binary);
+
+        return $path;
     }
 
     /** Approval khusus Owner jika pengajuan diteruskan ke Owner */
