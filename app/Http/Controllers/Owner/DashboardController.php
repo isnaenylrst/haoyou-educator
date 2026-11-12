@@ -80,11 +80,14 @@ class DashboardController extends Controller
         $prevSeries = array_map(fn ($k) => (float) ($rows[Carbon::parse($k . '-01')->subYear()->format('Y-m')] ?? 0), $keys);
 
         // 3 tahun
+        $startYearDate = ($year - 2) . '-01-01';
+        $driver = DB::getDriverName();
+        $yearSql = $driver === 'sqlite' ? "strftime('%Y', payment_date)" : "YEAR(payment_date)";
         $yrows = $this->safe(fn () => DB::table('payments')
             ->whereNull('deleted_at')
-            ->whereRaw('YEAR(payment_date) >= ?', [$year - 2])
-            ->selectRaw('YEAR(payment_date) as yr, SUM(amount_paid) as total')
-            ->groupByRaw('YEAR(payment_date)')
+            ->where('payment_date', '>=', $startYearDate)
+            ->selectRaw("{$yearSql} as yr, SUM(amount_paid) as total")
+            ->groupByRaw("{$yearSql}")
             ->pluck('total', 'yr'), collect());
 
         $years = [];

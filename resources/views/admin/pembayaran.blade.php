@@ -3,49 +3,18 @@
 @section('title', 'Pembayaran | Keuangan')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/admin/calonsiswa.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
-    <style>
-        .alert-success, .alert-error { border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; font-size: 13px; }
-        .alert-success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; }
-        .alert-error { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; }
-        .alert-error ul { margin: 0; padding-left: 18px; }
-
-        .pay-progress { width: 100%; height: 6px; border-radius: 999px; background: #f1f2f4; overflow: hidden; margin-top: 6px; }
-        .pay-progress > span { display: block; height: 100%; background: #22c55e; }
-        .pay-progress.is-partial > span { background: #f59e0b; }
-
-        .money { font-variant-numeric: tabular-nums; white-space: nowrap; }
-        .money-remaining { font-weight: 700; }
-        .money-remaining.is-zero { color: #15803d; }
-        .money-remaining.is-due { color: #dc2626; }
-
-        .pay-type-tag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: rgba(201,162,39,.12); color: #b8860b; font-size: 10.5px; font-weight: 700; text-transform: uppercase; }
-
-        .pay-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
-        .pay-summary > div { background: #fafafa; border: 1px solid #edeef1; border-radius: 10px; padding: 10px 14px; }
-        .pay-summary .lbl { font-size: 11px; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
-        .pay-summary .val { font-size: 15px; font-weight: 700; color: #111827; margin-top: 2px; }
-
-        .history-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-        .history-table th { text-align: left; font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: .04em; padding: 6px 8px; border-bottom: 1px solid #edeef1; }
-        .history-table td { padding: 8px; border-bottom: 1px solid #f4f5f7; vertical-align: top; }
-        .history-empty { text-align: center; color: #9ca3af; padding: 24px 0; font-size: 13px; }
-
-        .date-range { display: flex; align-items: center; gap: 6px; }
-        .date-range .date-icon { color: #9ca3af; font-size: 13px; }
-        .date-range input.flatpickr-input,
-        .date-range input.date-range-input {
-            height: 38px; min-width: 230px; padding: 0 12px; border: 1px solid #e5e7eb; border-radius: 10px;
-            background: #fff; font-size: 13px; color: #111827; font-family: inherit; cursor: pointer;
-        }
-    </style>
 @endpush
 
 @section('content')
 
     @php
         $rupiah = fn ($n) => 'Rp ' . number_format((float) $n, 0, ',', '.');
+
+        // satu paginator untuk footer, sesuai tampilan yang aktif
+        $paginator = $view === 'tagihan' ? $enrollments : $transactions;
+        $unitLabel = $view === 'tagihan' ? 'enrollment' : 'transaksi';
     @endphp
 
     <div class="dashboard-header">
@@ -55,6 +24,7 @@
             <p>
                 Pantau tagihan tiap siswa dan catat pembayaran lanjutan (Termin 1–3 atau Pelunasan).
                 Pembayaran pertama (DP/Lunas) tercatat otomatis saat calon siswa dikonversi.
+                Pilih tampilan <strong>Transaksi</strong> untuk melihat semua pembayaran, termasuk Kelas Pengganti dan Home Visit.
             </p>
         </div>
     </div>
@@ -73,7 +43,7 @@
         </div>
     @endif
 
-    {{-- ========================= STATISTIK (semua card ikut kalender; default bulan ini) ========================= --}}
+    {{-- ========================= STATISTIK ========================= --}}
     <div class="stat-row">
         <div class="stat-card c-red">
             <div class="stat-top">
@@ -81,7 +51,7 @@
                 <i class="fa-solid fa-file-invoice-dollar stat-icon"></i>
             </div>
             <div class="stat-value">{{ $rupiah($outstanding) }}</div>
-            <div class="stat-note warn">Belum terbayar &middot; {{ $period['note'] }}</div>
+            <div class="stat-note warn">Belum terbayar &middot; termasuk tagihan periode sebelumnya</div>
         </div>
 
         <div class="stat-card c-yellow">
@@ -90,7 +60,7 @@
                 <i class="fa-solid fa-hourglass-half stat-icon"></i>
             </div>
             <div class="stat-value">{{ $unpaidCount }}</div>
-            <div class="stat-note">Masih punya sisa tagihan &middot; {{ $period['note'] }}</div>
+            <div class="stat-note">Masih punya sisa tagihan</div>
         </div>
 
         <div class="stat-card c-blue">
@@ -99,7 +69,7 @@
                 <i class="fa-solid fa-wallet stat-icon"></i>
             </div>
             <div class="stat-value">{{ $rupiah($collected) }}</div>
-            <div class="stat-note">{{ $period['note'] }}</div>
+            <div class="stat-note">Semua jenis pembayaran &middot; {{ $period['note'] }}</div>
         </div>
 
         <div class="stat-card c-green">
@@ -120,20 +90,41 @@
                 <input type="text" id="searchInput" name="search" value="{{ request('search') }}" placeholder="Cari nama siswa">
             </div>
 
+            {{-- Jenis: reguler (per kategori), private, dan biaya tambahan --}}
             <select name="type" class="select-chip" onchange="this.form.submit()">
-                <option value="">Semua Tipe</option>
-                <option value="Reguler" {{ request('type') === 'Reguler' ? 'selected' : '' }}>Reguler</option>
-                <option value="Private" {{ request('type') === 'Private' ? 'selected' : '' }}>Private</option>
+                <option value="">Semua Jenis</option>
+
+                <optgroup label="Reguler">
+                    <option value="reguler" {{ request('type') === 'reguler' ? 'selected' : '' }}>Semua Reguler</option>
+                    @foreach ($categories as $c)
+                        <option value="kategori:{{ $c->id }}" {{ request('type') === 'kategori:' . $c->id ? 'selected' : '' }}>
+                            {{ $c->program?->program_name }} – {{ $c->category_name }}
+                        </option>
+                    @endforeach
+                </optgroup>
+
+                <option value="private" {{ request('type') === 'private' ? 'selected' : '' }}>Private</option>
+
+                <optgroup label="Biaya Tambahan">
+                    <option value="kelas_pengganti" {{ request('type') === 'kelas_pengganti' ? 'selected' : '' }}>Kelas Pengganti</option>
+                    <option value="home_visit" {{ request('type') === 'home_visit' ? 'selected' : '' }}>Home Visit</option>
+                </optgroup>
             </select>
 
-            <select name="payment_status" class="select-chip" onchange="this.form.submit()">
-                <option value="">Semua Status</option>
-                <option value="belum" {{ request('payment_status') === 'belum' ? 'selected' : '' }}>Belum bayar</option>
-                <option value="sebagian" {{ request('payment_status') === 'sebagian' ? 'selected' : '' }}>Bayar sebagian</option>
-                <option value="lunas" {{ request('payment_status') === 'lunas' ? 'selected' : '' }}>Lunas</option>
-            </select>
+            {{-- Tampilan (Tagihan/Transaksi) dipilih lewat tab di bawah; dibawa lewat hidden input --}}
+            <input type="hidden" name="view" value="{{ $view }}">
 
-            {{-- Rentang tanggal (kalender): tanggal daftar untuk tabel & kartu tagihan, tanggal bayar untuk kartu Terkumpul. Default bulan ini. --}}
+            {{-- Status bayar hanya relevan untuk tampilan Tagihan --}}
+            @if ($view === 'tagihan')
+                <select name="payment_status" class="select-chip" onchange="this.form.submit()">
+                    <option value="">Semua Status</option>
+                    <option value="belum" {{ request('payment_status') === 'belum' ? 'selected' : '' }}>Belum bayar</option>
+                    <option value="sebagian" {{ request('payment_status') === 'sebagian' ? 'selected' : '' }}>Bayar sebagian</option>
+                    <option value="lunas" {{ request('payment_status') === 'lunas' ? 'selected' : '' }}>Lunas</option>
+                </select>
+            @endif
+
+            {{-- Rentang tanggal: Tagihan = tanggal daftar / tanggal bayar / masih ada sisa. Transaksi & Terkumpul = tanggal bayar. Default bulan ini. --}}
             <div class="date-range">
                 <i class="fa-regular fa-calendar date-icon"></i>
                 <input type="text" id="dateRange" class="date-range-input" placeholder="Pilih rentang tanggal" readonly>
@@ -150,131 +141,232 @@
         </div>
     </form>
 
+    {{-- ========================= TAB: TAGIHAN / TRANSAKSI ========================= --}}
+    @php
+        $tabQuery = request()->except(['view', 'page']);
+    @endphp
+    <div class="pkg-tabs" role="tablist">
+        <a class="pkg-tab {{ $view === 'tagihan' ? 'active' : '' }}"
+           href="{{ route('admin.pembayaran', array_merge($tabQuery, ['view' => 'tagihan'])) }}">
+            <i class="fa-solid fa-file-invoice-dollar"></i> Tagihan
+        </a>
+        <a class="pkg-tab {{ $view === 'transaksi' ? 'active' : '' }}"
+           href="{{ route('admin.pembayaran', array_merge(\Illuminate\Support\Arr::except($tabQuery, ['payment_status']), ['view' => 'transaksi'])) }}">
+            <i class="fa-solid fa-receipt"></i> Transaksi
+        </a>
+    </div>
+
     {{-- ========================= TABEL ========================= --}}
     <div class="card">
-        <table>
-            <thead>
-                <tr>
-                    <th>Siswa</th>
-                    <th>Paket</th>
-                    <th>Tagihan</th>
-                    <th>Terbayar</th>
-                    <th>Sisa</th>
-                    <th>Status</th>
-                    <th width="120" style="text-align:center;">Aksi</th>
-                </tr>
-            </thead>
 
-            <tbody>
-                @forelse ($enrollments as $enrollment)
-                    @php
-                        $bill      = (float) $enrollment->total_bill;
-                        $paid      = (float) $enrollment->total_paid;
-                        $remaining = max($bill - $paid, 0);
-                        $percent   = $bill > 0 ? min(100, round($paid / $bill * 100)) : 0;
-                        $isPrivate = ! is_null($enrollment->private_package_id);
-                        $packageName = $enrollment->programPackage?->package_name
-                            ?? $enrollment->privatePackage?->package_name
-                            ?? '-';
-
-                        if ($bill > 0 && $remaining <= 0) {
-                            [$statusLabel, $statusClass] = ['Lunas', 'badge-completed'];
-                        } elseif ($paid > 0) {
-                            [$statusLabel, $statusClass] = ['Sebagian', 'badge-warm'];
-                        } else {
-                            [$statusLabel, $statusClass] = ['Belum bayar', 'badge-cancelled'];
-                        }
-                    @endphp
+        @if ($view === 'tagihan')
+            {{-- ---------- TAMPILAN TAGIHAN (per enrollment) ---------- --}}
+            <table>
+                <thead>
                     <tr>
-                        <td>
-                            <div class="name-cell">
-                                <div class="avatar-sm">{{ strtoupper(substr($enrollment->student?->name ?? '?', 0, 1)) }}</div>
-                                <div>
-                                    <div class="cand-name">{{ $enrollment->student?->name ?? '-' }}</div>
-                                    <div class="cand-sub">Enrollment #{{ $enrollment->id }}</div>
+                        <th>Siswa</th>
+                        <th>Paket</th>
+                        <th style="text-align: center; vertical-align: middle;">Tagihan</th>
+                        <th style="text-align: center; vertical-align: middle;">Terbayar</th>
+                        <th style="text-align: center; vertical-align: middle;">Sisa</th>
+                        <th style="text-align: center; vertical-align: middle;">Status</th>
+                        <th width="120" style="text-align:center;">Aksi</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @forelse ($enrollments as $enrollment)
+                        @php
+                            $bill      = (float) $enrollment->total_bill;
+                            $paid      = (float) $enrollment->total_paid;
+                            $remaining = max($bill - $paid, 0);
+                            $percent   = $bill > 0 ? min(100, round($paid / $bill * 100)) : 0;
+                            $isPrivate = ! is_null($enrollment->private_package_id);
+                            $packageName = $enrollment->programPackage?->package_name
+                                ?? $enrollment->privatePackage?->package_name
+                                ?? '-';
+
+                            if ($bill > 0 && $remaining <= 0) {
+                                [$statusLabel, $statusClass] = ['Lunas', 'badge-completed'];
+                            } elseif ($paid > 0) {
+                                [$statusLabel, $statusClass] = ['Sebagian', 'badge-warm'];
+                            } else {
+                                [$statusLabel, $statusClass] = ['Belum bayar', 'badge-cancelled'];
+                            }
+                        @endphp
+                        <tr>
+                            <td>
+                                <div class="name-cell">
+                                    <div class="avatar-sm">{{ strtoupper(substr($enrollment->student?->name ?? '?', 0, 1)) }}</div>
+                                    <div>
+                                        <div class="cand-name">{{ $enrollment->student?->name ?? '-' }}</div>
+                                        <div class="cand-sub">Enrollment #{{ $enrollment->id }}</div>
+                                    </div>
                                 </div>
-                            </div>
-                        </td>
+                            </td>
 
-                        <td>
-                            {{ $packageName }}
-                            @if ($isPrivate)
-                                <span class="pay-type-tag">Private</span>
-                            @endif
-                        </td>
-
-                        <td class="money">{{ $rupiah($bill) }}</td>
-
-                        <td class="money">
-                            {{ $rupiah($paid) }}
-                            <div class="pay-progress {{ $remaining > 0 ? 'is-partial' : '' }}">
-                                <span style="width: {{ $percent }}%;"></span>
-                            </div>
-                        </td>
-
-                        <td class="money money-remaining {{ $remaining > 0 ? 'is-due' : 'is-zero' }}">
-                            {{ $rupiah($remaining) }}
-                        </td>
-
-                        <td>
-                            <span class="badge {{ $statusClass }}">
-                                <span class="badge-dot"></span> {{ $statusLabel }}
-                            </span>
-                        </td>
-
-                        <td>
-                            <div class="row-actions">
-                                <button type="button" class="icon-btn" title="Riwayat pembayaran"
-                                        onclick="openHistoryModal({{ $enrollment->id }})">
-                                    <i class="fa-solid fa-clock-rotate-left"></i>
-                                </button>
-
-                                @if ($remaining > 0)
-                                    <button type="button" class="icon-btn convert" title="Catat pembayaran"
-                                            data-id="{{ $enrollment->id }}"
-                                            data-name="{{ $enrollment->student?->name }}"
-                                            data-package="{{ $packageName }}"
-                                            data-remaining="{{ $remaining }}"
-                                            data-next-stage="{{ $enrollment->next_stage }}"
-                                            onclick="openPayModal(this)">
-                                        <i class="fa-solid fa-money-bill-wave"></i>
-                                    </button>
+                            <td>
+                                {{ $packageName }}
+                                @if ($isPrivate)
+                                    <span class="pay-type-tag">Private</span>
                                 @endif
-                            </div>
-                        </td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="7" style="text-align:center;padding:50px;color:#888;">
-                            Belum ada data pembayaran.
-                        </td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
+                                @if ($enrollment->category_name)
+                                    <div class="cand-sub">{{ $enrollment->category_name }}</div>
+                                @endif
+                            </td>
 
+                            <td class="money" style="text-align: center; vertical-align: middle;">{{ $rupiah($bill) }}</td>
+
+                            <td class="money" style="text-align: center; vertical-align: middle;">
+                                {{ $rupiah($paid) }}
+                                <div class="pay-progress {{ $remaining > 0 ? 'is-partial' : '' }}">
+                                    <span style="width: {{ $percent }}%;"></span>
+                                </div>
+                            </td>
+
+                            <td class="money money-remaining {{ $remaining > 0 ? 'is-due' : 'is-zero' }}" style="text-align: center; vertical-align: middle;">
+                                {{ $rupiah($remaining) }}
+                            </td>
+
+                            <td class="pay-status-cell" style="text-align: center; vertical-align: middle;">
+                                <span class="badge {{ $statusClass }}">
+                                    <span class="badge-dot"></span> {{ $statusLabel }}
+                                </span>
+                            </td>
+
+                            <td style="text-align: center; vertical-align: middle;">
+                                <div class="row-actions" style="display: flex; justify-content: center; align-items: center; gap: 8px;">
+                                    <button type="button" class="icon-btn" title="Riwayat pembayaran"
+                                            onclick="openHistoryModal({{ $enrollment->id }})">
+                                        <i class="fa-solid fa-clock-rotate-left"></i>
+                                    </button>
+
+                                    @if ($remaining > 0)
+                                        <button type="button" class="icon-btn convert" title="Catat pembayaran"
+                                                data-id="{{ $enrollment->id }}"
+                                                data-name="{{ $enrollment->student?->name }}"
+                                                data-package="{{ $packageName }}"
+                                                data-remaining="{{ $remaining }}"
+                                                data-next-stage="{{ $enrollment->next_stage }}"
+                                                data-next-amount="{{ $enrollment->next_amount }}"
+                                                data-next-min="{{ $enrollment->next_min }}"
+                                                data-next-exact="{{ $enrollment->next_exact ? 1 : 0 }}"
+                                                onclick="openPayModal(this)">
+                                            <i class="fa-solid fa-money-bill-wave"></i>
+                                        </button>
+                                    @endif
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="7" style="text-align:center;padding:50px;color:#888;">
+                                Belum ada data pembayaran.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        @else
+            {{-- ---------- TAMPILAN TRANSAKSI (satu baris per pembayaran, semua jenis) ---------- --}}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tanggal / Invoice</th>
+                        <th>Siswa</th>
+                        <th>Pembayaran</th>
+                        <th>Nominal / Metode</th>
+                        <th width="120" style="text-align:center;">Aksi</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @forelse ($transactions as $p)
+                        @php
+                            [$jenis, $jenisClass] = match ($p->payment_type) {
+                                'Replacement' => ['Kelas Pengganti', 'is-replacement'],
+                                'Home Visit'  => ['Home Visit', 'is-homevisit'],
+                                default       => [$p->enrollment?->private_package_id ? 'Private' : 'Reguler', ''],
+                            };
+                            $paket = $p->enrollment?->programPackage?->package_name
+                                ?? $p->enrollment?->privatePackage?->package_name
+                                ?? '-';
+                        @endphp
+                        <tr>
+                            <td>
+                                <div class="cand-name">{{ $p->payment_date?->format('d M Y') ?? '-' }}</div>
+                                <div class="cand-sub">{{ $p->invoice_number ?? '-' }}</div>
+                            </td>
+
+                            <td>
+                                <div class="cand-name">{{ $p->enrollment?->student?->name ?? '-' }}</div>
+                                <div class="cand-sub">Enrollment #{{ $p->enrollment_id }}</div>
+                            </td>
+
+                            <td>
+                                {{ $p->payment_stage ?? '-' }}
+                                <span class="pay-type-tag {{ $jenisClass }}">{{ $jenis }}</span>
+                                <div class="cand-sub">{{ $paket }}</div>
+                            </td>
+
+                            <td>
+                                <div class="money-main">{{ $rupiah($p->amount_paid) }}</div>
+                                <div class="cand-sub">{{ $p->payment_method ?? '-' }}</div>
+                            </td>
+
+                            <td style="text-align: center; vertical-align: middle;">
+                                <div class="row-actions" style="display: flex; justify-content: center; align-items: center;">
+                                    @if ($p->payment_proof_path)
+                                        @php
+                                            $isPdf = str_ends_with(strtolower($p->payment_proof_path), '.pdf');
+                                        @endphp
+                                        <a href="{{ asset('storage/' . $p->payment_proof_path) }}"
+                                        target="_blank" rel="noopener"
+                                        class="icon-btn" title="Lihat bukti pembayaran">
+                                            <i class="fa-solid {{ $isPdf ? 'fa-file-pdf' : 'fa-image' }}"></i>
+                                        </a>
+                                    @else
+                                        <span class="icon-btn is-disabled" title="Tidak ada bukti pembayaran">
+                                            <i class="fa-solid fa-image"></i>
+                                        </span>
+                                    @endif
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="5" style="text-align:center;padding:50px;color:#888;">
+                                Belum ada transaksi pada periode ini.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        @endif
+
+        {{-- ---------- FOOTER + PAGINASI (dipakai kedua tampilan) ---------- --}}
         <div class="table-footer">
             <span class="table-footer-info">
                 Menampilkan
-                <strong>{{ $enrollments->firstItem() ?? 0 }}</strong> -
-                <strong>{{ $enrollments->lastItem() ?? 0 }}</strong>
-                dari <strong>{{ $enrollments->total() }}</strong> enrollment
+                <strong>{{ $paginator->firstItem() ?? 0 }}</strong> -
+                <strong>{{ $paginator->lastItem() ?? 0 }}</strong>
+                dari <strong>{{ $paginator->total() }}</strong> {{ $unitLabel }}
             </span>
 
             <div class="table-footer-pagination">
-                @if ($enrollments->hasPages())
+                @if ($paginator->hasPages())
                     @php
-                        $current = $enrollments->currentPage();
-                        $last = $enrollments->lastPage();
+                        $current = $paginator->currentPage();
+                        $last = $paginator->lastPage();
                         $onEachSide = 1;
                     @endphp
 
                     <nav class="pagination-nav" aria-label="Pagination">
                         <ul class="pagination-list">
-                            @if ($enrollments->onFirstPage())
+                            @if ($paginator->onFirstPage())
                                 <li class="page-item disabled"><span class="page-btn"><i class="fa-solid fa-chevron-left"></i></span></li>
                             @else
-                                <li class="page-item"><a class="page-btn" href="{{ $enrollments->previousPageUrl() }}" rel="prev"><i class="fa-solid fa-chevron-left"></i></a></li>
+                                <li class="page-item"><a class="page-btn" href="{{ $paginator->previousPageUrl() }}" rel="prev"><i class="fa-solid fa-chevron-left"></i></a></li>
                             @endif
 
                             @for ($page = 1; $page <= $last; $page++)
@@ -287,7 +379,7 @@
                                     @if ($page == $current)
                                         <li class="page-item active"><span class="page-btn current">{{ $page }}</span></li>
                                     @else
-                                        <li class="page-item"><a class="page-btn" href="{{ $enrollments->url($page) }}">{{ $page }}</a></li>
+                                        <li class="page-item"><a class="page-btn" href="{{ $paginator->url($page) }}">{{ $page }}</a></li>
                                     @endif
                                 @elseif ($page == 2 && $current - $onEachSide > 2)
                                     <li class="page-item disabled"><span class="page-btn dots">...</span></li>
@@ -296,8 +388,8 @@
                                 @endif
                             @endfor
 
-                            @if ($enrollments->hasMorePages())
-                                <li class="page-item"><a class="page-btn" href="{{ $enrollments->nextPageUrl() }}" rel="next"><i class="fa-solid fa-chevron-right"></i></a></li>
+                            @if ($paginator->hasMorePages())
+                                <li class="page-item"><a class="page-btn" href="{{ $paginator->nextPageUrl() }}" rel="next"><i class="fa-solid fa-chevron-right"></i></a></li>
                             @else
                                 <li class="page-item disabled"><span class="page-btn"><i class="fa-solid fa-chevron-right"></i></span></li>
                             @endif
@@ -324,13 +416,10 @@
 
                 <div class="modal-body">
                     <div class="form-grid">
+                        {{-- Tahap ditentukan sistem (DP / Termin 1-3 / Pelunasan), hanya ditampilkan --}}
                         <div class="form-field">
-                            <label>Tahap Pembayaran *</label>
-                            <select name="payment_stage" id="pay_stage" required>
-                                @foreach ($stages as $stage)
-                                    <option value="{{ $stage }}">{{ $stage }}</option>
-                                @endforeach
-                            </select>
+                            <label>Tahap Pembayaran</label>
+                            <input type="text" id="pay_stage" readonly>
                         </div>
 
                         <div class="form-field">
@@ -488,12 +577,29 @@
 
         document.getElementById('payForm').action = `/admin/pembayaran/${btn.dataset.id}`;
         document.getElementById('pay_sub').textContent = `${btn.dataset.name} · ${btn.dataset.package}`;
-        document.getElementById('pay_stage').value = btn.dataset.nextStage;
+        document.getElementById('pay_stage').value = btn.dataset.nextStage || '';
 
         const amount = document.getElementById('pay_amount');
-        amount.value = '';
+        const hint = document.getElementById('pay_remaining_hint');
+        const exact = btn.dataset.nextExact === '1';
+        const nextAmount = Number(btn.dataset.nextAmount);
+        const nextMin = Number(btn.dataset.nextMin);
+
         amount.max = remaining;
-        document.getElementById('pay_remaining_hint').textContent = `Sisa tagihan ${rupiah(remaining)}`;
+
+        if (exact && nextAmount > 0) {
+            // Termin 1-3 / Pelunasan: nominal ditentukan sistem
+            amount.value = nextAmount;
+            amount.min = nextAmount;
+            amount.readOnly = true;
+            hint.textContent = `Nominal ${btn.dataset.nextStage} sesuai jadwal. Sisa tagihan ${rupiah(remaining)}`;
+        } else {
+            // DP: nominal bebas, minimal sebesar biaya pendaftaran
+            amount.value = '';
+            amount.min = nextMin > 0 ? nextMin : 1;
+            amount.readOnly = false;
+            hint.textContent = `Minimal DP ${rupiah(nextMin)}. Sisa tagihan ${rupiah(remaining)}`;
+        }
 
         document.getElementById('payModalOverlay').classList.add('open');
     }
@@ -509,6 +615,13 @@
     /* ============================================================
        MODAL: RIWAYAT PEMBAYARAN
     ============================================================ */
+    // payment_type di database: Package | Replacement | Home Visit
+    const PAYMENT_TYPE_LABEL = {
+        'Package': 'Paket',
+        'Replacement': 'Kelas Pengganti',
+        'Home Visit': 'Home Visit',
+    };
+
     function openHistoryModal(id) {
         const overlay = document.getElementById('historyModalOverlay');
         const rows = document.getElementById('history_rows');
@@ -530,27 +643,25 @@
                     return;
                 }
 
-
-            rows.innerHTML = data.payments.map(p => `
-                <tr>
-                    <td>
-                        <strong>${p.stage ?? '-'}</strong>
-                        <div style="margin-top:4px;">
-                            <span class="badge ${p.payment_type === 'package' ? 'bg-primary' : 'bg-info'}">
-                                ${p.payment_type === 'package' ? 'Paket' : 'Biaya Tambahan'}
-                            </span>
-                        </div>
-                    </td>
-                    <td>${p.date ?? '-'}</td>
-                    <td>${rupiah(p.amount_paid)}</td>
-                    <td>${p.method ?? '-'}</td>
-                    <td>${p.invoice_number ?? '-'}</td>
-                    <td>${p.proof_url
-                        ? `<a href="${p.proof_url}" target="_blank" rel="noopener">Lihat</a>`
-                        : '-'}</td>
-                </tr>
-            `).join('');
-
+                rows.innerHTML = data.payments.map(p => `
+                    <tr>
+                        <td>
+                            <strong>${p.stage ?? '-'}</strong>
+                            <div style="margin-top:4px;">
+                                <span class="badge ${p.payment_type === 'Package' ? 'bg-primary' : 'bg-info'}">
+                                    ${PAYMENT_TYPE_LABEL[p.payment_type] ?? p.payment_type ?? '-'}
+                                </span>
+                            </div>
+                        </td>
+                        <td>${p.date ?? '-'}</td>
+                        <td>${rupiah(p.amount_paid)}</td>
+                        <td>${p.method ?? '-'}</td>
+                        <td>${p.invoice_number ?? '-'}</td>
+                        <td>${p.proof_url
+                            ? `<a href="${p.proof_url}" target="_blank" rel="noopener">Lihat</a>`
+                            : '-'}</td>
+                    </tr>
+                `).join('');
             })
             .catch(() => {
                 rows.innerHTML = '<tr><td colspan="6" class="history-empty">Gagal memuat riwayat.</td></tr>';

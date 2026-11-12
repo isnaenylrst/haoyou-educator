@@ -26,6 +26,7 @@ class ClassModel extends Model
         'teacher_response',
         'teacher_response_note',
         'teacher_responded_at',
+        'broadcast_to_all',
     ];
 
     protected $casts = [
@@ -33,6 +34,7 @@ class ClassModel extends Model
         'end_date'             => 'date',
         'capacity'             => 'integer',
         'teacher_responded_at' => 'datetime',
+        'broadcast_to_all'     => 'boolean',
     ];
 
     /** Status enrollment yang memakai kursi di kelas ini. */
@@ -106,6 +108,21 @@ class ClassModel extends Model
         return $this->hasMany(Material::class, 'class_id');
     }
 
+    public function learningMaterials(): HasMany
+    {
+        return $this->hasMany(ClassLearningMaterial::class, 'class_id')->orderBy('sort_order');
+    }
+
+    public function observations(): HasMany
+    {
+        return $this->hasMany(TeacherObservation::class, 'class_id');
+    }
+
+    public function learningRequests(): HasMany
+    {
+        return $this->hasMany(StudentLearningRequest::class, 'class_id');
+    }
+
     /* ---------------------------------------------------------- */
     /*  Kapasitas & kuorum (dari min_students / max_students paket) */
     /* ---------------------------------------------------------- */
@@ -147,5 +164,11 @@ class ClassModel extends Model
     public function studentsNeeded(): int
     {
         return max($this->minStudents() - $this->enrolledCount(), 0);
+    }
+
+    // Tabel menyimpan assign guru ke jadwal
+    public function teacherOffers()
+    {
+        return $this->hasMany(ClassTeacherOffer::class, 'class_id');
     }
 }

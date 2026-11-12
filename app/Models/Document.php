@@ -11,8 +11,18 @@ class Document extends Model
 {
     use HasFactory;
 
-    /** Jenis dokumen yang termasuk "Pemberitahuan Surat". */
-    public const LETTER_TYPES = ['SURAT_LIBUR', 'SURAT_DINAS', 'LOA'];
+    /** Jenis dokumen dasar yang termasuk "Pemberitahuan Surat". */
+    public const LETTER_TYPES = ['SURAT_LIBUR', 'SURAT_DINAS', 'LOA', 'SP1', 'SP2', 'SP3'];
+
+    public static function letterTypeCodes(): array
+    {
+        try {
+            $dynamic = LetterType::where('is_active', true)->pluck('code')->all();
+            return array_unique(array_merge(self::LETTER_TYPES, $dynamic));
+        } catch (\Throwable $e) {
+            return self::LETTER_TYPES;
+        }
+    }
 
     protected $table = 'documents';
 
@@ -95,6 +105,13 @@ class Document extends Model
     public function scopeLetters($query)
     {
         return $query->whereIn('document_type', self::LETTER_TYPES);
+    }
+
+    /** Apakah dokumen ini SOP yang ditujukan untuk guru. */
+    public function isSopForTeachers(): bool
+    {
+    return $this->document_type === 'SOP'
+        && $this->visibility === 'Teacher';
     }
 
     // ------------------------------------------------------------ INFO FILE & LABEL

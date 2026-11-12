@@ -146,23 +146,52 @@ class CutiController extends Controller
             ? $request->file('supporting_document')->store('leaves', 'public')
             : null;
 
-        DB::table('teacher_leaves')->insert([
-            'teacher_id'             => $teacher->id,
-            'class_schedule_id'      => $schedule->id,
-            'request_type'           => $data['request_type'],
-            'leave_date'             => $data['leave_date'],
-            'leave_type'             => $data['leave_type'] ?? 'Permission',
-            'reason'                 => $data['reason'],
-            'supporting_document'    => $docPath,
-            'replacement_teacher_id' => $replacementId,
-            'replacement_response'   => $replacementId ? 'Pending' : null,
-            'status'                 => 'Pending',
-            'created_at'             => now(),
-            'updated_at'             => now(),
-        ]);
+        $leaveId = null;
+        DB::transaction(function () use ($teacher, $schedule, $data, $replacementId, $docPath, &$leaveId) {
+            $leave = \App\Models\TeacherLeave::create([
+                'teacher_id'             => $teacher->id,
+                'class_schedule_id'      => $schedule->id,
+                'request_type'           => $data['request_type'],
+                'leave_date'             => $data['leave_date'],
+                'leave_type'             => $data['leave_type'] ?? 'Permission',
+                'reason'                 => $data['reason'],
+                'supporting_document'    => $docPath,
+                'replacement_teacher_id' => $replacementId,
+                'replacement_response'   => $replacementId ? 'Pending' : 'Accepted',
+                'curriculum_response'    => 'Pending',
+                'status'                 => 'Pending',
+            ]);
+            $leaveId = $leave->id;
+
+            // 1. Notifikasi ke Kurikulum
+            $curriculums = \App\Models\User::whereHas('level', fn ($q) => $q->where('nama_level', 'Curriculum'))->get();
+            foreach ($curriculums as $cUser) {
+                $cUser->notify(new \App\Notifications\AppNotification(
+                    title: "Pengajuan {$data['request_type']}: {$schedule->class_name}",
+                    message: "Guru {$teacher->name} mengajukan {$data['request_type']} pada tanggal " . Carbon::parse($data['leave_date'])->translatedFormat('d M Y') . ". Silakan review.",
+                    url: url('/kurikulum/review-pengajuan?tab=cuti'),
+                    type: 'cuti',
+                    icon: 'fa-plane-departure'
+                ));
+            }
+
+            // 2. Notifikasi ke Guru Pengganti jika ada
+            if ($replacementId) {
+                $repTeacher = \App\Models\Teacher::with('user')->find($replacementId);
+                if ($repTeacher?->user) {
+                    $repTeacher->user->notify(new \App\Notifications\AppNotification(
+                        title: "Permintaan Guru Pengganti: {$schedule->class_name}",
+                        message: "Guru {$teacher->name} meminta Anda menggantikan sesi kelas {$schedule->class_name} pada tanggal " . Carbon::parse($data['leave_date'])->translatedFormat('d M Y') . ". Buka menu Schedule untuk konfirmasi.",
+                        url: url('/guru/schedule'),
+                        type: 'cuti',
+                        icon: 'fa-user-clock'
+                    ));
+                }
+            }
+        });
 
         return redirect()->route('teacher.cuti')->with('success', $replacementId
-            ? 'Pengajuan dikirim. Guru pengganti perlu menerima dulu, setelah itu Kepala Kurikulum memprosesnya.'
-            : 'Pengajuan dikirim ke Kepala Kurikulum.');
+            ? 'Pengajuan ganti kelas berhasil dikirim. Persetujuan paralel berjalan antara Kurikulum dan Guru Pengganti.'
+            : 'Pengajuan cuti berhasil dikirim ke Kurikulum untuk direview.');
     }
 }

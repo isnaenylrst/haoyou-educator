@@ -34,9 +34,16 @@
     @if($cert['score'] !== null)
         <div class="score">Final Score: <strong>{{ $cert['score'] }}</strong></div>
     @endif
-    <div class="sign">
-        Teacher<br><br><br>
-        <strong>{{ $teacher->name }}</strong>
+    <div class="sign" style="margin-top: 30px;">
+        @if(!empty($ownerSignature) && file_exists(storage_path('app/public/' . $ownerSignature)))
+            <img src="{{ storage_path('app/public/' . $ownerSignature) }}" style="height: 55px; margin-bottom: 5px;" alt="TTD Owner"><br>
+        @else
+            <div style="height: 55px;"></div>
+        @endif
+        <div style="border-top: 1px solid #333; display: inline-block; padding: 3px 30px 0;">
+            <strong>Joy Limmunandar</strong>
+        </div>
+        <div style="font-size: 11px; color: #555;">Owner Haoyou Educator</div>
     </div>
     <div class="no">No. {{ $number }}</div>
 </div>

@@ -75,13 +75,13 @@
                         @foreach ($items->sortBy('meeting_number') as $material)
 
                             <div
-                                class="material-item flex items-center justify-between py-4 border-b border-line last:border-0"
+                                class="material-item flex items-center justify-between gap-3 py-4 border-b border-line last:border-0"
                                 data-search="{{ strtolower($material->title . ' pertemuan ' . $material->meeting_number) }}"
                             >
 
                                 <div class="flex items-center gap-3">
 
-                                  <div class="w-11 h-11 rounded-xl bg-[#ffe135] flex items-center justify-center text-lg shrink-0">
+                                    <div class="w-11 h-11 rounded-xl bg-[#ffe135] flex items-center justify-center text-lg shrink-0">
                                         📖
                                     </div>
 
@@ -93,26 +93,49 @@
                                         <div class="text-xs text-gray-500 mt-1">
                                             Pertemuan {{ $material->meeting_number ?? '-' }}
 
+                                            @if ($material->program)
+                                                · {{ $material->program->category_name }}
+                                            @endif
+
+                                            @if ($material->level)
+                                                · {{ $material->level->level_name }}
+                                            @endif
+
                                             @if ($material->vocabs->isNotEmpty())
                                                 · {{ $material->vocabs->count() }} kosakata
                                             @endif
                                         </div>
+
+                                        @if ($material->description)
+                                            <div class="text-xs text-gray-600 mt-1">
+                                                {{ \Illuminate\Support\Str::limit($material->description, 140) }}
+                                            </div>
+                                        @endif
                                     </div>
 
                                 </div>
 
-                                @if ($material->material_file_path)
-                                    <a
-                                        href="{{ asset('storage/' . $material->material_file_path) }}"
-                                        target="_blank"
-                                        class="text-xs font-semibold border border-ink rounded-full px-4 py-2 hover:bg-ink hover:text-white transition whitespace-nowrap"
-                                    >
-                                        Buka Materi →
-                                    </a>
+                                @if ($material->file_exists)
+
+                                    <div class="flex items-center gap-2">
+                                        @if ($material->is_pdf)
+                                            <a href="{{ route('program.materi.lihat', $material) }}" target="_blank"
+                                               class="text-xs font-semibold border border-ink rounded-full px-4 py-2 hover:bg-ink hover:text-white transition whitespace-nowrap">
+                                                Buka Materi →
+                                            </a>
+                                        @endif
+                                        <a href="{{ route('program.materi.unduh', $material) }}"
+                                           class="text-xs font-semibold border border-ink rounded-full px-4 py-2 hover:bg-ink hover:text-white transition whitespace-nowrap">
+                                            Unduh
+                                        </a>
+                                    </div>
+
                                 @else
+
                                     <span class="text-[11px] font-semibold px-3 py-1 rounded-full bg-gray-100 text-gray-500 whitespace-nowrap">
                                         File belum tersedia
                                     </span>
+
                                 @endif
 
                             </div>

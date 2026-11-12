@@ -270,10 +270,27 @@
     {{-- ===================== SIDEBAR ===================== --}}
     <aside class="relative overflow-hidden z-10 w-[264px] bg-white text-[#1d1a0f] flex-shrink-0 hidden md:flex flex-col border-r border-[#EFEBDB]">
 
+        
         <div class="h-24 flex items-center justify-center border-b border-[#EFEBDB]">
             <img src="{{ asset('assets/img/logo.png') }}"
                  alt="Haoyou"
                  class="w-[68px] h-[68px] object-contain">
+        </div>
+
+      {{-- ============ BELAJAR VOCAB (BARU) ============ --}}
+      @php $inVocab = request()->routeIs('student.vocab.*'); @endphp
+      <div id="grpVocab" class="side-group {{ $inVocab ? 'open' : '' }}">
+        <button type="button" data-side-toggle="grpVocab" aria-expanded="{{ $inVocab ? 'true' : 'false' }}"
+                class="side-link alumni-restricted w-full" style="border:0;background:none;cursor:pointer;text-align:left">
+          <span class="ico">📖</span> Belajar Vocab
+          <svg class="side-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg>
+        </button>
+        <div class="side-subwrap">
+          <a href="{{ route('student.vocab.plan') }}"  class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.plan') ? 'is-active' : '' }}"><span>📅</span> Study Plan</a>
+          <a href="{{ route('student.vocab.list') }}"  class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.list') ? 'is-active' : '' }}"><span>📖</span> Vocab List</a>
+          <a href="{{ route('student.vocab.test') }}"  class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.test*') ? 'is-active' : '' }}"><span>✍️</span> Test</a>
+          <a href="{{ route('student.vocab.traps') }}" class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.traps*') ? 'is-active' : '' }}"><span>⚠️</span> Vocab Traps</a>
+        <a href="{{ route('student.vocab.materi') }}" class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.materi*') ? 'is-active' : '' }}"><span>🌸</span> Materi Huahua</a>
         </div>
 
         <nav class="relative z-10 flex-1 p-3.5 pt-5">
@@ -511,6 +528,7 @@
                         ['Vocab list',  'student.vocab.list',   'student.vocab.list'],
                         ['Test',        'student.vocab.test',   'student.vocab.test*'],
                         ['Vocab traps', 'student.vocab.traps',  'student.vocab.traps*'],
+                        ['Materi Huahua', 'student.vocab.materi', 'student.vocab.materi*'],
                     ],
                     'grammar' => [
                         ['Panduan',       'student.grammar.guide', 'student.grammar.guide'],

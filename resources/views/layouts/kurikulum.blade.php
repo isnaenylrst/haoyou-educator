@@ -142,15 +142,23 @@
             ['Jadwal Konsultasi', 'fa-calendar-days', '/kurikulum/jadwal-konsultasi', 'kurikulum/jadwal-konsultasi*'],
             ['Tugas Kelas', 'fa-clipboard-list', '/kurikulum/tugas-kelas', 'kurikulum/tugas-kelas*'],
             ['Video Pembelajaran', 'fa-circle-play', '/kurikulum/video', 'kurikulum/video*'],
+            ['Materi Training', 'fa-graduation-cap', '/kurikulum/training', 'kurikulum/training*'],
+            ['Request Belajar', 'fa-book-open-reader', '/kurikulum/request-belajar', 'kurikulum/request-belajar*'],
         ]],
         ['label' => 'Pengajar', 'items' => [
             ['Review Pengajuan', 'fa-circle-check', '/kurikulum/review-pengajuan', 'kurikulum/review-pengajuan*'],
-            ['Kompetensi Report', 'fa-list-check', '/kurikulum/kompetensi', 'kurikulum/kompetensi*'],
+            //['Kompetensi Report', 'fa-list-check', '/kurikulum/kompetensi', 'kurikulum/kompetensi*'],
+            ['Template Progress Report', 'fa-table-list', '/kurikulum/template-progress-report', 'kurikulum/template-progress-report*'],
+            ['Observasi Guru', 'fa-magnifying-glass-chart', '/kurikulum/observasi', 'kurikulum/observasi*'],
+            ['Hasil Konsultasi', 'fa-comments', '/kurikulum/hasil-konsultasi', 'kurikulum/hasil-konsultasi*'],
             ['Ketersediaan Guru', 'fa-user-clock', '/kurikulum/ketersediaan-guru', 'kurikulum/ketersediaan-guru*'],
             ['Monitoring Guru & Kelas', 'fa-chart-line', '/kurikulum/monitoring', 'kurikulum/monitoring*'],
         ]],
         ['label' => 'Komunikasi', 'items' => [
             ['Pemberitahuan Surat', 'fa-envelope', '/kurikulum/surat', 'kurikulum/surat*'],
+        ]],
+        ['label' => 'Akun', 'items' => [
+            ['Profil & Tanda Tangan', 'fa-signature', '/profil', 'profil*'],
         ]],
     ];
 
@@ -205,11 +213,13 @@
     </nav>
 
     <div class="sidebar-user">
-        <div class="avatar">{{ $initials }}</div>
-        <div class="user-meta">
-            <div class="n">{{ $userName }}</div>
-            <div class="r">{{ $roleLabel }}</div>
-        </div>
+        <a href="{{ route('profil.index') }}" class="d-flex align-items-center gap-2 text-decoration-none text-reset flex-fill overflow-hidden" title="Lihat & Edit Profil">
+            <div class="avatar">{{ $initials }}</div>
+            <div class="user-meta">
+                <div class="n">{{ $userName }}</div>
+                <div class="r">{{ $roleLabel }} <i class="fa-solid fa-signature ms-1" style="font-size:10px;"></i></div>
+            </div>
+        </a>
         <button type="button" class="collapse-btn" id="collapseBtn" title="Ciutkan sidebar">
             <i class="fa-solid fa-chevron-left" style="font-size:12px"></i>
         </button>
@@ -239,45 +249,44 @@
                 @if($pendingTotal > 0)<span class="dot"></span>@endif
             </a>
 
-            {{-- Notifikasi --}}
+            {{-- Notifikasi (Laravel Database Notification) --}}
             <div class="dropdown">
                 <button class="icon-btn" data-bs-toggle="dropdown" aria-expanded="false" title="Notifikasi">
                     <i class="fa-regular fa-bell"></i>
-                    @if($pendingTotal > 0)<span class="dot"></span>@endif
+                    @if(($unreadNotificationsCount ?? 0) > 0)
+                        <span class="dot"></span>
+                    @endif
                 </button>
-                <div class="dropdown-menu dropdown-menu-end p-0" style="width:320px">
-                    <div class="px-3 py-3 fw-bold border-bottom">
-                        Notifikasi
-                        @if($pendingTotal > 0)<span class="badge text-bg-warning ms-1">{{ $pendingTotal }}</span>@endif
+                <div class="dropdown-menu dropdown-menu-end p-0 shadow rounded-4" style="width:340px; max-height:450px; overflow-y:auto;">
+                    <div class="px-3 py-2 fw-bold border-bottom d-flex justify-content-between align-items-center bg-light">
+                        <span>Notifikasi @if(($unreadNotificationsCount ?? 0) > 0)<span class="badge bg-warning text-dark ms-1">{{ $unreadNotificationsCount }}</span>@endif</span>
+                        @if(($unreadNotificationsCount ?? 0) > 0)
+                            <form action="{{ route('notifications.mark-all-read') }}" method="POST" class="m-0">
+                                @csrf
+                                <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none text-muted" style="font-size:11px;">Tandai semua dibaca</button>
+                            </form>
+                        @endif
                     </div>
 
-                    @if($pendingTotal === 0)
-                        <div class="p-4 text-center text-muted small">Semua pengajuan sudah ditindaklanjuti 🎉</div>
+                    @if(!empty($unreadNotifications) && $unreadNotifications->count() > 0)
+                        @foreach($unreadNotifications as $notif)
+                            <a class="notif-item border-bottom d-flex align-items-start gap-2 text-decoration-none text-dark p-2" href="{{ route('notifications.read', $notif->id) }}">
+                                <div class="badge-num mt-1"><i class="fa-solid {{ $notif->data['icon'] ?? 'fa-bell' }}"></i></div>
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold small">{{ $notif->data['title'] ?? 'Pemberitahuan' }}</div>
+                                    <div class="text-muted" style="font-size:12px; line-height:1.2;">{{ Str::limit($notif->data['message'] ?? '', 75) }}</div>
+                                    <div class="text-secondary" style="font-size:10px;">{{ $notif->created_at->diffForHumans() }}</div>
+                                </div>
+                            </a>
+                        @endforeach
                     @else
-                        @if($pendingMaterials > 0)
-                            <a class="notif-item" href="{{ $reviewUrl }}">
-                                <div class="badge-num">{{ $pendingMaterials }}</div>
-                                <div><div class="fw-semibold small">Materi / PPT / LP menunggu</div>
-                                <div class="text-muted" style="font-size:12px">Perlu direview</div></div>
-                            </a>
-                        @endif
-                        @if($pendingJournals > 0)
-                            <a class="notif-item" href="{{ $reviewUrl }}">
-                                <div class="badge-num">{{ $pendingJournals }}</div>
-                                <div><div class="fw-semibold small">Jurnal belum direview</div>
-                                <div class="text-muted" style="font-size:12px">Dari guru</div></div>
-                            </a>
-                        @endif
-                        @if($pendingLeaves > 0)
-                            <a class="notif-item" href="{{ $reviewUrl }}">
-                                <div class="badge-num">{{ $pendingLeaves }}</div>
-                                <div><div class="fw-semibold small">Cuti / Ganti Kelas pending</div>
-                                <div class="text-muted" style="font-size:12px">Menunggu persetujuan</div></div>
-                            </a>
-                        @endif
+                        <div class="p-4 text-center text-muted small">
+                            <i class="fa-regular fa-bell-slash fs-4 d-block mb-2 text-secondary"></i>
+                            Tidak ada notifikasi baru 🎉
+                        </div>
                     @endif
 
-                    <a href="{{ $reviewUrl }}" class="d-block text-center py-2 small fw-semibold border-top text-decoration-none">Buka Review Pengajuan →</a>
+                    <a href="{{ $reviewUrl }}" class="d-block text-center py-2 small fw-semibold border-top text-decoration-none bg-light">Buka Review Pengajuan Guru →</a>
                 </div>
             </div>
 
@@ -295,8 +304,14 @@
                     </div>
                     <i class="fa-solid fa-chevron-down" style="font-size:11px;color:var(--muted)"></i>
                 </div>
-                <ul class="dropdown-menu dropdown-menu-end p-2" style="min-width:200px">
+                <ul class="dropdown-menu dropdown-menu-end p-2" style="min-width:210px">
                     <li class="px-3 py-2 small text-muted">Masuk sebagai <strong>{{ $userName }}</strong></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a href="{{ route('profil.index') }}" class="dropdown-item rounded-3 fw-semibold">
+                            <i class="fa-solid fa-signature me-2 text-warning"></i> Profil & Tanda Tangan
+                        </a>
+                    </li>
                     <li><hr class="dropdown-divider"></li>
                     <li>
                         <form method="POST" action="{{ route('logout') }}">

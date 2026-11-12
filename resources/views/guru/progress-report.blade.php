@@ -8,8 +8,8 @@
         <div>
             <h2 class="fw-bold mb-1">Progress Report</h2>
             <p class="text-muted">
-                Isi nilai kompetensi setiap siswa (Achievement Level dan nilai latihan). PDF dibuat otomatis,
-                lalu kirim ke Kurikulum. Batas pengisian maksimal H+3 setelah pertemuan terakhir.
+                                Isi Achievement Level dan Description setiap siswa. Learning Materials sudah disiapkan Kurikulum
+                (template program). PDF dibuat otomatis, lalu kirim ke Kurikulum. Batas pengisian maksimal H+3 setelah pertemuan terakhir.
                 Siswa baru bisa melihat report setelah disetujui Kurikulum.
             </p>
         </div>
@@ -44,6 +44,12 @@
             </form>
         </div>
     </div>
+
+        @if(!empty($templateMissing))
+        <div class="alert alert-warning"><i class="fa-solid fa-triangle-exclamation me-1"></i> {{ $templateMessage }}</div>
+    @elseif(!empty($templateName))
+        <div class="alert alert-info py-2"><i class="fa-solid fa-lock me-1"></i> Template Learning Materials: <b>{{ $templateName }}</b> (dari Kurikulum). Anda hanya mengisi Achievement Level, Description, dan Assessment.</div>
+    @endif
 
     {{-- DAFTAR SISWA --}}
     <div class="card shadow-sm border-0 rounded-4 mb-4">
@@ -94,13 +100,27 @@
 
                     <div class="col-md-6 text-md-end mt-2 mt-md-0">
 
-                        @if($s->is_late)
+                                                @if(!empty($templateMissing))
+                            <span class="btn btn-secondary btn-sm disabled">Menunggu template Kurikulum</span>
+                        @elseif($s->is_late)
                             <span class="btn btn-secondary btn-sm disabled">Terkunci (lewat H+3)</span>
                         @else
-                            <a href="{{ route('teacher.progress-report.form', $s->enrollment_id) }}"
-                               class="btn btn-primary btn-sm">
-                                {{ !$s->report ? 'Buat Report' : ($s->report->status === 'Draft' ? 'Lanjut Edit' : 'Report Baru') }}
-                            </a>
+                                                    @if($s->report && $s->report->status === 'Submitted')
+                                {{-- sudah diajukan: tidak bisa diedit guru, tampilkan dokumen --}}
+                                <a href="{{ route('progress-report.document', $s->report) }}" target="_blank" class="btn btn-outline-primary btn-sm">Lihat Dokumen</a>
+                            @else
+                                <a href="{{ route('teacher.progress-report.form', $s->enrollment_id) }}"
+                                   class="btn btn-primary btn-sm">
+                                    {{ !$s->report ? 'Buat Report' : ($s->report->status === 'Draft' ? 'Lanjut Edit' : 'Report Baru') }}
+                                </a>
+                                @if($s->report && $s->report->status === 'Draft')
+                                    <form method="POST" action="{{ route('teacher.progress-report.destroy', $s->report) }}" class="d-inline" onsubmit="return confirm('Hapus draft report ini?')">
+                                        @csrf @method('DELETE')
+                                        <button class="btn btn-outline-danger btn-sm" title="Hapus draft"><i class="fa-regular fa-trash-can"></i></button>
+                                    </form>
+                                @endif
+                            @endif
+
                         @endif
 
                         @if($s->report && $s->report->file_path)

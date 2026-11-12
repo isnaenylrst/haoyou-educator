@@ -12,7 +12,19 @@
         'SURAT_LIBUR' => ['bg-warning text-dark', 'Surat Libur'],
         'SURAT_DINAS' => ['bg-primary', 'Surat Dinas'],
         'LOA'         => ['bg-success', 'LoA'],
+        'SP1'         => ['bg-danger text-white', 'Surat Peringatan 1 (SP1)'],
+        'SP2'         => ['bg-danger text-white', 'Surat Peringatan 2 (SP2)'],
+        'SP3'         => ['bg-danger text-white', 'Surat Peringatan 3 (SP3)'],
     ];
+
+    if (isset($letterTypes)) {
+        foreach ($letterTypes as $lt) {
+            if (!isset($typeBadge[$lt->code])) {
+                $isSp = str_starts_with($lt->code, 'SP');
+                $typeBadge[$lt->code] = [$isSp ? 'bg-danger text-white' : 'bg-secondary', $lt->name];
+            }
+        }
+    }
 
     // Tautan WhatsApp untuk mengingatkan guru yang belum membuka surat
     $waRemind = function ($user, $letter) {
@@ -113,8 +125,8 @@
                     <label class="form-label fw-semibold">Jenis Surat</label>
                     <select class="form-select" name="jenis_surat" required>
                         <option value="">-- Pilih Jenis Surat --</option>
-                        @foreach (['SURAT_LIBUR' => 'Surat Libur', 'SURAT_DINAS' => 'Surat Dinas', 'LOA' => 'LoA'] as $val => $label)
-                            <option value="{{ $val }}" @selected($editId === '' && old('jenis_surat') === $val)>{{ $label }}</option>
+                        @foreach ($letterTypes ?? [] as $lt)
+                            <option value="{{ $lt->code }}" @selected($editId === '' && old('jenis_surat') === $lt->code)>{{ $lt->name }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -189,8 +201,8 @@
                 <div class="col-md-3">
                     <select name="type" class="form-select form-select-sm">
                         <option value="">Semua jenis</option>
-                        @foreach (['SURAT_LIBUR' => 'Surat Libur', 'SURAT_DINAS' => 'Surat Dinas', 'LOA' => 'LoA'] as $val => $label)
-                            <option value="{{ $val }}" @selected($type === $val)>{{ $label }}</option>
+                        @foreach ($letterTypes ?? [] as $lt)
+                            <option value="{{ $lt->code }}" @selected($type === $lt->code)>{{ $lt->name }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -343,8 +355,8 @@
                             <div class="col-md-4 mb-3">
                                 <label class="form-label fw-semibold">Jenis Surat</label>
                                 <select name="jenis_surat" class="form-select" required>
-                                    @foreach (['SURAT_LIBUR' => 'Surat Libur', 'SURAT_DINAS' => 'Surat Dinas', 'LOA' => 'LoA'] as $val => $label)
-                                        <option value="{{ $val }}" @selected(($useOld ? old('jenis_surat', $letter->document_type) : $letter->document_type) === $val)>{{ $label }}</option>
+                                    @foreach ($letterTypes ?? [] as $lt)
+                                        <option value="{{ $lt->code }}" @selected(($useOld ? old('jenis_surat', $letter->document_type) : $letter->document_type) === $lt->code)>{{ $lt->name }}</option>
                                     @endforeach
                                 </select>
                             </div>

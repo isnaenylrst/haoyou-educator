@@ -85,4 +85,14 @@ class Teacher extends Model
     {
         return $this->hasMany(Consultation::class);
     }
+
+    public function observations()
+    {
+        return $this->hasMany(TeacherObservation::class, 'teacher_id');
+    }
+
+    public function consultationResults()
+    {
+        return $this->hasMany(ConsultationResult::class, 'teacher_id');
+    }
 }

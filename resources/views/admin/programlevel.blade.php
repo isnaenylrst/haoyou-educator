@@ -3,7 +3,7 @@
 @section('title', 'Program & Level | Pengaturan')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('css/admin/programlevel.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
 @endpush
 
 @section('content')
@@ -77,221 +77,187 @@
         </a>
     </div>
 
+    {{-- ========================= TAB: REGULER / PRIVATE ========================= --}}
+    <div class="pkg-tabs" role="tablist">
+        <button type="button" class="pkg-tab active" data-tab="reguler" onclick="switchPackageTab('reguler')">
+            <i class="fa-solid fa-book"></i> Paket Reguler
+            <span class="pkg-tab-count">{{ $packages->count() }}</span>
+        </button>
+        <button type="button" class="pkg-tab" data-tab="private" onclick="switchPackageTab('private')">
+            <i class="fa-solid fa-user-graduate"></i> Paket Private
+            <span class="pkg-tab-count">{{ $privatePackages->count() }}</span>
+        </button>
+    </div>
+
     {{-- ========================= PAKET REGULER ========================= --}}
-    @php
-        $dailyPackages = $packages->filter(fn ($p) => $p->program->program_name === 'Daily Activity');
-        $hskPackages   = $packages->filter(fn ($p) => $p->program->program_name === 'HSK');
-    @endphp
+    <div class="pkg-panel" id="panel-reguler">
+        <div class="card">
+            <div class="toolbar">
+                <div class="form-field" style="margin:0;min-width:220px;">
+                    <select id="programFilter" onchange="filterRegulerPackages()">
+                        <option value="">Semua Program</option>
+                        @foreach ($programs as $program)
+                            <option value="{{ $program->id }}">{{ $program->program_name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <button type="button" class="btn btn-primary"
+                        onclick="openAddPackageModal(document.getElementById('programFilter').value)">
+                    <i class="fa-solid fa-plus"></i> Tambah Paket
+                </button>
+            </div>
 
-    {{-- ----- Daily Activity ----- --}}
-    <div class="section-title">
-        <i class="fa-solid fa-book"></i> Paket Reguler — Daily Activity
-    </div>
-
-    <div class="card">
-        <div class="toolbar">
-            <div></div>
-            <button type="button" class="btn btn-primary" onclick="openAddPackageModal({{ $programs->firstWhere('program_name', 'Daily Activity')?->id }})">
-                <i class="fa-solid fa-plus"></i> Tambah Paket
-            </button>
-        </div>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>Nama Paket</th>
-                    <th>Durasi</th>
-                    <th>Pertemuan</th>
-                    <th>Kapasitas</th>
-                    <th>Harga</th>
-                    <th>Status</th>
-                    <th width="110" style="text-align:right;">Aksi</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse ($dailyPackages as $package)
+            <table>
+                <thead>
                     <tr>
-                        <td class="cell-name">{{ $package->package_name }}</td>
-                        <td>{{ $package->duration_minutes }} menit</td>
-                        <td>{{ $package->total_meetings }}x</td>
-                        <td>{{ $package->min_students }}–{{ $package->max_students }} siswa</td>
-                        <td>Rp{{ number_format($package->price, 0, ',', '.') }}</td>
-                        <td>
-                            <span class="badge {{ $package->is_active ? 'badge-active' : 'badge-inactive' }}">
-                                <span class="badge-dot"></span>
-                                {{ $package->is_active ? 'Aktif' : 'Nonaktif' }}
-                            </span>
-                        </td>
-                        <td>
-                            <div class="row-actions">
-                                <button type="button" class="icon-btn" title="Edit"
-                                        onclick="openEditPackageModal({{ $package->id }})">
-                                    <i class="fa-regular fa-pen-to-square"></i>
-                                </button>
-                                <form action="{{ route('admin.program-level.paket.destroy', $package) }}"
-                                      method="POST" style="display:inline;"
-                                      onsubmit="return confirm('Hapus paket &quot;{{ $package->package_name }}&quot;? Paket tidak bisa dihapus jika masih dipakai di kelas.');">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="icon-btn danger" title="Hapus">
-                                        <i class="fa-regular fa-trash-can"></i>
+                        <th>Nama Paket</th>
+                        <th style="text-align: center; vertical-align: middle;">Program</th>
+                        <th style="text-align: center; vertical-align: middle;">Kategori / Level</th>
+                        <th style="text-align: center; vertical-align: middle;">Durasi / Pertemuan</th>
+                        <th style="text-align: center; vertical-align: middle;">Kapasitas</th>
+                        <th style="text-align: center; vertical-align: middle;">Harga</th>
+                        <th style="text-align: center; vertical-align: middle;">Status</th>
+                        <th width="110" style="text-align:center;">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody id="regulerTbody">
+                    @forelse ($packages as $package)
+                        <tr class="reguler-row" data-program-id="{{ $package->program_id }}">
+                            <td class="cell-name">{{ $package->package_name }}</td>
+                            <td class="cell-nowrap" style="text-align: center; vertical-align: middle;">
+                                {{ $package->program->program_name ?? '-' }}
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                <div class="cell-stack-main">{{ $package->category->category_name ?? '-' }}</div>
+                                @if ($package->level)
+                                    <div class="cell-stack-sub">{{ $package->level->level_name }}</div>
+                                @endif
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                <div class="cell-stack-main">{{ $package->duration_minutes }} menit</div>
+                                <div class="cell-stack-sub">{{ $package->total_meetings }}x pertemuan</div>
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">{{ $package->min_students }}–{{ $package->max_students }} siswa</td>
+                            <td>Rp{{ number_format($package->price, 0, ',', '.') }}</td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                <span class="badge {{ $package->is_active ? 'badge-active' : 'badge-inactive' }}">
+                                    <span class="badge-dot"></span>
+                                    {{ $package->is_active ? 'Aktif' : 'Nonaktif' }}
+                                </span>
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                <div class="row-actions">
+                                    <button type="button" class="icon-btn" title="Edit"
+                                            onclick="openEditPackageModal({{ $package->id }})">
+                                        <i class="fa-regular fa-pen-to-square"></i>
                                     </button>
-                                </form>
-                            </div>
+                                    <form action="{{ route('admin.program-level.paket.destroy', $package) }}"
+                                          method="POST" style="display:inline;"
+                                          onsubmit="return confirm('Hapus paket &quot;{{ $package->package_name }}&quot;? Paket tidak bisa dihapus jika masih dipakai di kelas.');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="icon-btn danger" title="Hapus">
+                                            <i class="fa-regular fa-trash-can"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="8" style="text-align:center;padding:50px;color:#888;">
+                                Belum ada paket reguler.
+                            </td>
+                        </tr>
+                    @endforelse
+
+                    <tr id="regulerFilterEmpty" style="display:none;">
+                        <td colspan="8" style="text-align:center;padding:50px;color:#888;">
+                            Belum ada paket untuk program ini.
                         </td>
                     </tr>
-                @empty
-                    <tr>
-                        <td colspan="7" style="text-align:center;padding:50px;color:#888;">
-                            Belum ada paket Daily Activity.
-                        </td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
-
-    {{-- ----- HSK ----- --}}
-    <div class="section-title">
-        <i class="fa-solid fa-book"></i> Paket Reguler — HSK
-    </div>
-
-    <div class="card">
-        <div class="toolbar">
-            <div></div>
-            <button type="button" class="btn btn-primary" onclick="openAddPackageModal({{ $programs->firstWhere('program_name', 'HSK')?->id }})">
-                <i class="fa-solid fa-plus"></i> Tambah Paket
-            </button>
+                </tbody>
+            </table>
         </div>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>Nama Paket</th>
-                    <th>Kategori</th>
-                    <th>Level</th>
-                    <th>Durasi</th>
-                    <th>Pertemuan</th>
-                    <th>Kapasitas</th>
-                    <th>Harga</th>
-                    <th>Status</th>
-                    <th width="110" style="text-align:right;">Aksi</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse ($hskPackages as $package)
-                    <tr>
-                        <td class="cell-name">{{ $package->package_name }}</td>
-                        <td>{{ $package->category->category_name ?? '—' }}</td>
-                        <td>{{ $package->level->level_name ?? '—' }}</td>
-                        <td>{{ $package->duration_minutes }} menit</td>
-                        <td>{{ $package->total_meetings }}x</td>
-                        <td>{{ $package->min_students }}–{{ $package->max_students }} siswa</td>
-                        <td>Rp{{ number_format($package->price, 0, ',', '.') }}</td>
-                        <td>
-                            <span class="badge {{ $package->is_active ? 'badge-active' : 'badge-inactive' }}">
-                                <span class="badge-dot"></span>
-                                {{ $package->is_active ? 'Aktif' : 'Nonaktif' }}
-                            </span>
-                        </td>
-                        <td>
-                            <div class="row-actions">
-                                <button type="button" class="icon-btn" title="Edit"
-                                        onclick="openEditPackageModal({{ $package->id }})">
-                                    <i class="fa-regular fa-pen-to-square"></i>
-                                </button>
-                                <form action="{{ route('admin.program-level.paket.destroy', $package) }}"
-                                      method="POST" style="display:inline;"
-                                      onsubmit="return confirm('Hapus paket &quot;{{ $package->package_name }}&quot;? Paket tidak bisa dihapus jika masih dipakai di kelas.');">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="icon-btn danger" title="Hapus">
-                                        <i class="fa-regular fa-trash-can"></i>
-                                    </button>
-                                </form>
-                            </div>
-                        </td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="9" style="text-align:center;padding:50px;color:#888;">
-                            Belum ada paket HSK.
-                        </td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
     </div>
 
     {{-- ========================= PAKET PRIVATE ========================= --}}
-    <div class="section-title">
-        <i class="fa-solid fa-user-graduate"></i> Paket Private
-    </div>
+    <div class="pkg-panel" id="panel-private" style="display:none;">
+        <div class="card">
+            <div class="toolbar">
+                <div></div>
+                <button type="button" class="btn btn-primary" onclick="openAddPrivateModal()">
+                    <i class="fa-solid fa-plus"></i> Tambah Paket Private
+                </button>
+            </div>
 
-    <div class="card">
-        <div class="toolbar">
-            <div></div>
-            <button type="button" class="btn btn-primary" onclick="openAddPrivateModal()">
-                <i class="fa-solid fa-plus"></i> Tambah Paket Private
-            </button>
-        </div>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>Nama Paket</th>
-                    <th>Durasi</th>
-                    <th>Pertemuan</th>
-                    <th>Kapasitas</th>
-                    <th>Harga</th>
-                    <th>Status</th>
-                    <th width="110" style="text-align:right;">Aksi</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse ($privatePackages as $pkg)
+            <table>
+                <thead>
                     <tr>
-                        <td class="cell-name">{{ $pkg->package_name }}</td>
-                        <td>{{ $pkg->duration_minutes }} menit</td>
-                        <td>{{ $pkg->total_meetings }}x</td>
-                        <td>{{ $pkg->min_students }}–{{ $pkg->max_students }} siswa</td>
-                        <td>Rp{{ number_format($pkg->price, 0, ',', '.') }}</td>
-                        <td>
-                            <span class="badge {{ $pkg->is_active ? 'badge-active' : 'badge-inactive' }}">
-                                <span class="badge-dot"></span>
-                                {{ $pkg->is_active ? 'Aktif' : 'Nonaktif' }}
-                            </span>
-                        </td>
-                        <td>
-                            <div class="row-actions">
-                                <button type="button" class="icon-btn" title="Edit"
-                                        onclick="openEditPrivateModal({{ $pkg->id }})">
-                                    <i class="fa-regular fa-pen-to-square"></i>
-                                </button>
-                                <form action="{{ route('admin.program-level.private.destroy', $pkg) }}"
-                                      method="POST" style="display:inline;"
-                                      onsubmit="return confirm('Hapus paket &quot;{{ $pkg->package_name }}&quot;? Paket tidak bisa dihapus jika masih dipakai di data pendaftaran siswa.');">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="icon-btn danger" title="Hapus">
-                                        <i class="fa-regular fa-trash-can"></i>
+                        <th>Nama Paket</th>
+                        <th style="text-align: center; vertical-align: middle;">Durasi</th>
+                        <th style="text-align: center; vertical-align: middle;">Pertemuan</th>
+                        <th style="text-align: center; vertical-align: middle;">Kapasitas</th>
+                        <th style="text-align: center; vertical-align: middle;">Harga</th>
+                        <th style="text-align: center; vertical-align: middle;">Status</th>
+                        <th width="110" style="text-align:center;">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse ($privatePackages as $pkg)
+                        <tr>
+                            <td class="cell-name">
+                                {{ $pkg->package_name }}
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                {{ $pkg->duration_minutes }} menit
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                {{ $pkg->total_meetings }}x
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                {{ $pkg->min_students }}–{{ $pkg->max_students }} siswa
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                Rp{{ number_format($pkg->price, 0, ',', '.') }}
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                <span class="badge {{ $pkg->is_active ? 'badge-active' : 'badge-inactive' }}">
+                                    <span class="badge-dot"></span>
+                                    {{ $pkg->is_active ? 'Aktif' : 'Nonaktif' }}
+                                </span>
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                <div class="row-actions">
+                                    <button type="button" class="icon-btn" title="Edit"
+                                            onclick="openEditPrivateModal({{ $pkg->id }})">
+                                        <i class="fa-regular fa-pen-to-square"></i>
                                     </button>
-                                </form>
-                            </div>
-                        </td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="7" style="text-align:center;padding:50px;color:#888;">
-                            Belum ada paket private.
-                        </td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
+                                    <form action="{{ route('admin.program-level.private.destroy', $pkg) }}"
+                                          method="POST" style="display:inline;"
+                                          onsubmit="return confirm('Hapus paket &quot;{{ $pkg->package_name }}&quot;? Paket tidak bisa dihapus jika masih dipakai di data pendaftaran siswa.');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="icon-btn danger" title="Hapus">
+                                            <i class="fa-regular fa-trash-can"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="7" style="text-align:center;padding:50px;color:#888;">
+                                Belum ada paket private.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
     </div>
 
-    {{-- ========================= MODAL — TAMBAH PAKET REGULER ========================= --}}
+    {{-- ========================= MODAL - TAMBAH PAKET REGULER ========================= --}}
     <div class="modal-overlay" id="addPackageModalOverlay">
         <div class="modal">
             <form action="{{ route('admin.program-level.paket.store') }}" method="POST">
@@ -320,13 +286,13 @@
                             <div class="form-field">
                                 <label>Kategori</label>
                                 <select name="category_id" id="category_id" onchange="onCategoryChange(this.value, '')">
-                                    <option value="">— Tidak ada —</option>
+                                    <option value="">- Tidak ada -</option>
                                 </select>
                             </div>
                             <div class="form-field full">
                                 <label>Level</label>
                                 <select name="level_id" id="level_id">
-                                    <option value="">— Tidak ada —</option>
+                                    <option value="">- Tidak ada -</option>
                                 </select>
                             </div>
                         </div>
@@ -378,7 +344,7 @@
         </div>
     </div>
 
-    {{-- ========================= MODAL — EDIT PAKET REGULER ========================= --}}
+    {{-- ========================= MODAL - EDIT PAKET REGULER ========================= --}}
     <div class="modal-overlay" id="editPackageModalOverlay">
         <div class="modal">
             <form id="editPackageForm" method="POST">
@@ -409,13 +375,13 @@
                             <div class="form-field">
                                 <label>Kategori</label>
                                 <select name="category_id" id="edit_category_id" onchange="onCategoryChange(this.value, '', true)">
-                                    <option value="">— Tidak ada —</option>
+                                    <option value="">- Tidak ada -</option>
                                 </select>
                             </div>
                             <div class="form-field full">
                                 <label>Level</label>
                                 <select name="level_id" id="edit_level_id">
-                                    <option value="">— Tidak ada —</option>
+                                    <option value="">- Tidak ada -</option>
                                 </select>
                             </div>
                         </div>
@@ -466,7 +432,7 @@
         </div>
     </div>
 
-    {{-- ========================= MODAL — TAMBAH PAKET PRIVATE ========================= --}}
+    {{-- ========================= MODAL - TAMBAH PAKET PRIVATE ========================= --}}
     <div class="modal-overlay" id="addPrivateModalOverlay">
         <div class="modal">
             <form action="{{ route('admin.program-level.private.store') }}" method="POST">
@@ -526,7 +492,7 @@
         </div>
     </div>
 
-    {{-- ========================= MODAL — EDIT PAKET PRIVATE ========================= --}}
+    {{-- ========================= MODAL - EDIT PAKET PRIVATE ========================= --}}
     <div class="modal-overlay" id="editPrivateModalOverlay">
         <div class="modal">
             <form id="editPrivateForm" method="POST">
@@ -609,27 +575,6 @@
     });
 @endphp
 
-@push('scripts')
-@php
-    $programTreeData = $programs->map(function ($p) {
-        return [
-            'id' => $p->id,
-            'categories' => $p->categories->map(function ($c) {
-                return [
-                    'id' => $c->id,
-                    'name' => $c->category_name,
-                    'levels' => $c->levels->map(function ($l) {
-                        return [
-                            'id' => $l->id,
-                            'name' => $l->level_name,
-                        ];
-                    }),
-                ];
-            }),
-        ];
-    });
-@endphp
-
 <script>
     const programTree = @json($programTreeData);
 
@@ -657,9 +602,9 @@
         const categories = program ? program.categories : [];
 
         if (categories.length === 0) {
-            // Program tanpa kategori (mis. Daily Activity) — kunci ke null.
-            fillSelect(categorySelect, [], '— Tidak ada —', '');
-            fillSelect(levelSelect, [], '— Tidak ada —', '');
+            // Program tanpa kategori (mis. Daily Activity) - kunci ke null.
+            fillSelect(categorySelect, [], '- Tidak ada -', '');
+            fillSelect(levelSelect, [], '- Tidak ada -', '');
             categorySelect.disabled = true;
             levelSelect.disabled = true;
         } else {
@@ -674,7 +619,7 @@
         const levelSelect = document.getElementById(prefix + 'level_id');
 
         if (!categoryId) {
-            fillSelect(levelSelect, [], '— Tidak ada —', '');
+            fillSelect(levelSelect, [], '- Tidak ada -', '');
             levelSelect.disabled = true;
             return;
         }
@@ -779,5 +724,45 @@
                 closeModal('editPrivateModalOverlay');
             });
     }
+
+    /* ============================================================
+       TAB REGULER / PRIVATE + FILTER PROGRAM
+    ============================================================ */
+    function switchPackageTab(name) {
+        if (!['reguler', 'private'].includes(name)) name = 'reguler';
+
+        document.querySelectorAll('.pkg-tab').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === name);
+        });
+        document.querySelectorAll('.pkg-panel').forEach(panel => {
+            panel.style.display = panel.id === 'panel-' + name ? '' : 'none';
+        });
+
+        try { sessionStorage.setItem('pkgTab', name); } catch (e) {}
+        history.replaceState(null, '', '#' + name);
+    }
+
+    function filterRegulerPackages() {
+        const programId = document.getElementById('programFilter').value;
+        const rows = document.querySelectorAll('#regulerTbody .reguler-row');
+        let visible = 0;
+
+        rows.forEach(row => {
+            const show = !programId || row.dataset.programId === programId;
+            row.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+
+        document.getElementById('regulerFilterEmpty').style.display =
+            (rows.length > 0 && visible === 0) ? '' : 'none';
+    }
+
+    (function initPackageTab() {
+        let tab = location.hash.replace('#', '');
+        if (!tab) {
+            try { tab = sessionStorage.getItem('pkgTab') || 'reguler'; } catch (e) { tab = 'reguler'; }
+        }
+        switchPackageTab(tab);
+    })();
 </script>
 @endpush

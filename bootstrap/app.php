@@ -23,10 +23,15 @@ return Application::configure(basePath: dirname(__DIR__))
         // berjalan setelah session aktif.
         $middleware->web(append: [
             \App\Http\Middleware\OwnerContext::class,
+            \App\Http\Middleware\LogOwnerAction::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
+
+        $exceptions->render(function (\Illuminate\Http\Exceptions\PostTooLargeException $e, Request $request) {
+            return back()->with('error', 'Ukuran file yang diunggah melebihi batas upload server (upload_max_filesize / post_max_size). Silakan perkecil ukuran file.');
+        });
     })->create();

@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Guru;
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\ClassSchedule;
+use App\Models\ScheduleJournalUnlock;
 use App\Models\Teacher;
 use App\Models\TeachingJournal;
+use App\Models\User;
+use App\Notifications\AppNotification;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -37,14 +40,6 @@ class AttendanceController extends Controller
         return self::DAYS[$date->format('l')];
     }
 
-    /** Daftar level valid untuk jenis kelas (Regular = gabungan semua kelas). */
-    private function levelsFor(?string $type): array
-    {
-        $data = config("journal.courses.$type", []);
-
-        return $type === 'Regular' ? array_merge(...array_values($data)) : $data;
-    }
-
     // ------------------------------------------------------------------ HALAMAN
 
     public function index(Request $request)
@@ -58,6 +53,8 @@ class AttendanceController extends Controller
         $schedules = ClassSchedule::with([
                 'class.enrollments' => fn ($q) => $q->where('status', 'Active'),
                 'class.enrollments.student',
+                'class.programPackage.program',
+                'class.level',
             ])
             ->where('day', $this->dayName($date))
             ->orderBy('start_time')
@@ -69,19 +66,43 @@ class AttendanceController extends Controller
             ->get()
             ->keyBy('class_schedule_id');
 
-        $build = function ($schedule) use ($journals) {
-            $journal = $journals->get($schedule->id);
+        $unlocks = ScheduleJournalUnlock::whereIn('class_schedule_id', $schedules->pluck('id'))
+            ->whereDate('session_date', $date->toDateString())
+            ->get()
+            ->keyBy('class_schedule_id');
+
+        $build = function ($schedule) use ($journals, $unlocks, $date) {
+            $journal       = $journals->get($schedule->id);
+            $unlockRecord  = $unlocks->get($schedule->id);
+            $sessionEnd    = Carbon::parse($date->toDateString() . ' ' . $schedule->end_time);
+            $deadline      = $sessionEnd->copy()->addHours(24);
+            $isPast        = now()->gt($deadline);
+            $isUnlocked    = ($unlockRecord && $unlockRecord->is_open);
+            $isLocked      = $isPast && !$isUnlocked && !$journal;
+
+            $status = !$journal
+                ? ($isLocked ? 'terlambat' : 'belum_diisi')
+                : match ($journal->status) {
+                    'Reviewed' => 'dikunci',
+                    'Revision' => 'revisi',
+                    default    => 'sudah_diisi',
+                };
+
+            // Hitung nomor pertemuan otomatis
+            $autoMeetingNumber = TeachingJournal::where('class_id', $schedule->class_id)
+                ->where('class_status', 'Conducted')
+                ->count() + ($journal ? 0 : 1);
 
             return [
-                'schedule' => $schedule,
-                'journal'  => $journal,
-                'status'   => !$journal
-                    ? 'belum_diisi'
-                    : match ($journal->status) {
-                        'Reviewed' => 'dikunci',
-                        'Revision' => 'revisi',
-                        default    => 'sudah_diisi',
-                    },
+                'schedule'            => $schedule,
+                'journal'             => $journal,
+                'status'              => $status,
+                'deadline'            => $deadline,
+                'is_past_deadline'    => $isPast,
+                'is_unlocked'         => $isUnlocked,
+                'unlocked_until'      => $unlockRecord?->unlocked_until,
+                'unlock_record'       => $unlockRecord,
+                'auto_meeting_number' => max(1, $autoMeetingNumber),
             ];
         };
 
@@ -101,8 +122,9 @@ class AttendanceController extends Controller
             ->values();
 
         $totalSessionToday = $sessions->count();
-        $filledCount       = $sessions->where('status', '!=', 'belum_diisi')->count();
+        $filledCount       = $sessions->where('status', '!=', 'belum_diisi')->where('status', '!=', 'terlambat')->count();
         $unfilledCount     = $sessions->where('status', 'belum_diisi')->count();
+        $lateCount         = $sessions->where('status', 'terlambat')->count() + $substituteSessions->where('status', 'terlambat')->count();
         $revisionCount     = $sessions->where('status', 'revisi')->count()
             + $substituteSessions->where('status', 'revisi')->count();
         $totalHadirHariIni = $sessions->sum(
@@ -113,18 +135,30 @@ class AttendanceController extends Controller
 
         return view('guru.attendance', compact(
             'sessions', 'substituteSessions', 'date', 'canFill', 'teacherNames',
-            'totalSessionToday', 'filledCount', 'unfilledCount', 'revisionCount', 'totalHadirHariIni'
+            'totalSessionToday', 'filledCount', 'unfilledCount', 'lateCount', 'revisionCount', 'totalHadirHariIni'
         ));
     }
 
     // ------------------------------------------------------------------ VALIDASI & HELPER BERSAMA
 
-    private function validated(Request $request): array
+    private function validated(Request $request, ?ClassSchedule $classSchedule = null): array
     {
         $running = $request->input('class_running') === 'Berjalan';
-        $type    = $request->input('course_type');
-        $levels  = $this->levelsFor($type);
         $req     = $running ? 'required' : 'nullable';
+
+        // Auto fallback dari data kelas / jadwal jika tidak dikirim form
+        $class = $classSchedule?->class;
+        if ($class) {
+            $defaultCourseType = $class->private_package_id ? 'Private' : ($class->programPackage?->package_name ?? $class->programPackage?->program?->program_name ?? 'Regular');
+            $defaultCourseLevel = $class->level?->level_name ?? $class->programLevel?->level_name ?? null;
+
+            if (!$request->filled('course_type')) {
+                $request->merge(['course_type' => $defaultCourseType]);
+            }
+            if (!$request->filled('course_level') && $defaultCourseLevel) {
+                $request->merge(['course_level' => $defaultCourseLevel]);
+            }
+        }
 
         return $request->validate([
             'teaching_teacher_id'   => ['required', 'exists:teachers,id'],
@@ -136,19 +170,21 @@ class AttendanceController extends Controller
             'meeting_number'        => ['required', 'integer', 'min:1', 'max:999'],
             'start_time'            => ['required', 'date_format:H:i'],
             'end_time'              => ['required', 'date_format:H:i', 'after:start_time'],
-            'course_type'           => ['required', Rule::in(array_keys(config('journal.courses')))],
-            'course_level'          => [Rule::requiredIf(!empty($levels)), 'nullable', Rule::in($levels)],
+            'course_type'           => ['nullable', 'string', 'max:100'],
+            'course_level'          => ['nullable', 'string', 'max:100'],
             'class_running'         => ['required', 'in:Berjalan,Tidak Berjalan'],
             'focus_materials'       => [$req, 'array'],
-            'focus_materials.*'     => [Rule::in(config('journal.focus'))],
-            'material_taught'       => [$req, 'string'],
-            'learning_activities'   => [$req, 'string'],
-            'problems'              => ['required', 'string'],   // kalau tidak berjalan: isi alasannya
-            'solutions'             => [$req, 'string'],
-            'results'               => [$req, 'string'],
+            'focus_materials.*'     => ['string', 'max:100'],
+            'material_taught'       => [$req, 'string', 'max:500'],
+            'learning_activities'   => [$req, 'string', 'max:2000'],
+            'problems'              => ['required', 'string', 'max:2000'],   // kalau tidak berjalan: isi alasannya
+            'solutions'             => [$req, 'string', 'max:2000'],
+            'results'               => [$req, 'string', 'max:2000'],
             'session_score'         => [$req, 'in:10,5'],
             'attendance'            => ['nullable', 'array'],
-            'attendance.*'          => [Rule::in(array_keys(config('journal.attendance_status')))],
+            'attendance.*'          => [Rule::in(array_keys(config('journal.attendance_status', [
+                'Present' => 'Hadir', 'Sick' => 'Sakit', 'Permission' => 'Izin', 'Absent' => 'Alpha',
+            ])))],
             'attendance_note'       => ['nullable', 'array'],
             'attendance_note.*'     => ['nullable', 'string', 'max:255'],
         ]);
@@ -166,7 +202,7 @@ class AttendanceController extends Controller
             'student_names'         => $data['student_names'],
             'is_last_meeting'       => $data['is_last_meeting'] === 'Ya',
             'meeting_number'        => $data['meeting_number'],
-            'course_type'           => $data['course_type'],
+            'course_type'           => $data['course_type'] ?? 'Regular',
             'course_level'          => $data['course_level'] ?? null,
             'class_status'          => $running ? 'Conducted' : 'Cancelled',
             'focus_materials'       => $data['focus_materials'] ?? [],
@@ -199,7 +235,7 @@ class AttendanceController extends Controller
     {
         $me      = $this->teacher();
         $class   = $classSchedule->class;
-        $data    = $this->validated($request);
+        $data    = $this->validated($request, $classSchedule);
         $running = $data['class_running'] === 'Berjalan';
 
         $isSubstitute = $data['is_substitute'] === 'Ya';
@@ -207,6 +243,21 @@ class AttendanceController extends Controller
 
         if ($this->dayName($date) !== $classSchedule->day) {
             return back()->withInput()->with('error', "Tanggal tersebut bukan hari {$classSchedule->day}, sesuai jadwal kelas.");
+        }
+
+        // Cek batas 24 jam setelah sesi selesai
+        $sessionEnd = Carbon::parse($data['session_date'] . ' ' . $classSchedule->end_time);
+        $deadline   = $sessionEnd->copy()->addHours(24);
+        $isPast     = now()->gt($deadline);
+
+        $unlocked = ScheduleJournalUnlock::where('class_schedule_id', $classSchedule->id)
+            ->whereDate('session_date', $data['session_date'])
+            ->where('status', 'Unlocked')
+            ->where('unlocked_until', '>', now())
+            ->first();
+
+        if ($isPast && !$unlocked) {
+            return back()->withInput()->with('error', 'Batas waktu pengisian jurnal (24 jam setelah jam mengajar selesai) telah lewat. Form terkunci. Silakan ajukan permohonan buka kunci kepada Kurikulum.');
         }
 
         $alreadyFilled = TeachingJournal::where('class_schedule_id', $classSchedule->id)
@@ -218,7 +269,7 @@ class AttendanceController extends Controller
         }
 
         try {
-            $journal = DB::transaction(function () use ($data, $classSchedule, $class, $me, $isSubstitute, $running) {
+            $journal = DB::transaction(function () use ($data, $classSchedule, $class, $me, $isSubstitute, $running, $isPast, $unlocked) {
                 $journal = TeachingJournal::create(
                     $this->journalAttributes($data, $running, $isSubstitute) + [
                         'filled_by'         => $me->id,                 // guru yang mengisi form
@@ -226,16 +277,31 @@ class AttendanceController extends Controller
                         'class_schedule_id' => $classSchedule->id,
                         'session_date'      => $data['session_date'],
                         'status'            => 'Pending',
+                        'is_late'           => ($isPast && $unlocked !== null),
                     ]
                 );
 
-                if ($running) {
-                    $studentIds = $class->enrollments()->where('status', 'Active')->pluck('student_id');
+                // Absensi siswa tetap disimpan terlepas dari berapa yang hadir
+                $studentIds = $class->enrollments()->where('status', 'Active')->pluck('student_id');
+                if ($studentIds->isNotEmpty()) {
                     $this->saveAttendances($journal, $studentIds, $data);
                 }
 
                 return $journal;
             });
+
+            // Notifikasi database ke seluruh tim Kurikulum
+            $curriculums = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Curriculum'))->get();
+            foreach ($curriculums as $cUser) {
+                $cUser->notify(new AppNotification(
+                    title: "Jurnal Mengajar Masuk: {$class->class_name}",
+                    message: "Guru {$me->name} telah mengisi jurnal pertemuan ke-{$journal->meeting_number} untuk kelas {$class->class_name}. Silakan review jurnal.",
+                    url: url('/kurikulum/review-pengajuan?tab=jurnal'),
+                    type: 'jurnal',
+                    icon: 'fa-book-open'
+                ));
+            }
+
         } catch (QueryException $e) {
             report($e);
 
@@ -243,12 +309,12 @@ class AttendanceController extends Controller
         } catch (\Throwable $e) {
             report($e);
 
-            return back()->withInput()->with('error', 'Terjadi kesalahan saat menyimpan jurnal. Silakan coba lagi.');
+            return back()->withInput()->with('error', 'Terjadi kesalahan saat menyimpan jurnal: ' . $e->getMessage());
         }
 
         return redirect()
             ->route('teacher.attendance', ['date' => $data['session_date']])
-            ->with('success', 'Jurnal berhasil disimpan.')
+            ->with('success', 'Jurnal berhasil disimpan dan dikirim ke Kurikulum untuk direview.')
             ->with('pdf_url', route('teacher.attendance.pdf', $journal));
     }
 
@@ -274,7 +340,7 @@ class AttendanceController extends Controller
         // Tanggal sesi tidak boleh diubah saat revisi
         $request->merge(['session_date' => $journal->session_date->toDateString()]);
 
-        $data         = $this->validated($request);
+        $data         = $this->validated($request, $journal->schedule);
         $running      = $data['class_running'] === 'Berjalan';
         $isSubstitute = $data['is_substitute'] === 'Ya';
 
@@ -289,28 +355,103 @@ class AttendanceController extends Controller
                     ]
                 );
 
-                // Pakai daftar murid dari absensi awal; jika kosong (sebelumnya kelas tidak berjalan) pakai murid aktif
                 $studentIds = $journal->attendances()->pluck('student_id');
-                if ($studentIds->isEmpty()) {
+                if ($studentIds->isEmpty() && $class) {
                     $studentIds = $class->enrollments()->where('status', 'Active')->pluck('student_id');
                 }
 
                 $journal->attendances()->delete();
 
-                if ($running) {
+                if ($studentIds->isNotEmpty()) {
                     $this->saveAttendances($journal, $studentIds, $data);
                 }
             });
+
+            // Notifikasi ke Kurikulum
+            $curriculums = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Curriculum'))->get();
+            foreach ($curriculums as $cUser) {
+                $cUser->notify(new AppNotification(
+                    title: "Revisi Jurnal Dikirim Ulang: {$class->class_name}",
+                    message: "Guru {$me->name} telah merevisi jurnal pertemuan ke-{$journal->meeting_number} kelas {$class->class_name}.",
+                    url: url('/kurikulum/review-pengajuan?tab=jurnal'),
+                    type: 'jurnal',
+                    icon: 'fa-book-open'
+                ));
+            }
         } catch (\Throwable $e) {
             report($e);
 
-            return back()->withInput()->with('error', 'Revisi gagal disimpan. Silakan coba lagi.');
+            return back()->withInput()->with('error', 'Revisi gagal disimpan: ' . $e->getMessage());
         }
 
         return redirect()
             ->route('teacher.attendance', ['date' => $journal->session_date->toDateString()])
             ->with('success', 'Revisi jurnal berhasil dikirim ulang ke Kurikulum.')
             ->with('pdf_url', route('teacher.attendance.pdf', $journal));
+    }
+
+    // ------------------------------------------------------------------ PERMOHONAN BUKA KUNCI JURNAL
+
+    public function requestUnlock(Request $request)
+    {
+        $data = $request->validate([
+            'class_schedule_id' => ['required', 'exists:class_schedules,id'],
+            'session_date'      => ['required', 'date'],
+            'request_reason'    => ['required', 'string', 'max:1000'],
+        ], [
+            'request_reason.required' => 'Alasan keterlambatan wajib diisi agar Kurikulum dapat mempertimbangkan pembukaan kunci.',
+        ]);
+
+        $schedule = ClassSchedule::with('class.teacher')->findOrFail($data['class_schedule_id']);
+        $teacher = $this->teacher();
+        $user = Auth::user();
+
+        // Pastikan guru bersangkutan yang mengajar atau berhak atas sesi ini
+        $isTeacher = (int) $schedule->class->teacher_id === $teacher->id;
+        if (! $isTeacher) {
+            // Bisa jadi dia guru pengganti
+            $isSub = \App\Models\TeacherLeave::where('class_schedule_id', $schedule->id)
+                ->whereDate('leave_date', $data['session_date'])
+                ->where('replacement_teacher_id', $teacher->id)
+                ->where('status', 'Approved')
+                ->exists();
+
+            if (! $isSub) {
+                return back()->with('error', 'Anda tidak memiliki hak akses untuk meminta buka kunci kelas ini.');
+            }
+        }
+
+        $unlock = ScheduleJournalUnlock::updateOrCreate(
+            [
+                'class_schedule_id' => $schedule->id,
+                'session_date'      => $data['session_date'],
+            ],
+            [
+                'status'         => 'Pending',
+                'request_reason' => $data['request_reason'],
+                'requested_at'   => now(),
+                'requested_by'   => $user->id,
+                'rejection_note' => null,
+            ]
+        );
+
+        // Kirim notifikasi ke tim Kurikulum
+        $curriculums = \App\Models\User::whereHas('level', fn ($q) => $q->where('nama_level', 'Kurikulum'))->get();
+        $className = $schedule->class->class_name ?? 'Kelas';
+        $sessionFormatted = Carbon::parse($data['session_date'])->translatedFormat('d M Y');
+
+        foreach ($curriculums as $curr) {
+            $curr->notify(new \App\Notifications\AppNotification(
+                title: "Permohonan Buka Kunci Jurnal: {$className}",
+                message: "Guru {$teacher->name} meminta pembukaan kunci jurnal kelas {$className} untuk sesi {$sessionFormatted}. Alasan: {$data['request_reason']}",
+                url: url('/kurikulum/review-pengajuan?tab=jurnal'),
+                type: 'jurnal',
+                icon: 'fa-lock-open',
+                actionLabel: 'Review & Buka Kunci'
+            ));
+        }
+
+        return back()->with('success', 'Permohonan buka kunci jurnal berhasil dikirim ke Kurikulum. Mohon menunggu konfirmasi/ACC dari Kurikulum.');
     }
 
     // ------------------------------------------------------------------ PDF

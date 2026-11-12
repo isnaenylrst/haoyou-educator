@@ -67,8 +67,26 @@
                 @csrf
 
                 <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label" for="categorySelect">Kategori</label>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label" for="classSelect">Kelas Anda <span class="text-danger">*</span></label>
+                        <select id="classSelect"
+                                name="class_id"
+                                class="form-select @error('class_id') is-invalid @enderror"
+                                required>
+                            <option value="">-- Pilih Kelas Yang Diampu --</option>
+                            @foreach ($myClasses as $c)
+                                <option value="{{ $c->id }}" @selected(old('class_id', $selectedClassId) == $c->id)>
+                                    {{ $c->class_name }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('class_id')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label" for="categorySelect">Kategori Materi</label>
                         <select id="categorySelect" class="form-select">
                             @foreach ($categories as $category)
                                 <option value="{{ $category->id }}">
@@ -78,8 +96,8 @@
                         </select>
                     </div>
 
-                    <div class="col-md-8 mb-3">
-                        <label class="form-label" for="materialSelect">Pilih Materi Kurikulum</label>
+                    <div class="col-md-12 mb-3">
+                        <label class="form-label" for="materialSelect">Pilih Materi Kurikulum <span class="text-danger">*</span></label>
                         <select id="materialSelect"
                                 name="material_id"
                                 class="form-select @error('material_id') is-invalid @enderror"
@@ -98,32 +116,39 @@
                     </div>
                 </div>
 
-                <div class="mb-3">
-                    <label class="form-label" for="lpFile">Upload Lesson Plan (PDF)</label>
-                    <input type="file"
-                           id="lpFile"
-                           name="lp_file"
-                           accept="application/pdf"
-                           class="form-control @error('lp_file') is-invalid @enderror"
-                           required>
-                    @error('lp_file')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                    @enderror
-                    <small class="text-muted">Format PDF, maksimal 10 MB.</small>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label" for="lpFile">Upload Lesson Plan (PDF) <span class="text-danger">*</span></label>
+                        <input type="file"
+                               id="lpFile"
+                               name="lp_file"
+                               accept="application/pdf"
+                               class="form-control @error('lp_file') is-invalid @enderror"
+                               required>
+                        @error('lp_file')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                        <small class="text-muted">Format PDF, maksimal 10 MB.</small>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label" for="pptFile">Upload PPT <span class="text-danger">*</span></label>
+                        <input type="file"
+                               id="pptFile"
+                               name="ppt_file"
+                               accept=".pdf,.ppt,.pptx"
+                               class="form-control @error('ppt_file') is-invalid @enderror"
+                               required>
+                        @error('ppt_file')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                        <small class="text-muted">Format PDF / PPT / PPTX, maksimal 20 MB.</small>
+                    </div>
                 </div>
 
                 <div class="mb-4">
-                    <label class="form-label" for="pptFile">Upload PPT</label>
-                    <input type="file"
-                           id="pptFile"
-                           name="ppt_file"
-                           accept=".pdf,.ppt,.pptx"
-                           class="form-control @error('ppt_file') is-invalid @enderror"
-                           required>
-                    @error('ppt_file')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                    @enderror
-                    <small class="text-muted">Format PDF / PPT / PPTX, maksimal 20 MB.</small>
+                    <label class="form-label" for="notes">Catatan Tambahan (Opsional)</label>
+                    <textarea id="notes" name="notes" rows="2" class="form-control" placeholder="Tuliskan catatan atau rencana silabus khusus untuk kelas ini...">{{ old('notes') }}</textarea>
                 </div>
 
                 <button type="submit" class="btn btn-success px-4">
@@ -310,14 +335,22 @@
                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
 
                         <div>
-                            <h6 class="fw-semibold mb-0">{{ $submission->ppt_title }}</h6>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <h6 class="fw-semibold mb-0">{{ $submission->ppt_title }}</h6>
+                                <span class="badge bg-dark-subtle text-dark border">v{{ $submission->current_version ?: 1 }}</span>
+                                @if($submission->class)
+                                    <span class="badge bg-warning-subtle text-dark border border-warning-subtle">
+                                        <i class="fa-solid fa-chalkboard me-1"></i> {{ $submission->class->class_name }}
+                                    </span>
+                                @endif
+                            </div>
                             <small class="text-muted">
                                 {{ $categoryName }} · LP & PPT · Dikirim {{ $submission->created_at->translatedFormat('j M Y') }}
                             </small>
 
-                            @if ($submission->status === 'Rejected' && $submission->review_note)
+                            @if (in_array($submission->status, ['Rejected', 'Perlu Revisi']) && $submission->review_note)
                                 <div class="small text-danger mt-1">
-                                    Catatan: {{ $submission->review_note }}
+                                    <i class="fa-solid fa-triangle-exclamation me-1"></i> Catatan Kurikulum: {{ $submission->review_note }}
                                 </div>
                             @endif
                         </div>
@@ -325,20 +358,28 @@
                         <div class="d-flex align-items-center gap-2">
                             <span class="badge {{ $badge['class'] }}">{{ $badge['text'] }}</span>
 
+                            {{-- Tombol Riwayat Versi --}}
+                            <button type="button"
+                                    class="btn btn-outline-secondary btn-sm"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#versionHistoryModal{{ $submission->id }}">
+                                <i class="fa-solid fa-clock-rotate-left me-1"></i> Riwayat Versi ({{ $submission->versions->count() }})
+                            </button>
+
                             @if ($isApproved)
                                 {{-- Crosscheck: lihat file LP & PPT --}}
                                 <div class="dropdown">
                                     <button class="btn btn-outline-dark btn-sm dropdown-toggle"
                                             type="button"
                                             data-bs-toggle="dropdown">
-                                        Crosscheck
+                                        Dokumen
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end">
                                         @if ($submission->lp_file_path)
                                             <li>
                                                 <a class="dropdown-item" target="_blank"
                                                    href="{{ Storage::url($submission->lp_file_path) }}">
-                                                    Lihat Lesson Plan
+                                                    <i class="fa-solid fa-file-pdf text-danger me-1"></i> Lihat Lesson Plan
                                                 </a>
                                             </li>
                                         @endif
@@ -346,7 +387,7 @@
                                             <li>
                                                 <a class="dropdown-item" target="_blank"
                                                    href="{{ Storage::url($submission->ppt_file_path) }}">
-                                                    Lihat PPT
+                                                    <i class="fa-solid fa-file-powerpoint text-warning me-1"></i> Lihat PPT
                                                 </a>
                                             </li>
                                         @endif
@@ -354,10 +395,10 @@
                                 </div>
                             @else
                                 <button type="button"
-                                        class="btn btn-warning btn-sm"
+                                        class="btn btn-warning btn-sm fw-semibold"
                                         data-bs-toggle="modal"
                                         data-bs-target="#reuploadModal{{ $submission->id }}">
-                                    Upload Ulang
+                                    <i class="fa-solid fa-upload me-1"></i> Upload Revisi
                                 </button>
                             @endif
                         </div>
@@ -365,41 +406,131 @@
                     </div>
                 </div>
 
-                {{-- ========== MODAL UPLOAD ULANG ========== --}}
+                {{-- ========== MODAL RIWAYAT VERSI DOKUMEN ========== --}}
+                <div class="modal fade" id="versionHistoryModal{{ $submission->id }}" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered modal-lg">
+                        <div class="modal-content rounded-4 border-0 shadow">
+                            <div class="modal-header bg-light">
+                                <div>
+                                    <h5 class="modal-title fw-bold mb-0">
+                                        <i class="fa-solid fa-clock-rotate-left text-warning me-2"></i> Riwayat Revisi & Versi Dokumen
+                                    </h5>
+                                    <small class="text-muted">{{ $submission->ppt_title }} {{ $submission->class ? '· ' . $submission->class->class_name : '' }}</small>
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+
+                            <div class="modal-body p-4">
+                                @if($submission->versions->isEmpty())
+                                    <div class="text-center py-4 text-muted">
+                                        <i class="fa-solid fa-file-circle-check fs-2 text-secondary mb-2"></i>
+                                        <p class="mb-0">Belum ada riwayat revisi tambahan. Dokumen ini masih berada pada versi awal (v1).</p>
+                                    </div>
+                                @else
+                                    <div class="timeline">
+                                        @foreach($submission->versions->sortByDesc('version_number') as $ver)
+                                            <div class="card border mb-3 rounded-3 shadow-none">
+                                                <div class="card-body p-3">
+                                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                                        <div>
+                                                            <span class="badge bg-dark fw-bold me-2">Versi {{ $ver->version_number }}</span>
+                                                            <span class="badge {{ $ver->status === 'Disetujui' ? 'bg-success' : ($ver->status === 'Perlu Revisi' ? 'bg-danger' : 'bg-warning text-dark') }}">
+                                                                {{ $ver->status }}
+                                                            </span>
+                                                        </div>
+                                                        <small class="text-muted">
+                                                            {{ $ver->created_at->translatedFormat('d M Y, H:i') }}
+                                                        </small>
+                                                    </div>
+
+                                                    @if($ver->notes)
+                                                        <div class="small mb-2">
+                                                            <strong>Catatan Guru:</strong>
+                                                            <span class="text-secondary">{{ $ver->notes }}</span>
+                                                        </div>
+                                                    @endif
+
+                                                    @if($ver->review_note)
+                                                        <div class="alert alert-warning py-2 px-3 small mb-2">
+                                                            <strong>Evaluasi Kurikulum:</strong> {{ $ver->review_note }}
+                                                            @if($ver->reviewer)
+                                                                <div class="text-muted mt-1" style="font-size:11px;">
+                                                                    Direview oleh: {{ $ver->reviewer->name }} ({{ $ver->reviewed_at?->translatedFormat('d M Y H:i') }})
+                                                                </div>
+                                                            @endif
+                                                        </div>
+                                                    @endif
+
+                                                    <div class="d-flex gap-2 mt-2 pt-2 border-top">
+                                                        @if($ver->lp_file_path)
+                                                            <a href="{{ Storage::url($ver->lp_file_path) }}" target="_blank" class="btn btn-sm btn-outline-danger">
+                                                                <i class="fa-solid fa-file-pdf me-1"></i> Unduh LP v{{ $ver->version_number }}
+                                                            </a>
+                                                        @endif
+                                                        @if($ver->ppt_file_path)
+                                                            <a href="{{ Storage::url($ver->ppt_file_path) }}" target="_blank" class="btn btn-sm btn-outline-warning text-dark">
+                                                                <i class="fa-solid fa-file-powerpoint me-1"></i> Unduh PPT v{{ $ver->version_number }}
+                                                            </a>
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+
+                            <div class="modal-footer bg-light">
+                                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Tutup</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- ========== MODAL UPLOAD ULANG / REVISI BARU ========== --}}
                 @unless ($isApproved)
                     <div class="modal fade" id="reuploadModal{{ $submission->id }}" tabindex="-1" aria-hidden="true">
                         <div class="modal-dialog modal-dialog-centered">
-                            <form class="modal-content"
+                            <form class="modal-content rounded-4 border-0 shadow"
                                   action="{{ route('teacher.kelas.reupload', $submission->id) }}"
                                   method="POST"
                                   enctype="multipart/form-data">
                                 @csrf
 
-                                <div class="modal-header">
-                                    <h5 class="modal-title">Upload Ulang — {{ $submission->ppt_title }}</h5>
+                                <div class="modal-header bg-light">
+                                    <h5 class="modal-title fw-bold">Upload Revisi Versi {{ ($submission->current_version ?: 1) + 1 }}</h5>
                                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                 </div>
 
-                                <div class="modal-body">
-                                    <p class="text-muted small">
-                                        Kosongkan kolom yang tidak ingin diganti.
-                                        Setelah dikirim, status kembali menjadi menunggu review.
+                                <div class="modal-body p-4">
+                                    <p class="text-muted small mb-3">
+                                        Unggah berkas LP dan/atau PPT yang telah diperbaiki. Versi baru akan tercatat di sistem dan Kurikulum akan menerima notifikasi.
                                     </p>
 
                                     <div class="mb-3">
-                                        <label class="form-label">Lesson Plan (PDF)</label>
+                                        <label class="form-label fw-semibold">Lesson Plan Baru (PDF)</label>
                                         <input type="file" name="lp_file" accept="application/pdf" class="form-control">
+                                        <small class="text-muted">Biarkan kosong jika tidak mengubah Lesson Plan.</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-semibold">PPT Baru (PDF / PPT / PPTX)</label>
+                                        <input type="file" name="ppt_file" accept=".pdf,.ppt,.pptx" class="form-control">
+                                        <small class="text-muted">Biarkan kosong jika tidak mengubah PPT.</small>
                                     </div>
 
                                     <div class="mb-0">
-                                        <label class="form-label">PPT</label>
-                                        <input type="file" name="ppt_file" accept=".pdf,.ppt,.pptx" class="form-control">
+                                        <label class="form-label fw-semibold">Catatan Poin Revisi <span class="text-danger">*</span></label>
+                                        <textarea name="notes" rows="3" class="form-control" placeholder="Jelaskan perubahan yang telah Anda lakukan pada dokumen ini..." required></textarea>
+                                        <small class="text-muted">Wajib diisi agar mempermudah tim Kurikulum mereview kembali.</small>
                                     </div>
                                 </div>
 
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
-                                    <button type="submit" class="btn btn-warning">Upload Ulang & Kirim</button>
+                                <div class="modal-footer bg-light">
+                                    <button type="button" class="btn btn-light rounded-pill px-3" data-bs-dismiss="modal">Batal</button>
+                                    <button type="submit" class="btn btn-warning rounded-pill px-4 fw-semibold">
+                                        <i class="fa-solid fa-paper-plane me-1"></i> Kirim Revisi v{{ ($submission->current_version ?: 1) + 1 }}
+                                    </button>
                                 </div>
                             </form>
                         </div>

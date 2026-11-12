@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ClassModel;
 use App\Models\TeacherAvailability;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 
 class TeacherAvailabilityService
 {
@@ -88,6 +89,73 @@ class TeacherAvailabilityService
             ->where('cs.start_time', '<', $end)
             ->where('cs.end_time', '>', $start)
             ->value('c.class_name');
+    }
+
+        /**
+     * Semua jadwal kelas yang SUDAH DITERIMA tiap guru, diambil sekali (hindari query berulang).
+     * Hasil: Collection dikelompokkan per teacher_id.
+     */
+    public static function busyIndex($teacherIds)
+    {
+        return DB::table('class_schedules as cs')
+            ->join('classes as c', 'c.id', '=', 'cs.class_id')
+            ->whereIn('c.teacher_id', $teacherIds)
+            ->where('c.teacher_response', 'Accepted')
+            ->whereIn('c.status', ['Open', 'Running'])
+            ->get(['c.teacher_id', 'c.id as class_id', 'c.class_name', 'cs.day', 'cs.start_time', 'cs.end_time'])
+            ->groupBy('teacher_id');
+    }
+
+    /** Versi tanpa query: bentrokkah jadwal kelas ini dengan daftar jadwal guru (hasil busyIndex)? */
+    public static function clashIn($rows, ClassModel $class): ?string
+    {
+        foreach ($class->schedules as $s) {
+            foreach ($rows as $r) {
+                if ((int) $r->class_id === (int) $class->id) {
+                    continue;
+                }
+
+                if ($r->day === $s->day
+                    && substr($r->start_time, 0, 5) < substr($s->end_time, 0, 5)
+                    && substr($r->end_time, 0, 5) > substr($s->start_time, 0, 5)) {
+                    return $r->class_name;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Tambah slot ketersediaan untuk beberapa hari sekaligus.
+     * Hari yang bertumpuk dengan slot lama dilewati.
+     *
+     * @return array [daftar hari yang ditambahkan, daftar hari yang dilewati]
+     */
+    public static function addSlots(int $teacherId, array $days, string $start, string $end, ?string $note, ?int $createdBy): array
+    {
+        $created = [];
+        $skipped = [];
+
+        foreach (array_unique($days) as $day) {
+            if (self::overlaps($teacherId, $day, $start, $end)) {
+                $skipped[] = $day;
+                continue;
+            }
+
+            TeacherAvailability::create([
+                'teacher_id' => $teacherId,
+                'day'        => $day,
+                'start_time' => $start,
+                'end_time'   => $end,
+                'note'       => $note,
+                'created_by' => $createdBy,
+            ]);
+
+            $created[] = $day;
+        }
+
+        return [$created, $skipped];
     }
 
     /**
@@ -181,5 +249,43 @@ class TeacherAvailabilityService
     private static function minutes(string $time): int
     {
         return ((int) substr($time, 0, 2)) * 60 + (int) substr($time, 3, 2);
+    }
+
+    /** Memilih ID guru yang cocok dengan seluruh jadwal mingguan kelas. */
+    public static function matchingTeacherIds(ClassModel $class): Collection
+    {
+        $class->loadMissing('schedules');
+
+        if ($class->schedules->isEmpty()) {
+            return collect();
+        }
+
+        return TeacherAvailability::with('teacher')->get()
+            ->filter(fn ($a) => $a->teacher !== null)
+            ->groupBy('teacher_id')
+            ->filter(fn ($slots, $teacherId) => self::coversClass($slots, $class)
+                && self::conflictWith((int) $teacherId, $class) === null)
+            ->keys()
+            ->values();
+    }
+
+    /**
+     * Tawarkan ke seluruh guru
+     */
+    public static function isOfferedTo(int $teacherId, ClassModel $class): bool
+    {
+        $class->loadMissing('schedules');
+
+        if ($class->schedules->isEmpty()) {
+            return false;
+        }
+
+        $mine = TeacherAvailability::where('teacher_id', $teacherId)->get();
+
+        if (self::coversClass($mine, $class) && self::conflictWith($teacherId, $class) === null) {
+            return true;
+        }
+
+        return self::matchingTeacherIds($class)->isEmpty();
     }
 }

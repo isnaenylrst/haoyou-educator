@@ -45,6 +45,14 @@ class ProgressReport extends Model
 
         // Konten dan review Kurikulum
         'content',
+        'suggestion_box',
+        'assessment_data',
+        'curriculum_signature_path',
+        'owner_signature_path',
+        'owner_signed_by',
+        'owner_signed_at',
+        'replacement_class_count',
+        'overall_achievement_level',
         'attendance_present',
         'attendance_total',
         'reviewed_by',
@@ -53,18 +61,25 @@ class ProgressReport extends Model
         'returned_at',
         'submitted_at',
         'extended_until',
+        'header_data',
+        'document_edited_at',
+        'document_edited_by',
     ];
 
     protected $casts = [
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
-        'published_at' => 'datetime',
-        'followed_up_at' => 'datetime',
-        'content' => 'array',
-        'reviewed_at' => 'datetime',
-        'returned_at' => 'datetime',
-        'submitted_at' => 'datetime',
-        'extended_until' => 'date',
+        'created_at'      => 'datetime',
+        'updated_at'      => 'datetime',
+        'published_at'    => 'datetime',
+        'followed_up_at'  => 'datetime',
+        'content'         => 'array',
+        'assessment_data' => 'array',
+        'reviewed_at'     => 'datetime',
+        'returned_at'     => 'datetime',
+        'submitted_at'    => 'datetime',
+        'owner_signed_at' => 'datetime',
+        'extended_until'  => 'date',
+        'header_data'     => 'array',
+        'document_edited_at' => 'datetime',
     ];
 
     public function student()
@@ -87,10 +102,20 @@ class ProgressReport extends Model
         return $this->belongsTo(User::class, 'uploaded_by');
     }
 
-    /** Sudah di-ACC Kurikulum (baru boleh tampil ke siswa). */
+    public function reviewer()
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function ownerSigner()
+    {
+        return $this->belongsTo(User::class, 'owner_signed_by');
+    }
+
+    /** Sudah di-ACC Kurikulum (baru boleh tampil ke siswa dan admin). */
     public function getIsApprovedAttribute(): bool
     {
-        return $this->status === self::SUBMITTED
+        return in_array($this->status, [self::SUBMITTED, 'Published'], true)
             && $this->reviewed_at !== null;
     }
 
@@ -108,11 +133,11 @@ class ProgressReport extends Model
             && $this->returned_at !== null;
     }
 
-    /** Hanya report yang sudah di-ACC. */
+    /** Hanya report yang sudah di-ACC / Terbit. */
     public function scopeApproved($query)
     {
         return $query
-            ->where('status', self::SUBMITTED)
+            ->whereIn('status', [self::SUBMITTED, 'Published'])
             ->whereNotNull('reviewed_at');
     }
 

@@ -10,21 +10,23 @@ return new class extends Migration
      */
     public function up(): void
     {
-        DB::statement("
-            ALTER TABLE documents
-            MODIFY document_type ENUM(
-                'CV',
-                'Photo',
-                'Teacher Certificate',
-                'Agreement',
-                'SOP',
-                'Teacher Leave Letter',
-                'Other',
-                'SURAT_LIBUR',
-                'SURAT_DINAS',
-                'LOA'
-            ) NOT NULL
-        ");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("
+                ALTER TABLE documents
+                MODIFY document_type ENUM(
+                    'CV',
+                    'Photo',
+                    'Teacher Certificate',
+                    'Agreement',
+                    'SOP',
+                    'Teacher Leave Letter',
+                    'Other',
+                    'SURAT_LIBUR',
+                    'SURAT_DINAS',
+                    'LOA'
+                ) NOT NULL
+            ");
+        }
     }
 
     /**
@@ -32,17 +34,19 @@ return new class extends Migration
      */
     public function down(): void
     {
-        DB::statement("
-            ALTER TABLE documents
-            MODIFY document_type ENUM(
-                'CV',
-                'Photo',
-                'Teacher Certificate',
-                'Agreement',
-                'SOP',
-                'Teacher Leave Letter',
-                'Other'
-            ) NOT NULL
-        ");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("
+                ALTER TABLE documents
+                MODIFY document_type ENUM(
+                    'CV',
+                    'Photo',
+                    'Teacher Certificate',
+                    'Agreement',
+                    'SOP',
+                    'Teacher Leave Letter',
+                    'Other'
+                ) NOT NULL
+            ");
+        }
     }
 };

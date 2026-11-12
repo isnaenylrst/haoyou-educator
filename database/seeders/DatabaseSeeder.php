@@ -33,7 +33,7 @@ class DatabaseSeeder extends Seeder
             PaymentSeeder::class,
             MaterialSeeder::class,
             TeacherLeaveSeeder::class,
-            TeachingJournalSeeder::class,
+            // TeachingJournalSeeder::class,
             ClassSessionSeeder::class,
             AttendanceSeeder::class,
             MaterialVocabSeeder::class,
@@ -42,8 +42,7 @@ class DatabaseSeeder extends Seeder
             DocumentTemplateSeeder::class,
             DocumentSeeder::class,
             PrintTemplateSeeder::class,
-            DocumentSeeder::class,
-            PrintTemplateSeeder::class,
+            KurikulumModuleSeeder::class,
             VocabWordSeeder::class,   // data kosakata Belajar Vocab
         ]);
     }

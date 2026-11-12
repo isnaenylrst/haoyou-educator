@@ -23,6 +23,7 @@ class ClassEnrollment extends Model
         'activity_fee',
         'discount',
         'notes',
+        'requested_material',
         'payment_scheme',
         'status',
     ];

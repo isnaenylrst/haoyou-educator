@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Models\ClassEnrollment;
+use App\Models\ClassSession;
 use App\Models\PrintTemplate;
 use App\Models\Setting;
 use App\Models\Student;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Carbon;
 
 class RegistrationFormService
 {
@@ -35,6 +37,10 @@ class RegistrationFormService
             'level'  => 'Level',
             'paket'  => 'Nama paket',
             'jadwal' => 'Jadwal kelas (kosong kalau belum masuk kelas)',
+            'total_pertemuan'   => 'Total pertemuan paket',
+            'pertemuan_pertama' => 'Tanggal pertemuan pertama siswa ini',
+            'expired_date'      => 'Expired date (pertemuan pertama + 30 hari, untuk private)',
+            'materi'            => 'Materi yang diminta siswa (private)',
         ],
         'Biaya (siswa ini)' => [
             'biaya_pendaftaran' => 'Biaya pendaftaran',
@@ -44,17 +50,24 @@ class RegistrationFormService
             'diskon' => 'Diskon',
         ],
         'Pembayaran' => [
+            'dp_pendaftaran_nominal' => 'Biaya pendaftaran: nominal',
+            'dp_pendaftaran_tanggal' => 'Biaya pendaftaran: tanggal dibayar',
+            'dp_aktivitas_nominal'   => 'Biaya aktivitas: nominal',
+            'dp_aktivitas_tanggal'   => 'Biaya aktivitas: tanggal dibayar (kosong sampai lunas)',
+            'dp_awal_tanggal'        => 'Pembayaran pertama: tanggal',
+            'termin1_lunas_nominal'  => 'Termin 1 / Lunas / Pelunasan: nominal',
+            'termin1_lunas_tanggal'  => 'Termin 1 / Lunas / Pelunasan: tanggal',
             'dp_lunas_nominal' => 'DP/Lunas pertama: nominal',
             'dp_lunas_tanggal' => 'DP/Lunas pertama: tanggal',
             'dp_nominal'       => 'DP: nominal',
             'dp_tanggal'       => 'DP: tanggal',
             'lunas_nominal'    => 'Lunas/Pelunasan: nominal',
             'lunas_tanggal'    => 'Lunas/Pelunasan: tanggal',
-            'termin1_nominal'  => 'Termin 1: nominal',
+            'termin1_nominal'  => 'Termin 1: nominal (rencana jadwal, atau yang sudah dibayar)',
             'termin1_tanggal'  => 'Termin 1: tanggal',
-            'termin2_nominal'  => 'Termin 2: nominal',
+            'termin2_nominal'  => 'Termin 2: nominal (rencana jadwal, atau yang sudah dibayar)',
             'termin2_tanggal'  => 'Termin 2: tanggal',
-            'termin3_nominal'  => 'Termin 3: nominal',
+            'termin3_nominal'  => 'Termin 3: nominal (rencana jadwal, atau yang sudah dibayar)',
             'termin3_tanggal'  => 'Termin 3: tanggal',
         ],
     ];
@@ -87,7 +100,12 @@ class RegistrationFormService
         $key = $enrollment->private_package_id ? 'form_private' : 'form_regular';
         $template = PrintTemplate::where('key', $key)->firstOrFail();
 
-        return $this->toPdf($this->render($template->content, $this->valuesFor($student, $enrollment)));
+        // Tabel pembayaran formulir reguler mengikuti skema siswa (Termin atau Lunas)
+        return $this->toPdf($this->render(
+            $template->content,
+            $this->valuesFor($student, $enrollment),
+            $enrollment->payment_scheme === 'Termin',
+        ));
     }
 
     /** Pratinjau dengan data contoh (isi editor yang belum disimpan pun bisa). */
@@ -103,8 +121,15 @@ class RegistrationFormService
         return $this->installments ??= new PaymentInstallmentService();
     }
 
-    private function render(string $html, array $values): string
+    /**
+     * @param  bool|null  $termin  true = skema Termin, false = skema Lunas, null = tampilkan keduanya (pratinjau editor)
+     */
+    private function render(string $html, array $values, ?bool $termin = null): string
     {
+        // Bagian template khusus skema: <!--JIKA_TERMIN-->...<!--/JIKA_TERMIN--> dan <!--JIKA_LUNAS-->...<!--/JIKA_LUNAS-->
+        $html = $this->block($html, 'JIKA_TERMIN', $termin !== false);
+        $html = $this->block($html, 'JIKA_LUNAS', $termin !== true);
+
         $map = [];
 
         foreach ($values as $key => $value) {
@@ -114,6 +139,15 @@ class RegistrationFormService
 
         // Hanya mengganti penanda yang dikenal. Isi template tidak pernah dijalankan sebagai kode.
         return strtr($html, $map);
+    }
+
+    private function block(string $html, string $tag, bool $keep): string
+    {
+        return preg_replace_callback(
+            '/<!--\s*' . $tag . '\s*-->(.*?)<!--\s*\/' . $tag . '\s*-->/s',
+            fn ($matches) => $keep ? $matches[1] : '',
+            $html
+        );
     }
 
     private function toPdf(string $body): string
@@ -140,6 +174,8 @@ class RegistrationFormService
         $lesTotal = (float) ($this->installments()->packageTotal($enrollment) ?? 0);
         $discount = (float) $enrollment->discount;
 
+        $firstSession = $this->firstSessionFor($enrollment);
+
         $values = [
             'logo'                => $this->logoTag(),
             'tanggal_pendaftaran' => e($enrollment->enrollment_date?->format('d/m/Y')),
@@ -160,6 +196,16 @@ class RegistrationFormService
             'level'  => e($this->levelLabel($student)),
             'paket'  => e($package?->package_name),
             'jadwal' => implode('<br>', array_map('e', $this->scheduleLines($enrollment))),
+
+            'total_pertemuan'   => e($package?->total_meetings),
+            'pertemuan_pertama' => $firstSession ? e(Carbon::parse($firstSession->session_date)->format('d/m/Y')) : '',
+            // Penggantian hari private berlaku maksimal 30 hari sejak pertemuan pertama
+            'expired_date'      => ($firstSession && $enrollment->private_package_id)
+                ? e(Carbon::parse($firstSession->session_date)->addDays(30)->format('d/m/Y'))
+                : '',
+            'materi'            => $enrollment->private_package_id && filled($enrollment->requested_material)
+                ? nl2br(e(trim($enrollment->requested_material)))
+                : '',
 
             'biaya_pendaftaran' => $this->rupiah($registrationFee),
             'biaya_aktivitas'   => $this->rupiah($activityFee),
@@ -197,7 +243,116 @@ class RegistrationFormService
             $values[$slot . '_tanggal'] = $payment?->payment_date?->format('d/m/Y') ?? '';
         }
 
+        // Tabel pembayaran formulir reguler, satu kolom per komponen:
+        //   Pendaftaran | Aktivitas | Termin 1 / Lunas | Termin 2 | Termin 3
+        // Nominal komponen langsung diisi (termin: sisa biaya les dibagi 3). Tanggal diisi dari
+        // pembayaran yang benar-benar tercatat, jadi bisa berbeda per kolom (mis. aktivitas dibayar
+        // bersama Termin 1). Tanggal dikosongkan sampai komponennya lunas, diisi tangan di formulir.
+        $ordered = $enrollment->packagePayments->sortBy('id')->values();
+        $first   = $ordered->get(0);
+        $due     = $this->installments()->componentsDue($enrollment);
+        $fmt     = fn ($date) => $date?->format('d/m/Y') ?? '';
+
+        $previous = 0.0;
+        $regPaid  = 0.0;
+        $actPaid  = 0.0;
+        $regDate  = null;
+        $actDate  = null;
+        $lesByStage = [];
+
+        foreach ($ordered as $payment) {
+            $amount = (float) $payment->amount_paid;
+            $parts  = $this->installments()->paymentComponents($enrollment, $previous, $amount);
+
+            $regPaid += $parts['pendaftaran'];
+            $actPaid += $parts['aktivitas'];
+
+            if ($parts['pendaftaran'] > 0) {
+                $regDate = $payment->payment_date;
+            }
+
+            if ($parts['aktivitas'] > 0) {
+                $actDate = $payment->payment_date;
+            }
+
+            $lesByStage[$payment->payment_stage] = ['amount' => $parts['les'], 'date' => $payment->payment_date];
+            $previous += $amount;
+        }
+
+        $values['dp_awal_tanggal']        = $fmt($first?->payment_date);
+        $values['dp_pendaftaran_nominal'] = $due['pendaftaran'] > 0 ? $this->rupiah($due['pendaftaran']) : '';
+        $values['dp_pendaftaran_tanggal'] = ($due['pendaftaran'] > 0 && $regPaid + 0.005 >= $due['pendaftaran']) ? $fmt($regDate) : '';
+        $values['dp_aktivitas_nominal']   = $due['aktivitas'] > 0 ? $this->rupiah($due['aktivitas']) : '';
+        $values['dp_aktivitas_tanggal']   = ($due['aktivitas'] > 0 && $actPaid + 0.005 >= $due['aktivitas']) ? $fmt($actDate) : '';
+
+        $values['termin1_lunas_nominal'] = '';
+        $values['termin1_lunas_tanggal'] = '';
+
+        if ($first) {
+            $dp = (float) $first->amount_paid;
+
+            if ($first->payment_stage === 'Lunas') {
+                // Dibayar sekaligus: biaya les masuk kolom Lunas
+                $les = $lesByStage['Lunas'] ?? null;
+
+                if ($les && $les['amount'] > 0) {
+                    $values['termin1_lunas_nominal'] = $this->rupiah($les['amount']);
+                    $values['termin1_lunas_tanggal'] = $fmt($les['date']);
+                }
+            } elseif ($enrollment->payment_scheme === 'Termin') {
+                // Termin 1-3: nominal sesuai kesepakatan (sisa biaya les dibagi 3); yang sudah dibayar memakai
+                // nominal sebenarnya. Aktivitas yang belum lunas ada di kolom Aktivitas, bukan di Termin 1.
+                $shares = $this->installments()->terminLesShares($enrollment, $dp)['shares'];
+
+                foreach ([1, 2, 3] as $n) {
+                    $paid   = $lesByStage['Termin ' . $n] ?? null;
+                    $amount = $paid ? $paid['amount'] : $shares[$n - 1];
+                    $text   = $amount > 0 ? $this->rupiah($amount) : '';
+                    $date   = $paid ? $fmt($paid['date']) : '';
+
+                    $values['termin' . $n . '_nominal'] = $text;
+                    $values['termin' . $n . '_tanggal'] = $date;
+
+                    if ($n === 1) {
+                        $values['termin1_lunas_nominal'] = $text;
+                        $values['termin1_lunas_tanggal'] = $date;
+                    }
+                }
+            } else {
+                // Skema Lunas dengan DP: pelunasan membayar sisa (aktivitas + biaya les)
+                $paid   = $lesByStage['Pelunasan'] ?? null;
+                $amount = $paid
+                    ? $paid['amount']
+                    : $this->installments()->terminLesShares($enrollment, $dp)['les_remaining'];
+
+                if ($amount > 0) {
+                    $values['termin1_lunas_nominal'] = $this->rupiah($amount);
+                    $values['termin1_lunas_tanggal'] = $paid ? $fmt($paid['date']) : '';
+                }
+            }
+        }
+
         return $values;
+    }
+
+    /**
+     * Pertemuan pertama siswa ini: pertemuan reguler pertama kelas pada/setelah tanggal pendaftaran
+     * (siswa yang masuk di tengah kelas dihitung dari pertemuan berikutnya). Jatuh ke pertemuan
+     * pertama kelas kalau tidak ada yang lebih baru.
+     */
+    private function firstSessionFor(ClassEnrollment $enrollment): ?ClassSession
+    {
+        if (! $enrollment->class_id) {
+            return null;
+        }
+
+        $base = ClassSession::where('class_id', $enrollment->class_id)->where('kind', 'Regular');
+
+        return (clone $base)
+            ->whereDate('session_date', '>=', $enrollment->enrollment_date?->toDateString() ?? now()->toDateString())
+            ->orderBy('session_date')
+            ->first()
+            ?? $base->orderBy('session_date')->first();
     }
 
     private function sampleValues(): array

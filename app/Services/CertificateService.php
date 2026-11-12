@@ -223,22 +223,30 @@ class CertificateService
         return $certificate;
     }
 
-    /** Pastikan file PDF ada; dibuat ulang bila hilang. Return path di disk 'public'. */
-    public function ensurePdf(Certificate $certificate): string
+    /** Pastikan file PDF ada; dibuat ulang bila hilang atau dipaksa generate ulang. Return path di disk 'public'. */
+    public function ensurePdf(Certificate $certificate, bool $force = false): string
     {
-        if ($certificate->file_path && Storage::disk('public')->exists($certificate->file_path)) {
+        if (!$force && $certificate->file_path && Storage::disk('public')->exists($certificate->file_path)) {
             return $certificate->file_path;
         }
 
-        $verifyUrl = route('certificates.verify', $certificate->verification_code);
+        $verifyCode = $certificate->verification_code ?: 'CERT-' . $certificate->id;
+        $verifyUrl = route('certificates.verify', $verifyCode);
         $qr = 'data:image/svg+xml;base64,' . base64_encode(
             QrCode::format('svg')->size(140)->margin(0)->generate($verifyUrl)
         );
 
+        $sigPath = null;
+        if ($certificate->owner_signature_path && Storage::disk('public')->exists($certificate->owner_signature_path)) {
+            $sigPath = storage_path('app/public/' . $certificate->owner_signature_path);
+        } elseif (file_exists(config('certificate.signature_path'))) {
+            $sigPath = config('certificate.signature_path');
+        }
+
         $pdf = Pdf::loadView('certificates.pdf', [
             'c'         => $certificate,
-            'logo'      => $this->dataUri(config('certificate.logo_path')),
-            'signature' => $this->dataUri(config('certificate.signature_path')),
+            'logo'      => file_exists(config('certificate.logo_path')) ? $this->dataUri(config('certificate.logo_path')) : '',
+            'signature' => $sigPath ? $this->dataUri($sigPath) : '',
             'qr'        => $qr,
         ])->setPaper('a4', 'landscape');
 

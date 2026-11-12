@@ -23,6 +23,10 @@
         <div class="alert alert-danger">{{ session('error') }}</div>
     @endif
 
+    @if ($errors->any())
+        <div class="alert alert-danger">{{ $errors->first() }}</div>
+    @endif
+
     {{-- Card --}}
     <div class="card border-0 shadow-sm rounded-4">
 
@@ -52,6 +56,17 @@
                         </div>
                     @endif
 
+                    @if (!empty($notif['attachment_path']))
+                        <div class="mt-2">
+                            <a href="{{ Storage::url($notif['attachment_path']) }}"
+                               target="_blank"
+                               class="btn btn-outline-secondary btn-sm">
+                                <i class="bi bi-paperclip me-1"></i>
+                                {{ $notif['attachment_name'] ?? 'Unduh Lampiran' }}
+                            </a>
+                        </div>
+                    @endif
+
                     @if (($notif['action']['kind'] ?? null) === 'task')
                         <form method="POST" action="{{ $notif['action']['url'] }}" class="d-flex gap-2 mt-2">
                             @csrf
@@ -69,6 +84,10 @@
 
                 @if (($notif['action']['kind'] ?? null) === 'done')
                     <span class="badge rounded-pill bg-success px-3 py-2">Selesai</span>
+                @elseif (in_array($notif['type'] ?? null, ['journal_missing', 'progress_due'], true))
+                    <span class="badge rounded-pill text-danger border border-danger px-3 py-2 bg-white">
+                        Belum Diisi
+                    </span>
                 @elseif ($isNew)
                     <span class="badge rounded-pill text-warning border border-warning px-3 py-2 bg-white">
                         Baru

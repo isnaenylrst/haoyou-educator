@@ -1,8 +1,8 @@
 @php
-    $passed   = $c->isPassed();
-    $cols     = count($c->scores) + 1;
+    $passed   = method_exists($c, 'isPassed') ? $c->isPassed() : true;
+    $cols     = count($c->scores ?? []) + 1;
     $tableW   = $cols * 120;
-    $label    = $c->level_name;
+    $label    = $c->level_name ?: ($c->course_name ?: 'Course');
     $title    = $passed ? 'Sertifikat Kelulusan' : 'Sertifikat Hasil Ujian';
     $desc     = $passed
         ? 'atas keberhasilan menyelesaikan program dan mengikuti ujian akhir <b>' . e($label) . '</b>'
@@ -48,7 +48,7 @@
   <div class="abs" style="top:288pt;">
     <table class="sans" style="margin:0 auto; border-collapse:collapse; width:{{ $tableW }}pt;">
       <tr>
-        @foreach ($c->scores as $name => $value)
+        @foreach (($c->scores ?? []) as $name => $value)
           <td style="border:0.75pt solid #CFCBBE; padding:6pt 4pt; text-align:center;">
             <div style="font-size:7.5pt; color:#5F5E5A; letter-spacing:1pt;">{{ strtoupper($name) }}</div>
             <div style="font-size:16pt; font-weight:bold;">{{ $value }}</div>
@@ -79,14 +79,18 @@
       <tr>
         <td style="width:220pt; text-align:left; vertical-align:bottom; font-size:8.5pt; color:#5F5E5A;">
           Diterbitkan di {{ config('certificate.issue_place') }}<br>
-          <span style="font-size:10pt; color:#23211C;">{{ $c->issued_at->translatedFormat('d F Y') }}</span>
+          <span style="font-size:10pt; color:#23211C;">{{ $c->issued_at ? $c->issued_at->translatedFormat('d F Y') : now()->translatedFormat('d F Y') }}</span>
         </td>
         <td style="width:260pt; text-align:center; vertical-align:bottom;">
           <img src="{{ $qr }}" style="width:52pt; height:52pt;"><br>
           <span style="font-size:7pt; color:#5F5E5A;">Pindai untuk verifikasi keaslian</span>
         </td>
         <td style="width:220pt; text-align:center; vertical-align:bottom;">
-          <img src="{{ $signature }}" style="height:50pt;"><br>
+          @if ($signature)
+            <img src="{{ $signature }}" style="height:50pt;"><br>
+          @else
+            <div style="height:50pt;"></div>
+          @endif
           <div style="border-top:0.75pt solid #23211C; padding-top:2pt; font-size:10pt;">{{ config('certificate.signer_name') }}</div>
           <div style="font-size:8pt; color:#5F5E5A;">{{ config('certificate.signer_title') }}</div>
         </td>

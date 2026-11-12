@@ -14,9 +14,11 @@ class TeacherMaterial extends Model
     protected $fillable = [
         'material_id',
         'teacher_id',
+        'class_id',
         'ppt_title',
         'ppt_file_path',
         'status',
+        'current_version',
         'review_note',
         'approved_by',
         'approved_at',
@@ -24,8 +26,19 @@ class TeacherMaterial extends Model
     ];
 
     protected $casts = [
-        'approved_at' => 'datetime',
+        'approved_at'     => 'datetime',
+        'current_version' => 'integer',
     ];
+
+    public function class()
+    {
+        return $this->belongsTo(ClassModel::class, 'class_id');
+    }
+
+    public function versions()
+    {
+        return $this->hasMany(TeacherMaterialVersion::class, 'teacher_material_id')->orderBy('version_number');
+    }
 
     public function material()
     {
