@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
             ClassSeeder::class,
             ClassEnrollmentSeeder::class,
             StudentSeeder::class,
+            StudentPointSeeder::class,
             ClassScheduleSeeder::class,
             TeacherAvailabilitySeeder::class,
             PaymentSeeder::class,
@@ -43,7 +44,7 @@ class DatabaseSeeder extends Seeder
             DocumentSeeder::class,
             PrintTemplateSeeder::class,
             KurikulumModuleSeeder::class,
-            VocabWordSeeder::class,   // data kosakata Belajar Vocab
+            // VocabWordSeeder::class,   // data kosakata Belajar Vocab
         ]);
     }
 }

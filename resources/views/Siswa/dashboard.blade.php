@@ -98,7 +98,7 @@
 
   <div class="flex flex-col gap-1.5">
     @forelse ($leaderboard as $item)
-      @php $saya = $item['nama'] === $student->name; @endphp
+      @php $saya = $item['id'] === $student->id; @endphp
 
       <div class="flex items-center gap-4 px-4 py-3.5 rounded-2xl text-[15px]
                   {{ $saya ? 'bg-[#FFF8D6] border border-[#F2D84A]' : '' }}">
