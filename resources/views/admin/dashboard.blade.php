@@ -21,6 +21,46 @@
             background: #EF4444;                                  /* merah solid */
         }
         .cp-missing { color: #DC2626; font-weight: 700; font-size: 12px; }
+
+        /* ---- Panel notifikasi dashboard ---- */
+        .nb-card { background: #fff; border: 1px solid #edeef1; border-radius: 16px; padding: 18px 20px 20px; margin-bottom: 20px; }
+        .nb-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+        .nb-head-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+        .nb-bell { position: relative; width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center;
+                   background: var(--yellow-soft, #fef9c3); color: var(--gold-dark, #a16207); font-size: 15px; flex-shrink: 0; }
+        .nb-bell.is-urgent { background: #fef2f2; color: #dc2626; }
+        .nb-bell-dot { position: absolute; top: -3px; right: -3px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+                       background: #dc2626; color: #fff; font-size: 10px; font-weight: 600; display: grid; place-items: center;
+                       border: 2px solid #fff; line-height: 1; }
+        .nb-head strong { display: block; font-size: 14.5px; font-weight: 600; color: #1f2937; line-height: 1.2; }
+        .nb-sub { display: block; font-size: 12px; font-weight: 400; color: #6b7280; margin-top: 2px; }
+        .nb-sub b { color: #dc2626; font-weight: 500; }
+        .nb-all { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: #374151;
+                  text-decoration: none; padding: 7px 12px; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff;
+                  transition: border-color .15s, background-color .15s; }
+        .nb-all:hover { border-color: var(--yellow, #facc15); background: #fffdf3; color: #111827; }
+        .nb-all i { font-size: 10px; }
+
+        .nb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+        a.nb-tile { position: relative; display: flex; align-items: center; gap: 12px; padding: 13px 14px 13px 16px;
+                    border: 1px solid #edeef1; border-radius: 12px; background: #fff; text-decoration: none; color: inherit;
+                    overflow: hidden; transition: border-color .15s, background-color .15s; }
+        a.nb-tile::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #f59e0b; }
+        a.nb-tile.is-urgent::before { background: #dc2626; }
+        a.nb-tile:hover { border-color: #d9dce1; background: #fbfbfc; color: inherit; }
+        a.nb-tile:focus-visible { outline: 2px solid var(--yellow, #facc15); outline-offset: 2px; }
+        .nb-ico { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; font-size: 14px;
+                  background: var(--yellow-soft, #fef9c3); color: var(--gold-dark, #a16207); }
+        .nb-tile.is-urgent .nb-ico { background: #fef2f2; color: #dc2626; }
+        .nb-txt { flex: 1; min-width: 0; }
+        .nb-txt strong { display: block; font-size: 13px; font-weight: 500; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .nb-txt span { display: block; font-size: 11.5px; font-weight: 400; color: #6b7280; margin-top: 1px; }
+        .nb-tile.is-urgent .nb-txt span { color: #dc2626; font-weight: 500; }
+        .nb-num { font-size: 17px; font-weight: 600; color: #374151; line-height: 1; }
+
+        .nb-empty { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 12px; background: #ecfdf5; color: #166534; font-size: 12.5px; }
+        .nb-empty i { font-size: 18px; }
+        .nb-empty strong { display: block; color: #14532d; font-size: 13px; font-weight: 600; }
     </style>
 @endpush
 
@@ -39,67 +79,63 @@
     </div>
 
     {{-- =====================================================
-        PRIORITY
+        NOTIFIKASI PER SECTION
     ===================================================== --}}
-    <div class="priority-card">
-        <div class="priority-title">
-            <span class="danger-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
-            <strong>Prioritas Hari Ini</strong>
-            <span>{{ $prioritas['total'] }} hal perlu ditindaklanjuti</span>
+    @php
+        $notifSections = \App\Services\AdminNotificationService::SECTIONS;
+        $notifCounts   = $notif['counts'] ?? [];
+        $notifUrgent   = $notif['urgent'] ?? [];
+        $notifIcons    = [
+            'siswa' => 'fa-user-graduate', 'kelas' => 'fa-chalkboard-user', 'jurnal' => 'fa-book-open',
+            'pembayaran' => 'fa-money-bill-wave', 'progress' => 'fa-file-lines',
+            'pengajuan' => 'fa-receipt', 'sop' => 'fa-clipboard-list',
+        ];
+    @endphp
+
+    @php $notifUrgentTotal = array_sum($notifUrgent); @endphp
+
+    <div class="nb-card">
+        <div class="nb-head">
+            <div class="nb-head-left">
+                <span class="nb-bell {{ $notifUrgentTotal > 0 ? 'is-urgent' : '' }}">
+                    <i class="fa-regular fa-bell"></i>
+                    @if ($notif['total'] > 0)<span class="nb-bell-dot">{{ $notif['total'] > 99 ? '99+' : $notif['total'] }}</span>@endif
+                </span>
+                <div>
+                    <strong>Notifikasi</strong>
+                    <span class="nb-sub">
+                        {{ $notif['total'] }} hal perlu ditindaklanjuti
+                        @if ($notifUrgentTotal > 0) &middot; <b>{{ $notifUrgentTotal }} mendesak</b> @endif
+                    </span>
+                </div>
+            </div>
+            <a href="{{ route('admin.notifikasi.index') }}" class="nb-all">
+                Lihat semua <i class="fa-solid fa-chevron-right"></i>
+            </a>
         </div>
 
-        <div class="priority-items">
-
-            {{-- Kelas berakhir hari ini (hari H) --}}
-            @foreach ($prioritas['hari_h'] as $k)
-                <div class="priority-item">
-                    <div class="priority-icon red"><i class="fa-solid fa-flag-checkered"></i></div>
-                    <div class="priority-text">
-                        <strong>{{ $k->class_name }} berakhir hari ini</strong>
-                        <span>Guru {{ $k->teacher->name ?? '-' }} · {{ $k->students_count }} siswa</span>
-                    </div>
-                </div>
-            @endforeach
-
-            {{-- Kelas akan berakhir (sebelum) --}}
-            @foreach ($prioritas['sebelum'] as $k)
-                <div class="priority-item">
-                    <div class="priority-icon yellow"><i class="fa-solid fa-hourglass-end"></i></div>
-                    <div class="priority-text">
-                        <strong>{{ $k->class_name }} akan berakhir</strong>
-                        <span>{{ (int) abs(today()->diffInDays($k->end_date)) }} hari lagi · Guru {{ $k->teacher->name ?? '-' }}</span>
-                    </div>
-                </div>
-            @endforeach
-
-            {{-- Setelah berakhir: konfirmasi ke guru --}}
-            @foreach ($prioritas['setelah'] as $k)
-                <div class="priority-item">
-                    <div class="priority-icon red"><i class="fa-solid fa-user-check"></i></div>
-                    <div class="priority-text">
-                        <strong>Konfirmasi ke guru: {{ $k->class_name }}</strong>
-                        <span>Berakhir {{ $k->end_date->translatedFormat('d M Y') }} ({{ (int) abs($k->end_date->diffInDays(today())) }} hari lalu) · Guru {{ $k->teacher->name ?? '-' }}</span>
-                    </div>
-                </div>
-            @endforeach
-
-            {{-- Follow up siswa: progress report sudah terverifikasi kurikulum --}}
-            @foreach ($prioritas['follow_up'] as $r)
-                <div class="priority-item">
-                    <div class="priority-icon yellow"><i class="fa-solid fa-phone-volume"></i></div>
-                    <div class="priority-text">
-                        <strong>Follow up {{ $r->student->name ?? '-' }}</strong>
-                        <span>Progress report {{ $r->report_period }} · {{ $r->enrollment->class->class_name ?? '' }} sudah terverifikasi kurikulum</span>
-                    </div>
-                </div>
-            @endforeach
-
-            @if ($prioritas['total'] === 0)
-                <div class="priority-item">
-                    <div class="priority-text"><strong>Tidak ada prioritas hari ini 🎉</strong></div>
-                </div>
-            @endif
-        </div>
+        @if ($notif['total'] === 0)
+            <div class="nb-empty">
+                <i class="fa-solid fa-circle-check"></i>
+                <div><strong>Semua sudah beres</strong>Tidak ada notifikasi yang perlu ditindaklanjuti.</div>
+            </div>
+        @else
+            {{-- Satu kotak per section; klik membuka halaman Notifikasi pada tab section itu --}}
+            <div class="nb-grid">
+                @foreach ($notifSections as $key => $label)
+                    @continue(($notifCounts[$key] ?? 0) === 0)
+                    @php $isUrgent = ($notifUrgent[$key] ?? 0) > 0; @endphp
+                    <a href="{{ route('admin.notifikasi.index', ['tab' => $key]) }}" class="nb-tile {{ $isUrgent ? 'is-urgent' : '' }}">
+                        <span class="nb-ico"><i class="fa-solid {{ $notifIcons[$key] ?? 'fa-bell' }}"></i></span>
+                        <span class="nb-txt">
+                            <strong>{{ $label }}</strong>
+                            <span>{{ $isUrgent ? $notifUrgent[$key] . ' mendesak' : 'Perlu tindakan' }}</span>
+                        </span>
+                        <span class="nb-num">{{ $notifCounts[$key] }}</span>
+                    </a>
+                @endforeach
+            </div>
+        @endif
     </div>
 
     {{-- =====================================================

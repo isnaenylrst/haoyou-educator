@@ -697,6 +697,17 @@ a.icon-btn {
     max-width: 1000px;          /* ukuran besar: Detail & Edit Siswa */
 }
 
+.modal-overlay > .modal,
+.sd-modal-overlay > .sd-modal {
+    position: relative;
+    top: auto;
+    left: auto;
+    height: auto;
+    margin: auto;
+    z-index: auto;
+    outline: 0;
+}
+
 /* form membungkus head/body/foot, jadi ikut jadi kolom */
 .modal > form {
     display: flex;

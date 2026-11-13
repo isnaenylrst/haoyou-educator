@@ -12,7 +12,9 @@ use App\Models\ProgressReport;
 use App\Models\Student;
 use App\Models\TeacherAvailability;
 use App\Models\TeachingJournal;
+use App\Services\AdminNotificationService;
 use App\Services\MissingJournalFinder;
+use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
 
@@ -50,13 +52,17 @@ class DashboardController extends Controller
     private const DAY_NAMES = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
     private const MIN_FREE_MINUTES = 30;
 
-    public function index()
+    public function index(AdminNotificationService $notifications)
     {
         $today = today();
 
+        // Ringkasan notifikasi per section (sama dengan yang dipakai bell)
+        $notif = $notifications->summary();
+        Cache::put(AdminNotificationService::CACHE_KEY, $notif, 60);
+
         return view('admin.dashboard', [
             'stats'     => $this->stats($today),
-            'prioritas' => $this->prioritas($today),
+            'notif'     => $notif,
             'programAktif'  => $this->programAktif(),
             'jadwalHariIni' => $this->jadwalHariIni($today),
             'guruTersedia'  => $this->guruTersedia($today),
@@ -449,50 +455,6 @@ class DashboardController extends Controller
             'menunggu_jadwal_kelas' => ClassEnrollment::where('status', self::ENROLL_WAITING)->count(),
 
             'kelas_berjalan' => ClassModel::where('status', self::CLASS_RUNNING)->count(),
-        ];
-    }
-
-    private function prioritas(Carbon $today): array
-    {
-        $kelas = fn () => ClassModel::with('teacher')
-            ->withCount(['enrollments as students_count' => fn ($q) =>
-                $q->whereIn('status', self::COUNTED_ENROLLMENT_STATUSES)]);
-
-        $sebelum = $kelas()
-            ->where('status', '!=', self::CLASS_CLOSED)
-            ->whereBetween('end_date', [
-                $today->copy()->addDay(),
-                $today->copy()->addDays(self::DAYS_BEFORE_END),
-            ])
-            ->orderBy('end_date')
-            ->get();
-
-        $hariH = $kelas()
-            ->where('status', '!=', self::CLASS_CLOSED)
-            ->whereDate('end_date', $today)
-            ->get();
-
-        $setelah = $kelas()
-            ->where('status', '!=', self::CLASS_CLOSED)
-            ->whereBetween('end_date', [
-                $today->copy()->subDays(self::DAYS_AFTER_END),
-                $today->copy()->subDay(),
-            ])
-            ->orderByDesc('end_date')
-            ->get();
-
-        $followUp = ProgressReport::with(['student', 'enrollment.class'])
-            ->where('status', self::REPORT_VERIFIED)
-            ->where('updated_at', '>=', $today->copy()->subDays(self::FOLLOW_UP_DAYS))
-            ->orderBy('updated_at')
-            ->get();
-
-        return [
-            'sebelum'   => $sebelum,
-            'hari_h'    => $hariH,
-            'setelah'   => $setelah,
-            'follow_up' => $followUp,
-            'total'     => $sebelum->count() + $hariH->count() + $setelah->count() + $followUp->count(),
         ];
     }
 }

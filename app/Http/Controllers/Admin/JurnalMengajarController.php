@@ -101,7 +101,7 @@ class JurnalMengajarController extends Controller
 
         // Cari sesi yang sudah lewat tetapi jurnalnya belum ada.
         $missing = $this->finder
-            ->find($from, $to, $teacherId)
+            ->find($from, $to, $teacherId, true)   // true: pengganti yang sudah ACC ikut dihitung, walau Kurikulum belum review
             ->when(
                 $classId,
                 fn ($items) => $items
@@ -273,7 +273,7 @@ class JurnalMengajarController extends Controller
             );
         }
 
-        $items = $this->finder->find($from, $to, $teacher->id);
+        $items = $this->finder->find($from, $to, $teacher->id, true);
 
         if (! empty($data['keys'])) {
             $items = $items

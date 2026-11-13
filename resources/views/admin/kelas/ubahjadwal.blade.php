@@ -322,7 +322,7 @@
         return `<div class="ms-item" id="ses_item_${s.id}">
             <div>
                 <div class="ms-item-name">Pertemuan ke-${s.number ?? '-'} &middot; ${escapeHtml(s.date_label)}</div>
-                <div class="ses-meta">${escapeHtml(s.start)}–${escapeHtml(s.end)} &middot; ${escapeHtml(place)} &middot; ${escapeHtml(s.teacher || 'Belum ada guru')}</div>
+                <div class="ses-meta">${escapeHtml(s.start)}–${escapeHtml(s.end)} &middot; ${escapeHtml(place)} &middot; ${escapeHtml(s.teacher || 'Belum ada guru')}${s.replacement ? ' &middot; <strong>Pengganti: ' + escapeHtml(s.replacement.name) + '</strong>' + (s.replacement.awaiting_curriculum ? ' <span class="badge badge-pending">Menunggu ACC Kurikulum</span>' : '') : ''}</div>
                 ${changed}
             </div>
             <div class="ses-actions">

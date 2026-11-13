@@ -14,6 +14,7 @@ use App\Models\ProgramPackage;
 use App\Models\Teacher;
 use App\Models\TeacherAvailability;
 use App\Models\TeacherLeave;
+use App\Support\AdminLeaveVisibility;
 use App\Models\TeachingJournal;
 use App\Models\ClassEnrollment;
 use App\Models\ClassSession;
@@ -431,12 +432,14 @@ class KelasController extends Controller
     {
         $kelas = ClassModel::findOrFail($id);
 
-        // Kelas yang sudah punya pertemuan bertanggal: jadwal mingguan, tanggal mulai, dan mode kelas
-        // dikunci. Perubahan jadwal dilakukan lewat "Ubah Jadwal" di daftar pertemuan kelas.
+        // Kelas yang sudah punya pertemuan bertanggal: jadwal mingguan dan tanggal mulai dikunci
+        // (ubah lewat "Ubah Jadwal" di daftar pertemuan kelas). Mode kelas (Offline/Online) tetap
+        // boleh diganti: ruangan jadwal dan pertemuan yang belum berlangsung ikut menyesuaikan.
         $hasSessions    = ClassSession::where('class_id', $kelas->id)->exists();
+        $oldMode        = $kelas->delivery_mode;
         $data        = $this->validated($request, $kelas, $hasSessions);
 
-        DB::transaction(function () use ($kelas, $data, $hasSessions) {
+        DB::transaction(function () use ($kelas, $data, $hasSessions, $oldMode) {
             // Tipe & paket sengaja TIDAK diubah setelah kelas dibuat.
             $kelas->forceFill([
                 'level_id'      => $data['level_id'],
@@ -453,10 +456,50 @@ class KelasController extends Controller
 
             if (! $hasSessions) {
                 $this->syncSchedules($kelas, $data['schedules']);
+            } elseif ($oldMode !== $data['delivery_mode']) {
+                $this->applyDeliveryModeChange($kelas, $data['delivery_mode'], $data['schedules']);
             }
         });
 
         return redirect()->route('admin.kelas')->with('success', 'Kelas berhasil diperbarui.');
+    }
+
+    /**
+     * Kelas yang sudah punya pertemuan berganti mode (Offline <-> Online).
+     * - Ruangan jadwal mingguan: Online -> "Online"; Offline -> ruangan yang dipilih admin.
+     * - Pertemuan yang BELUM berlangsung (Scheduled, tanggal hari ini ke depan) ikut menyesuaikan
+     *   ruangan & jenis lokasi. Pertemuan yang sudah berlangsung/dibatalkan dan Home Visit tidak diubah.
+     */
+    private function applyDeliveryModeChange(ClassModel $kelas, string $newMode, array $schedules): void
+    {
+        $roomBySchedule = collect($schedules)
+            ->filter(fn ($r) => ! empty($r['id']))
+            ->mapWithKeys(fn ($r) => [(int) $r['id'] => $r['room'] ?? null]);
+
+        foreach ($kelas->schedules()->get() as $sc) {
+            if ($roomBySchedule->has($sc->id)) {
+                $sc->forceFill(['room' => $roomBySchedule[$sc->id]])->save();
+            }
+        }
+
+        $upcoming = ClassSession::with('schedule')
+            ->where('class_id', $kelas->id)
+            ->where('kind', 'Regular')
+            ->where('status', 'Scheduled')
+            ->whereDate('session_date', '>=', today())
+            ->where(fn ($q) => $q->whereNull('location_type')->orWhere('location_type', '!=', 'Home Visit'))
+            ->get();
+
+        foreach ($upcoming as $session) {
+            if ($newMode === 'Online') {
+                $session->forceFill(['room' => 'Online', 'location_type' => 'Online'])->save();
+            } else {
+                $session->forceFill([
+                    'room'          => $roomBySchedule[$session->class_schedule_id] ?? $session->schedule?->room,
+                    'location_type' => 'Studio',
+                ])->save();
+            }
+        }
     }
 
     /* ============================================================
@@ -468,11 +511,23 @@ class KelasController extends Controller
         // kelas yang sudah punya guru dicek terhadap guru yang sekarang (bukan guru dari form).
         $request->merge(['teacher_id' => $kelas?->teacher_id]);
 
-        // Kelas yang sudah punya pertemuan: pakai jadwal, tanggal mulai, dan mode yang tersimpan
-        // (input form diabaikan). Cek guru di bawah tetap jalan terhadap jadwal yang berlaku.
+        // Kelas yang sudah punya pertemuan: pakai jadwal dan tanggal mulai yang tersimpan (input form
+        // diabaikan). Mode kelas boleh berubah. Cek guru di bawah tetap jalan terhadap jadwal yang berlaku.
         if ($kelas && $lockSchedule) {
+            $newMode = in_array($request->input('delivery_mode'), ['Offline', 'Online'], true)
+                ? $request->input('delivery_mode')
+                : $kelas->delivery_mode;
+
+            // Online -> Offline: ruangan tiap jadwal dipilih admin di form (dicocokkan lewat id jadwal).
+            // Selain itu ruangan tetap seperti tersimpan (Offline -> Online dijadikan "Online" di bawah).
+            $postedRooms = collect($request->input('schedules', []))
+                ->filter(fn ($r) => isset($r['id']))
+                ->mapWithKeys(fn ($r) => [(int) $r['id'] => $r['room'] ?? null]);
+
+            $needsRooms = $newMode === 'Offline' && $kelas->delivery_mode === 'Online';
+
             $request->merge([
-                'delivery_mode' => $kelas->delivery_mode,
+                'delivery_mode' => $newMode,
                 'start_date'    => Carbon::parse($kelas->start_date)->toDateString(),
                 'end_date'      => $kelas->end_date ? Carbon::parse($kelas->end_date)->toDateString() : null,
                 'schedules'     => $kelas->schedules()->get()->map(fn ($sc) => [
@@ -480,7 +535,7 @@ class KelasController extends Controller
                     'day'        => $sc->day,
                     'start_time' => substr($sc->start_time, 0, 5),
                     'end_time'   => substr($sc->end_time, 0, 5),
-                    'room'       => $sc->room,
+                    'room'       => $needsRooms ? ($postedRooms[$sc->id] ?? null) : $sc->room,
                 ])->all(),
             ]);
         }
@@ -969,6 +1024,15 @@ class KelasController extends Controller
             ->orderBy('start_time')
             ->get();
 
+        // Cuti dengan guru pengganti (tampil begitu pengganti ACC, tanpa menunggu Kurikulum)
+        $leaves = AdminLeaveVisibility::apply(
+            TeacherLeave::query()
+                ->with('replacementTeacher:id,name')
+                ->whereIn('class_schedule_id', $sessions->pluck('class_schedule_id')->filter()->unique()->values())
+        )->get()->keyBy(
+            fn ($l) => $l->class_schedule_id . '|' . \Illuminate\Support\Carbon::parse($l->leave_date)->toDateString()
+        );
+
         // Muat relasi jurnal hanya kalau relasinya memang ada di model TeachingJournal
         $journals = $sessions->pluck('journal')->filter()->values();
 
@@ -995,6 +1059,7 @@ class KelasController extends Controller
                 'room'           => $s->room,
                 'location_type'  => $s->location_type,
                 'teacher'        => $s->teacher?->name,
+                'replacement'    => $this->leaveReplacement($leaves, $s),
                 'status'         => $s->status,
                 'deviates'       => $s->deviatesFromPattern(),
                 'change_reason'  => $s->change_reason,
@@ -1016,6 +1081,22 @@ class KelasController extends Controller
                 ])->values(),
             ])
             ->values();
+    }
+
+    /** Guru pengganti (dari cuti) untuk satu pertemuan, atau null. */
+    private function leaveReplacement($leaves, ClassSession $s): ?array
+    {
+        $leave = $leaves->get($s->class_schedule_id . '|' . $s->session_date->toDateString())
+            ?? ($s->original_date ? $leaves->get($s->class_schedule_id . '|' . $s->original_date->toDateString()) : null);
+
+        if (! $leave || ! $leave->replacementTeacher) {
+            return null;
+        }
+
+        return [
+            'name'                => $leave->replacementTeacher->name,
+            'awaiting_curriculum' => AdminLeaveVisibility::awaitingCurriculum($leave),
+        ];
     }
 
     /** Ringkasan jurnal mengajar untuk satu pertemuan (admin hanya melihat). */

@@ -10,6 +10,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use App\View\Composers\AdminNotificationComposer;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -83,5 +84,7 @@ class AppServiceProvider extends ServiceProvider
 
             $view->with('levelAktif', $levelAktif);
         });
+
+        View::composer('admin.app', AdminNotificationComposer::class);
     }
 }

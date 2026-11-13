@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ClassSchedule;
 use App\Models\TeacherLeave;
+use App\Support\AdminLeaveVisibility;
 use App\Models\TeachingJournal;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -24,7 +25,12 @@ class MissingJournalFinder
         5 => 'Jumat', 6 => 'Sabtu', 7 => 'Minggu',
     ];
 
-    public function find(Carbon $from, Carbon $to, ?int $teacherId = null): Collection
+    /**
+     * @param bool $includeAcceptedPending  khusus Admin: cuti yang guru penggantinya SUDAH menerima ikut dianggap
+     *                                      berlaku walau Kurikulum belum review (status masih Pending), supaya
+     *                                      tidak terlewat bila Kurikulum lupa. Guru tetap memakai default (false).
+     */
+    public function find(Carbon $from, Carbon $to, ?int $teacherId = null, bool $includeAcceptedPending = false): Collection
     {
         $now = now();
         $today = $now->copy()->startOfDay();
@@ -68,7 +74,12 @@ class MissingJournalFinder
         // dengan guru pengganti => guru pengganti yang wajib mengisi jurnal.
         $leaves = TeacherLeave::query()
             ->with('replacementTeacher.user')
-            ->where('status', 'Approved')
+            ->where(function ($q) use ($includeAcceptedPending) {
+                // admin: pengganti yang sudah ACC ikut berlaku walau Kurikulum belum review
+                $includeAcceptedPending
+                    ? AdminLeaveVisibility::apply($q)
+                    : $q->where('status', 'Approved');
+            })
             ->whereBetween('leave_date', [$from->toDateString(), $to->toDateString()])
             ->get()
             ->keyBy(fn ($l) => $l->class_schedule_id . '|' . $l->leave_date->format('Y-m-d'));
@@ -119,6 +130,7 @@ class MissingJournalFinder
                     'class'         => $class,
                     'teacher'       => $responsible,
                     'is_substitute' => (bool) $leave,
+                    'awaiting_curriculum' => $leave && $leave->status !== 'Approved',
                     'date'          => $date->copy(),
                     'days_late'     => (int) $date->diffInDays($today, true),
                     'reminded_at'   => null,
