@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Curriculum;
 use App\Models\Teacher;
 use App\Models\User;
 use App\Models\Document;
@@ -48,12 +49,22 @@ class GuruController extends Controller
         $sedangTraining = Teacher::where('training_status', 'Training')->count();
         $lulusTraining  = Teacher::where('training_status', 'Passed')->count();
 
+        // Tabel Kurikulum (halaman sendiri-sendiri, paginasi terpisah)
+        $curriculums = Curriculum::with('user')
+            ->orderBy('name')
+            ->paginate(10, ['*'], 'kurikulum_page')
+            ->withQueryString();
+
+        $totalKurikulum = Curriculum::count();
+
         return view('admin.guru.index', compact(
             'teachers',
             'totalGuru',
             'guruAktif',
             'sedangTraining',
-            'lulusTraining'
+            'lulusTraining',
+            'curriculums',
+            'totalKurikulum'
         ));
     }
 

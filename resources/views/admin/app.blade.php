@@ -13,43 +13,18 @@
     {{-- Google Fonts --}}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" referrerpolicy="no-referrer" />
 
-    {{-- CSS Layout Admin --}}
+    {{-- Bootstrap (dipakai oleh halaman admin: grid, card, dropdown notifikasi, dll) --}}
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    {{-- CSS Layout Admin (HARUS setelah Bootstrap agar tidak tertimpa) --}}
     <link rel="stylesheet" href="{{ asset('css/admin/layout.css') }}">
 
     {{-- CSS Tambahan dari halaman --}}
     @stack('styles')
 
-    {{-- CSS Dropdown Profil + Logout --}}
-    <style>
-        .profile-dropdown { position: relative; }
-        .topbar-profile { cursor: pointer; user-select: none; }
-        .profile-caret { font-size: 11px; color: #8b8fa3; margin-left: 4px; transition: transform .15s; }
-        .profile-dropdown.open .profile-caret { transform: rotate(180deg); }
-
-        .profile-menu {
-            display: none; position: absolute; right: 0; top: calc(100% + 10px); min-width: 220px;
-            background: #fff; border: 1px solid #ececf2; border-radius: 14px; padding: 8px;
-            box-shadow: 0 10px 30px rgba(0,0,0,.08); z-index: 1050;
-        }
-        .profile-dropdown.open .profile-menu { display: block; }
-
-        .profile-menu-head { padding: 8px 12px; font-size: 12px; color: #8b8fa3; }
-        .profile-menu-head strong { color: #1d1d27; }
-
-        .profile-menu-item {
-            display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px;
-            border: 0; background: transparent; border-radius: 10px; text-align: left;
-            font: inherit; font-size: 14px; font-weight: 600; color: #1d1d27;
-            text-decoration: none; cursor: pointer;
-        }
-        .profile-menu-item:hover { background: #fff7cc; color: #1d1d27; }
-        .profile-menu-item.danger { color: #dc3545; }
-        .profile-menu-item.danger:hover { background: #fdecee; color: #dc3545; }
-        .profile-menu form { margin: 0; }
-    </style>
 </head>
 
 <body>
@@ -99,10 +74,10 @@
                     <span class="label">Calon Siswa</span>
                 </a>
 
-                <a href="{{ route('admin.request-belajar.index') }}" class="nav-item {{ request()->routeIs('admin.request-belajar.*') ? 'active' : '' }}">
+                {{-- <a href="{{ route('admin.request-belajar.index') }}" class="nav-item {{ request()->routeIs('admin.request-belajar.*') ? 'active' : '' }}">
                     <i class="fa-solid fa-book-open-reader nav-icon" title="Request Belajar Siswa"></i>
                     <span class="label">Request Belajar</span>
-                </a>
+                </a> --}}
             </div>
 
             {{-- AKADEMIK --}}
@@ -129,9 +104,14 @@
                     <span class="label">Jurnal Mengajar</span>
                 </a>
 
+                <a href="{{ route('admin.progress-report') }}" class="nav-item {{ request()->routeIs('admin.progress-report*') ? 'active' : '' }}">
+                    <i class="fa-solid fa-chart-line nav-icon" title="Progress Report"></i>
+                    <span class="label">Progress Report</span>
+                </a>
+
                 <a href="{{ route('admin.kurikulum-materi') }}" class="nav-item {{ request()->routeIs('admin.kurikulum-materi*') ? 'active' : '' }}">
                     <i class="fa-solid fa-book nav-icon" title="Kurikulum & Materi"></i>
-                    <span class="label">Kurikulum & Materi</span>
+                    <span class="label">Materi</span>
                 </a>
             </div>
 
@@ -141,7 +121,7 @@
 
                 <a href="{{ route('admin.guru.index') }}" class="nav-item {{ request()->routeIs('admin.guru.index') ? 'active' : '' }}">
                     <i class="fa-solid fa-chalkboard-user nav-icon" title="Guru"></i>
-                    <span class="label">Guru</span>
+                    <span class="label">Kurikulum & Guru</span>
                 </a>
             </div>
 
@@ -161,47 +141,64 @@
                 </a>
             </div>
 
-            {{-- LAPORAN --}}
-            <div class="nav-group">
-                <div class="nav-group-label">Laporan</div>
-
-                <a href="{{ route('admin.progress-report') }}" class="nav-item {{ request()->routeIs('admin.progress-report*') ? 'active' : '' }}">
-                    <i class="fa-solid fa-chart-line nav-icon" title="Progress Report"></i>
-                    <span class="label">Progress Report</span>
-                </a>
-
-                <a href="{{ route('admin.dokumen') }}" class="nav-item {{ request()->routeIs('admin.dokumen*') ? 'active' : '' }}">
-                    <i class="fa-solid fa-file-lines nav-icon" title="Dokumen"></i>
-                    <span class="label">Dokumen</span>
-                </a>
-
-                <a href="{{ route('admin.training.index') }}" class="nav-item {{ request()->routeIs('admin.training*') ? 'active' : '' }}">
-                    <i class="fa-solid fa-graduation-cap nav-icon" title="Materi Training"></i>
-                    <span class="label">Materi Training</span>
-                </a>
-            </div>
-
             {{-- PENGATURAN --}}
             <div class="nav-group">
-                <div class="nav-group-label">Pengaturan</div>
+                <div class="nav-group-label">Lainnya</div>
 
                 <a href="{{ route('admin.program-level') }}" class="nav-item {{ request()->routeIs('admin.program-level*') ? 'active' : '' }}">
                     <i class="fa-solid fa-layer-group nav-icon" title="Program & Level"></i>
                     <span class="label">Program & Level</span>
                 </a>
 
-                {{-- <a href="{{ route('admin.template-dokumen.index') }}" class="nav-item {{ request()->routeIs('admin.template-dokumen*') ? 'active' : '' }}">
-                    <i class="fa-solid fa-print nav-icon" title="Print Dokumen"></i>
-                    <span class="label">Print Dokumen</span>
-                </a> --}}
+                <a href="{{ route('admin.dokumen') }}" class="nav-item {{ request()->routeIs('admin.dokumen*', 'admin.template-dokumen.*') ? 'active' : '' }}">
+                    <i class="fa-solid fa-file-lines nav-icon" title="Dokumen"></i>
+                    <span class="label">Dokumen</span>
+                </a>
 
-                <a href="{{ route('admin.pengaturan.index') }}" class="nav-item {{ request()->routeIs('admin.pengaturan.*', 'admin.template-dokumen.*') ? 'active' : '' }}">
+                <a href="{{ route('admin.training.index') }}" class="nav-item {{ request()->routeIs('admin.training*') ? 'active' : '' }}">
+                    <i class="fa-solid fa-graduation-cap nav-icon" title="Materi Training"></i>
+                    <span class="label">SOP Admin</span>
+                </a>
+
+                {{-- <a href="{{ route('admin.pengaturan.index') }}" class="nav-item {{ request()->routeIs('admin.pengaturan.*', 'admin.template-dokumen.*') ? 'active' : '' }}">
                     <i class="fa-solid fa-gear nav-icon" title="Pengaturan"></i>
                     <span class="label">Pengaturan</span>
-                </a>
+                </a> --}}
             </div>
 
         </nav>
+
+        {{-- Simpan & pulihkan posisi scroll sidebar supaya tidak lompat ke atas setiap pindah halaman --}}
+        <script>
+            (function () {
+                var nav = document.querySelector('.sidebar-nav');
+                if (!nav) return;
+                var KEY = 'adminSidebarScroll';
+
+                function restore() {
+                    try {
+                        var y = sessionStorage.getItem(KEY);
+                        if (y !== null) nav.scrollTop = parseInt(y, 10) || 0;
+                    } catch (e) {}
+
+                    // pastikan menu aktif tetap terlihat (mis. saat pertama kali dibuka)
+                    var active = nav.querySelector('.nav-item.active');
+                    if (active) {
+                        var n = nav.getBoundingClientRect(), a = active.getBoundingClientRect();
+                        if (a.top < n.top || a.bottom > n.bottom) {
+                            active.scrollIntoView({ block: 'nearest' });
+                        }
+                    }
+                }
+
+                restore();                                   // sebelum halaman digambar (tanpa kedip)
+                window.addEventListener('load', restore);    // ulangi setelah font/ikon selesai dimuat
+
+                nav.addEventListener('scroll', function () {
+                    try { sessionStorage.setItem(KEY, nav.scrollTop); } catch (e) {}
+                }, { passive: true });
+            })();
+        </script>
 
         {{-- SIDEBAR FOOTER --}}
         <div class="sidebar-footer">
@@ -292,11 +289,13 @@
                             Masuk sebagai <strong>{{ $authUser->username ?? $userName }}</strong>
                         </div>
 
-                        <a href="{{ route('profil.index') }}" class="profile-menu-item">
-                            <i class="fa-solid fa-signature" style="color:#f5b700;"></i> Profil & Tanda Tangan
-                        </a>
+                        <div class="profile-menu-section">
+                            <a href="{{ route('profil.index') }}" class="profile-menu-item">
+                                <i class="fa-solid fa-user" style="color:#f5b700;"></i> Profil
+                            </a>
+                        </div>
 
-                        <form method="POST" action="{{ route('logout') }}">
+                        <form method="POST" action="{{ route('logout') }}" class="profile-menu-section">
                             @csrf
                             <button type="submit" class="profile-menu-item danger">
                                 <i class="fa-solid fa-right-from-bracket"></i> Keluar
@@ -325,7 +324,8 @@
 
         if (collapseButton) {
             collapseButton.addEventListener('click', function () {
-                app.classList.toggle('collapsed');
+                const collapsed = app.classList.toggle('collapsed');
+                collapseButton.textContent = collapsed ? '›' : '‹';
             });
         }
     });
@@ -354,6 +354,9 @@
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setOpen(false); });
     });
 </script>
+
+{{-- Bootstrap JS (untuk data-bs-toggle="dropdown", alert dismiss, dll) --}}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 {{-- Global JavaScript (Opsional) --}}
 @if(file_exists(public_path('js/app.js')))

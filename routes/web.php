@@ -48,6 +48,7 @@ use App\Http\Controllers\Admin\JurnalMengajarController;
 use App\Http\Controllers\Admin\ProgressReportController;
 use App\Http\Controllers\Admin\KurikulumMateriController;
 use App\Http\Controllers\Admin\DokumenController;
+use App\Http\Controllers\Admin\KurikulumController;
 use App\Http\Controllers\Admin\GuruController;
 use App\Http\Controllers\Admin\PembayaranController;
 use App\Http\Controllers\Admin\ProgramLevelController;
@@ -1102,6 +1103,18 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
             Route::delete('/{privatePackage}', [ProgramLevelController::class, 'destroyPrivate'])
                 ->name('program-level.private.destroy');
         });
+    });
+
+    // KURIKULUM (tabelnya tampil di halaman Guru, tanpa halaman detail)
+    Route::prefix('kurikulum-staf')->name('kurikulum-staf.')->controller(KurikulumController::class)->group(function () {
+        Route::post('/', 'store')
+            ->name('store');
+        Route::get('/{curriculum}/edit', 'edit')
+            ->name('edit');
+        Route::put('/{curriculum}', 'update')
+            ->name('update');
+        Route::delete('/{curriculum}', 'destroy')
+            ->name('destroy');
     });
 
     // GURU

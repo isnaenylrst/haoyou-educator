@@ -67,6 +67,10 @@ class ProfilController extends Controller
     {
         $user = $request->user();
 
+        if ($user->level?->nama_level === 'Admin') {
+            return back()->with('error', 'TTD Admin dibuat langsung saat memverifikasi setiap pengajuan, bukan dari profil.');
+        }
+
         $request->validate([
             'signature_file'   => ['nullable', 'image', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
             'signature_base64' => ['nullable', 'string'],
@@ -143,6 +147,10 @@ class ProfilController extends Controller
     public function destroySignature(Request $request)
     {
         $user = $request->user();
+
+        if ($user->level?->nama_level === 'Admin') {
+            return back()->with('error', 'TTD Admin dibuat langsung saat memverifikasi setiap pengajuan, bukan dari profil.');
+        }
 
         if ($user->signature_path) {
             Storage::disk('public')->delete($user->signature_path);

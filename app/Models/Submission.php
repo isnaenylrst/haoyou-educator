@@ -46,6 +46,8 @@ class Submission extends Model
         'curriculum_signature_path',
         'admin_id',
         'admin_verified_at',
+        'admin_signature_path',
+        'admin_signer_name',
         'admin_note',
         'owner_id',
         'owner_note',
@@ -105,4 +107,3 @@ class Submission extends Model
         };
     }
 }
-

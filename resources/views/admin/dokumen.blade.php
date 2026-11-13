@@ -24,6 +24,10 @@
         .x-frow-count { font-size: 13px; color: #8a8f9c; }
         .x-frow-arrow { margin-left: auto; color: #b3b7c2; }
         .x-frow form { margin: 0; }
+        .x-section-title {
+            margin: 26px 0 12px; font-size: 11px; font-weight: 700; letter-spacing: .06em;
+            text-transform: uppercase; color: #b8860b;
+        }
     </style>
 @endpush
 
@@ -99,6 +103,27 @@
             @empty
                 <div class="card x-empty">
                     <i class="fa-regular fa-folder-open"></i> Belum ada folder.
+                </div>
+            @endforelse
+        </div>
+
+        {{-- ========================= TEMPLATE DOKUMEN (di bawah folder) ========================= --}}
+        <div class="x-section-title">Template Dokumen</div>
+        <div class="x-flist">
+            @forelse (($templates ?? collect()) as $template)
+                <div class="x-frow">
+                    <a href="{{ route('admin.template-dokumen.edit', $template) }}" class="x-frow-link">
+                        <div class="x-frow-icon"><i class="fa-solid fa-file-signature"></i></div>
+                        <div>
+                            <div class="x-frow-name">{{ $template->name }}</div>
+                            <div class="x-frow-count">Terakhir diubah {{ $template->updated_at->format('d/m/Y H:i') }}</div>
+                        </div>
+                        <i class="fa-solid fa-chevron-right x-frow-arrow"></i>
+                    </a>
+                </div>
+            @empty
+                <div class="card x-empty">
+                    <i class="fa-regular fa-file-lines"></i> Belum ada template. Jalankan <code>php artisan db:seed --class=PrintTemplateSeeder</code>.
                 </div>
             @endforelse
         </div>

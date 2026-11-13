@@ -12,10 +12,15 @@
         <div>
             <div class="eyebrow">MANAJEMEN SDM</div>
             <h1>Guru</h1>
-            <p>Kelola data guru, status pelatihan, dan akun login guru.</p>
+            <p>Kelola data guru dan kurikulum, status pelatihan guru, serta akun login mereka.</p>
         </div>
 
         <div class="dashboard-header-actions">
+            <button type="button" class="btn btn-secondary" onclick="openKurikulumModal()">
+                <i class="fa-solid fa-plus"></i>
+                Tambah Kurikulum
+            </button>
+
             <button type="button" class="btn btn-primary" onclick="openGuruModal()">
                 <i class="fa-solid fa-plus"></i>
                 Tambah Guru
@@ -74,6 +79,10 @@
         </div>
     </div>
 
+    <div class="section-title" style="margin-top:8px;">
+        <i class="fa-solid fa-chalkboard-user"></i> Data Guru
+    </div>
+
     {{-- ========================= FILTER ========================= --}}
     <form method="GET" action="{{ route('admin.guru.index') }}" id="filterForm">
         <div class="toolbar">
@@ -103,15 +112,14 @@
     </form>
 
     <div class="card">
-        <table>
+        <table class="table-aligned">
             <thead>
                 <tr>
                     <th>Guru</th>
                     <th style="text-align: center; vertical-align: middle;">No. HP</th>
                     <th style="text-align: center; vertical-align: middle;">Tanggal Bergabung</th>
-                    <th style="text-align: center; vertical-align: middle;">Status Training</th>
                     <th style="text-align: center; vertical-align: middle;">Status</th>
-                    <th width="120" style="text-align: center;">Aksi</th>
+                    <th style="text-align: center;">Aksi</th>
                 </tr>
             </thead>
 
@@ -136,21 +144,6 @@
 
                         <td style="text-align: center; vertical-align: middle;">
                             {{ $teacher->join_date ? \Carbon\Carbon::parse($teacher->join_date)->format('d M Y') : '-' }}
-                        </td>
-
-                        <td style="text-align: center; vertical-align: middle;">
-                            @php
-                                $trainingClass = match ($teacher->training_status) {
-                                    'Training' => 'badge-pending',
-                                    'Passed'   => 'badge-completed',
-                                    'Failed'   => 'badge-cancelled',
-                                    default    => 'badge-pending',
-                                };
-                            @endphp
-                            <span class="badge {{ $trainingClass }}">
-                                <span class="badge-dot"></span>
-                                {{ $teacher->training_status ?? '-' }}
-                            </span>
                         </td>
 
                         <td style="text-align: center; vertical-align: middle;">
@@ -189,7 +182,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" style="text-align:center;padding:50px;color:#888;">
+                        <td colspan="5" style="text-align:center;padding:50px;color:#888;">
                             Belum ada data guru.
                         </td>
                     </tr>
@@ -245,6 +238,143 @@
 
                             @if ($teachers->hasMorePages())
                                 <li class="page-item"><a class="page-btn" href="{{ $teachers->nextPageUrl() }}" rel="next"><i class="fa-solid fa-chevron-right"></i></a></li>
+                            @else
+                                <li class="page-item disabled"><span class="page-btn"><i class="fa-solid fa-chevron-right"></i></span></li>
+                            @endif
+                        </ul>
+                    </nav>
+                @endif
+            </div>
+        </div>
+    </div>
+
+    {{-- ========================= TABEL KURIKULUM ========================= --}}
+    <div class="section-title">
+        <i class="fa-solid fa-book-open"></i> Data Kurikulum
+        <span class="section-note">{{ $totalKurikulum }} akun</span>
+    </div>
+
+    <div class="card">
+        <table class="table-aligned">
+            <thead>
+                <tr>
+                    <th>Kurikulum</th>
+                    <th style="text-align: center; vertical-align: middle;">No. HP</th>
+                    <th style="text-align: center; vertical-align: middle;">Tanggal Bergabung</th>
+                    <th style="text-align: center; vertical-align: middle;">Status</th>
+                    <th style="text-align: center;">Aksi</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @forelse ($curriculums as $curriculum)
+                    <tr>
+                        <td>
+                            <div class="name-cell">
+                                <div class="avatar-sm">
+                                    {{ strtoupper(substr($curriculum->name, 0, 1)) }}
+                                </div>
+                                <div>
+                                    <div class="cand-name">{{ $curriculum->name }}</div>
+                                    <div class="cand-sub">{{ $curriculum->user?->username ?? '-' }}</div>
+                                </div>
+                            </div>
+                        </td>
+
+                        <td style="text-align: center; vertical-align: middle;">
+                            {{ $curriculum->phone }}
+                        </td>
+
+                        <td style="text-align: center; vertical-align: middle;">
+                            {{ $curriculum->join_date ? \Carbon\Carbon::parse($curriculum->join_date)->format('d M Y') : '-' }}
+                        </td>
+
+                        <td style="text-align: center; vertical-align: middle;">
+                            <span class="badge {{ $curriculum->status === 'Active' ? 'badge-completed' : 'badge-cancelled' }}">
+                                <span class="badge-dot"></span>
+                                {{ $curriculum->status }}
+                            </span>
+                        </td>
+
+                        <td style="text-align: center; vertical-align: middle;">
+                            <div class="row-actions">
+                                <button
+                                    type="button"
+                                    class="icon-btn"
+                                    title="Edit"
+                                    onclick="openEditKurikulumModal({{ $curriculum->id }})">
+                                    <i class="fa-regular fa-pen-to-square"></i>
+                                </button>
+
+                                <form action="{{ route('admin.kurikulum-staf.destroy', $curriculum->id) }}" method="POST"
+                                      onsubmit="return confirm('Yakin ingin menghapus kurikulum {{ $curriculum->name }}?');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="icon-btn danger" title="Hapus">
+                                        <i class="fa-regular fa-trash-can"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="5" style="text-align:center;padding:50px;color:#888;">
+                            Belum ada data kurikulum.
+                        </td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+
+        <div class="table-footer">
+            <span class="table-footer-info">
+                Menampilkan
+                <strong>{{ $curriculums->firstItem() ?? 0 }}</strong>
+                -
+                <strong>{{ $curriculums->lastItem() ?? 0 }}</strong>
+                dari
+                <strong>{{ $curriculums->total() }}</strong>
+                kurikulum
+            </span>
+
+            <div class="table-footer-pagination">
+                @if ($curriculums->hasPages())
+                    @php
+                        $kCurrent = $curriculums->currentPage();
+                        $kLast = $curriculums->lastPage();
+                        $kSide = 1;
+                    @endphp
+
+                    <nav class="pagination-nav" aria-label="Pagination Kurikulum">
+                        <ul class="pagination-list">
+                            @if ($curriculums->onFirstPage())
+                                <li class="page-item disabled"><span class="page-btn"><i class="fa-solid fa-chevron-left"></i></span></li>
+                            @else
+                                <li class="page-item"><a class="page-btn" href="{{ $curriculums->previousPageUrl() }}" rel="prev"><i class="fa-solid fa-chevron-left"></i></a></li>
+                            @endif
+
+                            @for ($kPage = 1; $kPage <= $kLast; $kPage++)
+                                @php
+                                    $kEdge = $kPage == 1 || $kPage == $kLast;
+                                    $kNear = abs($kPage - $kCurrent) <= $kSide;
+                                @endphp
+
+                                @if ($kEdge || $kNear)
+                                    @if ($kPage == $kCurrent)
+                                        <li class="page-item active"><span class="page-btn current">{{ $kPage }}</span></li>
+                                    @else
+                                        <li class="page-item"><a class="page-btn" href="{{ $curriculums->url($kPage) }}">{{ $kPage }}</a></li>
+                                    @endif
+                                @elseif ($kPage == 2 && $kCurrent - $kSide > 2)
+                                    <li class="page-item disabled"><span class="page-btn dots">...</span></li>
+                                @elseif ($kPage == $kLast - 1 && $kCurrent + $kSide < $kLast - 1)
+                                    <li class="page-item disabled"><span class="page-btn dots">...</span></li>
+                                @endif
+                            @endfor
+
+                            @if ($curriculums->hasMorePages())
+                                <li class="page-item"><a class="page-btn" href="{{ $curriculums->nextPageUrl() }}" rel="next"><i class="fa-solid fa-chevron-right"></i></a></li>
                             @else
                                 <li class="page-item disabled"><span class="page-btn"><i class="fa-solid fa-chevron-right"></i></span></li>
                             @endif
@@ -444,6 +574,177 @@
         </div>
     </div>
 
+    {{-- ========================= MODAL — TAMBAH KURIKULUM ========================= --}}
+    <div class="modal-overlay" id="kurikulumModalOverlay">
+        <div class="modal">
+            <form action="{{ route('admin.kurikulum-staf.store') }}" method="POST">
+                @csrf
+
+                <div class="modal-head">
+                    <div>
+                        <div class="modal-title">Tambah Kurikulum Baru</div>
+                        <div class="modal-sub">Isi data kurikulum dan akun login-nya.</div>
+                    </div>
+                    <button type="button" class="modal-close" onclick="closeKurikulumModal()"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div class="modal-body">
+
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-user"></i> Data Kurikulum</div>
+                        <div class="form-grid">
+                            <div class="form-field full">
+                                <label>Nama Lengkap *</label>
+                                <input type="text" name="name" id="add_kurikulum_name" required>
+                            </div>
+                            <div class="form-field">
+                                <label>No. Telepon *</label>
+                                <input type="text" name="phone" id="add_kurikulum_phone" required>
+                            </div>
+                            <div class="form-field">
+                                <label>Tanggal Bergabung</label>
+                                <input type="date" name="join_date" id="add_kurikulum_join_date">
+                            </div>
+                            <div class="form-field full">
+                                <label>Alamat</label>
+                                <textarea name="address" id="add_kurikulum_address" rows="3"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-toggle-on"></i> Aktivasi</div>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label>Status Akun *</label>
+                                <select name="status" id="add_kurikulum_status" required>
+                                    <option value="Active">Active</option>
+                                    <option value="Inactive">Inactive</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-key"></i> Akun Login Kurikulum</div>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label>Username *</label>
+                                <input type="text" name="username" id="add_kurikulum_username" required>
+                            </div>
+                            <div class="form-field">
+                                <label>Password *</label>
+                                <div style="position:relative;">
+                                    <input type="password" name="password" id="add_kurikulum_password"
+                                           autocomplete="new-password" required minlength="6"
+                                           style="width:100%;padding-right:44px;">
+                                    <button type="button" onclick="togglePassword('add_kurikulum_password', this)" title="Lihat password"
+                                            style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:0;cursor:pointer;color:#6b7280;">
+                                        <i class="fa-regular fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-foot">
+                    <div></div>
+                    <div class="modal-foot-right">
+                        <button type="button" class="btn btn-secondary" onclick="closeKurikulumModal()">Batal</button>
+                        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Simpan Kurikulum</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {{-- ========================= MODAL — EDIT KURIKULUM ========================= --}}
+    <div class="modal-overlay" id="editKurikulumModalOverlay">
+        <div class="modal">
+            <form id="editKurikulumForm" method="POST">
+                @csrf
+                @method('PUT')
+
+                <div class="modal-head">
+                    <div>
+                        <div class="modal-title">Edit Data Kurikulum</div>
+                        <div class="modal-sub">Perbarui data kurikulum ini.</div>
+                    </div>
+                    <button type="button" class="modal-close" onclick="closeEditKurikulumModal()"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div class="modal-body">
+
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-user"></i> Data Kurikulum</div>
+                        <div class="form-grid">
+                            <div class="form-field full">
+                                <label>Nama Lengkap *</label>
+                                <input type="text" name="name" id="edit_kurikulum_name" required>
+                            </div>
+                            <div class="form-field">
+                                <label>No. Telepon *</label>
+                                <input type="text" name="phone" id="edit_kurikulum_phone" required>
+                            </div>
+                            <div class="form-field">
+                                <label>Tanggal Bergabung</label>
+                                <input type="date" name="join_date" id="edit_kurikulum_join_date">
+                            </div>
+                            <div class="form-field full">
+                                <label>Alamat</label>
+                                <textarea name="address" id="edit_kurikulum_address" rows="3"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-toggle-on"></i> Aktivasi</div>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label>Status Akun *</label>
+                                <select name="status" id="edit_kurikulum_status" required>
+                                    <option value="Active">Active</option>
+                                    <option value="Inactive">Inactive</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-key"></i> Akun Login Kurikulum</div>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label>Username *</label>
+                                <input type="text" name="username" id="edit_kurikulum_username" required>
+                            </div>
+                            <div class="form-field">
+                                <label>Password <span class="opt">(kosongkan jika tidak ingin diubah)</span></label>
+                                <div style="position:relative;">
+                                    <input type="password" name="password" id="edit_kurikulum_password"
+                                           autocomplete="new-password" minlength="6"
+                                           style="width:100%;padding-right:44px;">
+                                    <button type="button" onclick="togglePassword('edit_kurikulum_password', this)" title="Lihat password"
+                                            style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:0;cursor:pointer;color:#6b7280;">
+                                        <i class="fa-regular fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-foot">
+                    <div></div>
+                    <div class="modal-foot-right">
+                        <button type="button" class="btn btn-secondary" onclick="closeEditKurikulumModal()">Batal</button>
+                        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Simpan Perubahan</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
 @endsection
 
 @push('scripts')
@@ -553,6 +854,64 @@
 
     document.getElementById('editGuruModalOverlay').addEventListener('click', function (e) {
         if (e.target === this) closeEditGuruModal();
+    });
+
+    /* ============================================================
+       MODAL: TAMBAH KURIKULUM
+    ============================================================ */
+    function openKurikulumModal() {
+        resetPasswordField('add_kurikulum_password');
+        document.getElementById('kurikulumModalOverlay').classList.add('open');
+    }
+
+    function closeKurikulumModal() {
+        resetPasswordField('add_kurikulum_password');
+        document.getElementById('kurikulumModalOverlay').classList.remove('open');
+    }
+
+    document.getElementById('kurikulumModalOverlay').addEventListener('click', function (e) {
+        if (e.target === this) closeKurikulumModal();
+    });
+
+    /* ============================================================
+       MODAL: EDIT KURIKULUM
+    ============================================================ */
+    function openEditKurikulumModal(id) {
+        const overlay = document.getElementById('editKurikulumModalOverlay');
+        const form = document.getElementById('editKurikulumForm');
+
+        overlay.classList.add('open');
+        form.action = `/admin/kurikulum-staf/${id}`;
+
+        fetch(`/admin/kurikulum-staf/${id}/edit`, {
+            headers: { 'Accept': 'application/json' }
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Gagal memuat data');
+            return response.json();
+        })
+        .then(data => {
+            document.getElementById('edit_kurikulum_name').value = data.name ?? '';
+            document.getElementById('edit_kurikulum_phone').value = data.phone ?? '';
+            document.getElementById('edit_kurikulum_join_date').value = data.join_date ?? '';
+            document.getElementById('edit_kurikulum_address').value = data.address ?? '';
+            document.getElementById('edit_kurikulum_status').value = data.status ?? 'Active';
+            document.getElementById('edit_kurikulum_username').value = data.username ?? '';
+            resetPasswordField('edit_kurikulum_password');
+        })
+        .catch(() => {
+            alert('Gagal memuat data kurikulum untuk diedit.');
+            closeEditKurikulumModal();
+        });
+    }
+
+    function closeEditKurikulumModal() {
+        resetPasswordField('edit_kurikulum_password');
+        document.getElementById('editKurikulumModalOverlay').classList.remove('open');
+    }
+
+    document.getElementById('editKurikulumModalOverlay').addEventListener('click', function (e) {
+        if (e.target === this) closeEditKurikulumModal();
     });
 </script>
 @endpush

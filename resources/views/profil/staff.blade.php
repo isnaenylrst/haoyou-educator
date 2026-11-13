@@ -37,9 +37,10 @@
     @endif
 
     <div class="row g-4">
+        @if($role !== 'Admin')
         {{-- CARD TANDA TANGAN DIGITAL --}}
         <div class="col-lg-7">
-            <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden h-100">
                 <div class="card-header bg-white border-bottom py-3">
                     <h5 class="fw-bold mb-0 text-dark">
                         <i class="fa-solid fa-signature text-warning me-2"></i> Tanda Tangan Digital (TTD Tersimpan)
@@ -100,9 +101,13 @@
             </div>
         </div>
 
+        @endif
+
         {{-- CARD AKUN & PASSWORD --}}
-        <div class="col-lg-5">
-            <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="{{ $role === 'Admin' ? 'col-12' : 'col-lg-5' }}">
+          <div class="{{ $role === 'Admin' ? 'row g-4 align-items-start' : '' }}">
+            <div class="{{ $role === 'Admin' ? 'col-lg-6' : '' }}">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden {{ $role === 'Admin' ? '' : 'mb-4' }}">
                 <div class="card-header bg-white border-bottom py-3">
                     <h5 class="fw-bold mb-0 text-dark">
                         <i class="fa-solid fa-user text-warning me-2"></i> Foto Profil & Akun
@@ -124,23 +129,27 @@
                     <form action="{{ route('profil.update') }}" method="POST" enctype="multipart/form-data" class="text-start">
                         @csrf
                         @method('PUT')
+                        @if($role !== 'Admin')
                         <div class="mb-3">
                             <label class="form-label small fw-semibold">Nama Lengkap (Tampil di bawah TTD Dokumen)</label>
                             <input type="text" name="name" class="form-control form-control-sm" value="{{ old('name', $user->name ?? ($role === 'Owner' ? 'Joy Limmunandar' : '')) }}" placeholder="Contoh: Joy Limmunandar">
                             <small class="text-muted" style="font-size:11px;">Nama ini dicetak di bawah tanda tangan pada sertifikat dan dokumen resmi.</small>
                         </div>
+                        @endif
                         <div class="mb-3">
                             <label class="form-label small fw-semibold">Ganti Foto Profil</label>
                             <input type="file" name="foto" class="form-control form-control-sm" accept="image/*">
                         </div>
-                        <button type="submit" class="btn btn-outline-warning text-dark btn-sm w-100 rounded-pill fw-semibold">
+                        <button type="submit" class="{{ $role === 'Admin' ? 'btn btn-warning w-100 rounded-pill py-2 fw-semibold' : 'btn btn-outline-warning text-dark btn-sm w-100 rounded-pill fw-semibold' }}">
                             Simpan Perubahan Profil
                         </button>
                     </form>
                 </div>
             </div>
+            </div>
 
-            <div class="card border-0 shadow-sm rounded-4">
+            <div class="{{ $role === 'Admin' ? 'col-lg-6' : '' }}">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
                 <div class="card-header bg-white border-bottom py-3">
                     <h5 class="fw-bold mb-0 text-dark">
                         <i class="fa-solid fa-key text-warning me-2"></i> Ganti Password
@@ -162,12 +171,14 @@
                             <label class="form-label small fw-semibold">Konfirmasi Password Baru</label>
                             <input type="password" name="password_confirmation" class="form-control" required>
                         </div>
-                        <button type="submit" class="btn btn-dark w-100 rounded-pill py-2 fw-semibold">
+                        <button type="submit" class="{{ $role === 'Admin' ? 'btn btn-warning w-100 rounded-pill py-2 fw-semibold' : 'btn btn-dark w-100 rounded-pill py-2 fw-semibold' }}">
                             Perbarui Password
                         </button>
                     </form>
                 </div>
             </div>
+            </div>
+          </div>
         </div>
     </div>
 </div>
@@ -248,4 +259,3 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 @endpush
 @endsection
-
