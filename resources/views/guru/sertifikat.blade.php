@@ -9,8 +9,9 @@
     <div class="mb-4">
         <h2 class="fw-bold mb-1">Sertifikat</h2>
         <p class="text-muted mb-0">
-            Buat sertifikat les Mandarin siswa. Tanggal mulai-selesai dan nilai terisi otomatis dari data les,
-            tetapi tetap bisa Anda ubah. Sertifikat tampil ke siswa setelah di-ACC Kurikulum.
+            Buat sertifikat les Mandarin siswa. Tanggal dan nilai Listening, Reading, Speaking, Writing terisi otomatis
+            dari progress report, tetapi tetap bisa Anda ubah. Nilai akhir dihitung otomatis (rata-rata).
+            Sertifikat tampil ke siswa setelah di-ACC Kurikulum.
         </p>
     </div>
 
@@ -46,7 +47,7 @@
                 <form method="POST" action="{{ route('teacher.sertifikat.store') }}" class="row g-3 align-items-end">
                     @csrf
 
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <label class="form-label small fw-semibold mb-1">Siswa &amp; Kelas</label>
                         <select name="enrollment_id" id="enrollment_id" class="form-select" required>
                             <option value="">Pilih siswa</option>
@@ -58,16 +59,10 @@
                         </select>
                     </div>
 
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <label class="form-label small fw-semibold mb-1">Nama Kursus / Level di Sertifikat</label>
                         <input type="text" name="course_name" id="course_name" maxlength="150"
                                value="{{ old('course_name') }}" class="form-control" required>
-                    </div>
-
-                    <div class="col-md-2">
-                        <label class="form-label small fw-semibold mb-1">Nilai</label>
-                        <input type="number" name="score" id="score" step="0.1" min="0" max="100"
-                               value="{{ old('score') }}" class="form-control" placeholder="0 - 100">
                     </div>
 
                     <div class="col-md-3">
@@ -82,14 +77,29 @@
                                value="{{ old('end_date') }}" class="form-control" required>
                     </div>
 
-                    <div class="col-md-3 d-grid">
-                        <button class="btn btn-warning fw-bold">Buat &amp; Ajukan ke Kurikulum</button>
+                    <div class="col-12"></div>
+
+                    @foreach (['listening' => 'Listening', 'reading' => 'Reading', 'speaking' => 'Speaking', 'writing' => 'Writing'] as $key => $label)
+                        <div class="col-6 col-md-2">
+                            <label class="form-label small fw-semibold mb-1">{{ $label }}</label>
+                            <input type="number" name="{{ $key }}_score" id="{{ $key }}_score" step="0.1" min="0" max="100"
+                                   value="{{ old($key . '_score') }}" class="form-control js-skill" placeholder="0 - 100" required>
+                        </div>
+                    @endforeach
+
+                    <div class="col-6 col-md-2">
+                        <label class="form-label small fw-semibold mb-1">Nilai Akhir</label>
+                        <input type="text" id="avg_score" class="form-control bg-light" readonly placeholder="otomatis">
+                    </div>
+
+                    <div class="col-md-2 d-grid">
+                        <button class="btn btn-warning fw-bold">Buat &amp; Ajukan</button>
                     </div>
 
                     <div class="col-12">
                         <div class="small text-muted">
-                            Setelah memilih siswa, kolom kursus, tanggal, dan nilai terisi otomatis. Nilai kosong berarti
-                            belum ada progress report yang di-ACC, silakan isi manual jika perlu.
+                            Setelah memilih siswa, kolom terisi otomatis dari progress report. Jika ada nilai yang masih kosong,
+                            silakan isi manual sesuai report siswa. Keempat nilai wajib diisi.
                         </div>
                     </div>
                 </form>
@@ -109,13 +119,15 @@
                             <th>Siswa</th>
                             <th>Kursus</th>
                             <th>Periode Les</th>
-                            <th>Nilai</th>
+                            <th>L / R / S / W</th>
+                            <th>Akhir</th>
                             <th>Status</th>
                             <th class="text-end">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
                     @forelse ($certificates as $c)
+                        @php $n = fn ($v) => is_null($v) ? '-' : rtrim(rtrim(number_format((float) $v, 1, '.', ''), '0'), '.'); @endphp
                         <tr>
                             <td>
                                 <div class="fw-semibold">{{ $c->student->name ?? '-' }}</div>
@@ -126,7 +138,10 @@
                                 {{ $c->start_date->translatedFormat('d M Y') }}<br>
                                 s/d {{ $c->end_date->translatedFormat('d M Y') }}
                             </td>
-                            <td>{{ is_null($c->score) ? '-' : $c->score }}</td>
+                            <td class="small text-nowrap">
+                                {{ $n($c->listening_score) }} / {{ $n($c->reading_score) }} / {{ $n($c->speaking_score) }} / {{ $n($c->writing_score) }}
+                            </td>
+                            <td class="fw-semibold">{{ $n($c->score) }}</td>
                             <td>
                                 @if ($c->status === 'Approved')
                                     <span class="badge bg-success">Disetujui</span>
@@ -158,9 +173,9 @@
                             </td>
                         </tr>
 
-                        {{-- Form edit (tersembunyi sampai tombol Edit ditekan) --}}
+                        {{-- Form edit --}}
                         <tr id="edit{{ $c->id }}" class="d-none">
-                            <td colspan="6" class="bg-light">
+                            <td colspan="7" class="bg-light">
                                 <form method="POST" action="{{ route('teacher.sertifikat.update', $c) }}" class="row g-2 align-items-end">
                                     @csrf @method('PUT')
 
@@ -179,26 +194,31 @@
                                         <input type="date" name="end_date" class="form-control form-control-sm"
                                                value="{{ $c->end_date->format('Y-m-d') }}" required>
                                     </div>
-                                    <div class="col-md-1">
-                                        <label class="form-label small fw-semibold mb-1">Nilai</label>
-                                        <input type="number" name="score" step="0.1" min="0" max="100"
-                                               class="form-control form-control-sm" value="{{ $c->score }}">
-                                    </div>
-                                    <div class="col-md-3 d-flex gap-1">
+                                    <div class="col-12"></div>
+
+                                    @foreach (['listening' => 'Listening', 'reading' => 'Reading', 'speaking' => 'Speaking', 'writing' => 'Writing'] as $key => $label)
+                                        <div class="col-6 col-md-2">
+                                            <label class="form-label small fw-semibold mb-1">{{ $label }}</label>
+                                            <input type="number" name="{{ $key }}_score" step="0.1" min="0" max="100"
+                                                   class="form-control form-control-sm" value="{{ $c->{$key . '_score'} }}" required>
+                                        </div>
+                                    @endforeach
+
+                                    <div class="col-md-4 d-flex gap-1">
                                         <button class="btn btn-warning btn-sm fw-bold">Simpan &amp; Ajukan Ulang</button>
                                         <button type="button" class="btn btn-outline-secondary btn-sm"
                                                 onclick="document.getElementById('edit{{ $c->id }}').classList.add('d-none')">Batal</button>
                                     </div>
                                     <div class="col-12 small text-muted">
-                                        Setelah disimpan, PDF dibuat ulang dan sertifikat dikirim lagi ke Kurikulum untuk di-ACC
-                                        (status kembali menjadi menunggu).
+                                        Setelah disimpan, PDF dibuat ulang (nilai akhir dihitung otomatis) dan sertifikat dikirim lagi
+                                        ke Kurikulum untuk di-ACC (status kembali menjadi menunggu).
                                     </div>
                                 </form>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="text-center text-muted py-4">Belum ada sertifikat.</td>
+                            <td colspan="7" class="text-center text-muted py-4">Belum ada sertifikat.</td>
                         </tr>
                     @endforelse
                     </tbody>
@@ -210,9 +230,16 @@
 </div>
 
 <script>
-    // Isian otomatis: kursus, tanggal mulai-selesai, dan nilai dari data les siswa
     const prefill = @json($prefill);
     const selEl = document.getElementById('enrollment_id');
+    const skills = ['listening', 'reading', 'speaking', 'writing'];
+
+    function updateAvg() {
+        const out = document.getElementById('avg_score');
+        if (!out) return;
+        const vals = skills.map(s => parseFloat(document.getElementById(s + '_score').value));
+        out.value = vals.some(isNaN) ? '' : (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1);
+    }
 
     function fillFromEnrollment() {
         if (!selEl) return;
@@ -221,13 +248,17 @@
         document.getElementById('course_name').value = d.course ?? '';
         document.getElementById('start_date').value  = d.start ?? '';
         document.getElementById('end_date').value    = d.end ?? '';
-        document.getElementById('score').value       = d.score ?? '';
+        skills.forEach(s => document.getElementById(s + '_score').value = d[s] ?? '');
+        updateAvg();
     }
 
     if (selEl) {
         selEl.addEventListener('change', fillFromEnrollment);
+        document.querySelectorAll('.js-skill').forEach(el => el.addEventListener('input', updateAvg));
         @if (!old('enrollment_id'))
             fillFromEnrollment();
+        @else
+            updateAvg();
         @endif
     }
 </script>
