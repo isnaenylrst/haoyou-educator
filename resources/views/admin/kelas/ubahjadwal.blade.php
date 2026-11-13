@@ -31,6 +31,18 @@
         <div class="alert-success">{{ session('success') }}</div>
     @endif
 
+    @if (session('error'))
+        <div class="alert-error">{{ session('error') }}</div>
+    @endif
+
+    @if ($errors->any())
+        <div class="alert-error">
+            @foreach ($errors->all() as $e)
+                <div>{{ $e }}</div>
+            @endforeach
+        </div>
+    @endif
+
     <div class="uj-grid">
 
         {{-- ========================= DAFTAR PERTEMUAN ========================= --}}
@@ -104,6 +116,13 @@
                         <span class="form-hint">Durasi pertemuan tetap sama.</span>
                     </div>
 
+                    <div class="form-field full" id="rs_confirm_wrap">
+                        <label class="form-radio">
+                            <input type="checkbox" id="rs_confirm"> Guru sudah setuju mengajar di luar jam tersedianya
+                        </label>
+                        <span class="form-hint">Centang kalau jadwal baru di luar jam tersedia guru dan guru sudah menyetujuinya.</span>
+                    </div>
+
                     <div class="form-field full" id="rs_room_field">
                         <label>Ruangan</label>
                         <input type="text" id="rs_room" list="rs_room_list" placeholder="Pilih atau ketik nama ruangan">
@@ -171,12 +190,6 @@
                         <input type="file" id="rs_pay_proof" accept=".jpg,.jpeg,.png,.pdf">
                         <span class="form-hint">JPG, PNG, atau PDF, maksimal 4 MB.</span>
                     </div>
-
-                    <div class="form-field full" id="rs_confirm_wrap">
-                        <label class="form-radio">
-                            <input type="checkbox" id="rs_confirm"> Guru sudah setuju mengajar di luar jam tersedianya
-                        </label>
-                    </div>
                 </div>
 
                 <div class="alert-error" id="rs_error" style="display:none;margin-top:12px;"></div>
@@ -240,6 +253,8 @@
 
 @push('scripts')
 <script>
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+
     const SESSIONS      = @json($sessionsData);
     const ROOM_OPTIONS  = @json($roomSuggestions);
     const CSRF_TOKEN    = @json(csrf_token());
@@ -421,7 +436,6 @@
         document.getElementById('rs_day').value = DAY_ORDER[weekdayIndex(s.date)];
 
         document.getElementById('rs_confirm').checked = false;
-        document.getElementById('rs_confirm_wrap').style.display = 'none';
         document.getElementById('rs_error').style.display = 'none';
         document.getElementById('rs_submit').disabled = false;
 
@@ -531,6 +545,7 @@
         const box = document.getElementById('rs_error');
         box.innerHTML = messages.map(m => `<div>${escapeHtml(m)}</div>`).join('');
         box.style.display = '';
+        box.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     function submitReschedule() {
@@ -586,6 +601,7 @@
 
         fetch(URL_RESCHEDULE.replace('__ID__', s.id), {
             method: 'POST',
+            redirect: 'manual',
             headers: {
                 'Accept': 'application/json',
                 'X-CSRF-TOKEN': CSRF_TOKEN,
@@ -594,23 +610,36 @@
             body: form,
         })
             .then(async (r) => {
-                if (r.ok) {
+                // Server membalas redirect: pesan (sukses/error) ada di flash session,
+                // jadi reload supaya tampil di bagian atas halaman.
+                if (r.type === 'opaqueredirect') {
+                    window.location.reload();
+                    return;
+                }
+
+                const data = await r.json().catch(() => null);
+
+                // Sukses hanya kalau server benar-benar membalas JSON berisi message
+                if (r.ok && data && data.message) {
                     window.location.reload(); // pesan sukses tampil lewat flash session
                     return;
                 }
 
-                const data = await r.json().catch(() => ({}));
-                const errors = data.errors || {};
+                const errors   = (data && data.errors) || {};
                 const messages = Object.values(errors).flat();
 
-                // Di luar jam tersedia guru: tampilkan centang konfirmasi, admin simpan ulang
+                // Di luar jam tersedia guru: sorot centang konfirmasi, admin simpan ulang
                 if (errors.availability) {
-                    document.getElementById('rs_confirm_wrap').style.display = 'block';
+                    const wrap = document.getElementById('rs_confirm_wrap');
+                    wrap.style.display = 'block';
+                    wrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
 
                 showRescheduleError(messages.length
                     ? messages
-                    : [r.status === 419 ? 'Sesi habis, muat ulang halaman lalu coba lagi.' : (data.message || 'Gagal menyimpan jadwal.')]);
+                    : [r.status === 419
+                        ? 'Sesi habis, muat ulang halaman lalu coba lagi.'
+                        : ((data && data.message) || `Respons tak terduga dari server (status ${r.status}).`)]);
                 btn.disabled = false;
             })
             .catch(() => {

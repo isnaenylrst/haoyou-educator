@@ -28,10 +28,14 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*'),
+            fn (Request $request) => $request->is('api/*', 'admin/kelas/pertemuan/*/jadwal'),
         );
 
         $exceptions->render(function (\Illuminate\Http\Exceptions\PostTooLargeException $e, Request $request) {
-            return back()->with('error', 'Ukuran file yang diunggah melebihi batas upload server (upload_max_filesize / post_max_size). Silakan perkecil ukuran file.');
+            $message = 'Ukuran file yang diunggah melebihi batas upload server (upload_max_filesize / post_max_size). Silakan perkecil ukuran file.';
+
+            return $request->expectsJson()
+                ? response()->json(['message' => $message], 413)
+                : back()->with('error', $message);
         });
     })->create();

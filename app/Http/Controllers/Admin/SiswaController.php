@@ -255,7 +255,7 @@ class SiswaController extends Controller
 
         if ($currentEnrollment && $currentEnrollment->private_package_id) {
             return $redirect
-                ->with('success', "Data siswa {$siswa->name} berhasil diperbarui. Kelas tidak diubah karena siswa sedang mengikuti paket Private — gunakan \"Lanjut Program Berikutnya\" untuk menggantinya.");
+                ->with('success', "Data siswa {$siswa->name} berhasil diperbarui");
         }
 
         return $redirect
@@ -657,7 +657,7 @@ class SiswaController extends Controller
         $list  = $names->take(5)->implode(', ') . ($names->count() > 5 ? ', ...' : '');
 
         return redirect()->route('admin.siswa.replacement', $siswa)
-            ->with('success', "Kelas pengganti diajukan ke {$names->count()} guru: {$list}. Guru terisi setelah ada yang menerima. "
+            ->with('success', "Kelas pengganti telah diajukan, guru akan terisi setelah ada yang menerima. "
                 . 'Pembayaran Rp' . number_format($total, 0, ',', '.') . ' tercatat lunas (' . $count . ' invoice).');
     }
 
