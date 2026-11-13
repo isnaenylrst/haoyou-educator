@@ -23,6 +23,7 @@ body {
     background: #f7f8fa;
     color: #111827;
     font-size: 14px;
+    font-weight: 500;              /* Poppins Medium: teks biasa terlihat sedikit lebih tebal dari 400 */
     -webkit-font-smoothing: antialiased;
 }
 
@@ -657,6 +658,53 @@ body {
     min-height: calc(100vh - 68px);
     background: #f7f8fa;
 }
+
+/* =====================================================
+   TIPOGRAFI BOOTSTRAP DI AREA KONTEN
+   Bootstrap memakai ukuran heading responsif (h4 bisa 26px, h5 20px
+   di layar lebar) dan font-size 1rem untuk tombol/input, padahal
+   layout admin berbasis 14px. Disamakan di sini agar halaman yang
+   memakai class Bootstrap (profil, dll.) tidak terlihat terlalu besar.
+
+   Heading memakai :where() (specificity 0) supaya CSS halaman yang
+   mengatur ukuran heading sendiri (mis. .dashboard-header h1) tetap menang.
+===================================================== */
+
+/* Reset jarak heading & paragraf.
+   Reset `* { margin: 0 }` di atas kalah oleh Bootstrap, yang memberi h1-h6 margin-bawah .5rem dan
+   p margin-bawah 1rem. Akibatnya judul, deskripsi, dan isi halaman terlihat terlalu berjarak.
+   Pakai :where() (specificity 0) supaya margin yang diatur CSS halaman maupun class .mb-* tetap menang. */
+:where(.page-content) :is(h1, h2, h3, h4, h5, h6, p) { margin-top: 0; margin-bottom: 0; }
+
+:where(.page-content) h1 { font-size: 26px; font-weight: 600; }
+:where(.page-content) h2 { font-size: 22px; font-weight: 600; }
+:where(.page-content) h3 { font-size: 20px; font-weight: 600; }
+:where(.page-content) h4 { font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
+:where(.page-content) h5 { font-size: 15.5px; font-weight: 600; }
+:where(.page-content) h6 { font-size: 14px; font-weight: 600; }
+
+/* Utility ukuran Bootstrap (memakai !important, jadi perlu selector lebih spesifik).
+   .fw-bold sengaja TIDAK diubah di sini supaya teks tebal di halaman lain tetap 700. */
+.page-content .fs-3 { font-size: 22px !important; }
+.page-content .fs-4 { font-size: 18px !important; }
+.page-content .fs-5 { font-size: 16px !important; }
+
+/* Tombol & form (Bootstrap membacanya dari CSS variable) */
+.page-content .btn {
+    --bs-btn-font-size: .875rem;
+    --bs-btn-font-weight: 600;
+}
+.page-content .btn-sm { --bs-btn-font-size: .8125rem; }
+
+.page-content .form-control,
+.page-content .form-select { font-size: .875rem; }
+
+.page-content .form-label {
+    font-size: .8125rem;
+    font-weight: 500;
+}
+
+.page-content .card-header small { font-weight: 400; }
 
 /* =====================================================
    RESPONSIVE

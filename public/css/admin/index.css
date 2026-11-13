@@ -3620,3 +3620,165 @@ input[type="date"].select-chip::-webkit-datetime-edit-fields-wrapper { font-fami
 .table-aligned .row-actions {
     justify-content: center;
 }
+
+/* =====================================================
+   MATERI TRAINING (admin/training.blade.php)
+   Kartu materi: chip kategori + tanggal, judul, deskripsi,
+   badge tipe/level, tombol aksi, dan footer "Dari: Owner".
+===================================================== */
+
+.x-training-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.x-training-card {
+    display: flex;
+    flex-direction: column;
+    border-radius: 16px;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.x-training-card:hover {
+    border-color: #e1e3e8;
+    box-shadow: 0 10px 28px rgba(17, 24, 39, .06);
+}
+
+/* Cover (hanya tampil kalau materi punya thumbnail) */
+.x-training-thumb {
+    aspect-ratio: 16 / 9;
+    background: #f3f4f6;
+    overflow: hidden;
+}
+
+.x-training-thumb img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.x-training-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 18px 20px 16px;
+}
+
+/* Baris atas: chip kategori (kiri) + tanggal (kanan) */
+.x-training-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.x-training-card .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.x-training-cat {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.x-training-date {
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 400;
+    color: #9ca3af;
+}
+
+.x-training-title {
+    margin-top: 12px;
+    font-size: 14.5px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: #111827;
+}
+
+.x-training-desc {
+    margin-top: 4px;
+    font-size: 12.5px;
+    font-weight: 400;
+    line-height: 1.6;
+    color: #6b7280;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.x-training-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+}
+
+.x-training-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 16px;
+}
+
+/* Tombol pill bergaris (tonton = merah, unduh = hijau) */
+.x-training-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 34px;
+    padding: 0 14px;
+    border-radius: 99px;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    font-size: 12.5px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background-color .15s ease, border-color .15s ease;
+}
+
+.x-training-btn i { font-size: 12px; }
+
+.x-training-btn.is-play     { color: #dc2626; border-color: #fecaca; }
+.x-training-btn.is-play:hover     { background: #fef2f2; border-color: #fca5a5; }
+
+.x-training-btn.is-download { color: #16a34a; border-color: #bbf7d0; }
+.x-training-btn.is-download:hover { background: #f0fdf4; border-color: #86efac; }
+
+/* Footer kartu */
+.x-training-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 20px;
+    border-top: 1px solid #f1f2f4;
+    font-size: 12px;
+    font-weight: 400;
+    color: #9ca3af;
+}
+
+.x-training-foot i { margin-right: 6px; }
+
+.x-training-ro {
+    padding: 3px 10px;
+    border-radius: 99px;
+    background: #f3f4f6;
+    color: #6b7280;
+    font-size: 11px;
+    font-weight: 600;
+}

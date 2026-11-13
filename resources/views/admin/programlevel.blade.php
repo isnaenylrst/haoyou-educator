@@ -16,6 +16,12 @@
                 Kelola program pembelajaran beserta kategori dan level yang tersedia di Haoyou Educator.
             </p>
         </div>
+
+        <div class="dashboard-header-actions">
+            <a href="{{ route('admin.program-level.struktur') }}" class="btn btn-primary">
+                <i class="fa-solid fa-sitemap"></i> Kelola Struktur
+            </a>
+        </div>
     </div>
 
     @if (session('success'))
@@ -62,19 +68,6 @@
             <div class="stat-value">{{ $stats['active_package'] }}</div>
             <div class="stat-note">Bisa dipilih calon siswa</div>
         </div>
-    </div>
-
-        {{-- ========================= STRUKTUR PROGRAM (RINGKASAN) ========================= --}}
-    <div class="card struktur-summary-card">
-        <div class="struktur-summary-text">
-            <div class="section-title" style="margin:0;">
-                <i class="fa-solid fa-diagram-project"></i> Struktur Program &amp; Kategori
-            </div>
-            <p>Kelola daftar Program, Kategori, dan Level pembelajaran di halaman terpisah.</p>
-        </div>
-        <a href="{{ route('admin.program-level.struktur') }}" class="btn btn-primary">
-            <i class="fa-solid fa-sitemap"></i> Kelola Struktur
-        </a>
     </div>
 
     {{-- ========================= TAB: REGULER / PRIVATE ========================= --}}

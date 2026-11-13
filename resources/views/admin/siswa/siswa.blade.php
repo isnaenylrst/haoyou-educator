@@ -18,15 +18,15 @@
         </div>
 
         <div class="dashboard-header-actions">
-            <button class="btn">
+            <button type="button" class="btn btn-primary">
                 <i class="fa-solid fa-file-export"></i>
                 Export
             </button>
 
-            <button type="button" class="btn btn-primary" onclick="openLeadModal()">
+            {{-- <button type="button" class="btn btn-primary" onclick="openLeadModal()">
                 <i class="fa-solid fa-plus"></i>
                 Tambah Siswa
-            </button>
+            </button> --}}
         </div>
     </div>
 

@@ -29,10 +29,10 @@
         </div>
 
         <div class="dashboard-header-actions">
-            <a href="{{ $hasExportRoute ? route('admin.kelas.export', request()->query()) : '#' }}" class="btn btn-secondary">
+            {{-- <a href="{{ $hasExportRoute ? route('admin.kelas.export', request()->query()) : '#' }}" class="btn btn-secondary">
                 <i class="fa-solid fa-file-export"></i>
                 Export
-            </a>
+            </a> --}}
 
             <a href="{{ route('admin.kelas.create') }}" class="btn btn-primary">
                 <i class="fa-solid fa-plus"></i>
