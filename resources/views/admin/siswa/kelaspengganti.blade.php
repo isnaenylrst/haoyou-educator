@@ -5,6 +5,33 @@
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
+    <style>
+        /* ---- Riwayat kelas pengganti ---- */
+        /* Ukuran kolom & padding mengikuti tabel global (index.css), sama seperti tabel Siswa */
+        .rp-history-wrap { overflow-x: auto; margin-top: 6px; }
+        .rp-history th:not(:first-child),
+        .rp-history td:not(:first-child) { text-align: center; }
+        .rp-history .row-actions { justify-content: center; }
+        .rp-history .nowrap { white-space: nowrap; }
+        .rp-history .muted  { color: #9ca3af; }
+        .rp-history .sub    { display: block; font-size: 12px; color: #9ca3af; margin-top: 2px; }
+
+        /* Status berbentuk badge */
+        .rp-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px;
+                     font-size: 12px; font-weight: 500; white-space: nowrap; background: #f3f4f6; color: #4b5563; }
+        .rp-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+        .rp-status.waiting   { background: #fff7db; color: #a16207; }
+        .rp-status.scheduled { background: #eff6ff; color: #2563eb; }
+        .rp-status.done      { background: #ecfdf5; color: #15803d; }
+        .rp-status.cancelled { background: #fef2f2; color: #dc2626; }
+
+        /* Invoice */
+        .rp-invoice a { color: #1d4ed8; font-weight: 500; text-decoration: none; }
+        .rp-invoice a:hover { text-decoration: underline; }
+
+        /* Aksi: tombol ikon saja (pakai .icon-btn & .row-actions dari index.css, sama seperti halaman Siswa) */
+        .rp-history .row-actions form { margin: 0; }
+    </style>
 @endpush
 
 @section('content')
@@ -200,98 +227,109 @@
     </form>
 
     {{-- ===== Riwayat ===== --}}
+    @php
+        $statusLabels = [
+            'Scheduled'   => 'Terjadwal',
+            'Conducted'   => 'Selesai',
+            'Cancelled'   => 'Dibatalkan',
+            'Rescheduled' => 'Dijadwal ulang',
+        ];
+        $locationLabels = ['Home Visit' => 'Guru ke rumah'];
+        $statusClass = [
+            'Scheduled' => 'scheduled',
+            'Conducted' => 'done',
+            'Cancelled' => 'cancelled',
+        ];
+    @endphp
+
     <div class="rp-card" style="margin-top:20px;">
         <div class="form-section" style="margin-bottom:0;">
             <div class="form-section-title"><i class="fa-solid fa-clock-rotate-left"></i> Riwayat Kelas Pengganti</div>
 
-            <table class="table-mini">
-                <thead>
-                    <tr>
-                        <th>Tanggal</th>
-                        <th>Jam</th>
-                        <th>Guru</th>
-                        <th>Lokasi</th>
-                        <th>Status</th>
-                        <th>Invoice</th>
-                        <th>Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @php
-                        $statusLabels = [
-                            'Scheduled' => 'Terjadwal',
-                            'Conducted' => 'Selesai',
-                            'Cancelled' => 'Dibatalkan',
-                            'Rescheduled' => 'Dijadwal ulang',
-                        ];
-
-                        $offerLabels = [
-                            'Pending'  => 'menunggu jawaban',
-                            'Accepted' => 'menerima',
-                            'Rejected' => 'menolak',
-                            'Closed'   => 'ditutup',
-                        ];
-                    @endphp
-
-                    @forelse ($history as $h)
+            <div class="rp-history-wrap">
+                <table class="rp-history">
+                    <thead>
                         <tr>
-                            <td>{{ $h['date'] }}</td>
-                            <td>{{ $h['time'] }}</td>
-                            <td>{{ $h['teacher'] ?? '-' }}</td>
-                            <td>
-                                {{ $h['location_type'] }}
-                                @if (! empty($h['room']))
-                                    <div class="rp-hint">{{ $h['room'] }}</div>
-                                @endif
-                            </td>
-                            <td>
-                                @if ($h['awaiting'])
-                                    <strong>Menunggu guru</strong>
-                                    @foreach ($h['offers'] as $o)
-                                        <div class="rp-hint">
-                                            {{ $o['teacher'] }}:
-                                            {{ $offerLabels[$o['status']] ?? $o['status'] }}@if ($o['status'] === 'Rejected' && $o['note']) ({{ $o['note'] }})@endif
-                                        </div>
-                                    @endforeach
-                                @else
-                                    {{ $statusLabels[$h['status']] ?? $h['status'] }}
-                                @endif
-                            </td>
-                            <td>
-                                @forelse ($h['payments'] as $p)
-                                    <div>
-                                        <a href="{{ $p['invoice_url'] }}" target="_blank" rel="noopener">{{ $p['invoice_number'] ?? 'Invoice' }}</a>
-                                        <span class="rp-hint">Rp {{ number_format($p['amount'], 0, ',', '.') }}</span>
-                                    </div>
-                                @empty
-                                    -
-                                @endforelse
-                            </td>
-                            <td>
-                                @if ($h['awaiting'])
-                                    <form method="POST" action="{{ $h['reoffer_url'] }}" class="rp-inline-form">
-                                        @csrf
-                                        <select name="mode">
-                                            <option value="matching">Guru yang cocok</option>
-                                            <option value="all">Semua guru</option>
-                                        </select>
-                                        <button type="submit" class="rp-btn-sm">Ajukan ulang</button>
-                                    </form>
-                                    <form method="POST" action="{{ $h['cancel_url'] }}" class="rp-inline-form"
-                                          onsubmit="return confirm('Batalkan kelas pengganti ini? Pembayaran tetap tercatat dan pengembalian dana diurus manual.')">
-                                        @csrf
-                                        <button type="submit" class="rp-btn-sm danger">Batalkan</button>
-                                    </form>
-                                @else
-                                    -
-                                @endif
-                            </td>
+                            <th>Tanggal</th>
+                            <th>Jam</th>
+                            <th>Guru</th>
+                            <th>Lokasi</th>
+                            <th>Status</th>
+                            <th>Invoice</th>
+                            <th>Aksi</th>
                         </tr>
-                    @empty
-                        <tr><td colspan="7">Belum ada kelas pengganti.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @forelse ($history as $h)
+                            <tr>
+                                <td class="nowrap">{{ $h['date'] }}</td>
+                                <td class="nowrap">{{ $h['time'] }}</td>
+                                <td>
+                                    @if (! empty($h['teacher']))
+                                        {{ $h['teacher'] }}
+                                    @else
+                                        <span class="muted">-</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    {{ $locationLabels[$h['location_type']] ?? $h['location_type'] }}
+                                    @if (! empty($h['room']))
+                                        <span class="sub">{{ $h['room'] }}</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    @if ($h['awaiting'])
+                                        <span class="rp-status waiting">Menunggu guru</span>
+                                    @else
+                                        <span class="rp-status {{ $statusClass[$h['status']] ?? '' }}">{{ $statusLabels[$h['status']] ?? $h['status'] }}</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    @forelse ($h['payments'] as $p)
+                                        <div class="rp-invoice">
+                                            <a href="{{ $p['invoice_url'] }}" target="_blank" rel="noopener">{{ $p['invoice_number'] ?? 'Invoice' }}</a>
+                                            <span class="sub">Rp {{ number_format($p['amount'], 0, ',', '.') }}</span>
+                                        </div>
+                                    @empty
+                                        <span class="muted">-</span>
+                                    @endforelse
+                                </td>
+                                <td>
+                                    @if ($h['awaiting'])
+                                        <div class="row-actions">
+                                            <form method="POST" action="{{ $h['reoffer_url'] }}">
+                                                @csrf
+                                                <input type="hidden" name="mode" value="matching">
+                                                <button type="submit" class="icon-btn" title="Ajukan ulang ke guru yang cocok" aria-label="Ajukan ulang ke guru yang cocok">
+                                                    <i class="fa-solid fa-user-check"></i>
+                                                </button>
+                                            </form>
+                                            <form method="POST" action="{{ $h['reoffer_url'] }}">
+                                                @csrf
+                                                <input type="hidden" name="mode" value="all">
+                                                <button type="submit" class="icon-btn" title="Ajukan ulang ke semua guru" aria-label="Ajukan ulang ke semua guru">
+                                                    <i class="fa-solid fa-users"></i>
+                                                </button>
+                                            </form>
+                                            <form method="POST" action="{{ $h['cancel_url'] }}"
+                                                  onsubmit="return confirm('Batalkan kelas pengganti ini? Pembayaran tetap tercatat dan pengembalian dana diurus manual.')">
+                                                @csrf
+                                                <button type="submit" class="icon-btn danger" title="Batalkan kelas" aria-label="Batalkan kelas">
+                                                    <i class="fa-solid fa-ban"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    @else
+                                        <span class="muted">-</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="7" class="muted">Belum ada kelas pengganti.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 

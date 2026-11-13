@@ -72,47 +72,54 @@
                 @php $isVideo = $material->type === 'video'; @endphp
 
                 <div class="card x-training-card">
-                    <div class="x-training-thumb {{ $isVideo ? 'is-video' : 'is-doc' }}">
-                        @if($material->thumbnail_path && Storage::disk('public')->exists($material->thumbnail_path))
-                            <img src="{{ asset('storage/' . $material->thumbnail_path) }}" alt="{{ $material->title }}">
-                        @else
-                            <i class="fa-solid {{ $isVideo ? 'fa-circle-play' : 'fa-file-lines' }}"></i>
-                        @endif
-
-                        <span class="badge x-training-type {{ $isVideo ? 'badge-cold' : 'badge-warning' }}">
-                            {{ $isVideo ? 'Video' : 'Dokumen' }}
-                        </span>
-                        <span class="badge x-training-level badge-pending">
-                            Level: {{ $material->level ?: 'Umum' }}
-                        </span>
-                    </div>
+                    @if($material->thumbnail_path && Storage::disk('public')->exists($material->thumbnail_path))
+                        <div class="x-training-thumb">
+                            <img src="{{ asset('storage/' . $material->thumbnail_path) }}" alt="{{ $material->title }}" loading="lazy">
+                        </div>
+                    @endif
 
                     <div class="x-training-body">
-                        <div class="x-training-meta">
-                            <span class="badge badge-neutral">{{ $material->category }}</span>
-                            <span class="x-muted">{{ $material->version ?: 'v1.0' }}</span>
+                        <div class="x-training-top">
+                            <span class="badge badge-cold x-training-cat"><i class="fa-solid fa-tag"></i> {{ $material->category }}</span>
+                            @if($material->created_at)
+                                <span class="x-training-date">{{ $material->created_at->translatedFormat('d M Y') }}</span>
+                            @endif
                         </div>
 
                         <div class="x-training-title">{{ $material->title }}</div>
                         <p class="x-training-desc">
-                            {{ Str::limit($material->description, 100) ?: 'Tidak ada deskripsi tambahan.' }}
+                            {{ Str::limit($material->description, 120) ?: 'Tidak ada deskripsi tambahan.' }}
                         </p>
+
+                        <div class="x-training-meta">
+                            <span class="badge {{ $isVideo ? 'badge-hot' : 'badge-warning' }}">
+                                <i class="fa-solid {{ $isVideo ? 'fa-circle-play' : 'fa-file-lines' }}"></i>
+                                {{ $isVideo ? 'Video' : 'Dokumen' }}
+                            </span>
+                            <span class="badge badge-pending">Level: {{ $material->level ?: 'Umum' }}</span>
+                            <span class="x-muted">{{ $material->version ?: 'v1.0' }}</span>
+                        </div>
 
                         @if($isVideo || $material->file_path)
                             <div class="x-training-actions">
                                 @if($isVideo)
-                                    <a href="{{ route('admin.training.stream', $material->id) }}" target="_blank" class="btn btn-primary btn-sm">
-                                        <i class="fa-solid fa-play"></i> Tonton Video
+                                    <a href="{{ route('admin.training.stream', $material->id) }}" target="_blank" class="x-training-btn is-play">
+                                        <i class="fa-solid fa-circle-play"></i> Tonton Video
                                     </a>
                                 @endif
 
                                 @if($material->file_path)
-                                    <a href="{{ route('admin.training.download', $material->id) }}" class="btn btn-secondary btn-sm">
+                                    <a href="{{ route('admin.training.download', $material->id) }}" class="x-training-btn is-download">
                                         <i class="fa-solid fa-download"></i> Unduh File
                                     </a>
                                 @endif
                             </div>
                         @endif
+                    </div>
+
+                    <div class="x-training-foot">
+                        <span><i class="fa-solid fa-user"></i>Dari: Owner</span>
+                        <span class="x-training-ro">Read-Only</span>
                     </div>
                 </div>
             @endforeach

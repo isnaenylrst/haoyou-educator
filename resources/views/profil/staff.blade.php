@@ -14,7 +14,11 @@
 @section('title', 'Profil & Tanda Tangan Saya')
 
 @section('content')
-<div class="container-fluid py-3">
+<style>
+    /* Halaman profil: teks tebal sedikit lebih ringan (hanya di halaman ini) */
+    .profil-page .fw-bold { font-weight: 600 !important; }
+</style>
+<div class="container-fluid py-3 profil-page">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="fw-bold mb-1">Pengaturan Profil & Tanda Tangan</h4>
@@ -40,7 +44,7 @@
         @if($role !== 'Admin')
         {{-- CARD TANDA TANGAN DIGITAL --}}
         <div class="col-lg-7">
-            <div class="card border-0 shadow-sm rounded-4 overflow-hidden h-100">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
                 <div class="card-header bg-white border-bottom py-3">
                     <h5 class="fw-bold mb-0 text-dark">
                         <i class="fa-solid fa-signature text-warning me-2"></i> Tanda Tangan Digital (TTD Tersimpan)
@@ -73,25 +77,25 @@
                         @csrf
                         <input type="hidden" name="signature_base64" id="signature_base64">
 
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Opsi 1: Gambar Tanda Tangan Langsung di Kanvas</label>
-                            <div class="border rounded-3 p-1 bg-white position-relative" style="touch-action: none;">
-                                <canvas id="signatureCanvas" width="500" height="200" class="w-100" style="border: 1px dashed #ccc; background: #fafafa; border-radius: 8px; cursor: crosshair;"></canvas>
-                                <div class="mt-2 d-flex gap-2">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill" id="clearCanvasBtn">
-                                        <i class="fa-solid fa-eraser me-1"></i> Bersihkan Kanvas
-                                    </button>
+                        <div class="row g-3">
+                            <div class="col-md-7">
+                                <label class="form-label small fw-semibold">Opsi 1: Gambar di Kanvas</label>
+                                <div class="border rounded-3 p-1 bg-white" style="touch-action: none;">
+                                    <canvas id="signatureCanvas" width="500" height="200" class="w-100 d-block" style="border: 1px dashed #ccc; background: #fafafa; border-radius: 8px; cursor: crosshair;"></canvas>
                                 </div>
+                                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill mt-2" id="clearCanvasBtn">
+                                    <i class="fa-solid fa-eraser me-1"></i> Bersihkan
+                                </button>
+                            </div>
+
+                            <div class="col-md-5">
+                                <label class="form-label small fw-semibold">Opsi 2: Upload File Gambar</label>
+                                <input type="file" name="signature_file" class="form-control form-control-sm" accept="image/png,image/jpeg,image/webp">
+                                <small class="text-muted d-block mt-1" style="font-size:11px;">PNG transparan disarankan. Maksimal 2 MB (PNG, JPG, WEBP).</small>
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Opsi 2: Atau Upload File Gambar Tanda Tangan (PNG Transparan disarankan)</label>
-                            <input type="file" name="signature_file" class="form-control" accept="image/png,image/jpeg,image/webp">
-                            <small class="text-muted">Maksimal 2 MB (PNG, JPG, WEBP)</small>
-                        </div>
-
-                        <div class="d-flex justify-content-end mt-4">
+                        <div class="d-flex justify-content-end mt-3">
                             <button type="submit" class="btn btn-warning px-4 py-2 fw-semibold rounded-pill" id="saveSigBtn">
                                 <i class="fa-solid fa-floppy-disk me-1"></i> Simpan Tanda Tangan
                             </button>

@@ -22,9 +22,18 @@
         }
         .cp-missing { color: #DC2626; font-weight: 700; font-size: 12px; }
 
+        /* ---- Jarak judul kartu ke isinya (semua kartu dashboard) ----
+           Bootstrap memberi h3 margin-bottom .5rem dan p margin-bottom 1rem (mengalahkan reset `*` di layout),
+           ditambah margin-bottom pada .card-header, jadi jarak ke isi kartu jadi jauh. Dirapatkan di sini. */
+        .dashboard-card .card-header { margin-bottom: 12px; padding-bottom: 0; }
+        .dashboard-card .card-header h3 { margin: 0 0 2px; }
+        .dashboard-card .card-header p  { margin: 0; }
+        .dashboard-card .card-header + * { margin-top: 0; }
+
         /* ---- Panel notifikasi dashboard ---- */
-        .nb-card { background: #fff; border: 1px solid #edeef1; border-radius: 16px; padding: 18px 20px 20px; margin-bottom: 20px; }
-        .nb-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+        /* tampilan kartu & judul mengikuti .dashboard-card / .card-header (sama dengan kartu Program Kelas Aktif) */
+        .nb-card { margin-bottom: 20px; }
+        .nb-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
         .nb-head-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
         .nb-bell { position: relative; width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center;
                    background: var(--yellow-soft, #fef9c3); color: var(--gold-dark, #a16207); font-size: 15px; flex-shrink: 0; }
@@ -32,9 +41,7 @@
         .nb-bell-dot { position: absolute; top: -3px; right: -3px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
                        background: #dc2626; color: #fff; font-size: 10px; font-weight: 600; display: grid; place-items: center;
                        border: 2px solid #fff; line-height: 1; }
-        .nb-head strong { display: block; font-size: 14.5px; font-weight: 600; color: #1f2937; line-height: 1.2; }
-        .nb-sub { display: block; font-size: 12px; font-weight: 400; color: #6b7280; margin-top: 2px; }
-        .nb-sub b { color: #dc2626; font-weight: 500; }
+        .nb-urgent { color: #dc2626; font-weight: 600; }
         .nb-all { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: #374151;
                   text-decoration: none; padding: 7px 12px; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff;
                   transition: border-color .15s, background-color .15s; }
@@ -53,9 +60,11 @@
                   background: var(--yellow-soft, #fef9c3); color: var(--gold-dark, #a16207); }
         .nb-tile.is-urgent .nb-ico { background: #fef2f2; color: #dc2626; }
         .nb-txt { flex: 1; min-width: 0; }
-        .nb-txt strong { display: block; font-size: 13px; font-weight: 500; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .nb-txt span { display: block; font-size: 11.5px; font-weight: 400; color: #6b7280; margin-top: 1px; }
-        .nb-tile.is-urgent .nb-txt span { color: #dc2626; font-weight: 500; }
+        /* Font judul & keterangan memakai class yang sama dengan daftar Program Kelas Aktif (.cp-title / .cp-meta),
+           jadi ukuran dan berat hurufnya otomatis sama. Di sini hanya layout (block + potong teks panjang). */
+        .nb-txt .cp-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .nb-txt .cp-meta  { display: block; }
+        .nb-tile.is-urgent .nb-txt .cp-meta { color: #dc2626; }
         .nb-num { font-size: 17px; font-weight: 600; color: #374151; line-height: 1; }
 
         .nb-empty { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 12px; background: #ecfdf5; color: #166534; font-size: 12.5px; }
@@ -94,24 +103,21 @@
 
     @php $notifUrgentTotal = array_sum($notifUrgent); @endphp
 
-    <div class="nb-card">
-        <div class="nb-head">
+    <div class="dashboard-card nb-card">
+        <div class="card-header nb-head">
             <div class="nb-head-left">
                 <span class="nb-bell {{ $notifUrgentTotal > 0 ? 'is-urgent' : '' }}">
                     <i class="fa-regular fa-bell"></i>
                     @if ($notif['total'] > 0)<span class="nb-bell-dot">{{ $notif['total'] > 99 ? '99+' : $notif['total'] }}</span>@endif
                 </span>
                 <div>
-                    <strong>Notifikasi</strong>
-                    <span class="nb-sub">
+                    <h3>Notifikasi</h3>
+                    <p>
                         {{ $notif['total'] }} hal perlu ditindaklanjuti
-                        @if ($notifUrgentTotal > 0) &middot; <b>{{ $notifUrgentTotal }} mendesak</b> @endif
-                    </span>
+                        @if ($notifUrgentTotal > 0) &middot; <b class="nb-urgent">{{ $notifUrgentTotal }} mendesak</b> @endif
+                    </p>
                 </div>
             </div>
-            <a href="{{ route('admin.notifikasi.index') }}" class="nb-all">
-                Lihat semua <i class="fa-solid fa-chevron-right"></i>
-            </a>
         </div>
 
         @if ($notif['total'] === 0)
@@ -128,8 +134,8 @@
                     <a href="{{ route('admin.notifikasi.index', ['tab' => $key]) }}" class="nb-tile {{ $isUrgent ? 'is-urgent' : '' }}">
                         <span class="nb-ico"><i class="fa-solid {{ $notifIcons[$key] ?? 'fa-bell' }}"></i></span>
                         <span class="nb-txt">
-                            <strong>{{ $label }}</strong>
-                            <span>{{ $isUrgent ? $notifUrgent[$key] . ' mendesak' : 'Perlu tindakan' }}</span>
+                            <span class="cp-title">{{ $label }}</span>
+                            <span class="cp-meta">{{ $isUrgent ? $notifUrgent[$key] . ' mendesak' : 'Perlu tindakan' }}</span>
                         </span>
                         <span class="nb-num">{{ $notifCounts[$key] }}</span>
                     </a>
@@ -251,7 +257,6 @@
                     <h3>Jadwal Kelas Hari Ini</h3>
                     <p>{{ $jadwalHariIni->count() }} kelas terjadwal</p>
                 </div>
-                <a href="#">Kalender <i class="fa-solid fa-arrow-right"></i></a>
             </div>
 
             @php
