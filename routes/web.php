@@ -53,6 +53,7 @@ use App\Http\Controllers\Admin\PaymentInvoiceController;
 use App\Http\Controllers\Admin\SubmissionRekapController;
 use App\Http\Controllers\Admin\StudentLearningRequestController as AdminStudentLearningRequestController;
 use App\Http\Controllers\Admin\TrainingMaterialController as AdminTrainingMaterialController;
+use App\Http\Controllers\Admin\AdminNotificationController;
 
 // ===== GURU =====
 use App\Http\Controllers\Guru\NotifikasiController as GuruNotifikasiController;
@@ -846,6 +847,10 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
     // DASHBOARD (pakai alias AdminDashboardController)
     Route::get('/dashboard', [AdminDashboardController::class, 'index'])
         ->name('dashboard');
+    
+    // Notifikasi
+    Route::get('notifikasi', [AdminNotificationController::class, 'index'])
+        ->name('notifikasi.index');
 
     // CALON SISWA
     Route::prefix('calon-siswa')->name('calon-siswa.')->group(function () {

@@ -22,6 +22,21 @@
     {{-- CSS Layout Admin (HARUS setelah Bootstrap agar tidak tertimpa) --}}
     <link rel="stylesheet" href="{{ asset('css/admin/layout.css') }}">
 
+    {{-- Bootstrap juga punya class .modal (position: fixed; top/left: 0; height: 100%) yang menarik
+         .modal buatan sendiri keluar dari .modal-overlay. Kembalikan posisinya ke dalam overlay. --}}
+    <style>
+        .modal-overlay > .modal,
+        .sd-modal-overlay > .sd-modal {
+            position: relative;
+            top: auto;
+            left: auto;
+            height: auto;
+            margin: auto;
+            z-index: auto;
+            outline: 0;
+        }
+    </style>
+
     {{-- CSS Tambahan dari halaman --}}
     @stack('styles')
 
@@ -230,46 +245,19 @@
             </div>
 
             <div class="topbar-actions d-flex align-items-center gap-2">
-                {{-- Notifikasi (Laravel Database Notification) --}}
-                <div class="dropdown">
-                    <button class="topbar-button notification position-relative" data-bs-toggle="dropdown" aria-expanded="false" title="Notifikasi">
-                        <i class="fa-regular fa-bell topbar-icon"></i>
-                        @if(($unreadNotificationsCount ?? 0) > 0)
-                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:10px;">
-                                {{ $unreadNotificationsCount }}
-                            </span>
-                        @endif
-                    </button>
-                    <div class="dropdown-menu dropdown-menu-end p-0 shadow rounded-4" style="width:340px; max-height:450px; overflow-y:auto;">
-                        <div class="px-3 py-2 fw-bold border-bottom d-flex justify-content-between align-items-center bg-light">
-                            <span>Notifikasi @if(($unreadNotificationsCount ?? 0) > 0)<span class="badge bg-warning text-dark ms-1">{{ $unreadNotificationsCount }}</span>@endif</span>
-                            @if(($unreadNotificationsCount ?? 0) > 0)
-                                <form action="{{ route('notifications.mark-all-read') }}" method="POST" class="m-0">
-                                    @csrf
-                                    <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none text-muted" style="font-size:11px;">Tandai semua dibaca</button>
-                                </form>
-                            @endif
-                        </div>
-
-                        @if(!empty($unreadNotifications) && $unreadNotifications->count() > 0)
-                            @foreach($unreadNotifications as $notif)
-                                <a class="notif-item border-bottom d-flex align-items-start gap-2 text-decoration-none text-dark p-2" href="{{ route('notifications.read', $notif->id) }}">
-                                    <div class="badge-num mt-1"><i class="fa-solid {{ $notif->data['icon'] ?? 'fa-bell' }}"></i></div>
-                                    <div class="flex-grow-1">
-                                        <div class="fw-semibold small">{{ $notif->data['title'] ?? 'Pemberitahuan' }}</div>
-                                        <div class="text-muted" style="font-size:12px; line-height:1.2;">{{ Str::limit($notif->data['message'] ?? '', 75) }}</div>
-                                        <div class="text-secondary" style="font-size:10px;">{{ $notif->created_at->diffForHumans() }}</div>
-                                    </div>
-                                </a>
-                            @endforeach
-                        @else
-                            <div class="p-4 text-center text-muted small">
-                                <i class="fa-regular fa-bell-slash fs-4 d-block mb-2 text-secondary"></i>
-                                Tidak ada notifikasi baru 🎉
-                            </div>
-                        @endif
-                    </div>
-                </div>
+                {{-- Notifikasi: klik langsung membuka halaman Notifikasi --}}
+                @php
+                    $adminNotifTotal = (int) ($adminNotif['total'] ?? 0);
+                    $notifPageUrl    = \Illuminate\Support\Facades\Route::has('admin.notifikasi.index') ? route('admin.notifikasi.index') : '#';
+                @endphp
+                <a href="{{ $notifPageUrl }}" class="topbar-button notification position-relative" title="Notifikasi" style="text-decoration:none;">
+                    <i class="fa-regular fa-bell topbar-icon"></i>
+                    @if($adminNotifTotal > 0)
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:10px;">
+                            {{ $adminNotifTotal > 99 ? '99+' : $adminNotifTotal }}
+                        </span>
+                    @endif
+                </a>
 
                 <div class="topbar-divider"></div>
 
