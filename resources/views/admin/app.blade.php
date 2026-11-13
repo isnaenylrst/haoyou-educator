@@ -129,9 +129,13 @@
                     <span class="label">Jurnal Mengajar</span>
                 </a>
 
+                <a href="{{ route('admin.progress-report') }}" class="nav-item {{ request()->routeIs('admin.progress-report*') ? 'active' : '' }}">
+                    <i class="fa-solid fa-chart-line nav-icon" title="Progress Report"></i>
+                    <span class="label">Progress Report</span>                
+
                 <a href="{{ route('admin.kurikulum-materi') }}" class="nav-item {{ request()->routeIs('admin.kurikulum-materi*') ? 'active' : '' }}">
                     <i class="fa-solid fa-book nav-icon" title="Kurikulum & Materi"></i>
-                    <span class="label">Kurikulum & Materi</span>
+                    <span class="label">Materi</span>
                 </a>
             </div>
 
@@ -141,7 +145,7 @@
 
                 <a href="{{ route('admin.guru.index') }}" class="nav-item {{ request()->routeIs('admin.guru.index') ? 'active' : '' }}">
                     <i class="fa-solid fa-chalkboard-user nav-icon" title="Guru"></i>
-                    <span class="label">Guru</span>
+                    <span class="label">Kurikulum & Guru</span>
                 </a>
             </div>
 
@@ -161,47 +165,64 @@
                 </a>
             </div>
 
-            {{-- LAPORAN --}}
-            <div class="nav-group">
-                <div class="nav-group-label">Laporan</div>
-
-                <a href="{{ route('admin.progress-report') }}" class="nav-item {{ request()->routeIs('admin.progress-report*') ? 'active' : '' }}">
-                    <i class="fa-solid fa-chart-line nav-icon" title="Progress Report"></i>
-                    <span class="label">Progress Report</span>
-                </a>
-
-                <a href="{{ route('admin.dokumen') }}" class="nav-item {{ request()->routeIs('admin.dokumen*') ? 'active' : '' }}">
-                    <i class="fa-solid fa-file-lines nav-icon" title="Dokumen"></i>
-                    <span class="label">Dokumen</span>
-                </a>
-
-                {{-- <a href="{{ route('admin.training.index') }}" class="nav-item {{ request()->routeIs('admin.training*') ? 'active' : '' }}">
-                    <i class="fa-solid fa-graduation-cap nav-icon" title="Materi Training"></i>
-                    <span class="label">Materi Training</span>
-                </a> --}}
-            </div>
-
             {{-- PENGATURAN --}}
             <div class="nav-group">
-                <div class="nav-group-label">Pengaturan</div>
+                <div class="nav-group-label">Lainnya</div>
 
                 <a href="{{ route('admin.program-level') }}" class="nav-item {{ request()->routeIs('admin.program-level*') ? 'active' : '' }}">
                     <i class="fa-solid fa-layer-group nav-icon" title="Program & Level"></i>
                     <span class="label">Program & Level</span>
                 </a>
 
-                {{-- <a href="{{ route('admin.template-dokumen.index') }}" class="nav-item {{ request()->routeIs('admin.template-dokumen*') ? 'active' : '' }}">
-                    <i class="fa-solid fa-print nav-icon" title="Print Dokumen"></i>
-                    <span class="label">Print Dokumen</span>
-                </a> --}}
+                <a href="{{ route('admin.dokumen') }}" class="nav-item {{ request()->routeIs('admin.dokumen*', 'admin.template-dokumen.*') ? 'active' : '' }}">
+                    <i class="fa-solid fa-file-lines nav-icon" title="Dokumen"></i>
+                    <span class="label">Dokumen</span>
+                </a>
 
-                <a href="{{ route('admin.pengaturan.index') }}" class="nav-item {{ request()->routeIs('admin.pengaturan.*', 'admin.template-dokumen.*') ? 'active' : '' }}">
+                <a href="{{ route('admin.training.index') }}" class="nav-item {{ request()->routeIs('admin.training*') ? 'active' : '' }}">
+                    <i class="fa-solid fa-graduation-cap nav-icon" title="Materi Training"></i>
+                    <span class="label">SOP Admin</span>
+                </a>
+
+                {{-- <a href="{{ route('admin.pengaturan.index') }}" class="nav-item {{ request()->routeIs('admin.pengaturan.*', 'admin.template-dokumen.*') ? 'active' : '' }}">
                     <i class="fa-solid fa-gear nav-icon" title="Pengaturan"></i>
                     <span class="label">Pengaturan</span>
-                </a>
+                </a> --}}
             </div>
 
         </nav>
+
+        {{-- Simpan & pulihkan posisi scroll sidebar supaya tidak lompat ke atas setiap pindah halaman --}}
+        <script>
+            (function () {
+                var nav = document.querySelector('.sidebar-nav');
+                if (!nav) return;
+                var KEY = 'adminSidebarScroll';
+
+                function restore() {
+                    try {
+                        var y = sessionStorage.getItem(KEY);
+                        if (y !== null) nav.scrollTop = parseInt(y, 10) || 0;
+                    } catch (e) {}
+
+                    // pastikan menu aktif tetap terlihat (mis. saat pertama kali dibuka)
+                    var active = nav.querySelector('.nav-item.active');
+                    if (active) {
+                        var n = nav.getBoundingClientRect(), a = active.getBoundingClientRect();
+                        if (a.top < n.top || a.bottom > n.bottom) {
+                            active.scrollIntoView({ block: 'nearest' });
+                        }
+                    }
+                }
+
+                restore();                                   // sebelum halaman digambar (tanpa kedip)
+                window.addEventListener('load', restore);    // ulangi setelah font/ikon selesai dimuat
+
+                nav.addEventListener('scroll', function () {
+                    try { sessionStorage.setItem(KEY, nav.scrollTop); } catch (e) {}
+                }, { passive: true });
+            })();
+        </script>
 
         {{-- SIDEBAR FOOTER --}}
         <div class="sidebar-footer">

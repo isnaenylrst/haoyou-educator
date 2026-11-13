@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\Document;
 use App\Models\DocumentFolder;
+use App\Models\PrintTemplate;
 use App\Models\Teacher;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -77,6 +79,7 @@ class DokumenController extends Controller
             'visibilities' => self::VISIBILITIES,
             'icons'        => self::ICONS,
             'owners'       => $this->ownerOptions(),
+            'templates'    => PrintTemplate::orderBy('id')->get(),
         ]);
     }
 
@@ -176,7 +179,7 @@ class DokumenController extends Controller
     public function destroy(Document $document)
     {
         if ($document->file_path) {
-            Storage::disk('public')->delete($document->file_path);
+            $this->disk()->delete($document->file_path);
         }
 
         $document->delete();
@@ -190,7 +193,7 @@ class DokumenController extends Controller
             return $this->missingFile();
         }
 
-        return Storage::disk('public')->response($document->file_path, $this->fileName($document));
+        return $this->disk()->response($document->file_path, $this->fileName($document));
     }
 
     public function unduh(Document $document)
@@ -199,7 +202,7 @@ class DokumenController extends Controller
             return $this->missingFile();
         }
 
-        return Storage::disk('public')->download($document->file_path, $this->fileName($document));
+        return $this->disk()->download($document->file_path, $this->fileName($document));
     }
 
     /* ------------------------------------------------------------------ */
@@ -212,9 +215,22 @@ class DokumenController extends Controller
         ];
     }
 
+    /**
+     * Disk 'public' bertipe FilesystemAdapter (punya response() & download()).
+     * Tanpa ini editor menandai method tersebut sebagai "unknown method" karena
+     * Storage::disk() hanya dikenali sebagai contract Filesystem.
+     */
+    private function disk(): FilesystemAdapter
+    {
+        /** @var FilesystemAdapter $disk */
+        $disk = Storage::disk('public');
+
+        return $disk;
+    }
+
     private function fileExists(Document $document): bool
     {
-        return $document->file_path && Storage::disk('public')->exists($document->file_path);
+        return $document->file_path && $this->disk()->exists($document->file_path);
     }
 
     private function missingFile()

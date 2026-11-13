@@ -9,6 +9,11 @@
         .badge-owner { background: rgba(168, 85, 247, .12); color: #9333ea; }
         .badge-paid  { background: rgba(20, 184, 166, .12); color: #0f766e; }
         .badge-done  { background: #e5e7eb; color: #111827; }
+
+        .stat-row-owner { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        @media (max-width: 900px) { .stat-row-owner { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 560px) { .stat-row-owner { grid-template-columns: 1fr; } }
+        .stat-card.c-blue { border-left-color: #3b82f6; }   
     </style>
 @endpush
 
@@ -33,7 +38,7 @@
 {{-- HEADER --}}
 <div class="dashboard-header">
     <div>
-        <div class="eyebrow">{{ $isOwner ? 'Owner' : 'Admin' }} · Keuangan</div>
+        <div class="eyebrow">Keuangan</div>
         <h1>Rekap Pengajuan Bahan Ajar &amp; Reimburse</h1>
         <p>Monitoring dan persetujuan pengajuan reimburse bahan ajar, pengadaan buku/kit, dan sertifikat.</p>
     </div>
@@ -64,39 +69,55 @@
 @endif
 
 {{-- RINGKASAN (ikut berubah sesuai filter) --}}
-<div class="x-note">
-    <i class="fa-solid fa-calendar-days"></i>
-    <span>Ringkasan periode: <strong>{{ $periodLabel }}</strong></span>
-</div>
-
-<div class="stat-row">
+@if ($isOwner)
+ 
+{{-- ===== OWNER: 6 kartu (3 kolom x 2 baris) ===== --}}
+<div class="stat-row stat-row-owner">
+    <div class="stat-card c-green">
+        <div class="stat-top">
+            <span class="stat-label">Total Pemasukan</span>
+            <i class="fa-solid fa-arrow-trend-up stat-icon"></i>
+        </div>
+        <div class="stat-value money">Rp {{ number_format($totalPemasukan ?? 0, 0, ',', '.') }}</div>
+        <div class="stat-note up">Dari total pembayaran les siswa</div>
+    </div>
+ 
     <div class="stat-card c-red">
         <div class="stat-top">
             <span class="stat-label">Total Pengeluaran</span>
             <i class="fa-solid fa-arrow-trend-down stat-icon"></i>
         </div>
         <div class="stat-value money">Rp {{ number_format($totalPengeluaran ?? 0, 0, ',', '.') }}</div>
-        <div class="stat-note">Reimburse &amp; pengadaan disetujui</div>
+        <div class="stat-note">Reimburse &amp; pengadaan bahan disetujui</div>
     </div>
-
+ 
+    <div class="stat-card c-blue">
+        <div class="stat-top">
+            <span class="stat-label">Saldo</span>
+            <i class="fa-solid fa-wallet stat-icon"></i>
+        </div>
+        <div class="stat-value money">Rp {{ number_format($saldo ?? 0, 0, ',', '.') }}</div>
+        <div class="stat-note">Selisih pemasukan dan pengeluaran</div>
+    </div>
+ 
     <div class="stat-card">
         <div class="stat-top">
             <span class="stat-label">Total Pengajuan</span>
             <i class="fa-solid fa-folder-open stat-icon"></i>
         </div>
         <div class="stat-value">{{ $totalCount }}</div>
-        <div class="stat-note">Semua status</div>
+        <div class="stat-note">Sesuai filter yang aktif</div>
     </div>
-
+ 
     <div class="stat-card c-yellow">
         <div class="stat-top">
-            <span class="stat-label">Perlu Verifikasi</span>
-            <i class="fa-solid fa-clipboard-check stat-icon"></i>
+            <span class="stat-label">Menunggu Review</span>
+            <i class="fa-solid fa-hourglass-half stat-icon"></i>
         </div>
-        <div class="stat-value">{{ $totalVerifikasi }}</div>
-        <div class="stat-note {{ $totalVerifikasi > 0 ? 'warn' : '' }}">Menunggu verifikasi Admin</div>
+        <div class="stat-value">{{ $totalMenunggu }}</div>
+        <div class="stat-note {{ $totalMenunggu > 0 ? 'warn' : '' }}">Diajukan s/d Review Owner</div>
     </div>
-
+ 
     <div class="stat-card c-green">
         <div class="stat-top">
             <span class="stat-label">Telah Disetujui</span>
@@ -106,6 +127,49 @@
         <div class="stat-note up">Disetujui, Dibayar &amp; Selesai</div>
     </div>
 </div>
+ 
+@else
+ 
+{{-- ===== ADMIN: 4 kartu (seperti sebelumnya) ===== --}}
+<div class="stat-row">
+    <div class="stat-card c-red">
+        <div class="stat-top">
+            <span class="stat-label">Total Pengeluaran</span>
+            <i class="fa-solid fa-arrow-trend-down stat-icon"></i>
+        </div>
+        <div class="stat-value money">Rp {{ number_format($totalPengeluaran ?? 0, 0, ',', '.') }}</div>
+        <div class="stat-note">Reimburse &amp; pengadaan disetujui</div>
+    </div>
+ 
+    <div class="stat-card">
+        <div class="stat-top">
+            <span class="stat-label">Total Pengajuan</span>
+            <i class="fa-solid fa-folder-open stat-icon"></i>
+        </div>
+        <div class="stat-value">{{ $totalCount }}</div>
+        <div class="stat-note">Semua status</div>
+    </div>
+ 
+    <div class="stat-card c-yellow">
+        <div class="stat-top">
+            <span class="stat-label">Perlu Verifikasi</span>
+            <i class="fa-solid fa-clipboard-check stat-icon"></i>
+        </div>
+        <div class="stat-value">{{ $totalVerifikasi }}</div>
+        <div class="stat-note {{ $totalVerifikasi > 0 ? 'warn' : '' }}">Menunggu verifikasi Admin</div>
+    </div>
+ 
+    <div class="stat-card c-green">
+        <div class="stat-top">
+            <span class="stat-label">Telah Disetujui</span>
+            <i class="fa-solid fa-circle-check stat-icon"></i>
+        </div>
+        <div class="stat-value">{{ $totalApproved }}</div>
+        <div class="stat-note up">Disetujui, Dibayar &amp; Selesai</div>
+    </div>
+</div>
+ 
+@endif
 
 {{-- FILTER (otomatis terfilter saat pilihan diubah) --}}
 <form method="GET" class="toolbar" id="filterForm">

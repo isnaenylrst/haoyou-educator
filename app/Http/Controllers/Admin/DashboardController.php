@@ -12,6 +12,7 @@ use App\Models\ProgressReport;
 use App\Models\Student;
 use App\Models\TeacherAvailability;
 use App\Models\TeachingJournal;
+use App\Services\MissingJournalFinder;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
 
@@ -63,7 +64,7 @@ class DashboardController extends Controller
     }
 
     /**
-     * Program Kelas Aktif: kelas (Running, Completed, Open, Closed, urut sesuai itu) beserta progres pertemuannya.
+     * Program Kelas Aktif: kelas (urut: Selesai, Jurnal belum diisi, Akan Berakhir, Berjalan, Belum Mulai, Ditutup) beserta progres pertemuannya.
      */
     private function programAktif()
     {
@@ -82,23 +83,19 @@ class DashboardController extends Controller
             ->groupBy('class_id')
             ->pluck('done', 'class_id');
 
+        // Pertemuan yang sudah lewat tapi jurnalnya belum dibuat (logika sama dengan notifikasi guru & tab "Belum Diisi")
+        $missingByClass = $this->missingJournalsByClass($classes);
+
         return $classes
-            ->each(function ($k) use ($doneByClass) {
+            ->each(function ($k) use ($doneByClass, $missingByClass) {
                 // Total pertemuan mengikuti paket (total_meetings), sama dengan halaman Kelas
                 $k->total_sessions = (int) ($k->programPackage?->total_meetings ?? $k->privatePackage?->total_meetings ?? 0);
                 $k->done_sessions  = (int) ($doneByClass[$k->id] ?? 0);
+                $k->missing_sessions = (int) ($missingByClass[$k->id] ?? 0);
                 $k->sessions_left  = max($k->total_sessions - $k->done_sessions, 0);
                 $k->progress       = $k->total_sessions > 0
                     ? min(100, (int) round($k->done_sessions / $k->total_sessions * 100))
                     : 0;
-
-                // urutan tampil: Running, Completed, Open, Closed
-                $k->rank = match ($k->status) {
-                    self::CLASS_RUNNING   => 0,
-                    self::CLASS_COMPLETED => 1,
-                    self::CLASS_OPEN      => 2,
-                    default               => 3,
-                };
 
                 if ($k->status === self::CLASS_CLOSED) {
                     $k->state = 'closed';         // Ditutup
@@ -113,11 +110,45 @@ class DashboardController extends Controller
                 } else {
                     $k->state = 'live';           // Berjalan
                 }
+
+                // urutan tampil: Selesai, Jurnal belum diisi, Akan Berakhir, Berjalan (jurnal sudah diisi), Belum Mulai, Ditutup
+                $k->rank = match (true) {
+                    $k->state === 'done'                                                  => 0,
+                    $k->missing_sessions > 0 && in_array($k->state, ['ending', 'live'], true) => 1,
+                    $k->state === 'ending'                                                => 2,
+                    $k->state === 'live'                                                  => 3,
+                    $k->state === 'scheduled'                                             => 4,
+                    default                                                               => 5, // closed
+                };
             })
-            ->sort(fn ($a, $b) => [$a->rank, $a->sessions_left, -($a->end_date?->timestamp ?? 0)]
-                              <=> [$b->rank, $b->sessions_left, -($b->end_date?->timestamp ?? 0)])
+            ->sort(fn ($a, $b) => [$a->rank, -$a->missing_sessions, $a->sessions_left, -($a->end_date?->timestamp ?? 0)]
+                              <=> [$b->rank, -$b->missing_sessions, $b->sessions_left, -($b->end_date?->timestamp ?? 0)])
             ->values()
             ->take(self::PROGRAM_LIST_LIMIT);
+    }
+
+    /**
+     * Jumlah pertemuan yang sudah berlangsung tetapi jurnal guru belum dibuat, per kelas.
+     * Memakai MissingJournalFinder supaya angkanya sama dengan notifikasi guru dan halaman Jurnal Mengajar.
+     *
+     * @return \Illuminate\Support\Collection<int, int>  [class_id => jumlah]
+     */
+    private function missingJournalsByClass($classes)
+    {
+        $from = $classes
+            ->where('status', '!=', self::CLASS_CLOSED)
+            ->pluck('start_date')
+            ->filter()
+            ->min();
+
+        if (! $from) {
+            return collect();
+        }
+
+        return app(MissingJournalFinder::class)
+            ->find($from, today())
+            ->groupBy(fn ($item) => $item->class->id)
+            ->map(fn ($group) => $group->count());
     }
 
     /**

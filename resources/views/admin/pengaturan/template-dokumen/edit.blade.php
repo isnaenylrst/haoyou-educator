@@ -41,11 +41,11 @@
 
     <div class="dashboard-header">
         <div>
-            <div class="eyebrow">Pengaturan &raquo; Print Dokumen</div>
+            <div class="eyebrow">Dokumen &raquo; Template Dokumen</div>
             <h1>{{ $template->name }}</h1>
             <p>Klik penanda di kanan untuk menyisipkannya di posisi kursor. Penanda diganti data siswa saat dicetak.</p>
         </div>
-        <a href="{{ route('admin.template-dokumen.index') }}" class="btn btn-secondary">
+        <a href="{{ route('admin.dokumen') }}" class="btn btn-secondary">
             <i class="fa-solid fa-arrow-left"></i> Kembali
         </a>
     </div>

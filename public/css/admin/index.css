@@ -3588,3 +3588,24 @@ input[type="date"].select-chip::-webkit-datetime-edit-fields-wrapper { font-fami
 .cell-nowrap {
     white-space: nowrap;
 }
+
+/* =====================================================
+   TABEL SEJAJAR (dipakai 2 tabel di satu halaman, mis. Guru & Kurikulum)
+   Lebar kolom dibagi persen, jadi kolom di tabel atas dan bawah lurus
+   dan kolom nama tidak memakan semua sisa lebar.
+   Khusus tabel 5 kolom: nama, No. HP, Tanggal Bergabung, Status, Aksi.
+===================================================== */
+
+.table-aligned {
+    table-layout: fixed;
+}
+
+.table-aligned th:nth-child(1), .table-aligned td:nth-child(1) { width: 30%; }
+.table-aligned th:nth-child(2), .table-aligned td:nth-child(2) { width: 18%; }
+.table-aligned th:nth-child(3), .table-aligned td:nth-child(3) { width: 20%; }
+.table-aligned th:nth-child(4), .table-aligned td:nth-child(4) { width: 16%; }
+.table-aligned th:nth-child(5), .table-aligned td:nth-child(5) { width: 16%; }
+
+.table-aligned .row-actions {
+    justify-content: center;
+}

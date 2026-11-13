@@ -4,6 +4,24 @@
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('/css/admin/dashboard.css') }}">
+    <style>
+        /* Tinggi area list Program Kelas Aktif & Jadwal Hari Ini dibuat SAMA; kalau isi lebih panjang -> scroll */
+        :root { --dash-list-h: 520px; }
+        .dash-scroll { height: var(--dash-list-h); overflow-y: auto; position: relative; }
+
+        /* Track progres: bar menyambung tanpa jeda.
+           kuning/hijau = jurnal sudah ada, merah = sudah berlangsung tapi jurnal belum dibuat */
+        .cp-track { display: flex; gap: 0; overflow: hidden; border-radius: 999px; }
+        /* ujung kanan bar melengkung; kalau ada bagian merah, lengkung kanan pindah ke ujung merah */
+        .cp-fill  { flex: none; border-radius: 999px; }
+        .cp-fill.has-miss { border-radius: 999px 0 0 999px; }     /* kiri melengkung, kanan rata (menyambung ke merah) */
+        .cp-miss  {
+            flex: none; height: 100%;
+            border-radius: 0 999px 999px 0;                       /* kiri rata (menyambung), kanan melengkung */
+            background: #EF4444;                                  /* merah solid */
+        }
+        .cp-missing { color: #DC2626; font-weight: 700; font-size: 12px; }
+    </style>
 @endpush
 
 @section('content')
@@ -123,7 +141,7 @@
                 </div>
             </div>
 
-            <div class="cp-lis" style="max-height: 520px; overflow-y: auto;">
+            <div class="cp-lis dash-scroll">
                 @forelse ($programAktif as $k)
                     @php
                         $barColor = match ($k->state) {
@@ -132,6 +150,20 @@
                             'closed' => '#9CA3AF',
                             default  => null,
                         };
+
+                        // Pertemuan yang sudah berlangsung tapi jurnal guru belum dibuat (diisi controller)
+                        $missing = (int) ($k->missing_sessions ?? 0);
+                        $held    = (int) $k->done_sessions + $missing;   // total pertemuan yang sudah berlangsung
+
+                        if ($k->total_sessions > 0) {
+                            $donePct = min(100, round($k->done_sessions / $k->total_sessions * 100, 2));
+                            $missPct = $missing > 0
+                                ? min(100 - $donePct, round($missing / $k->total_sessions * 100, 2))
+                                : 0;
+                        } else {
+                            $donePct = (float) $k->progress;
+                            $missPct = 0;
+                        }
                     @endphp
                     <div class="cp-row">
                         <div class="cp-head">
@@ -154,12 +186,18 @@
                             </div>
                         </div>
                         <div class="cp-track">
-                            <div class="cp-fill" style="width: {{ $k->progress }}%;{{ $barColor ? ' background:' . $barColor . ';' : '' }}"></div>
+                            <div class="cp-fill{{ $missPct > 0 ? ' has-miss' : '' }}" style="width: {{ $donePct }}%;{{ $barColor ? ' background:' . $barColor . ';' : '' }}"></div>
+                            @if ($missPct > 0)
+                                <div class="cp-miss" style="width: {{ $missPct }}%;" title="{{ $missing }} pertemuan sudah berlangsung, jurnal belum dibuat"></div>
+                            @endif
                         </div>
                         <div class="cp-foot">
                             <span class="cp-sessions">Pertemuan
-                                <b>{{ $k->done_sessions }}@if ($k->total_sessions > 0)/{{ $k->total_sessions }}@endif</b>
+                                <b>{{ $held }}@if ($k->total_sessions > 0)/{{ $k->total_sessions }}@endif</b>
                             </span>
+                            @if ($missing > 0)
+                                <span class="cp-missing"><i class="fa-solid fa-circle-exclamation"></i> {{ $missing }} jurnal belum dibuat</span>
+                            @endif
                         </div>
                     </div>
                 @empty
@@ -180,13 +218,31 @@
                 <a href="#">Kalender <i class="fa-solid fa-arrow-right"></i></a>
             </div>
 
-            <div class="today-list">
-                @forelse ($jadwalHariIni as $s)
+            @php
+                // Item yang dipusatkan di tengah card:
+                // 1) kelas yang sedang berlangsung, 2) kalau tidak ada: kelas terdekat berikutnya, 3) kalau tidak ada: kelas terakhir
+                $focusIdx = $jadwalHariIni->filter(fn ($x) => $x->state === 'ongoing')->keys()->all();
+
+                if (empty($focusIdx)) {
+                    $next = $jadwalHariIni->first(fn ($x) => in_array($x->state, ['soon', 'upcoming']));
+                    if ($next) {
+                        $focusIdx = $jadwalHariIni->filter(fn ($x) => $x->start_label === $next->start_label)->keys()->all();
+                    }
+                }
+
+                if (empty($focusIdx) && $jadwalHariIni->isNotEmpty()) {
+                    $focusIdx = [$jadwalHariIni->count() - 1];
+                }
+            @endphp
+
+            <div class="today-list dash-scroll" id="todayList">
+                @forelse ($jadwalHariIni as $i => $s)
                     @php
                         $guru = $s->teacher->name ?? $s->class->teacher->name ?? '-';
                         $mode = $s->location_type ?: ($s->class->delivery_mode ?? '');
                     @endphp
-                    <div class="today-item {{ $s->state === 'completed' ? 'completed' : (in_array($s->state, ['soon', 'ongoing']) ? 'soon' : '') }}">
+                    <div class="today-item {{ $s->state === 'completed' ? 'completed' : (in_array($s->state, ['soon', 'ongoing']) ? 'soon' : '') }}"
+                         @if (in_array($i, $focusIdx)) data-focus="1" @endif>
                         @if (in_array($s->state, ['soon', 'ongoing']))
                             <div class="today-time" style="color: #E0A400; font-weight: 800;">
                                 {{ $s->start_label }} – {{ $s->end_label }} ·
@@ -206,6 +262,25 @@
             </div>
         </div>
         </div>
+
+        <script>
+            // Scroll list jadwal supaya kelas yang sedang berlangsung berada di tengah card
+            (function () {
+                const list = document.getElementById('todayList');
+                if (!list) return;
+
+                const items = list.querySelectorAll('[data-focus="1"]');
+                if (!items.length) return;
+
+                const first  = items[0];
+                const last   = items[items.length - 1];
+                const top    = first.offsetTop;
+                const bottom = last.offsetTop + last.offsetHeight;
+                const target = (top + bottom) / 2 - list.clientHeight / 2;
+
+                list.scrollTop = Math.max(0, target);
+            })();
+        </script>
 
         {{-- =====================================================
         PAYMENT + TEACHER

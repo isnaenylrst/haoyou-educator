@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\OwnerApproveSubmissionRequest;
+use App\Models\Payment;
 use App\Models\Submission;
 use App\Models\Teacher;
 use App\Models\User;
@@ -59,11 +60,48 @@ class SubmissionRekapController extends Controller
             });
         }
 
+        // ---------------------------------------------------------------
+        // KARTU RINGKASAN
         // Semua kartu dihitung dari $query yang sama, jadi ikut berubah mengikuti filter
+        // ---------------------------------------------------------------
+
+        // Dipakai KEDUA role (Admin: 4 kartu, Owner: 6 kartu)
         $totalCount       = (clone $query)->count();
         $totalPengeluaran = (float) (clone $query)->whereIn('status', ['Disetujui', 'Dibayar', 'Selesai'])->sum('amount');
-        $totalVerifikasi  = (clone $query)->where('status', 'Review Admin')->count();
+        $totalVerifikasi  = (clone $query)->where('status', 'Review Admin')->count();   // kartu Admin: "Perlu Verifikasi"
         $totalApproved    = (clone $query)->whereIn('status', ['Disetujui', 'Dibayar', 'Selesai'])->count();
+
+        // Khusus Owner (Admin tidak butuh angka ini, jadi tidak di-query)
+        $totalPemasukan = null;
+        $totalMenunggu  = null;
+        $saldo          = null;
+
+        if ($isOwner) {
+            // Menunggu Review = semua yang belum final: Diajukan s/d Review Owner
+            $totalMenunggu = (clone $query)
+                ->whereIn('status', ['Diajukan', 'Review Kurikulum', 'Review Admin', 'Review Owner'])
+                ->count();
+
+            // Pemasukan = pembayaran siswa (Paid/Partial), mengikuti filter periode yang sama
+            // tetapi berdasarkan tanggal pembayaran (payment_date).
+            $totalPemasukan = (float) Payment::whereIn('status', ['Paid', 'Partial'])
+                ->when(
+                    $dateFrom || $dateTo,
+                    function ($q) use ($dateFrom, $dateTo) {
+                        $q->when($dateFrom, fn ($qq) => $qq->whereDate('payment_date', '>=', $dateFrom))
+                          ->when($dateTo, fn ($qq) => $qq->whereDate('payment_date', '<=', $dateTo));
+                    },
+                    function ($q) use ($bulan) {
+                        $q->when($bulan, function ($qq) use ($bulan) {
+                            [$y, $m] = explode('-', $bulan);
+                            $qq->whereYear('payment_date', (int) $y)->whereMonth('payment_date', (int) $m);
+                        });
+                    }
+                )
+                ->sum('amount_paid');
+
+            $saldo = $totalPemasukan - $totalPengeluaran;
+        }
 
         // Label periode untuk ditampilkan di atas kartu
         if ($dateFrom || $dateTo) {
@@ -93,6 +131,7 @@ class SubmissionRekapController extends Controller
         return view('admin.pengajuan.index', compact(
             'submissions', 'teachers', 'totalCount', 'totalPengeluaran',
             'totalVerifikasi', 'totalApproved', 'periodLabel',
+            'totalPemasukan', 'totalMenunggu', 'saldo',
             'status', 'type', 'teacherId', 'bulan', 'dateFrom', 'dateTo', 'isOwner'
         ));
     }
