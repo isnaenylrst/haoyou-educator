@@ -242,7 +242,7 @@ class AdminNotificationService
                         . ' ' . $this->endsText($end) . '.',
                     $end->isToday() ? 3 : 2,
                     $end,
-                    $this->to('admin.kelas.sessions', $c->id, 'kelas')
+                    $this->to('admin.kelas.ubah-jadwal', $c->id, 'kelas')
                 );
             });
     }
@@ -255,7 +255,7 @@ class AdminNotificationService
     protected function missingJournals(): Collection
     {
         return app(MissingJournalFinder::class)
-            ->find(today()->subDays(self::JOURNAL_LOOKBACK_DAYS), today())
+            ->find(today()->subDays(self::JOURNAL_LOOKBACK_DAYS), today(), null, true)
             ->filter(function ($i) {
                 $end = Carbon::parse($i->date->format('Y-m-d') . ' ' . $i->schedule->end_time);
 
@@ -266,7 +266,9 @@ class AdminNotificationService
                 'Jurnal mengajar belum diisi',
                 "{$i->teacher->name} belum mengisi jurnal " . $this->className($i->class)
                     . ' (' . $i->date->translatedFormat('d M Y') . ', selesai ' . substr($i->schedule->end_time, 0, 5) . ')'
-                    . ($i->is_substitute ? ' sebagai guru pengganti.' : '.'),
+                    . ($i->is_substitute
+                        ? ' sebagai guru pengganti' . ($i->awaiting_curriculum ? ' (cuti menunggu ACC Kurikulum)' : '') . '.'
+                        : '.'),
                 $i->days_late >= 2 ? 3 : 2,
                 Carbon::parse($i->date->format('Y-m-d') . ' ' . $i->schedule->end_time)
             ));

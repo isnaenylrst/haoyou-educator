@@ -298,6 +298,9 @@
                                 {{ $m->teacher->name }}
                                 @if ($m->is_substitute)
                                     <span class="badge badge-warning" style="margin-left:4px;">Pengganti</span>
+                                    @if ($m->awaiting_curriculum ?? false)
+                                        <div class="cand-sub">Cuti menunggu ACC Kurikulum</div>
+                                    @endif
                                 @endif
                             </td>
                             <td style="text-align: center; vertical-align: middle;">

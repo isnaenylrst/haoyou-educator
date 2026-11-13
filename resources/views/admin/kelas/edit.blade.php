@@ -99,6 +99,7 @@
                                 <option value="Offline">Offline</option>
                                 <option value="Online">Online</option>
                             </select>
+                            <span class="form-hint" id="edit_mode_hint"></span>
                         </div>
                         <div class="form-field">
                             <label>Kapasitas Maksimal *</label>
@@ -233,6 +234,72 @@
                         </div>
                     @endunless
                 </div>
+
+                {{-- ===== Cuti & Guru Pengganti =====
+                     Tampil begitu guru pengganti sudah ACC, walau Kurikulum belum review (agar tidak terlewat). --}}
+                @php
+                    $cutiRows = \App\Support\AdminLeaveVisibility::apply(
+                        \App\Models\TeacherLeave::with(['teacher', 'replacementTeacher', 'classSchedule'])
+                            ->whereHas('classSchedule', fn ($q) => $q->where('class_id', $kelas->id))
+                            ->whereDate('leave_date', '>=', today())
+                    )->orderBy('leave_date')->get();
+                @endphp
+
+                @if ($cutiRows->isNotEmpty())
+                    <div class="form-section">
+                        <div class="form-section-title"><i class="fa-solid fa-user-clock"></i> Cuti &amp; Guru Pengganti</div>
+
+                        <div class="sd-scroll">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Tanggal</th>
+                                        <th>Jadwal</th>
+                                        <th>Guru Kelas</th>
+                                        <th>Guru Pengganti</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($cutiRows as $c)
+                                        <tr>
+                                            <td>
+                                                <div class="cand-name">{{ $c->leave_date->translatedFormat('d M Y') }}</div>
+                                                <div class="cand-sub">{{ $c->request_type }}</div>
+                                            </td>
+                                            <td>
+                                                {{ $c->classSchedule?->day }}
+                                                {{ substr($c->classSchedule?->start_time ?? '', 0, 5) }}–{{ substr($c->classSchedule?->end_time ?? '', 0, 5) }}
+                                            </td>
+                                            <td>{{ $c->teacher?->name ?? '-' }}</td>
+                                            <td>
+                                                @if ($c->replacement_teacher_id)
+                                                    <span class="cand-name">{{ $c->replacementTeacher?->name ?? '-' }}</span>
+                                                @else
+                                                    <span class="x-muted">Tanpa pengganti</span>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                @if ($c->status === 'Approved')
+                                                    <span class="badge badge-completed">Disetujui Kurikulum</span>
+                                                @else
+                                                    <span class="badge badge-pending">Menunggu ACC Kurikulum</span>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+
+                        @if ($cutiRows->contains(fn ($c) => $c->status !== 'Approved'))
+                            <div class="auto-note">
+                                <i class="fa-solid fa-circle-info"></i>
+                                Guru pengganti sudah menerima, tetapi Kurikulum belum mereview. Jika mendekati tanggal cuti, ingatkan Kurikulum.
+                            </div>
+                        @endif
+                    </div>
+                @endif
             </div>
 
             <div class="kelas-form-actions">
@@ -260,72 +327,6 @@
                               'mode' => $offerFit->isNotEmpty() ? 'all' : null, 'label' => 'Ajukan ke Semua Guru', 'empty' => null];
         }
     @endphp
-
-    <div class="kelas-form-card kelas-edit-card" id="offerCard">
-        <div class="form-section">
-            <div class="form-section-title">
-                <i class="fa-solid fa-paper-plane"></i> {{ $kelas->teacher_id ? 'Ganti Guru' : 'Ajukan ke Guru' }}
-            </div>
-
-            <div class="auto-note">
-                <i class="fa-solid fa-circle-info"></i>
-                <span>
-                    @if ($kelas->teacher_id)
-                        Guru saat ini: <b>{{ $kelas->teacher?->name }}</b>.
-                    @else
-                        Guru kelas baru terisi setelah ada guru yang menerima.
-                    @endif
-                </span>
-            </div>
-
-            @foreach ($offerGroups as $g)
-                <div class="offer-group">
-                    <div class="offer-head">
-                        <div class="offer-head-title">
-                            {{ $g['title'] }}@if ($g['count'] !== null)<span class="offer-count">{{ $g['count'] }}</span>@endif
-                        </div>
-                        @if ($g['mode'])
-                            <button type="button" class="btn btn-primary btn-sm" onclick="submitOffer('{{ $g['mode'] }}')">
-                                <i class="fa-solid fa-paper-plane"></i> {{ $g['label'] }}
-                            </button>
-                        @endif
-                    </div>
-
-                    @if ($g['empty'])
-                        <div class="offer-empty">{{ $g['empty'] }}</div>
-                    @endif
-
-                    @if ($g['list']->isNotEmpty())
-                        <div class="offer-grid">
-                            @foreach ($g['list'] as $t)
-                                <div class="offer-row">
-                                    <div class="offer-main">
-                                        <div class="offer-name">{{ $t->name }}</div>
-                                        @if ($t->reason)
-                                            <div class="offer-why">{{ $t->reason }}</div>
-                                        @endif
-                                        @if ($t->status === 'Rejected' && $t->note)
-                                            <div class="offer-note">Alasan menolak: {{ $t->note }}</div>
-                                        @endif
-                                    </div>
-                                    <div class="offer-actions">
-                                        @if ($t->status && $t->status !== 'Closed')
-                                            <span class="offer-chip {{ strtolower($t->status) }}">{{ $offerStatusLabel[$t->status] ?? $t->status }}</span>
-                                        @endif
-                                        @if ($t->status !== 'Pending')
-                                            <button type="button" class="btn btn-primary btn-sm" onclick="submitOffer('selected', [{{ $t->id }}])">
-                                                {{ $t->status === 'Rejected' ? 'Ajukan Lagi' : 'Ajukan' }}
-                                            </button>
-                                        @endif
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-                    @endif
-                </div>
-            @endforeach
-        </div>
-    </div>
 
     {{-- Form tersembunyi untuk tombol Ajukan (terpisah dari form Edit Kelas) --}}
     <form id="offerForm" method="POST" action="{{ route('admin.kelas.offer.store', $kelas->id) }}" style="display:none;">
@@ -498,9 +499,31 @@ const DAY_ORDER = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu
     function syncRooms(prefix) {
         const online = document.getElementById(prefix + '_delivery_mode').value === 'Online';
 
+        // Kelas yang sudah punya pertemuan: jadwal terkunci, KECUALI ruangan saat berganti Online -> Offline
+        // (admin wajib memilih ruangan fisik). Offline -> Online: ruangan otomatis "Online".
+        const locked = typeof HAS_SESSIONS !== 'undefined' && HAS_SESSIONS;
+        const needsRooms = locked && ! online && KELAS.delivery_mode === 'Online';
+
         document.querySelectorAll('#' + prefix + '_schedule_rows .room-field').forEach(el => {
             el.style.display = online ? 'none' : '';
+
+            if (locked) {
+                el.querySelectorAll('select, button').forEach(c => { c.disabled = ! needsRooms; });
+                const add = el.querySelector('.room-add');
+                if (add) add.style.display = needsRooms ? '' : 'none';
+            }
         });
+
+        const hint = document.getElementById(prefix + '_mode_hint');
+        if (hint && locked) {
+            if (needsRooms) {
+                hint.textContent = 'Berganti ke Offline: pilih ruangan untuk tiap jadwal di bawah. Pertemuan yang belum berlangsung akan dipindah ke ruangan itu.';
+            } else if (online && KELAS.delivery_mode !== 'Online') {
+                hint.textContent = 'Berganti ke Online: ruangan dikosongkan dan pertemuan yang belum berlangsung memakai Zoom. Link Zoom bisa diisi di bawah.';
+            } else {
+                hint.textContent = 'Mode bisa diganti. Pertemuan yang sudah berlangsung dan Home Visit tidak berubah.';
+            }
+        }
 
         const zoom = document.getElementById(prefix + '_zoom_fields');
         if (zoom) {
@@ -719,17 +742,34 @@ const DAY_ORDER = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu
     };
 
     function lockSchedule() {
-        ['edit_delivery_mode', 'edit_start_date', 'edit_end_date'].forEach(id => {
+        // Mode kelas (edit_delivery_mode) sengaja TIDAK dikunci: boleh diganti Offline <-> Online
+        ['edit_start_date', 'edit_end_date'].forEach(id => {
             document.getElementById(id).disabled = true;
         });
-        document.querySelectorAll('#edit_schedule_rows input, #edit_schedule_rows select, #edit_schedule_rows button')
+        // input hidden (id jadwal) tetap aktif supaya ruangan baru bisa dicocokkan di server
+        document.querySelectorAll('#edit_schedule_rows input:not([type=hidden]), #edit_schedule_rows select, #edit_schedule_rows button')
             .forEach(el => { el.disabled = true; });
         document.querySelectorAll('#edit_schedule_rows .schedule-remove, #edit_schedule_rows .room-add')
             .forEach(el => { el.style.display = 'none'; });
         document.getElementById('edit_add_schedule_btn').style.display = 'none';
+
+        // Setelah dikunci, atur ulang ruangan sesuai mode yang dipilih
+        syncRooms('edit');
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        const editForm = document.getElementById('editKelasForm');
+        if (editForm) {
+            editForm.addEventListener('submit', function (e) {
+                const mode = document.getElementById('edit_delivery_mode').value;
+                if (HAS_SESSIONS && mode !== KELAS.delivery_mode) {
+                    const msg = 'Mode kelas diganti dari ' + KELAS.delivery_mode + ' ke ' + mode + '.\n'
+                        + 'Ruangan dan pertemuan yang belum berlangsung akan ikut diubah. Lanjutkan?';
+                    if (! confirm(msg)) e.preventDefault();
+                }
+            });
+        }
+
         // Tipe & paket tidak bisa diubah: selalu ikut data kelas, abaikan input lama
         fillKelasForm('edit', Object.assign({}, KELAS, OLD_INPUT, {
             type: KELAS.type,

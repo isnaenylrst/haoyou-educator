@@ -12,6 +12,7 @@ use App\Models\Program;
 use App\Models\Teacher;
 use App\Models\TeacherAvailability;
 use App\Models\TeacherLeave;
+use App\Support\AdminLeaveVisibility;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
@@ -267,7 +268,8 @@ class JadwalController extends Controller
 
         $leaves = TeacherLeave::query()
             ->whereIn('class_schedule_id', $scheduleIds)
-            ->where('status', 'Approved')
+            // Pengganti tampil begitu guru pengganti ACC, tanpa menunggu Kurikulum
+            ->tap(fn ($q) => AdminLeaveVisibility::apply($q))
             ->whereBetween('leave_date', [
                 $weekStart->copy()->subWeeks(4)->toDateString(),
                 $weekEnd->copy()->addWeeks(4)->toDateString(),
@@ -277,6 +279,7 @@ class JadwalController extends Controller
                 'class_schedule_id',
                 'leave_date',
                 'replacement_teacher_id',
+                'status',
             ])
             ->keyBy(
                 fn ($leave) => $leave->class_schedule_id
@@ -588,7 +591,9 @@ class JadwalController extends Controller
                 $note = 'Guru pengganti';
             } elseif ($leave && $leave->replacement_teacher_id) {
                 $teacherId = $leave->replacement_teacher_id;
-                $note = 'Guru pengganti (izin disetujui)';
+                $note = AdminLeaveVisibility::awaitingCurriculum($leave)
+                    ? 'Guru pengganti (menunggu ACC Kurikulum)'
+                    : 'Guru pengganti (izin disetujui)';
             }
 
             if (
