@@ -135,20 +135,21 @@ class SiswaLearningController extends Controller
     public function video()
     {
         $student = $this->student();
+        $studying = $student && $this->isStudying($student);
 
-        $levelIds = ($student && $this->isStudying($student))
-            ? $this->activeLevelIds($student)
-            : [];
+        $levelIds = $studying ? $this->activeLevelIds($student) : [];
 
-        $categoryIds = \App\Models\ProgramCategory::whereHas('levels', fn ($q) => $q->whereIn('id', $levelIds))
-            ->pluck('id')->values()->all();
+        $categoryIds = $studying
+        ? \App\Models\ProgramCategory::whereHas('levels', fn ($q) => $q->whereIn('id', $levelIds))
+            ->pluck('id')->values()->all()
+        : [];
 
-        $videos = ($student && $this->isStudying($student))
-            ? LearningVideo::visibleToCategoriesAndLevels($categoryIds, $levelIds)
-                ->with(['level', 'category'])
-                ->latest()
-                ->get()
-            : collect();
+          $videos = $studying
+        ? LearningVideo::visibleToCategoriesAndLevels($categoryIds, $levelIds)
+            ->with(['level', 'category'])
+            ->latest()
+            ->get()
+        : collect();
 
         $groupedVideos = $videos->groupBy(function ($v) {
             return $v->category?->category_name ?? 'Umum / Semua Program';

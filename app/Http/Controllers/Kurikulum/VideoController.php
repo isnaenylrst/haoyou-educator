@@ -56,6 +56,7 @@ class VideoController extends Controller
             'program_level_id' => ['nullable', 'integer', 'exists:program_levels,id'],
             'source_type'      => ['required', Rule::in(['file', 'youtube'])],
             'video'            => ['required_if:source_type,file', 'nullable', 'file', 'mimes:mp4,webm,mov', 'max:512000'],
+            'kind' => ['required', Rule::in(['culture', 'replay'])],
             'youtube_url'      => ['required_if:source_type,youtube', 'nullable', 'string', 'max:255'],
             'thumbnail'        => ['nullable', 'image', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
         ], self::MESSAGES);
@@ -71,6 +72,7 @@ class VideoController extends Controller
             'title'            => trim($data['title']),
             'description'      => $data['description'] ?? null,
             'source_type'      => $data['source_type'],
+            'kind' => $data['kind'],
             'thumbnail_path'   => $thumbnailPath,
             'is_published'     => $request->boolean('is_published', true),
             'is_active'        => $request->boolean('is_active', true),
@@ -124,6 +126,7 @@ class VideoController extends Controller
             'title'            => ['required', 'string', 'max:255'],
             'description'      => ['nullable', 'string', 'max:2000'],
             'category_id'      => ['nullable', 'integer', 'exists:program_categories,id'],
+            'kind' => ['required', Rule::in(['culture', 'replay'])],
             'program_level_id' => ['nullable', 'integer', 'exists:program_levels,id'],
             'thumbnail'        => ['nullable', 'image', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
         ];
@@ -138,6 +141,7 @@ class VideoController extends Controller
             'title'            => trim($data['title']),
             'description'      => $data['description'] ?? null,
             'category_id'      => $data['category_id'] ?? null,
+            'kind' => $data['kind'],
             'program_level_id' => $data['program_level_id'] ?? null,
             'is_published'     => $request->boolean('is_published', true),
             'is_active'        => $request->boolean('is_active', true),
