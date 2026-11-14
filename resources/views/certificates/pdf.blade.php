@@ -91,7 +91,7 @@
           @else
             <div style="height:50pt;"></div>
           @endif
-          <div style="border-top:0.75pt solid #23211C; padding-top:2pt; font-size:10pt;">{{ config('certificate.signer_name') }}</div>
+         <div style="width:100pt; margin:0 auto; border-top:0.75pt solid #23211C; padding-top:2pt; font-size:10pt;">{{ config('certificate.signer_name') }}</div>
           <div style="font-size:8pt; color:#5F5E5A;">{{ config('certificate.signer_title') }}</div>
         </td>
       </tr>

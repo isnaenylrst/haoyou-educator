@@ -12,6 +12,7 @@ use App\Models\ProgramLevel;
 use App\Models\User;
 use App\Models\VocabWord;
 use App\Notifications\AppNotification;
+use App\Services\BelajarmandiriExcelImporter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -19,17 +20,21 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
+/**
+ * Catatan: nilai audience 'Huahua' di database/kode TETAP dipakai sebagai kode internal
+ * untuk materi "Belajar Mandiri" (hanya teks yang tampil ke pengguna yang diganti).
+ */
 class MaterialController extends Controller
 {
-    private const MAX_VOCAB        = 255;     // materials_vocab.order_number (tinyint)
-    private const MAX_HUAHUA_ORDER = 65535;   // vocab_words.order_number (smallint)
+    private const MAX_VOCAB         = 255;     // materials_vocab.order_number (tinyint)
+    private const MAX_MANDIRI_ORDER = 65535;   // vocab_words.order_number (smallint)
 
     private const MESSAGES = [
-        'audience.required'      => 'Pilih tujuan materi: Guru, Siswa, atau Huahua.',
+        'audience.required'      => 'Pilih tujuan materi: Guru, Siswa, atau Belajar Mandiri.',
         'meeting_number.unique'  => 'Pertemuan ini sudah ada pada level dan tujuan yang sama.',
         'meeting_number.max'     => 'Nomor pertemuan maksimal 255.',
         'material_file.required' => 'File materi wajib diunggah.',
-        'material_file.mimes'    => 'File harus berformat PDF, DOC, DOCX, PPT, atau PPTX.',
+        'material_file.mimes'    => 'File harus berformat PDF, DOC, DOCX, PPT, atau PPTX (khusus Belajar Mandiri juga XLSX atau XLS).',
         'material_file.max'      => 'Ukuran file maksimal 10 MB.',
         'material_file.uploaded' => 'Upload gagal. Periksa upload_max_filesize dan post_max_size di php.ini.',
     ];
@@ -105,7 +110,7 @@ class MaterialController extends Controller
         return view('kurikulum.materi', compact('materials', 'programs', 'levels', 'audience', 'counts', 'selectedProgram'));
     }
 
-    /** Kolom khusus Guru dikosongkan untuk materi Siswa/Huahua (dan sebaliknya). */
+    /** Kolom khusus Guru dikosongkan untuk materi Siswa/Belajar Mandiri (dan sebaliknya). */
     private function payload(Request $request, string $audience): array
     {
         $isGuru = $audience === 'Guru';
@@ -143,9 +148,20 @@ class MaterialController extends Controller
                 ]);
 
                 $this->saveVocabulary($created, $request->vocabularies, $summary);
+                $this->importExcelIfAny($created, $path, $summary);
 
                 return $created;
             });
+        } catch (\RuntimeException $e) {
+            // pesan dari importer Excel (template salah, level belum dipilih, dst.)
+            Storage::disk('public')->delete($path);
+
+            return back()->withInput()->with('error', $e->getMessage());
+        } catch (\PhpOffice\PhpSpreadsheet\Exception $e) {
+            Storage::disk('public')->delete($path);
+            report($e);
+
+            return back()->withInput()->with('error', 'File Excel tidak dapat dibaca. Gunakan template import Belajar Mandiri.');
         } catch (\Throwable $e) {
             Storage::disk('public')->delete($path);   // jangan sisakan file yatim
             report($e);
@@ -155,7 +171,7 @@ class MaterialController extends Controller
 
         $this->sendNewMaterialNotification($material);
 
-        return $this->done('Materi berhasil ditambahkan untuk ' . $audience . '.', $summary, $material);
+        return $this->done('Materi berhasil ditambahkan untuk ' . $this->audienceLabel($audience) . '.', $summary, $material);
     }
 
     public function update(UpdateMaterialRequest $request, Material $material)
@@ -179,7 +195,21 @@ class MaterialController extends Controller
                     $material->vocabularies()->delete();   // diganti dengan daftar baru
                 }
                 $this->saveVocabulary($material, $request->vocabularies, $summary);
+                $this->importExcelIfAny($material, $newPath, $summary);
             });
+        } catch (\RuntimeException $e) {
+            if ($newPath) {
+                Storage::disk('public')->delete($newPath);
+            }
+
+            return back()->withInput()->with('error', $e->getMessage());
+        } catch (\PhpOffice\PhpSpreadsheet\Exception $e) {
+            if ($newPath) {
+                Storage::disk('public')->delete($newPath);
+            }
+            report($e);
+
+            return back()->withInput()->with('error', 'File Excel tidak dapat dibaca. Gunakan template import Belajar Mandiri.');
         } catch (\Throwable $e) {
             if ($newPath) {
                 Storage::disk('public')->delete($newPath);
@@ -207,7 +237,8 @@ class MaterialController extends Controller
 
         try {
             DB::transaction(function () use ($material) {
-                // Kata di bank Huahua TIDAK dihapus (material_id menjadi NULL) agar progres belajar siswa aman
+                // Kata Belajar Mandiri, bab, dan grammar hasil import TIDAK dihapus
+                // (material_id menjadi NULL) agar progres belajar siswa aman
                 $material->vocabularies()->delete();
                 $material->delete();
             });
@@ -236,7 +267,7 @@ class MaterialController extends Controller
         return response()->download(storage_path('app/public/' . $material->material_file_path), $name);
     }
 
-    /** PDF dibuka di browser; Word/PowerPoint otomatis diunduh. */
+    /** PDF dibuka di browser; Word/PowerPoint/Excel otomatis diunduh. */
     public function preview(Material $material)
     {
         abort_unless($material->file_exists, 404, 'File materi tidak ditemukan.');
@@ -252,6 +283,11 @@ class MaterialController extends Controller
     }
 
     // ------------------------------------------------------------ HELPER
+
+    private function audienceLabel(string $audience): string
+    {
+        return $audience === 'Huahua' ? 'Belajar Mandiri' : $audience;
+    }
 
     protected function sendNewMaterialNotification(Material $material): void
     {
@@ -348,8 +384,18 @@ class MaterialController extends Controller
             ]))
             ->with('success', $message);
 
-        if ($material->audience === 'Huahua' && ($summary['imported'] + $summary['updated']) > 0) {
-            $redirect->with('info', "Bank Huahua: {$summary['imported']} kata baru, {$summary['updated']} kata diperbarui.");
+        $excel = $summary['excel'] ?? null;
+
+        if ($excel) {
+            $redirect->with('info',
+                "Excel Belajar Mandiri: {$excel['imported']} kata baru, {$excel['updated']} kata diperbarui, "
+                . "{$excel['duplicates']} duplikat dilewati. "
+                . "Grammar: {$excel['grammar_new']} baru, {$excel['grammar_updated']} diperbarui. "
+                . "Vocab Traps: {$excel['traps_new']} baru, {$excel['traps_updated']} diperbarui."
+                . "Soal Grammar: " . ($excel['questions_new'] ?? 0) . " baru, " . ($excel['questions_updated'] ?? 0) . " diperbarui."
+                );
+        } elseif ($material->audience === 'Huahua' && ($summary['imported'] + $summary['updated']) > 0) {
+            $redirect->with('info', "Bank Belajar Mandiri: {$summary['imported']} kata baru, {$summary['updated']} kata diperbarui.");
         }
 
         if ($summary['skipped'] > 0) {
@@ -357,13 +403,15 @@ class MaterialController extends Controller
                 ? 'Hanzi | Pinyin | Arti Indonesia | English (opsional) | Jenis kata (opsional)'
                 : 'Hanzi | Pinyin | Arti';
 
-            $redirect->with('warning', "{$summary['skipped']} baris kosakata dilewati karena formatnya salah, kosong, terlalu panjang, atau melebihi batas (format: {$format}).");
+            $detail = $excel && ! empty($excel['notes']) ? ' Rincian: ' . implode(' | ', $excel['notes']) : '';
+
+            $redirect->with('warning', "{$summary['skipped']} baris dilewati karena formatnya salah, kosong, terlalu panjang, atau melebihi batas (format teks: {$format}).{$detail}");
         }
 
         return $redirect;
     }
 
-    /** Guru & Siswa -> materials_vocab; Huahua -> bank vocab_words. */
+    /** Guru & Siswa -> materials_vocab; Belajar Mandiri -> bank vocab_words. */
     private function saveVocabulary(Material $material, ?string $text, array &$summary): void
     {
         if (!$text) {
@@ -371,8 +419,29 @@ class MaterialController extends Controller
         }
 
         $material->audience === 'Huahua'
-            ? $this->importHuahuaWords($material, $text, $summary)
+            ? $this->importMandiriWords($material, $text, $summary)
             : $this->saveMaterialVocab($material, $text, $summary);
+    }
+
+    /**
+     * Materi Belajar Mandiri dengan file Excel -> otomatis masuk ke
+     * vocab_chapters, vocab_words, vocab_examples, dan grammar_points.
+     * Berjalan di dalam DB::transaction milik store()/update().
+     */
+    private function importExcelIfAny(Material $material, ?string $path, array &$summary): void
+    {
+        if ($material->audience !== 'Huahua' || ! $path
+            || ! BelajarmandiriExcelImporter::supports(pathinfo($path, PATHINFO_EXTENSION))) {
+            return;
+        }
+
+        $result = app(BelajarmandiriExcelImporter::class)
+            ->import($material, Storage::disk('public')->path($path));
+
+        foreach (['imported', 'updated', 'skipped'] as $key) {
+            $summary[$key] += $result[$key];
+        }
+        $summary['excel'] = $result;
     }
 
     private function saveMaterialVocab(Material $material, string $text, array &$summary): void
@@ -409,10 +478,10 @@ class MaterialController extends Controller
     }
 
     /**
-     * Masukkan kata ke bank Huahua. Kata yang sama (level + hanzi) DIPERBARUI,
-     * bukan digandakan. Kata yang dihapus dari daftar TIDAK dihapus dari bank.
+     * Masukkan kata (input teks) ke bank Belajar Mandiri. Kata yang sama (level + hanzi)
+     * DIPERBARUI, bukan digandakan. Kata yang dihapus dari daftar TIDAK dihapus dari bank.
      */
-    private function importHuahuaWords(Material $material, string $text, array &$summary): void
+    private function importMandiriWords(Material $material, string $text, array &$summary): void
     {
         $order = (int) VocabWord::max('order_number');
 
@@ -451,7 +520,7 @@ class MaterialController extends Controller
                 continue;
             }
 
-            if ($order >= self::MAX_HUAHUA_ORDER) {
+            if ($order >= self::MAX_MANDIRI_ORDER) {
                 $summary['skipped']++;
                 continue;
             }

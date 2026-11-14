@@ -16,6 +16,7 @@ use App\Http\Controllers\ProfilController;
 use App\Http\Controllers\Siswa\VocabGuideVideoController;
 use App\Http\Controllers\Siswa\GrammarController;
 use App\Http\Controllers\Siswa\BelajarMandiriController;
+use App\Http\Controllers\Siswa\SelfStudyCertificateController;
 use App\Http\Controllers\NotificationController;
 
 // ===== KURIKULUM =====
@@ -230,11 +231,17 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
     Route::get('/sertifikat/{certificate}/download', [SiswaLearningController::class, 'downloadSertifikat'])
         ->name('sertifikat.download');
 
-    // SERTIFIKAT OTOMATIS (HSK)
+     // SERTIFIKAT OTOMATIS (HSK)
     Route::prefix('student/certificates')->name('student.certificates.')->group(function () {
         Route::get('/', [StudentCertificateController::class, 'index'])->name('index');
         Route::post('/', [StudentCertificateController::class, 'store'])->name('store');
         Route::get('/{certificate}/download', [StudentCertificateController::class, 'download'])->name('download');
+    }); // <-- INI YANG HILANG
+
+    // SERTIFIKAT BELAJAR MANDIRI
+    Route::prefix('student/belajar-mandiri/sertifikat')->name('student.mandiri-certificates.')->group(function () {
+        Route::post('/', [SelfStudyCertificateController::class, 'store'])->name('store');
+        Route::get('/{certificate}/download', [SelfStudyCertificateController::class, 'download'])->name('download');
     });
 
     // VIDEO
@@ -259,7 +266,7 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
         Route::get('vocab-list', [VocabController::class, 'list'])->name('list');
 
         Route::get('test/{type?}', [VocabController::class, 'test'])->name('test')
-            ->where('type', 'reading|listening|writing');
+        ->where('type', 'reading|listening|writing');
         Route::post('test/{type}/answer', [VocabController::class, 'answer'])->name('test.answer');
         Route::get('test/{type}/pending', [VocabController::class, 'pending'])->name('test.pending');
         Route::post('test/{type}/reset', [VocabController::class, 'reset'])->name('test.reset');
@@ -283,26 +290,27 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
     Route::get('/test',  [GrammarController::class, 'test'])->name('test');
     Route::post('/test/{no}/answer', [GrammarController::class, 'answer'])->name('test.answer');
 });
-
-    // BOOKING KELAS
-    Route::get('/booking', [BookingController::class, 'index'])
-        ->name('booking.index');
-
-    Route::post('/booking/privat', [BookingController::class, 'storePrivate'])
-        ->name('booking.privat.store');
-
-    Route::patch('/booking/privat/{booking}/reschedule', [BookingController::class, 'reschedulePrivate'])
-        ->name('booking.privat.reschedule');
-
-    Route::post('/booking/reguler/{class}', [BookingController::class, 'daftarReguler'])
-        ->name('booking.reguler.daftar');
-
-    Route::post('/booking/request-privat', [BookingController::class, 'requestPrivate'])
-        ->name('booking.request.privat');
-
-    Route::post('/booking/request-reguler', [BookingController::class, 'requestReguler'])
-        ->name('booking.request.reguler');
 });
+
+//     // BOOKING KELAS
+//     Route::get('/booking', [BookingController::class, 'index'])
+//         ->name('booking.index');
+
+//     Route::post('/booking/privat', [BookingController::class, 'storePrivate'])
+//         ->name('booking.privat.store');
+
+//     Route::patch('/booking/privat/{booking}/reschedule', [BookingController::class, 'reschedulePrivate'])
+//         ->name('booking.privat.reschedule');
+
+//     Route::post('/booking/reguler/{class}', [BookingController::class, 'daftarReguler'])
+//         ->name('booking.reguler.daftar');
+
+//     Route::post('/booking/request-privat', [BookingController::class, 'requestPrivate'])
+//         ->name('booking.request.privat');
+
+//     Route::post('/booking/request-reguler', [BookingController::class, 'requestReguler'])
+//         ->name('booking.request.reguler');
+// });
 
 /*
 |--------------------------------------------------------------------------

@@ -62,7 +62,7 @@
   <form method="POST" action="{{ route('student.vocab.plan.save') }}" class="vb-card" style="margin:0">
     @csrf
     <div class="vb-title">Rencana belajarmu</div>
-    <div class="vb-sub" style="margin-bottom:16px">Isi sendiri, lalu selesaikan Huahua sesuai targetmu.</div>
+    <div class="vb-sub" style="margin-bottom:16px">Isi sendiri, lalu selesaikan sesuai targetmu.</div>
 
     <div class="vb-field"><label>Tanggal mulai</label>
       <input type="date" name="start_date" id="pStart" value="{{ old('start_date', optional($plan)->start_date?->toDateString() ?? today()->toDateString()) }}"></div>

@@ -2,10 +2,46 @@
 
 namespace App\Support;
 
+use App\Models\GrammarPoint;
+use App\Models\GrammarQuestion;
+
 class GrammarData
 {
-    /** Daftar grammar: no, hanzi, arti, pinyin, fungsi, pola, contoh[[hanzi, indo]] */
-    public static function list(): array
+    /**
+     * Daftar grammar: no, hanzi, arti, pinyin, fungsi, pola, contoh[[hanzi, indo]]
+     *
+     * Sumber data: tabel grammar_points (hasil import Excel Belajar Mandiri) sesuai level siswa.
+     * Kalau belum ada data untuk level itu, dipakai data bawaan (staticList) supaya halaman tidak kosong.
+     */
+    public static function list(?int $levelId = null): array
+    {
+        try {
+            $rows = GrammarPoint::forLevel($levelId ?? StudentLevel::id())
+                ->orderBy('chapter_number')
+                ->orderBy('order_number')
+                ->get();
+        } catch (\Throwable $e) {
+            // Tabel grammar_points belum dimigrasi / error lain: tampilan siswa tetap seperti semula
+            return self::staticList();
+        }
+
+        if ($rows->isEmpty()) {
+            return self::staticList();
+        }
+
+        return $rows->map(fn ($g) => [
+            'no'     => $g->id,                 // dipakai sebagai item_no di grammar_progress
+            'hanzi'  => $g->hanzi,
+            'arti'   => $g->arti ?? '',
+            'pinyin' => $g->pinyin ?? '',
+            'fungsi' => $g->fungsi ?? '',
+            'pola'   => $g->pola ?? '',
+            'contoh' => $g->contoh ?? [],
+        ])->all();
+    }
+
+    /** Data bawaan (cadangan) selama belum ada grammar hasil import. */
+    public static function staticList(): array
     {
         return [
             [
@@ -112,23 +148,73 @@ class GrammarData
 
     /**
      * Soal test. Status tiap pilihan: benar | kurang | salah
+     *
+     * Sumber: tabel grammar_questions (no = id soal, grammar_no = id pola).
+     * Kalau belum ada soal di database, dipakai soal bawaan (staticQuestions).
      */
-    public static function questions(): array
+    public static function questions(?int $levelId = null): array
+    {
+        $levelId ??= StudentLevel::id();
+
+        try {
+            $rows = GrammarQuestion::forLevel($levelId)
+                ->orderBy('chapter_number')->orderBy('order_number')->orderBy('id')
+                ->get();
+        } catch (\Throwable $e) {
+            $rows = collect();
+        }
+
+        if ($rows->isNotEmpty()) {
+            return $rows->map(fn ($q) => [
+                'no'         => $q->id,
+                'grammar_no' => $q->grammar_point_id,
+                'soal'       => $q->soal,
+                'options'    => $q->options ?? [],
+            ])->all();
+        }
+
+        $static = self::staticQuestions();
+
+        // Pola sudah dari Excel: nomor pola bawaan tidak cocok, jadi jangan dihitung ke bintang.
+        if (self::usesImportedGrammar($levelId)) {
+            foreach ($static as &$q) {
+                $q['grammar_no'] = null;
+            }
+            unset($q);
+        }
+
+        return $static;
+    }
+
+    private static function usesImportedGrammar(?int $levelId): bool
+    {
+        try {
+            return GrammarPoint::forLevel($levelId)->exists();
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Soal bawaan (cadangan).
+     * grammar_no = nomor pola di staticList() yang diuji soal ini (null = tidak dihitung ke bintang)
+     */
+    public static function staticQuestions(): array
     {
         return [
-            ['no' => 1, 'soal' => 'Hari ini panas sekali.', 'options' => [
+            ['no' => 1, 'grammar_no' => 1, 'soal' => 'Hari ini panas sekali.', 'options' => [
                 ['今天热得很', 'kurang'], ['今天热得不得了', 'benar'], ['今天热了一点儿', 'salah'],
             ]],
-            ['no' => 2, 'soal' => 'Masalah ini sangat sulit.', 'options' => [
+            ['no' => 2, 'grammar_no' => 2, 'soal' => 'Masalah ini sangat sulit.', 'options' => [
                 ['这个问题难得不得了', 'kurang'], ['这个问题难了一点儿', 'salah'], ['这个问题难得很', 'benar'],
             ]],
-            ['no' => 3, 'soal' => 'Kamar ini agak terlalu kecil.', 'options' => [
+            ['no' => 3, 'grammar_no' => 3, 'soal' => 'Kamar ini agak terlalu kecil.', 'options' => [
                 ['这个房间小得很', 'kurang'], ['这个房间小了一点儿', 'benar'], ['这个房间有的是小', 'salah'],
             ]],
-            ['no' => 4, 'soal' => 'Dia punya banyak waktu.', 'options' => [
+            ['no' => 4, 'grammar_no' => 4, 'soal' => 'Dia punya banyak waktu.', 'options' => [
                 ['他有的是时间', 'benar'], ['他总是时间', 'salah'], ['他有很多时间', 'kurang'],
             ]],
-            ['no' => 5, 'soal' => 'Segampang ini pun kamu tidak tahu.', 'options' => [
+            ['no' => 5, 'grammar_no' => null, 'soal' => 'Segampang ini pun kamu tidak tahu.', 'options' => [
                 ['这么简单你还不知道', 'kurang'], ['这么简单你毕竟不知道', 'salah'], ['这么简单你都不知道', 'benar'],
             ]],
         ];
