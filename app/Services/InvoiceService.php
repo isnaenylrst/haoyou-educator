@@ -71,7 +71,8 @@ class InvoiceService
             'logo'          => 'Logo Haoyou',
             'nomor_invoice' => 'Nomor invoice',
             'tanggal_bayar' => 'Tanggal pembayaran',
-            'jenis_biaya'   => 'Jenis biaya tambahan',
+            'jenis_biaya'   => 'Jenis biaya tambahan (gabungan kalau Home Visit + Pengganti)',
+            'rincian_biaya' => 'Baris rincian biaya, satu baris per jenis (otomatis)',
         ],
 
         'Siswa' => [
@@ -167,7 +168,19 @@ class InvoiceService
             self::TEMPLATE_KEY_EXTRA
         )->firstOrFail();
 
-        $values = $this->extraValuesFor($payment);
+        // Home Visit + Pertemuan Pengganti berbagi satu nomor invoice: tampil sebagai satu invoice
+        $group = Payment::query()
+            ->where('enrollment_id', $payment->enrollment_id)
+            ->where('invoice_number', $payment->invoice_number)
+            ->whereIn('payment_type', Payment::EXTRA_TYPES)
+            ->orderBy('id')
+            ->get();
+
+        if ($group->isEmpty()) {
+            $group = collect([$payment]);
+        }
+
+        $values = $this->extraValuesFor($payment, $group);
 
         // Invoice biaya tambahan tidak memakai blok cicilan paket.
         $content = $this->render(
@@ -204,6 +217,8 @@ class InvoiceService
         $values['watermark'] = $this->watermarkTag();
 
         if ($key === self::TEMPLATE_KEY_EXTRA) {
+            $values['rincian_biaya'] = $this->extraRow('[Jenis biaya tambahan]', '[Jumlah]');
+
             return $this->toPdf(
                 $this->render($content, $values, false, false)
             );
@@ -367,8 +382,10 @@ class InvoiceService
      * INVOICE BIAYA TAMBAHAN
      * ========================================================== */
 
-    private function extraValuesFor(Payment $payment): array
+    private function extraValuesFor(Payment $payment, ?\Illuminate\Support\Collection $group = null): array
     {
+        $group = ($group === null || $group->isEmpty()) ? collect([$payment]) : $group;
+
         $session = $payment->session;
         $enrollment = $payment->enrollment;
 
@@ -393,15 +410,23 @@ class InvoiceService
                 . substr((string) $endTime, 0, 5);
         }
 
-        $jenisBiaya = match ($payment->payment_type) {
+        $label = fn (Payment $p) => match ($p->payment_type) {
             Payment::TYPE_REPLACEMENT =>
                 'Pertemuan tambahan (kelas pengganti)',
 
             Payment::TYPE_HOME_VISIT =>
                 'Biaya guru mengajar ke rumah murid',
 
-            default => (string) $payment->payment_type,
+            default => (string) $p->payment_type,
         };
+
+        $rows = $group->map(fn (Payment $p) => $this->extraRow(
+            $label($p),
+            $this->rupiah((float) $p->amount_paid)
+        ))->implode('');
+
+        $jenisBiaya = $group->map(fn (Payment $p) => e($label($p)))->implode('<br>');
+        $total      = (float) $group->sum('amount_paid');
 
         $location = collect([
             $session->location_type,
@@ -417,7 +442,8 @@ class InvoiceService
                 $this->dateId($payment->payment_date)
             ),
 
-            'jenis_biaya' => e($jenisBiaya),
+            'jenis_biaya' => $jenisBiaya,
+            'rincian_biaya' => $rows,
 
             'nama_siswa' => e($student?->name),
             'kelas' => e($className),
@@ -436,9 +462,7 @@ class InvoiceService
                     : 'Haoyou Educator'
             ),
 
-            'jumlah_dibayar' => $this->rupiah(
-                (float) $payment->amount_paid
-            ),
+            'jumlah_dibayar' => $this->rupiah($total),
 
             'metode_bayar' => e(
                 $payment->payment_method
@@ -618,6 +642,16 @@ class InvoiceService
             $stage === 'Termin 2'                   => 'Termin3',
             default                                 => 'Termin',
         };
+    }
+
+    /** Satu baris tabel Rincian Biaya invoice biaya tambahan. */
+    private function extraRow(string $label, string $amount): string
+    {
+        $td = 'border:1px solid #000;padding:3px 6px;vertical-align:top;';
+
+        return '<tr><td style="' . $td . '">' . e($label) . '</td>'
+            . '<td style="' . $td . 'text-align:right;white-space:nowrap;">'
+            . e($amount) . '</td></tr>';
     }
 
     private function feeRow(

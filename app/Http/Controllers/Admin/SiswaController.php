@@ -727,7 +727,7 @@ class SiswaController extends Controller
 
         $enrollment->load([
             'student.candidateStudent.availableSchedules',
-            'student.currentLevel',
+            'student.currentLevel.category',
             'programPackage.program',
         ]);
 
@@ -769,7 +769,11 @@ class SiswaController extends Controller
             'match' => [
                 'program' => $enrollment->programPackage?->program?->program_name,
                 'package' => $enrollment->programPackage?->package_name,
+                'category' => $enrollment->student?->currentLevel?->category?->category_name,
                 'level'   => $enrollment->student?->currentLevel?->level_name,
+                'registered_at' => $enrollment->enrollment_date
+                    ? Carbon::parse($enrollment->enrollment_date)->format('d/m/Y')
+                    : null,
             ],
         ]);
     }
@@ -1721,6 +1725,7 @@ class SiswaController extends Controller
         abort_unless((int) $enrollment->student_id === (int) $siswa->id, 404);
 
         $settle = $request->query('jenis') === 'pelunasan';
+        $fromPayment = $request->query('dari') === 'pembayaran';
 
         return view('admin.calon-siswa.convert', [
             'step'        => 3,
@@ -1729,8 +1734,8 @@ class SiswaController extends Controller
             'eyebrow'     => 'Akademik » Siswa',
             'doneTitle'   => $settle ? 'Pembayaran Berhasil' : 'Lanjut Program Berhasil',
             'subtitle'    => 'Pembayaran sudah tercatat. Unduh dokumen yang diperlukan di bawah ini.',
-            'doneUrl'     => route('admin.siswa'),
-            'doneLabel'   => 'Daftar Siswa',
+            'doneUrl'     => $fromPayment ? route('admin.pembayaran') : route('admin.siswa'),
+            'doneLabel'   => $fromPayment ? 'Daftar Pembayaran' : 'Daftar Siswa',
             // null → blade memakai 3 label bawaan (Data Diri & Program, Pembayaran & Bukti, Invoice & Formulir)
             'stepLabels'  => $settle
                 ? [1 => 'Pembayaran & Bukti', 2 => 'Invoice & Formulir']

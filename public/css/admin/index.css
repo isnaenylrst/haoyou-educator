@@ -1946,7 +1946,11 @@ a.icon-btn {
 
     .card-padded,
     .convert-layout .card {
-        padding: 18px;
+        padding: 24px;
+    }
+
+    .convert-layout .card {
+        overflow: visible;
     }
 
     .form-grid {

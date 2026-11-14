@@ -25,6 +25,20 @@ class Payment extends Model
         'payment_type' => self::TYPE_PACKAGE,
     ];
 
+    public bool $useGivenInvoiceNumber = false;
+
+    protected static function booted(): void
+    {
+        static::creating(function (Payment $payment) {
+            if ($payment->useGivenInvoiceNumber && filled($payment->invoice_number)) {
+                return;
+            }
+
+            $payment->invoice_number = app(\App\Services\InvoiceNumberService::class)
+                ->forPayment($payment);
+        });
+    }
+
     protected $fillable = [
         'enrollment_id',
         'class_session_id',

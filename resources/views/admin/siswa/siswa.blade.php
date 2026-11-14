@@ -390,6 +390,19 @@
                 <div class="modal-body">
                     <div class="form-section">
                         <div class="form-field full">
+                            <label>Detail Pendaftaran</label>
+                            <div id="assign_registration_detail" style="font-size:13px;color:#374151;display:grid;grid-template-columns:110px 1fr;gap:4px 10px;">
+                                <span>Tanggal Daftar</span><strong id="assign_reg_date">-</strong>
+                                <span>Program</span><strong id="assign_reg_program">-</strong>
+                                <span>Paket</span><strong id="assign_reg_package">-</strong>
+                                <span>Kategori</span><strong id="assign_reg_category">-</strong>
+                                <span>Level</span><strong id="assign_reg_level">-</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-field full">
                             <label>Jadwal Siswa</label>
                             <div id="assign_student_schedule" style="font-size:13px;color:#374151;">-</div>
                         </div>
@@ -463,6 +476,9 @@
             select.innerHTML = '<option value="">- Pilih Kelas -</option>';
             emptyNote.style.display = 'none';
             scheduleBox.textContent = '-';
+            ['date', 'program', 'package', 'category', 'level'].forEach(k => {
+                document.getElementById(`assign_reg_${k}`).textContent = '-';
+            });
             overlay.classList.add('open');
 
             fetch(`/admin/enrollments/${enrollmentId}/waiting-class-options`, {
@@ -473,6 +489,13 @@
                 return response.json();
             })
             .then(data => {
+                const m = data.match ?? {};
+                document.getElementById('assign_reg_date').textContent     = m.registered_at || '-';
+                document.getElementById('assign_reg_program').textContent  = m.program || '-';
+                document.getElementById('assign_reg_package').textContent  = m.package || '-';
+                document.getElementById('assign_reg_category').textContent = m.category || '-';
+                document.getElementById('assign_reg_level').textContent    = m.level || '-';
+
                 const schedules = data.student_schedules ?? [];
                 scheduleBox.textContent = schedules.length
                     ? schedules.map(s => `${s.day} ${s.start_time}–${s.end_time}`).join(', ')

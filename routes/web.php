@@ -1152,6 +1152,10 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
             ->name('pembayaran.show');
         Route::post('/{enrollment}', [PembayaranController::class, 'store'])
             ->name('pembayaran.store');
+        Route::get('/pembayaran/{enrollment}/lanjutan', [PembayaranController::class, 'settleForm'])
+            ->name('pembayaran.settle');
+        Route::post('/pembayaran/{enrollment}/lanjutan', [PembayaranController::class, 'settleStore'])
+            ->name('pembayaran.settle.store');
     });
 
     // INVOICE
