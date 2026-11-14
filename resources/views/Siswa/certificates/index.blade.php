@@ -5,17 +5,12 @@
 @php
     $tab = request('tab') === 'mandiri' ? 'mandiri' : 'kelas';
 
-    // ===== DATA DUMMY (nanti diganti dari controller) =====
-    $mandiriItems = [
-        ['icon' => '📖', 'label' => 'Test Belajar Vocab',   'desc' => 'Selesaikan seluruh rangkaian test Vocab',   'done' => 8, 'total' => 10, 'soon' => false],
-        ['icon' => '📝', 'label' => 'Test Belajar Grammar', 'desc' => 'Selesaikan seluruh rangkaian test Grammar', 'done' => 3, 'total' => 10, 'soon' => false],
-        ['icon' => '✏️', 'label' => 'Kalimat Rumpang',      'desc' => 'Latihan melengkapi kalimat',                'done' => 0, 'total' => 0,  'soon' => true],
-    ];
-    $aktif     = collect($mandiriItems)->where('soon', false);
-    $totalDone = $aktif->sum('done');
-    $totalAll  = $aktif->sum('total');
-    $pctAll    = $totalAll > 0 ? round($totalDone / $totalAll * 100) : 0;
-    $mandiriOk = $totalAll > 0 && $totalDone >= $totalAll;
+    if ($tab === 'mandiri') {
+        $ms           = \App\Support\SelfStudyReport::summary(auth()->id());
+        $msc          = $ms['score'];
+        $elig         = \App\Support\SelfStudyReport::eligibility(auth()->id(), $msc);
+        $mandiriCerts = \App\Models\SelfStudyCertificate::where('user_id', auth()->id())->orderByDesc('issued_at')->get();
+    }
 @endphp
 
 {{-- ===== TAB ===== --}}
@@ -152,87 +147,109 @@
 
 
 {{-- ============================================================ --}}
-{{-- TAB 2: SERTIFIKAT BELAJAR MANDIRI (DUMMY)                    --}}
+{{-- TAB 2: SERTIFIKAT BELAJAR MANDIRI                            --}}
 {{-- ============================================================ --}}
 @if ($tab === 'mandiri')
+
+@if (session('success'))
+  <div class="bg-green-50 border border-green-200 text-green-800 text-xs rounded-xl p-3 mb-4">{{ session('success') }}</div>
+@endif
+@if (session('error'))
+  <div class="bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl p-3 mb-4">{{ session('error') }}</div>
+@endif
 
 <div class="bg-white border border-line rounded-2xl p-5 mb-5">
   <h3 class="font-semibold mb-1">Sertifikat Belajar Mandiri</h3>
   <p class="text-xs text-gray-500 mb-4">
-    Sertifikat terbit <strong>otomatis</strong> setelah kamu menyelesaikan seluruh rangkaian test
-    di Belajar Vocab, Belajar Grammar, dan Kalimat Rumpang.
+    Nilaimu dihitung dari bintang di Belajar Vocab dan Belajar Grammar. Sertifikat bisa dibuat
+    setelah total nilaimu mencapai <strong>{{ $msc['passing'] }}</strong> dari 100.
   </p>
 
-  {{-- Progres keseluruhan --}}
-  <div class="rounded-xl bg-pale border border-gold p-4 mb-5">
-    <div class="flex items-center justify-between text-sm mb-2">
-      <span class="font-semibold">Progres keseluruhan</span>
-      <span class="font-semibold">{{ $pctAll }}%</span>
+  {{-- Ringkasan bintang dan nilai --}}
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+    <div class="rounded-xl border border-line p-4">
+      <div class="text-xs text-gray-500 mb-1">⭐ Bintang vocab</div>
+      <div class="text-xl font-bold">{{ number_format($ms['vocab_stars'], 0, ',', '.') }}
+        <span class="text-xs font-medium text-gray-500">/ {{ number_format($ms['vocab_max'], 0, ',', '.') }}</span></div>
+      <div class="h-1.5 rounded-full bg-gray-100 overflow-hidden mt-2"><div class="h-full rounded-full bg-[#EF9F27]" style="width: {{ $msc['vocab_pct'] }}%"></div></div>
+      <div class="text-xs text-gray-500 mt-1">{{ $msc['vocab_pct'] }}% · bobot {{ $msc['weight_vocab'] }}%</div>
     </div>
-    <div class="h-2.5 rounded-full bg-white overflow-hidden">
-      <div class="h-full rounded-full bg-ink" style="width: {{ $pctAll }}%"></div>
+    <div class="rounded-xl border border-line p-4">
+      <div class="text-xs text-gray-500 mb-1">⭐ Bintang grammar</div>
+      <div class="text-xl font-bold">{{ number_format($ms['grammar_stars'], 0, ',', '.') }}
+        <span class="text-xs font-medium text-gray-500">/ {{ number_format($ms['grammar_max'], 0, ',', '.') }}</span></div>
+      <div class="h-1.5 rounded-full bg-gray-100 overflow-hidden mt-2"><div class="h-full rounded-full bg-[#EF9F27]" style="width: {{ $msc['grammar_pct'] }}%"></div></div>
+      <div class="text-xs text-gray-500 mt-1">{{ $msc['grammar_pct'] }}% · bobot {{ $msc['weight_grammar'] }}%</div>
     </div>
-    <div class="text-xs text-gray-500 mt-2">{{ $totalDone }} dari {{ $totalAll }} test selesai</div>
-  </div>
-
-  {{-- Syarat per modul --}}
-  @foreach ($mandiriItems as $m)
-    @php
-        $pct = $m['total'] > 0 ? round($m['done'] / $m['total'] * 100) : 0;
-        $fin = !$m['soon'] && $m['total'] > 0 && $m['done'] >= $m['total'];
-    @endphp
-    <div class="flex items-center gap-3 py-3 border-b border-line last:border-0 {{ $m['soon'] ? 'opacity-60' : '' }}">
-    <div class="w-11 h-11 rounded-xl bg-[#ffe135] flex items-center justify-center text-lg flex-shrink-0">{{ $m['icon'] }}</div>
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center justify-between gap-2">
-          <div class="text-sm font-medium">{{ $m['label'] }}</div>
-          @if ($m['soon'])
-            <span class="text-[11px] font-semibold bg-gray-100 text-gray-500 rounded-full px-2.5 py-0.5">Segera hadir</span>
-          @elseif ($fin)
-            <span class="text-[11px] font-semibold bg-green-50 text-green-700 rounded-full px-2.5 py-0.5">✓ Selesai</span>
-          @else
-            <span class="text-xs text-gray-500">{{ $m['done'] }}/{{ $m['total'] }}</span>
-          @endif
-        </div>
-        <div class="text-xs text-gray-500 mb-1.5">{{ $m['desc'] }}</div>
-        @unless ($m['soon'])
-          <div class="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-            <div class="h-full rounded-full {{ $fin ? 'bg-green-600' : 'bg-ink' }}" style="width: {{ $pct }}%"></div>
-          </div>
-        @endunless
+    <div class="rounded-xl bg-pale border border-gold p-4">
+      <div class="text-xs text-gray-600 mb-1">🏆 Total capaian</div>
+      <div class="text-xl font-bold">{{ $msc['total'] }}% <span class="text-xs font-medium text-gray-500">/ 100</span></div>
+      <div class="h-1.5 rounded-full bg-white overflow-hidden mt-2"><div class="h-full rounded-full bg-ink" style="width: {{ $msc['total'] }}%"></div></div>
+      <div class="text-xs text-gray-600 mt-1">
+        {{ $msc['lulus'] ? 'Predikat: ' . $msc['predikat'] : 'Belum lulus · minimal ' . $msc['passing'] }}
       </div>
     </div>
-  @endforeach
-</div>
+  </div>
 
-{{-- Kartu sertifikat --}}
-<div class="bg-white border border-line rounded-2xl p-5 mb-5">
-  <div class="flex items-center justify-between gap-3">
+  {{-- Kartu penerbitan --}}
+  <div class="flex items-center justify-between gap-3 py-3 border-t border-line">
     <div class="flex items-center gap-3">
       <div class="w-11 h-11 rounded-xl bg-[#ffe135] flex items-center justify-center text-lg">🏅</div>
       <div>
         <div class="text-sm font-medium">Sertifikat Belajar Mandiri</div>
         <div class="text-xs text-gray-500">
-          @if ($mandiriOk)
-            Semua syarat terpenuhi. Sertifikat sedang diproses otomatis.
+          @if ($elig['ok'])
+            Syarat terpenuhi. Sertifikat dengan nilai {{ $msc['total'] }} ({{ $msc['predikat'] }}) siap dibuat.
           @else
-            Belum tersedia. Selesaikan semua test untuk membukanya.
+            {{ $elig['reason'] }}
           @endif
         </div>
       </div>
     </div>
 
-    @if ($mandiriOk)
-      <a href="#" class="text-xs font-semibold border border-ink rounded-full px-4 py-2 hover:bg-ink hover:text-white transition whitespace-nowrap">Download PDF</a>
+    @if ($elig['ok'])
+      <form method="POST" action="{{ route('student.mandiri-certificates.store') }}">
+        @csrf
+        <button type="submit"
+                class="text-xs font-semibold bg-ink text-white rounded-full px-4 py-2 hover:opacity-90 transition whitespace-nowrap">
+          Buat Sertifikat
+        </button>
+      </form>
     @else
-      <span class="text-xs text-gray-400 whitespace-nowrap">🔒 Terkunci</span>
+      <span class="text-xs text-gray-400 whitespace-nowrap">🔒 Belum tersedia</span>
     @endif
   </div>
+</div>
 
-  <div class="border border-dashed border-line rounded-xl p-4 mt-4 text-xs text-gray-500">
-    Tampilan ini masih <strong>data contoh</strong>. Progres akan terhubung ke hasil test
-    Vocab, Grammar, dan Kalimat Rumpang yang sebenarnya.
-  </div>
+{{-- Daftar sertifikat yang sudah terbit --}}
+<div class="bg-white border border-line rounded-2xl p-5 mb-5">
+  <h3 class="font-semibold mb-1">Sertifikat saya</h3>
+  <p class="text-xs text-gray-500 mb-4">Sertifikat yang sudah terbit tidak berubah walaupun kamu belajar lagi. Kalau nilaimu naik, kamu bisa membuat sertifikat baru.</p>
+
+  @forelse ($mandiriCerts as $mc)
+    <div class="flex items-center justify-between gap-3 py-3 border-b border-line last:border-0">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-xl bg-[#ffe135] flex items-center justify-center text-lg">🏅</div>
+        <div>
+          <div class="text-sm font-medium">No. {{ $mc->certificate_number }}</div>
+          <div class="text-xs text-gray-500">
+            Diterbitkan {{ $mc->issued_at->format('d/m/Y') }} ·
+            Total score {{ $mc->total_score }} / 100 · {{ $mc->predicate }}
+          </div>
+        </div>
+      </div>
+      <a href="{{ route('student.mandiri-certificates.download', $mc) }}"
+         class="text-xs font-semibold border border-ink rounded-full px-4 py-2 hover:bg-ink hover:text-white transition whitespace-nowrap">
+        Download PDF
+      </a>
+    </div>
+  @empty
+    <div class="text-center py-6">
+      <div class="text-4xl mb-3">🏅</div>
+      <p class="text-sm font-medium text-black">Belum ada sertifikat</p>
+      <p class="text-xs text-gray-500 mt-1">Kumpulkan bintang di Belajar Vocab dan Belajar Grammar sampai nilaimu mencapai {{ $msc['passing'] }}.</p>
+    </div>
+  @endforelse
 </div>
 
 @endif {{-- end tab mandiri --}}

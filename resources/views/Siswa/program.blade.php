@@ -166,7 +166,9 @@
 
 {{-- ===================== VIDEO PEMBELAJARAN ===================== --}}
 @php
-    $firstCulture = $cultureVideos->first();
+    // Urut dari yang paling lama supaya Bab 1, Bab 2, ... berurutan
+    $cultureList = $learningVideos->sortBy('id')->values();
+    $firstCulture = $cultureList->first();
 @endphp
 
 <div class="bg-white border border-line rounded-2xl p-5 mb-5">
@@ -182,20 +184,24 @@
             @if ($firstCulture)
 
                 <div class="aspect-video rounded-xl overflow-hidden bg-black">
-                    <iframe id="cultureFrame"
-                            class="w-full h-full"
-                            src="{{ $firstCulture->embed_url }}"
-                            title="{{ $firstCulture->title }}"
-                            loading="lazy"
-                            allow="encrypted-media; picture-in-picture; fullscreen"
-                            allowfullscreen
-                            referrerpolicy="strict-origin-when-cross-origin"></iframe>
-                </div>
+         <iframe id="cultureFrame"
+            class="w-full h-full {{ $firstCulture->is_youtube ? '' : 'hidden' }}"
+            src="{{ $firstCulture->is_youtube ? $firstCulture->embed_url : 'about:blank' }}"
+            title="{{ $firstCulture->title }}"
+            allow="encrypted-media; picture-in-picture; fullscreen"
+            allowfullscreen
+            referrerpolicy="strict-origin-when-cross-origin"></iframe>
+        <video id="cultureFile"
+           class="w-full h-full {{ $firstCulture->is_youtube ? 'hidden' : '' }}"
+           controls preload="metadata"
+           @unless ($firstCulture->is_youtube) src="{{ route('video.stream', $firstCulture) }}" @endunless></video>
+        </div>
 
                 <div class="mt-4">
                     <div class="text-sm font-semibold text-black">Video Budaya China</div>
                     <div id="cultureTitle" class="text-xs text-gray-500 mt-1">
-                        Bab {{ $firstCulture->chapter_number }} · {{ $firstCulture->title }}
+                        {{ $firstCulture->title }}
+                        @if ($firstCulture->level) · {{ $firstCulture->level->level_name }} @endif
                     </div>
                 </div>
 
@@ -208,10 +214,11 @@
 
                     <select id="cultureSelect"
                             class="flex-1 text-xs font-semibold border border-ink rounded-full px-4 py-2 bg-white focus:outline-none cursor-pointer">
-                        @foreach ($cultureVideos as $cv)
-                            <option value="{{ $cv->embed_url }}"
-                                    data-title="Bab {{ $cv->chapter_number }} · {{ $cv->title }}">
-                                Bab {{ $cv->chapter_number }} — {{ $cv->title }}
+                        @foreach ($cultureList as $cv)
+                            <option value="{{ $cv->is_youtube ? $cv->embed_url : route('video.stream', $cv) }}"
+                                    data-type="{{ $cv->is_youtube ? 'youtube' : 'file' }}"
+                                    data-title="{{ $cv->title }}{{ $cv->level ? ' · ' . $cv->level->level_name : '' }}">
+                                {{ $cv->title }}{{ $cv->level ? ' — ' . $cv->level->level_name : '' }}
                             </option>
                         @endforeach
                     </select>
@@ -242,34 +249,35 @@
         {{-- ===== VIDEO REPLAY ===== --}}
         <div class="border border-line rounded-2xl p-4">
 
-            @if ($replayVideo)
-                <div class="aspect-video rounded-xl overflow-hidden bg-black">
-                    <iframe class="w-full h-full"
-                            src="{{ $replayVideo->embed_url }}"
-                            title="{{ $replayVideo->title }}"
-                            loading="lazy"
-                            allow="encrypted-media; picture-in-picture; fullscreen"
-                            allowfullscreen
-                            referrerpolicy="strict-origin-when-cross-origin"></iframe>
-                </div>
+    @if ($replayVideo)
+        <div class="aspect-video rounded-xl overflow-hidden bg-black">
+            @if ($replayVideo->is_youtube)
+                <iframe class="w-full h-full"
+                        src="{{ $replayVideo->embed_url }}"
+                        title="{{ $replayVideo->title }}"
+                        loading="lazy"
+                        allow="encrypted-media; picture-in-picture; fullscreen"
+                        allowfullscreen
+                        referrerpolicy="strict-origin-when-cross-origin"></iframe>
             @else
-                <div class="w-full aspect-video rounded-xl bg-pale flex flex-col items-center justify-center text-center px-4">
-                    <div class="text-3xl mb-2">🔁</div>
-                    <p class="text-xs font-medium text-black">Video belum tersedia</p>
-                    <p class="text-[11px] text-gray-500 mt-1">Akan muncul setelah diunggah oleh pengajar.</p>
-                </div>
+                <video class="w-full h-full" controls preload="metadata"
+                       src="{{ route('video.stream', $replayVideo) }}"></video>
             @endif
-
-            <div class="mt-4">
-                <div class="text-sm font-semibold text-black">{{ $replayVideo->title ?? 'Video Replay Materi' }}</div>
-                <div class="text-xs text-gray-500 mt-1">Rangkuman untuk mengingat kembali materi yang sudah diajarkan.</div>
-            </div>
-
         </div>
+    @else
+        <div class="w-full aspect-video rounded-xl bg-pale flex flex-col items-center justify-center text-center px-4">
+            <div class="text-3xl mb-2">🔁</div>
+            <p class="text-xs font-medium text-black">Video belum tersedia</p>
+            <p class="text-[11px] text-gray-500 mt-1">Akan muncul setelah diunggah oleh kurikulum.</p>
+        </div>
+    @endif
 
+    <div class="mt-4">
+        <div class="text-sm font-semibold text-black">{{ $replayVideo->title ?? 'Video Replay Materi' }}</div>
+        <div class="text-xs text-gray-500 mt-1">Rangkuman untuk mengingat kembali materi yang sudah diajarkan.</div>
     </div>
-</div>
 
+</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -320,13 +328,28 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (select) {
         var frame = document.getElementById('cultureFrame');
+        var fileVideo = document.getElementById('cultureFile');
         var title = document.getElementById('cultureTitle');
         var prev  = document.getElementById('culturePrev');
         var next  = document.getElementById('cultureNext');
 
         function updateCulture() {
             var opt = select.options[select.selectedIndex];
-            frame.src = opt.value;
+
+           if (opt.dataset.type === 'youtube') {
+                fileVideo.pause();
+                fileVideo.removeAttribute('src');
+                fileVideo.classList.add('hidden');
+                frame.classList.remove('hidden');
+                frame.src = opt.value;
+            } else {
+                frame.src = 'about:blank';
+                frame.classList.add('hidden');
+                fileVideo.classList.remove('hidden');
+                fileVideo.src = opt.value;
+                fileVideo.load();
+            }
+
             title.textContent = opt.dataset.title;
             prev.disabled = select.selectedIndex === 0;
             next.disabled = select.selectedIndex === select.options.length - 1;
@@ -347,13 +370,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 updateCulture();
             }
         });
+        
+    }
 
         // Set kondisi awal tombol prev/next (tanpa reload iframe)
         prev.disabled = true;
         next.disabled = select.options.length <= 1;
     }
 
-});
+);
 </script>
 
 @endsection

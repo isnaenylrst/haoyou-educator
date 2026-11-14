@@ -27,9 +27,9 @@ class VocabController extends Controller
      * Contoh lain: auth()->user()->student->program_level_id
      * Jika null => semua kata tampil (tidak difilter).
      */
-    private function levelId(): ?int
+       private function levelId(): ?int
     {
-        return auth()->user()->program_level_id ?? null;
+        return \App\Support\StudentLevel::id();
     }
 
     /** Daftar bab untuk level siswa + bab yang sedang dipilih (?bab=2). */

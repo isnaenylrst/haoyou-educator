@@ -26,6 +26,9 @@ class UpdateMaterialRequest extends FormRequest
             $levelRule[] = 'exists:program_levels,id';
         }
 
+        // Excel hanya boleh untuk materi Belajar Mandiri (audience Huahua di database)
+        $mimes = $audience === 'Huahua' ? 'pdf,doc,docx,ppt,pptx,xlsx,xls' : 'pdf,doc,docx,ppt,pptx';
+
         return [
             'audience'       => ['nullable'],
             'program_id'     => ['nullable', 'integer', 'exists:program_categories,id'],
@@ -46,7 +49,7 @@ class UpdateMaterialRequest extends FormRequest
             'activity'       => ['nullable', 'string'],
             'box_code'       => ['nullable', 'string', 'max:50'],
             'equipment_list' => ['nullable', 'string'],
-            'material_file'  => ['nullable', 'file', 'mimes:pdf,doc,docx,ppt,pptx', 'max:10240'],
+            'material_file'  => ['nullable', 'file', "mimes:{$mimes}", 'max:10240'],
             'vocabularies'   => ['nullable', 'string', 'max:100000'],
         ];
     }
@@ -57,7 +60,7 @@ class UpdateMaterialRequest extends FormRequest
             'level_id.exists'        => 'Level yang dipilih tidak sesuai dengan program yang dipilih.',
             'meeting_number.unique'  => 'Pertemuan ini sudah ada pada program, level, dan tujuan yang sama.',
             'meeting_number.max'     => 'Nomor pertemuan maksimal 255.',
-            'material_file.mimes'    => 'File harus berformat PDF, DOC, DOCX, PPT, atau PPTX.',
+            'material_file.mimes'    => 'File harus berformat PDF, DOC, DOCX, PPT, atau PPTX (khusus Belajar Mandiri juga XLSX atau XLS).',
             'material_file.max'      => 'Ukuran file maksimal 10 MB.',
             'material_file.uploaded' => 'Upload gagal. Periksa upload_max_filesize dan post_max_size di php.ini.',
         ];
@@ -83,4 +86,3 @@ class UpdateMaterialRequest extends FormRequest
         ];
     }
 }
-

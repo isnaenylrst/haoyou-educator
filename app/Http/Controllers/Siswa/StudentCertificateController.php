@@ -21,10 +21,6 @@ class StudentCertificateController extends Controller
     {
         $user = $request->user();
 
-        // SESUAIKAN: pakai query yang sekarang Anda pakai untuk $documents
-        // (sertifikat upload manual dari kurikulum, untuk alumni lama). Contoh:
-        // $documents = Document::where('user_id', $user->id)->where('type', 'certificate')
-        //     ->with('programLevel.program')->latest()->get();
         // Sertifikat upload manual (alumni lama)
         $documents = Document::where('user_id', $user->id)
             ->where('document_type', 'certificate') // cek nilai aslinya di DB
@@ -40,7 +36,13 @@ class StudentCertificateController extends Controller
             'check'       => $this->service->check($user, $level),
         ]);
 
-    return view('Siswa.certificates.index', compact('documents', 'levels', 'certificates'));
+        return view('Siswa.certificates.index', [
+            'title'        => 'Sertifikat',
+            'subtitle'     => 'Download sertifikat kelulusan',
+            'documents'    => $documents,
+            'levels'       => $levels,
+            'certificates' => $certificates,
+        ]);
     }
 
     public function store(Request $request)

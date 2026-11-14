@@ -20,4 +20,12 @@ class VocabWord extends Model
     {
         return $levelId ? $q->where("program_level_id", $levelId) : $q;
     }
+    public static function equivalentLevelIds($levelId): array
+{
+    $lvl = ProgramLevel::find($levelId);
+
+    return $lvl
+        ? ProgramLevel::where('category_id', $lvl->category_id)->where('level_name', $lvl->level_name)->pluck('id')->all()
+        : [(int) $levelId];
+}
 }

@@ -25,6 +25,7 @@ class Certificate extends Model
         'result',
         'issued_at',
 
+
         // Sertifikat kelas
         'enrollment_id',
         'student_id',
@@ -33,6 +34,10 @@ class Certificate extends Model
         'start_date',
         'end_date',
         'score',
+        'listening_score',   
+        'reading_score',     
+        'speaking_score',    
+        'writing_score',     
         'status',
         'review_note',
         'reviewed_by',
@@ -53,6 +58,10 @@ class Certificate extends Model
         'start_date'      => 'date',
         'end_date'        => 'date',
         'score'           => 'float',
+        'listening_score' => 'float',   
+        'reading_score'   => 'float',   
+        'speaking_score'  => 'float',   
+        'writing_score'   => 'float',   
         'total_score'     => 'float',
         'max_total'       => 'float',
         'passing_score'   => 'float',

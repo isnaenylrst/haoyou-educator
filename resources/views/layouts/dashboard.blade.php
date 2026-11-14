@@ -235,10 +235,83 @@
     }
 
     /* ---------- TAB BELAJAR MANDIRI (vocab / grammar) ---------- */
-    .mt-tabs{display:flex;gap:4px;border-bottom:1px solid #E6E4DC;margin:18px 0 22px;overflow-x:auto;white-space:nowrap}
+    .mt-tabs{display:flex;gap:4px;border-bottom:1px solid #E6E4DC;margin:18px 0 22px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
     .mt-tab{padding:10px 16px;font-size:14px;font-weight:500;color:#6b6652;text-decoration:none;border-bottom:3px solid transparent;margin-bottom:-1px;transition:.15s}
     .mt-tab:hover{color:#1d1a0f}
     .mt-tab.is-active{color:#1d1a0f;font-weight:700;border-bottom-color:#FFE135}
+
+    /* ---------- RESPONSIF MOBILE ---------- */
+    .mobile-bar, .sidebar-overlay { display: none; }
+
+    @media (max-width: 767px) {
+        /* Sidebar jadi drawer dari kiri */
+        #sidebar {
+            display: flex !important;
+            position: fixed;
+            top: 0; bottom: 0; left: 0;
+            height: 100vh;
+            height: 100dvh;
+            width: 280px;
+            max-width: 85vw;
+            z-index: 60;
+            transform: translateX(-100%);
+            transition: transform .25s ease;
+        }
+        #sidebar.is-open {
+            transform: translateX(0);
+            box-shadow: 8px 0 32px rgba(0,0,0,.25);
+        }
+
+        /* Overlay gelap */
+        .sidebar-overlay {
+            display: block;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,.45);
+            z-index: 55;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .25s ease;
+        }
+        .sidebar-overlay.is-open { opacity: 1; pointer-events: auto; }
+
+        /* Bar bawah dengan tombol burger */
+        .mobile-bar {
+            display: flex;
+            position: fixed; left: 0; right: 0; bottom: 0;
+            z-index: 40;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 0 16px env(safe-area-inset-bottom, 0px);
+            height: calc(64px + env(safe-area-inset-bottom, 0px));
+            background: #fff;
+            border-top: 1px solid #EFEBDB;
+            box-shadow: 0 -4px 16px rgba(90,70,0,.08);
+        }
+        .burger-btn {
+            display: flex; align-items: center; gap: 10px;
+            min-height: 44px; padding: 0 18px;
+            border: 0; border-radius: 14px;
+            background: #ffe135; color: #1d1a0f;
+            font-family: inherit; font-size: 14px; font-weight: 600;
+            cursor: pointer;
+        }
+        .mobile-bar-title {
+            font-size: 13px; font-weight: 600; color: #6b6652;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+
+        /* Konten tidak tertutup bar bawah */
+        .main-content {
+            padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)) !important;
+        }
+
+        /* Dropdown profil tidak melebihi layar */
+        .profile-menu { width: min(272px, calc(100vw - 32px)); }
+
+        /* Cegah scroll body saat drawer terbuka */
+        body.drawer-open { overflow: hidden; }
+    }
 </style>
 @endpush
 
@@ -257,7 +330,6 @@
     $fotoUrl = !empty($authUser->foto) ? asset('storage/' . $authUser->foto) : null;
 @endphp
 
-{{-- PERUBAHAN: wrapper utama sekarang punya isolate agar z-index lingkaran terkontrol --}}
 <div class="relative isolate overflow-hidden flex min-h-screen bg-white font-poppins {{ $isAlumni ? 'alumni-mode' : '' }}">
 
     {{-- ===================== LATAR LINGKARAN ===================== --}}
@@ -267,33 +339,23 @@
         <span class="ring-c"></span>
     </div>
 
-    {{-- ===================== SIDEBAR ===================== --}}
-    <aside class="relative overflow-hidden z-10 w-[264px] bg-white text-[#1d1a0f] flex-shrink-0 hidden md:flex flex-col border-r border-[#EFEBDB]">
+    {{-- ===================== SIDEBAR (drawer di mobile) ===================== --}}
+    <aside id="sidebar" class="relative overflow-hidden z-10 w-[264px] bg-white text-[#1d1a0f] flex-shrink-0 hidden md:flex flex-col border-r border-[#EFEBDB]">
 
-        
-        <div class="h-24 flex items-center justify-center border-b border-[#EFEBDB]">
+        <div class="h-24 flex items-center justify-center border-b border-[#EFEBDB] flex-shrink-0">
             <img src="{{ asset('assets/img/logo.png') }}"
                  alt="Haoyou"
                  class="w-[68px] h-[68px] object-contain">
         </div>
 
-      {{-- ============ BELAJAR VOCAB (BARU) ============
-      @php $inVocab = request()->routeIs('student.vocab.*'); @endphp
-      <div id="grpVocab" class="side-group {{ $inVocab ? 'open' : '' }}">
-        <button type="button" data-side-toggle="grpVocab" aria-expanded="{{ $inVocab ? 'true' : 'false' }}"
-                class="side-link alumni-restricted w-full" style="border:0;background:none;cursor:pointer;text-align:left">
-          <span class="ico">📖</span> Belajar Vocab
-          <svg class="side-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg>
-        </button>
-        <div class="side-subwrap">
-          <a href="{{ route('student.vocab.plan') }}"  class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.plan') ? 'is-active' : '' }}"><span>📅</span> Study Plan</a>
-          <a href="{{ route('student.vocab.list') }}"  class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.list') ? 'is-active' : '' }}"><span>📖</span> Vocab List</a>
-          <a href="{{ route('student.vocab.test') }}"  class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.test*') ? 'is-active' : '' }}"><span>✍️</span> Test</a>
-          <a href="{{ route('student.vocab.traps') }}" class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.traps*') ? 'is-active' : '' }}"><span>⚠️</span> Vocab Traps</a>
-        <a href="{{ route('student.vocab.materi') }}" class="side-sub alumni-restricted {{ request()->routeIs('student.vocab.materi*') ? 'is-active' : '' }}"><span>🌸</span> Materi Huahua</a>
+        {{-- (Opsional) Blok "Belajar Vocab" lama, dinonaktifkan:
+        @php $inVocab = request()->routeIs('student.vocab.*'); @endphp
+        <div id="grpVocab" class="side-group {{ $inVocab ? 'open' : '' }}">
+            ...
         </div>
+        --}}
 
-        <nav class="relative z-10 flex-1 p-3.5 pt-5"> --}}
+        <nav class="relative z-10 flex-1 min-h-0 overflow-y-auto p-3.5 pt-5">
 
             <a href="{{ route('dashboard') }}"
                class="side-link alumni-restricted {{ request()->routeIs('dashboard') ? 'is-active' : '' }}">
@@ -321,16 +383,11 @@
                 <span class="ico">🗓️</span> Booking Kelas
             </a>
             --}}
-          
+
             <a href="{{ route('progresreport.index') }}"
                class="side-link {{ request()->routeIs('progresreport.*') ? 'is-active' : '' }}">
                 <span class="ico">📊</span> Progress Report
             </a>
-
-            {{-- <a href="{{ route('sertifikat.index') }}"
-               class="side-link {{ request()->routeIs('sertifikat.*') ? 'is-active' : '' }}">
-                <span class="ico">🏅</span> Sertifikat
-            </a> --}}
 
             {{-- ============ SERTIFIKAT KELAS ============ --}}
             @php
@@ -386,8 +443,10 @@
 
     </aside>
 
+    {{-- Overlay gelap untuk drawer (mobile) --}}
+    <div id="sidebarOverlay" class="sidebar-overlay" aria-hidden="true"></div>
+
     {{-- ===================== KOLOM KANAN ===================== --}}
-    {{-- PERUBAHAN: z-10 dihapus dari sini supaya tidak menutupi lingkaran sebagai satu lapisan solid --}}
     <div class="relative flex-1 min-w-0 flex flex-col">
 
         {{-- TOPBAR MINT --}}
@@ -513,8 +572,7 @@
         </header>
 
         {{-- ISI HALAMAN --}}
-        {{-- PERUBAHAN: bg-white dihapus dari <main> dan diganti bg-transparent --}}
-        <main class="flex-1 bg-transparent px-5 py-6 md:px-10 md:py-8">
+        <main class="main-content flex-1 bg-transparent px-5 py-6 md:px-10 md:py-8">
 
             @php
                 // Halaman di dalam Belajar mandiri: breadcrumb + judul + tab otomatis
@@ -583,6 +641,19 @@
 
         </main>
     </div>
+
+    {{-- ===================== BAR BAWAH + TOMBOL BURGER (hanya mobile) ===================== --}}
+    <div class="mobile-bar">
+        <button id="burgerBtn" type="button" class="burger-btn"
+                aria-label="Buka menu" aria-controls="sidebar" aria-expanded="false">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+            Menu
+        </button>
+        <span class="mobile-bar-title">{{ $title ?? 'Dashboard' }}</span>
+    </div>
 </div>
 
 <script>
@@ -624,6 +695,41 @@
             );
         });
     });
+
+    // ---------- Drawer sidebar (mobile) ----------
+    (function(){
+        var sidebar = document.getElementById('sidebar');
+        var overlay = document.getElementById('sidebarOverlay');
+        var burger  = document.getElementById('burgerBtn');
+        if(!sidebar || !overlay || !burger) return;
+
+        function setDrawer(open){
+            sidebar.classList.toggle('is-open', open);
+            overlay.classList.toggle('is-open', open);
+            document.body.classList.toggle('drawer-open', open);
+            burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+
+        burger.addEventListener('click', function(){
+            setDrawer(!sidebar.classList.contains('is-open'));
+        });
+
+        overlay.addEventListener('click', function(){ setDrawer(false); });
+
+        document.addEventListener('keydown', function(e){
+            if(e.key === 'Escape') setDrawer(false);
+        });
+
+        // Tutup drawer saat salah satu menu diklik
+        sidebar.querySelectorAll('a').forEach(function(a){
+            a.addEventListener('click', function(){ setDrawer(false); });
+        });
+
+        // Reset saat layar diputar / dibesarkan
+        window.addEventListener('resize', function(){
+            if(window.innerWidth >= 768) setDrawer(false);
+        });
+    })();
 
     // ---------- Pembatasan akun Alumni ----------
     var alumniMode = @json($isAlumni);

@@ -17,7 +17,10 @@
         $audience = 'Guru';
     }
 
-    // Isi awal kolom kosakata (format berbeda untuk Huahua)
+    // Nilai 'Huahua' tetap dipakai di database; hanya tulisan di layar yang diganti
+    $audLabel = ['Guru' => 'Guru', 'Siswa' => 'Siswa', 'Huahua' => 'Belajar Mandiri'];
+
+    // Isi awal kolom kosakata (format berbeda untuk Belajar Mandiri)
     if ($m && $m->audience === 'Huahua') {
         $vocabText = $m->huahuaWords
             ->map(fn ($w) => rtrim(implode('|', [$w->hanzi, $w->pinyin, $w->meaning_id, $w->meaning_en, $w->word_type]), '|'))
@@ -32,8 +35,10 @@
     $audCards = [
         'Guru'   => ['👩‍🏫', 'Guru', 'Materi mengajar: silabus, CCO, lesson plan, box perlengkapan. Dipakai guru di menu Materi dan Kelas.'],
         'Siswa'  => ['🎓', 'Siswa', 'Materi belajar siswa. Tampil di Program Belajar siswa sesuai level kelas yang diikuti.'],
-        'Huahua' => ['🌸', 'Huahua', 'Materi untuk Belajar Vocab (Huahua). Kosakatanya otomatis masuk bank kata Huahua.'],
+        'Huahua' => ['🌟', 'Belajar Mandiri', 'Materi untuk Belajar Vocab dan Belajar Grammar. Bisa upload file Excel template agar kosakata dan grammar otomatis masuk ke akun siswa.'],
     ];
+
+    $fileAccept = '.pdf,.doc,.docx,.ppt,.pptx' . ($audience === 'Huahua' ? ',.xlsx,.xls' : '');
 @endphp
 
 @if ($m)
@@ -62,7 +67,7 @@
     <div class="alert alert-light border small">
         Tujuan materi:
         <span class="badge {{ ['Guru' => 'bg-primary', 'Siswa' => 'bg-success', 'Huahua' => 'bg-danger'][$m->audience] ?? 'bg-secondary' }}">
-            {{ $m->audience }}
+            {{ $audLabel[$m->audience] ?? $m->audience }}
         </span>
         — tujuan tidak dapat diubah. Untuk tujuan lain, upload materi baru.
     </div>
@@ -156,7 +161,7 @@
     </div>
 </div>
 
-{{-- ====== KHUSUS SISWA & HUAHUA ====== --}}
+{{-- ====== KHUSUS SISWA & BELAJAR MANDIRI ====== --}}
 <div class="aud-field" data-aud="Siswa Huahua">
     <div class="mb-3">
         <label class="form-label fw-semibold">Deskripsi <small class="text-muted fw-normal">(dibaca siswa)</small></label>
@@ -207,11 +212,11 @@
 
 <div class="mb-3">
     <label class="form-label fw-semibold">{{ $m ? 'Ganti File Materi' : 'Upload File Materi' }}</label>
-    <input type="file" name="material_file"
+    <input type="file" name="material_file" data-file-input
            class="form-control {{ $err('material_file') ? 'is-invalid' : '' }}"
-           accept=".pdf,.doc,.docx,.ppt,.pptx" @if (!$m) required @endif>
+           accept="{{ $fileAccept }}" @if (!$m) required @endif>
     <small class="text-muted">
-        PDF, DOC, DOCX, PPT, atau PPTX. Maksimal 10 MB.
+        <span data-file-hint>PDF, DOC, DOCX, PPT, atau PPTX. Maksimal 10 MB.</span>
         @if ($m) Kosongkan jika tidak ingin mengganti file. @endif
     </small>
     {!! $fb('material_file') !!}

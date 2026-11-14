@@ -11,11 +11,18 @@
         'Huahua' => ['bg-danger',  '🌸'],
     ];
 
+    // Nilai 'Huahua' tetap dipakai di database; hanya tulisan di layar yang diganti
+    $audLabel = [
+        'Guru'   => 'Guru',
+        'Siswa'  => 'Siswa',
+        'Huahua' => 'Belajar Mandiri',
+    ];
+
     $tabs = [
         ''       => ['Semua', $counts->sum()],
         'Guru'   => ['Guru', $counts['Guru'] ?? 0],
         'Siswa'  => ['Siswa', $counts['Siswa'] ?? 0],
-        'Huahua' => ['Huahua', $counts['Huahua'] ?? 0],
+        'Huahua' => ['Belajar Mandiri', $counts['Huahua'] ?? 0],
     ];
 @endphp
 
@@ -40,7 +47,7 @@
     <div class="mb-4">
         <h3 class="fw-bold mb-1">Materi & Silabus</h3>
         <small class="text-muted">
-            Upload materi untuk <strong>Guru</strong>, <strong>Siswa</strong>, atau <strong>Huahua</strong> (Belajar Vocab).
+            Upload materi untuk <strong>Guru</strong>, <strong>Siswa</strong>, atau <strong>Belajar Mandiri</strong> (Belajar Vocab &amp; Belajar Grammar).
             Setiap tujuan punya file sendiri dan hanya tampil ke pihak yang dituju.
         </small>
     </div>
@@ -173,7 +180,7 @@
                                 <h5 class="fw-bold mb-2">{{ $material->title }}</h5>
 
                                 <div class="mb-2">
-                                    <span class="badge {{ $audClass }}">{{ $audIcon }} {{ $material->audience }}</span>
+                                    <span class="badge {{ $audClass }}">{{ $audIcon }} {{ $audLabel[$material->audience] ?? $material->audience }}</span>
                                     <span class="badge bg-warning text-dark"><i class="fa-solid fa-layer-group me-1"></i> {{ $material->program_name }}</span>
                                     <span class="badge bg-primary">Pertemuan {{ $material->meeting_number }}</span>
 
@@ -226,7 +233,7 @@
                                 @if ($material->audience === 'Huahua')
                                     @if ($material->huahua_words_count > 0)
                                         <div class="mb-3">
-                                            <strong>Bank Huahua ({{ $material->huahua_words_count }} kata)</strong>
+                                            <strong>Bank Belajar Mandiri ({{ $material->huahua_words_count }} kata)</strong>
                                             <div class="border rounded p-3 bg-light mt-2">
                                                 <div class="row">
                                                     @foreach ($material->huahuaWords->take(12) as $w)
@@ -288,7 +295,7 @@
                                         </button>
                                     @else
                                         <form action="{{ route('kurikulum.materi.destroy', $material) }}" method="POST"
-                                              onsubmit="return confirm('Yakin ingin menghapus materi ini? File juga akan dihapus.{{ $material->audience === 'Huahua' ? ' Kata di bank Huahua tetap ada.' : '' }}')">
+                                              onsubmit="return confirm('Yakin ingin menghapus materi ini? File juga akan dihapus.{{ $material->audience === 'Huahua' ? ' Kata di bank Belajar Mandiri tetap ada.' : '' }}')">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="btn btn-danger w-100">
@@ -340,7 +347,7 @@
                         <div>
                             <h5 class="modal-title fw-bold">Edit Materi</h5>
                             <small class="text-muted">
-                                {{ $material->audience }} · Pertemuan {{ $material->meeting_number }} - {{ $material->level?->level_name ?? '-' }}
+                                {{ $audLabel[$material->audience] ?? $material->audience }} · Pertemuan {{ $material->meeting_number }} - {{ $material->level?->level_name ?? '-' }}
                             </small>
                         </div>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -388,14 +395,19 @@
         return true;
     }
 
-    // ---- Form menyesuaikan tujuan materi (Guru / Siswa / Huahua)
+    // ---- Form menyesuaikan tujuan materi (Guru / Siswa / Belajar Mandiri [kode: Huahua])
     const AUD = {
         Guru:   { title: 'Daftar Kosakata', hint: 'Format: Hanzi | Pinyin | Arti — satu kosakata per baris (maksimal 255 baris).',
-                  ph: '爸爸|bàba|Ayah\n妈妈|māma|Ibu' },
+                  ph: '爸爸|bàba|Ayah\n妈妈|māma|Ibu',
+                  file: 'PDF, DOC, DOCX, PPT, atau PPTX. Maksimal 10 MB.', accept: '.pdf,.doc,.docx,.ppt,.pptx' },
         Siswa:  { title: 'Daftar Kosakata', hint: 'Format: Hanzi | Pinyin | Arti — satu kosakata per baris. Tampil bersama materi di Program Belajar siswa.',
-                  ph: '爸爸|bàba|Ayah\n妈妈|māma|Ibu' },
-        Huahua: { title: 'Kosakata untuk Bank Huahua', hint: 'Format: Hanzi | Pinyin | Arti Indonesia | English (opsional) | Jenis kata (opsional). Kata yang sama (level + hanzi) diperbarui, tidak digandakan.',
-                  ph: '爸爸|bàba|Ayah|Father|名\n学习|xuéxí|Belajar|To study|动' }
+                  ph: '爸爸|bàba|Ayah\n妈妈|māma|Ibu',
+                  file: 'PDF, DOC, DOCX, PPT, atau PPTX. Maksimal 10 MB.', accept: '.pdf,.doc,.docx,.ppt,.pptx' },
+        Huahua: { title: 'Kosakata untuk Bank Belajar Mandiri',
+                  hint: 'Jika memakai file Excel template, kolom ini boleh dikosongkan. Format manual: Hanzi | Pinyin | Arti Indonesia | English (opsional) | Jenis kata (opsional). Kata yang sama (level + hanzi) diperbarui, tidak digandakan.',
+                  ph: '爸爸|bàba|Ayah|Father|名\n学习|xuéxí|Belajar|To study|动',
+                  file: 'PDF, DOC, DOCX, PPT, PPTX, XLSX, atau XLS. Maksimal 10 MB. File Excel template Belajar Mandiri otomatis masuk ke Vocab List dan Grammar List siswa (pilih Level dulu).',
+                  accept: '.pdf,.doc,.docx,.ppt,.pptx,.xlsx,.xls' }
     };
 
     function applyAudience(form) {
@@ -415,6 +427,8 @@
         form.querySelectorAll('[data-vocab-title]').forEach(e => e.textContent = cfg.title);
         form.querySelectorAll('[data-vocab-hint]').forEach(e => e.textContent = cfg.hint);
         form.querySelectorAll('[data-vocab-area]').forEach(e => e.placeholder = cfg.ph);
+        form.querySelectorAll('[data-file-input]').forEach(e => e.setAttribute('accept', cfg.accept));
+        form.querySelectorAll('[data-file-hint]').forEach(e => e.textContent = cfg.file);
     }
 
     document.addEventListener('DOMContentLoaded', function () {

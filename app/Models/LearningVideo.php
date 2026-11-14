@@ -14,6 +14,7 @@ class LearningVideo extends Model
         'title',
         'description',
         'source_type',
+        'kind',
         'youtube_url',
         'youtube_id',
         'file_path',

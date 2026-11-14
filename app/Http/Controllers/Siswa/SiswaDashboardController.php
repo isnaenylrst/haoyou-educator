@@ -11,6 +11,7 @@ use App\Models\PrivateBooking;
 use App\Models\ProgressReport;
 use App\Models\ProgramLevel;
 use App\Models\ProgramVideo;
+use App\Models\LearningVideo;
 use App\Models\Student;
 use App\Models\User;
 use Carbon\Carbon;
@@ -259,29 +260,33 @@ class SiswaDashboardController extends Controller
 
         $currentLevel = $this->currentLevel($student, $levelIds);
 
-        $cultureVideos = $currentLevel
-            ? ProgramVideo::where('type', 'culture')
-                ->where('level_id', $currentLevel->id)
-                ->where('is_published', true)
-                ->orderBy('chapter_number')
-                ->get()
-            : collect();
+       $allVideos = LearningVideo::visibleToCategoriesAndLevels(
+        $categoryIds->all(),
+        $levelIds->all()
+        )
+        ->with(['level', 'category'])
+        ->latest()
+        ->get();
 
-        $replayVideo = $currentLevel
-            ? ProgramVideo::where('type', 'replay')
-                ->where('level_id', $currentLevel->id)
-                ->where('is_published', true)
-                ->first()
-            : null;
+        $learningVideos = $allVideos->where('kind', 'culture')->values();
+        $replayVideo    = $allVideos->firstWhere('kind', 'replay');
+
+        $learningVideos = LearningVideo::visibleToCategoriesAndLevels(
+        $categoryIds->all(),
+        $levelIds->all()
+        )
+        ->with(['level', 'category'])
+        ->latest()
+        ->get();
 
         return view('Siswa.program', [
-            'title' => 'Program Belajar',
-            'student' => $student,
-            'enrollments' => $enrollments,
-            'materials' => $materials,
-            'cultureVideos' => $cultureVideos,
-            'replayVideo' => $replayVideo,
-        ]);
+        'title' => 'Program Belajar',
+        'student' => $student,
+        'enrollments' => $enrollments,
+        'materials' => $materials,
+        'learningVideos' => $learningVideos,
+        'replayVideo' => $replayVideo,
+    ]);
     }
 
     /** Siswa hanya boleh membuka materi bertujuan Siswa untuk level/program kelasnya. */
