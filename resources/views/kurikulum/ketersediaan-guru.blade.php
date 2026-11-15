@@ -213,45 +213,94 @@
 
         <div class="list-group list-group-flush">
             @forelse ($replacementsWaiting as $rs)
-                @php
-                    $offerLabel = ['Pending' => 'menunggu jawaban', 'Rejected' => 'menolak', 'Closed' => 'ditutup', 'Accepted' => 'menerima'];
-                @endphp
-                <div class="list-group-item">
-                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                        <div>
-                            <div class="fw-semibold">
-                                {{ $rs->enrollment?->student?->name ?? '-' }}
-                                @if ($rs->enrollment?->class)
-                                    <small class="text-muted fw-normal">· {{ $rs->enrollment->class->class_name }}</small>
-                                @endif
-                            </div>
-                            <small class="text-muted d-block">
-                                {{ $rs->session_date->translatedFormat('l, d M Y') }},
-                                {{ substr($rs->start_time, 0, 5) }}–{{ substr($rs->end_time, 0, 5) }}
-                                · {{ $rs->location_type }}{{ $rs->location_type === 'Studio' && $rs->room ? ' · ' . $rs->room : '' }}
-                            </small>
-
-                            @forelse ($rs->teacherOffers as $o)
-                                <div class="small {{ $o->status === 'Rejected' ? 'text-danger' : 'text-muted' }} mt-1">
-                                    {{ $o->teacher->name ?? '-' }}: {{ $offerLabel[$o->status] ?? $o->status }}
-                                    @if ($o->status === 'Rejected' && $o->response_note) ({{ $o->response_note }}) @endif
+                @if ($rs instanceof \App\Models\TeacherLeave)
+                    {{-- Permintaan Penggantian Kelas / Cuti dari Guru ke Guru Pengganti --}}
+                    @php
+                        $sch = $rs->classSchedule;
+                        $clsName = $sch?->class?->class_name ?? 'Kelas';
+                        $reqType = $rs->request_type ?? 'Cuti';
+                    @endphp
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                            <div>
+                                <div class="fw-semibold">
+                                    {{ $clsName }}
+                                    <span class="badge {{ $reqType === 'Ganti Kelas' ? 'bg-primary' : 'bg-info text-dark' }} ms-1" style="font-size:11px;">{{ $reqType }}</span>
                                 </div>
-                            @empty
-                                <div class="small text-warning mt-1">Belum diajukan ke guru mana pun</div>
-                            @endforelse
+                                <div class="text-dark small mt-1">
+                                    <i class="fa-solid fa-calendar-day me-1 text-muted"></i>
+                                    <strong>{{ $rs->leave_date ? $rs->leave_date->translatedFormat('l, d M Y') : '-' }}</strong>
+                                    @if ($sch)
+                                        · {{ substr($sch->start_time, 0, 5) }}–{{ substr($sch->end_time, 0, 5) }}
+                                        @if ($sch->room) · Ruang {{ $sch->room }} @endif
+                                    @endif
+                                </div>
+                                <div class="small mt-1">
+                                    <span class="text-danger fw-semibold">{{ $rs->teacher->name ?? '-' }}</span>
+                                    <i class="fa-solid fa-arrow-right mx-1 text-muted"></i>
+                                    <span class="text-success fw-semibold">{{ $rs->replacementTeacher->name ?? '-' }}</span>
+                                </div>
+                                @if ($rs->reason)
+                                    <div class="small text-muted mt-1">
+                                        <i class="fa-solid fa-comment-dots me-1"></i>Alasan: {{ $rs->reason }}
+                                    </div>
+                                @endif
+                                <div class="small text-muted mt-1">
+                                    <i class="fa-solid fa-clock me-1"></i>Diajukan {{ $rs->created_at?->diffForHumans() }}
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-warning text-dark mb-1">Menunggu Konfirmasi Guru Pengganti</span>
+                                <div>
+                                    <a href="{{ url('/kurikulum/review-pengajuan?tab=cuti') }}" class="btn btn-outline-primary btn-sm">
+                                        Lihat di Review Pengajuan
+                                    </a>
+                                </div>
+                            </div>
                         </div>
-
-                        <form action="{{ route('kurikulum.ketersediaan.pengganti.ajukan', $rs) }}" method="POST"
-                              class="d-flex gap-2 align-items-center">
-                            @csrf
-                            <select name="mode" class="form-select form-select-sm">
-                                <option value="matching">Guru yang cocok</option>
-                                <option value="all">Semua guru</option>
-                            </select>
-                            <button class="btn btn-primary btn-sm text-nowrap">Ajukan</button>
-                        </form>
                     </div>
-                </div>
+                @else
+                    {{-- Sesi Pengganti untuk Siswa (ClassSession) --}}
+                    @php
+                        $offerLabel = ['Pending' => 'menunggu jawaban', 'Rejected' => 'menolak', 'Closed' => 'ditutup', 'Accepted' => 'menerima'];
+                    @endphp
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                            <div>
+                                <div class="fw-semibold">
+                                    {{ $rs->enrollment?->student?->name ?? '-' }}
+                                    @if ($rs->enrollment?->class)
+                                        <small class="text-muted fw-normal">· {{ $rs->enrollment->class->class_name }}</small>
+                                    @endif
+                                </div>
+                                <small class="text-muted d-block">
+                                    {{ $rs->session_date->translatedFormat('l, d M Y') }},
+                                    {{ substr($rs->start_time, 0, 5) }}–{{ substr($rs->end_time, 0, 5) }}
+                                    · {{ $rs->location_type }}{{ $rs->location_type === 'Studio' && $rs->room ? ' · ' . $rs->room : '' }}
+                                </small>
+
+                                @forelse ($rs->teacherOffers as $o)
+                                    <div class="small {{ $o->status === 'Rejected' ? 'text-danger' : 'text-muted' }} mt-1">
+                                        {{ $o->teacher->name ?? '-' }}: {{ $offerLabel[$o->status] ?? $o->status }}
+                                        @if ($o->status === 'Rejected' && $o->response_note) ({{ $o->response_note }}) @endif
+                                    </div>
+                                @empty
+                                    <div class="small text-warning mt-1">Belum diajukan ke guru mana pun</div>
+                                @endforelse
+                            </div>
+
+                            <form action="{{ route('kurikulum.ketersediaan.pengganti.ajukan', $rs) }}" method="POST"
+                                  class="d-flex gap-2 align-items-center">
+                                @csrf
+                                <select name="mode" class="form-select form-select-sm">
+                                    <option value="matching">Guru yang cocok</option>
+                                    <option value="all">Semua guru</option>
+                                </select>
+                                <button class="btn btn-primary btn-sm text-nowrap">Ajukan</button>
+                            </form>
+                        </div>
+                    </div>
+                @endif
             @empty
                 <div class="list-group-item text-center text-muted py-4">
                     Tidak ada kelas pengganti yang menunggu guru.

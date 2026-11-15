@@ -62,4 +62,15 @@ class TeacherLeave extends Model
     {
         return $this->hasMany(TeachingJournal::class, 'teacher_leave_id');
     }
+
+    /**
+     * Scope untuk pengajuan (Cuti DAN Ganti Kelas) dengan guru pengganti yang masih menunggu konfirmasi pengganti.
+     */
+    public function scopeWaitingReplacement($query)
+    {
+        return $query->whereNotNull('replacement_teacher_id')
+            ->where('status', 'Pending')
+            ->where('replacement_response', 'Pending')
+            ->whereDate('leave_date', '>=', today());
+    }
 }

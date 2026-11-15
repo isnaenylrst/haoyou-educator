@@ -7,6 +7,7 @@ use App\Models\ClassModel;
 use App\Models\ClassSession;
 use App\Models\Teacher;
 use App\Models\TeacherAvailability;
+use App\Models\TeacherLeave;
 use App\Services\ClassSessionOfferService;
 use App\Services\TeacherAvailabilityService;
 use Illuminate\Http\Request;
@@ -84,14 +85,23 @@ class KetersediaanGuruController extends Controller
             ];
         }
 
-        // Kelas pengganti (satu pertemuan untuk satu siswa) yang sudah dibayar tapi belum diterima guru mana pun
-        $replacementsWaiting = ClassSession::with(['enrollment.student', 'enrollment.class', 'teacherOffers.teacher:id,name'])
+        // Kelas pengganti yang menunggu guru:
+        // 1. Permintaan cuti / ganti kelas dari guru ke guru pengganti yang menunggu konfirmasi (TeacherLeave)
+        $teacherReplacementRequests = TeacherLeave::with(['teacher', 'classSchedule.class', 'replacementTeacher'])
+            ->waitingReplacement()
+            ->orderBy('leave_date')
+            ->get();
+
+        // 2. Kelas pengganti untuk siswa (ClassSession) yang belum diterima guru mana pun
+        $classSessionReplacements = ClassSession::with(['enrollment.student', 'enrollment.class', 'teacherOffers.teacher:id,name'])
             ->where('kind', 'Replacement')
             ->where('status', 'Scheduled')
             ->whereNull('teacher_id')
             ->whereDate('session_date', '>=', today())
             ->orderBy('session_date')->orderBy('start_time')
             ->get();
+
+        $replacementsWaiting = $teacherReplacementRequests->concat($classSessionReplacements);
 
         $days = TeacherAvailability::DAYS;
 

@@ -483,6 +483,62 @@
         </div>
     </div>
 
+    {{-- KELAS PENGGANTI MENUNGGU GURU (Permintaan Ganti Kelas Guru Lain) --}}
+    @if (!empty($replacementsWaiting) && $replacementsWaiting->isNotEmpty())
+        <div class="card mb-4 border-0 shadow-sm" style="border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; margin-bottom: 24px;">
+            <div style="background: #ffffff; padding: 14px 20px; border-bottom: 1px solid #edf2f7; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fa-solid fa-user-clock text-warning" style="font-size: 16px;"></i>
+                    <strong style="font-size: 14.5px; color: #1e293b;">Kelas Pengganti Menunggu Guru</strong>
+                </div>
+                <span class="badge bg-warning text-dark" style="font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px;">
+                    {{ $replacementsWaiting->count() }} permintaan
+                </span>
+            </div>
+            <div style="background: #fff;">
+                @foreach ($replacementsWaiting as $rw)
+                    @php
+                        $sch = $rw->classSchedule;
+                        $clsName = $sch?->class?->class_name ?? 'Kelas';
+                        $reqType = $rw->request_type ?? 'Cuti';
+                    @endphp
+                    <div style="padding: 14px 20px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; flex-wrap: gap; gap: 12px;">
+                        <div>
+                            <div style="font-weight: 600; font-size: 14px; color: #0f172a;">
+                                {{ $clsName }}
+                                <span class="badge {{ $reqType === 'Ganti Kelas' ? 'bg-primary' : 'bg-info text-dark' }} ms-1" style="font-size: 10.5px; font-weight: 500;">{{ $reqType }}</span>
+                            </div>
+                            <div style="font-size: 12.5px; color: #475569; margin-top: 3px;">
+                                <i class="fa-solid fa-calendar-day me-1 text-muted"></i>
+                                <strong>{{ $rw->leave_date ? $rw->leave_date->translatedFormat('l, d M Y') : '-' }}</strong>
+                                @if ($sch)
+                                    · {{ substr($sch->start_time, 0, 5) }}–{{ substr($sch->end_time, 0, 5) }}
+                                    @if ($sch->room) · Ruang {{ $sch->room }} @endif
+                                @endif
+                            </div>
+                            <div style="font-size: 12.5px; margin-top: 3px;">
+                                <span class="text-danger fw-semibold">{{ $rw->teacher->name ?? '-' }}</span>
+                                <i class="fa-solid fa-arrow-right mx-1 text-muted" style="font-size: 10px;"></i>
+                                <span class="text-success fw-semibold">{{ $rw->replacementTeacher->name ?? '-' }}</span>
+                            </div>
+                            @if ($rw->reason)
+                                <div style="font-size: 12px; color: #64748b; margin-top: 3px;">
+                                    <i class="fa-solid fa-comment-dots me-1"></i>Alasan: {{ $rw->reason }}
+                                </div>
+                            @endif
+                            <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
+                                <i class="fa-solid fa-clock me-1"></i>Diajukan {{ $rw->created_at?->diffForHumans() }}
+                            </div>
+                        </div>
+                        <div>
+                            <span class="badge bg-warning text-dark" style="font-size: 11px; padding: 4px 8px;">Menunggu Konfirmasi Guru Pengganti</span>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
+
     {{-- JADWAL AVAILABLE GURU (card terpisah, di bawah jadwal kelas) --}}
     <div class="card avail-card">
         <div class="avail-head">

@@ -420,6 +420,17 @@ class ReviewPengajuanController extends Controller
                 ));
             }
 
+            // Notifikasi ke guru pengganti jika ada
+            if ($teacherLeave->replacementTeacher?->user) {
+                $teacherLeave->replacementTeacher->user->notify(new AppNotification(
+                    title: "Persetujuan {$teacherLeave->request_type}: {$className}",
+                    message: "Pengajuan {$teacherLeave->request_type} untuk {$className} (" . ($teacherLeave->teacher?->name ?? 'Guru') . ") telah disetujui oleh Kurikulum.",
+                    url: url('/guru/schedule'),
+                    type: 'cuti',
+                    icon: 'fa-circle-check'
+                ));
+            }
+
             return back()->with('success', 'Persetujuan Kurikulum berhasil disimpan.' . ($repAccepted ? ' Pengajuan telah disetujui penuh.' : ' Menunggu konfirmasi dari guru pengganti.'));
         }
 
@@ -437,6 +448,17 @@ class ReviewPengajuanController extends Controller
                 title: "Pengajuan {$teacherLeave->request_type} Ditolak",
                 message: "Pengajuan {$teacherLeave->request_type} untuk {$className} ditolak Kurikulum. Alasan: " . ($data['note'] ?? '-'),
                 url: url('/guru/cuti'),
+                type: 'cuti',
+                icon: 'fa-circle-xmark'
+            ));
+        }
+
+        // Notifikasi ke guru pengganti jika ada
+        if ($teacherLeave->replacementTeacher?->user) {
+            $teacherLeave->replacementTeacher->user->notify(new AppNotification(
+                title: "Pengajuan {$teacherLeave->request_type} Ditolak",
+                message: "Pengajuan {$teacherLeave->request_type} untuk {$className} (" . ($teacherLeave->teacher?->name ?? 'Guru') . ") ditolak Kurikulum.",
+                url: url('/guru/schedule'),
                 type: 'cuti',
                 icon: 'fa-circle-xmark'
             ));
