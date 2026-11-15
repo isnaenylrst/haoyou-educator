@@ -199,9 +199,7 @@ class ScheduleController extends Controller
         // Permintaan dari guru lain agar saya menggantikan kelasnya
         $replacementRequests = TeacherLeave::with(['teacher', 'classSchedule.class'])
             ->where('replacement_teacher_id', $teacher->id)
-            ->where('status', 'Pending')
-            ->where('replacement_response', 'Pending')
-            ->whereDate('leave_date', '>=', now()->toDateString())
+            ->waitingReplacement()
             ->orderBy('leave_date')
             ->get();
 

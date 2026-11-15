@@ -1113,6 +1113,12 @@ class JadwalController extends Controller
             ->addWeek()
             ->toDateString();
 
+        // Permintaan ganti kelas / cuti dari guru ke guru pengganti yang menunggu konfirmasi guru pengganti
+        $replacementsWaiting = TeacherLeave::with(['teacher', 'classSchedule.class', 'replacementTeacher'])
+            ->waitingReplacement()
+            ->orderBy('leave_date')
+            ->get();
+
         return view('admin.jadwal.index', compact(
             'weekStart',
             'days',
@@ -1134,7 +1140,8 @@ class JadwalController extends Controller
             'dayRooms',
             'selectedTeacher',
             'availabilityRows',
-            'availDays'
+            'availDays',
+            'replacementsWaiting'
         ));
     }
 

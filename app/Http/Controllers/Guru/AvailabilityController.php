@@ -305,6 +305,19 @@ class AvailabilityController extends Controller
                 ));
             }
 
+            // Notifikasi ke Kurikulum & Admin bahwa guru pengganti menerima
+            $notifUsers = User::whereHas('level', fn ($q) => $q->whereIn('nama_level', ['Curriculum', 'Admin']))->get();
+            foreach ($notifUsers as $u) {
+                $uRole = $u->level?->nama_level;
+                $u->notify(new AppNotification(
+                    title: "Guru Pengganti Diterima: {$className}",
+                    message: "Guru {$teacher->name} bersedia menggantikan kelas {$className} (" . ($leave->teacher?->name ?? 'Guru') . ")." . ($curriculumAccepted ? " Status disetujui penuh." : " Menunggu ACC Kurikulum."),
+                    url: $uRole === 'Curriculum' ? url('/kurikulum/review-pengajuan?tab=cuti') : url('/admin/jadwal'),
+                    type: 'cuti',
+                    icon: 'fa-user-check'
+                ));
+            }
+
             return back()->with('success', "Anda bersedia menggantikan {$className}." . ($curriculumAccepted ? " Pengajuan telah disetujui penuh." : " Menunggu konfirmasi Kurikulum."));
         }
 
@@ -322,6 +335,19 @@ class AvailabilityController extends Controller
                 title: "Permintaan Pengganti Ditolak: {$className}",
                 message: "Guru {$teacher->name} tidak dapat menggantikan kelas {$className}. Alasan: {$data['note']}",
                 url: url('/guru/cuti'),
+                type: 'cuti',
+                icon: 'fa-user-xmark'
+            ));
+        }
+
+        // Notifikasi penolakan ke Kurikulum & Admin
+        $notifUsers = User::whereHas('level', fn ($q) => $q->whereIn('nama_level', ['Curriculum', 'Admin']))->get();
+        foreach ($notifUsers as $u) {
+            $uRole = $u->level?->nama_level;
+            $u->notify(new AppNotification(
+                title: "Guru Pengganti Menolak: {$className}",
+                message: "Guru {$teacher->name} menolak menggantikan kelas {$className} (" . ($leave->teacher?->name ?? 'Guru') . "). Alasan: {$data['note']}.",
+                url: $uRole === 'Curriculum' ? url('/kurikulum/ketersediaan-guru') : url('/admin/jadwal'),
                 type: 'cuti',
                 icon: 'fa-user-xmark'
             ));

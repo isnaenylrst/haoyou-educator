@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Guru;
 
 use App\Http\Controllers\Controller;
 use App\Models\TeacherAvailability;
+use App\Models\User;
+use App\Notifications\AppNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -164,9 +166,9 @@ class CutiController extends Controller
             $leaveId = $leave->id;
 
             // 1. Notifikasi ke Kurikulum
-            $curriculums = \App\Models\User::whereHas('level', fn ($q) => $q->where('nama_level', 'Curriculum'))->get();
+            $curriculums = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Curriculum'))->get();
             foreach ($curriculums as $cUser) {
-                $cUser->notify(new \App\Notifications\AppNotification(
+                $cUser->notify(new AppNotification(
                     title: "Pengajuan {$data['request_type']}: {$schedule->class_name}",
                     message: "Guru {$teacher->name} mengajukan {$data['request_type']} pada tanggal " . Carbon::parse($data['leave_date'])->translatedFormat('d M Y') . ". Silakan review.",
                     url: url('/kurikulum/review-pengajuan?tab=cuti'),
@@ -175,11 +177,23 @@ class CutiController extends Controller
                 ));
             }
 
-            // 2. Notifikasi ke Guru Pengganti jika ada
+            // 2. Notifikasi ke Admin
+            $admins = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Admin'))->get();
+            foreach ($admins as $adminUser) {
+                $adminUser->notify(new AppNotification(
+                    title: "Pengajuan {$data['request_type']}: {$schedule->class_name}",
+                    message: "Guru {$teacher->name} mengajukan {$data['request_type']} pada tanggal " . Carbon::parse($data['leave_date'])->translatedFormat('d M Y') . ($replacementId ? " dengan guru pengganti." : "."),
+                    url: url('/admin/jadwal'),
+                    type: 'cuti',
+                    icon: 'fa-plane-departure'
+                ));
+            }
+
+            // 3. Notifikasi ke Guru Pengganti jika ada
             if ($replacementId) {
                 $repTeacher = \App\Models\Teacher::with('user')->find($replacementId);
                 if ($repTeacher?->user) {
-                    $repTeacher->user->notify(new \App\Notifications\AppNotification(
+                    $repTeacher->user->notify(new AppNotification(
                         title: "Permintaan Guru Pengganti: {$schedule->class_name}",
                         message: "Guru {$teacher->name} meminta Anda menggantikan sesi kelas {$schedule->class_name} pada tanggal " . Carbon::parse($data['leave_date'])->translatedFormat('d M Y') . ". Buka menu Schedule untuk konfirmasi.",
                         url: url('/guru/schedule'),
