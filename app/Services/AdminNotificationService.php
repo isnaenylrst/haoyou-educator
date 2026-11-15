@@ -103,11 +103,16 @@ class AdminNotificationService
         $offsets = collect([1, 0, -1])
             ->mapWithKeys(fn ($o) => [today()->addDays($o)->format('m-d') => $o]);
 
+        $driver = \Illuminate\Support\Facades\DB::connection()->getDriverName();
+        $dateFormattedSql = $driver === 'sqlite'
+            ? "strftime('%m-%d', birth_date) IN (?, ?, ?)"
+            : "DATE_FORMAT(birth_date, '%m-%d') IN (?, ?, ?)";
+
         return Student::query()
             ->with('candidateStudent')
             ->whereHas('activeEnrollment')
             ->whereHas('candidateStudent', fn ($q) => $q->whereRaw(
-                "DATE_FORMAT(birth_date, '%m-%d') IN (?, ?, ?)",
+                $dateFormattedSql,
                 $offsets->keys()->all()
             ))
             ->get()

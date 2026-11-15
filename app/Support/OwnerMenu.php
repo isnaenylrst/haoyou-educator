@@ -41,7 +41,7 @@ class OwnerMenu
                     ['Jadwal',            'fa-calendar-days', '/admin/jadwal',        'Jadwal kelas mingguan'],
                     ['Program & Level',   'fa-layer-group',   '/admin/program-level', 'Struktur program, level, paket, harga'],
                     ['Materi Training',   'fa-graduation-cap','/admin/training',      'Akses materi training dan SOP admin'],
-                    ['Rekap Pengajuan',   'fa-receipt',       '/admin/pengajuan',     'Verifikasi berkas reimbursement guru'],
+                    ['Rekap Keuangan (tampilan Admin)', 'fa-receipt', '/admin/pengajuan', 'Verifikasi berkas reimbursement guru'],
                 ],
             ],
             [

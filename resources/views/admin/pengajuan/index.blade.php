@@ -10,10 +10,44 @@
         .badge-paid  { background: rgba(20, 184, 166, .12); color: #0f766e; }
         .badge-done  { background: #e5e7eb; color: #111827; }
 
-        .stat-row-owner { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        @media (max-width: 900px) { .stat-row-owner { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-        @media (max-width: 560px) { .stat-row-owner { grid-template-columns: 1fr; } }
-        .stat-card.c-blue { border-left-color: #3b82f6; }   
+        .stat-row-6 {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        @media (max-width: 900px) {
+            .stat-row-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 560px) {
+            .stat-row-6 { grid-template-columns: 1fr; }
+        }
+        .stat-card.c-blue { border-left-color: #3b82f6; }
+        .stat-card.c-green { border-left-color: #22a05a; }
+        .stat-card.c-red { border-left-color: #ef4444; }
+        .stat-card.c-yellow { border-left-color: #e8a317; }
+        .stat-value.is-negative { color: #ef4444 !important; }
+
+        .period-header-line {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            font-size: 13px;
+            flex-wrap: wrap;
+        }
+        .period-badge-chip {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            padding: 4px 12px;
+            border-radius: 99px;
+            font-weight: 600;
+            color: #111827;
+        }
+        .period-note {
+            color: #6b7280;
+            font-size: 12px;
+        }
     </style>
 @endpush
 
@@ -68,111 +102,84 @@
     </div>
 @endif
 
-{{-- RINGKASAN (ikut berubah sesuai filter) --}}
-@if ($isOwner)
- 
-{{-- ===== OWNER: 6 kartu (3 kolom x 2 baris) ===== --}}
-<div class="stat-row stat-row-owner">
+{{-- RINGKASAN KEUANGAN ADMIN: 6 kartu (1 kolom HP, 2 kolom tablet, 3 kolom laptop) --}}
+<div class="period-header-line">
+    <span class="period-badge-chip">
+        <i class="fa-regular fa-calendar me-1"></i> Periode: <strong>{{ $periodLabel }}</strong>
+    </span>
+    <span class="period-note">Angka ringkasan mengikuti filter yang aktif</span>
+</div>
+
+<div class="stat-row-6">
+    {{-- a. Total Pemasukan --}}
     <div class="stat-card c-green">
         <div class="stat-top">
             <span class="stat-label">Total Pemasukan</span>
             <i class="fa-solid fa-arrow-trend-up stat-icon"></i>
         </div>
-        <div class="stat-value money">Rp {{ number_format($totalPemasukan ?? 0, 0, ',', '.') }}</div>
+        <div class="stat-value money {{ $totalPemasukan < 0 ? 'is-negative' : '' }}">{{ format_rupiah($totalPemasukan ?? 0) }}</div>
         <div class="stat-note up">Dari total pembayaran les siswa</div>
     </div>
- 
+
+    {{-- b. Pengeluaran Dibayar --}}
     <div class="stat-card c-red">
         <div class="stat-top">
-            <span class="stat-label">Total Pengeluaran</span>
+            <span class="stat-label">Pengeluaran Dibayar</span>
             <i class="fa-solid fa-arrow-trend-down stat-icon"></i>
         </div>
-        <div class="stat-value money">Rp {{ number_format($totalPengeluaran ?? 0, 0, ',', '.') }}</div>
-        <div class="stat-note">Reimburse &amp; pengadaan bahan disetujui</div>
+        <div class="stat-value money {{ $totalPengeluaranDibayar < 0 ? 'is-negative' : '' }}">{{ format_rupiah($totalPengeluaranDibayar ?? 0) }}</div>
+        <div class="stat-note">Pengajuan berstatus Dibayar &amp; Selesai</div>
     </div>
- 
+
+    {{-- c. Disetujui Belum Dibayar --}}
+    <div class="stat-card c-yellow">
+        <div class="stat-top">
+            <span class="stat-label">Disetujui Belum Dibayar</span>
+            <i class="fa-solid fa-clock-rotate-left stat-icon"></i>
+        </div>
+        <div class="stat-value money {{ $disetujuiBelumDibayar < 0 ? 'is-negative' : '' }}">{{ format_rupiah($disetujuiBelumDibayar ?? 0) }}</div>
+        <div class="stat-note warn">Komitmen pengeluaran yang belum cair</div>
+    </div>
+
+    {{-- d. Saldo --}}
     <div class="stat-card c-blue">
         <div class="stat-top">
             <span class="stat-label">Saldo</span>
             <i class="fa-solid fa-wallet stat-icon"></i>
         </div>
-        <div class="stat-value money">Rp {{ number_format($saldo ?? 0, 0, ',', '.') }}</div>
-        <div class="stat-note">Selisih pemasukan dan pengeluaran</div>
+        <div class="stat-value money {{ $saldo < 0 ? 'is-negative' : '' }}">{{ format_rupiah($saldo ?? 0) }}</div>
+        <div class="stat-note">Pemasukan dikurangi Pengeluaran Dibayar</div>
     </div>
- 
+
+    {{-- e. Saldo Setelah Komitmen --}}
+    <div class="stat-card c-blue">
+        <div class="stat-top">
+            <span class="stat-label">Saldo Setelah Komitmen</span>
+            <i class="fa-solid fa-scale-balanced stat-icon"></i>
+        </div>
+        <div class="stat-value money {{ $saldoSetelahKomitmen < 0 ? 'is-negative' : '' }}">{{ format_rupiah($saldoSetelahKomitmen ?? 0) }}</div>
+        <div class="stat-note">Saldo dikurangi komitmen yang disetujui</div>
+    </div>
+
+    {{-- f. Menunggu Verifikasi --}}
     <div class="stat-card">
         <div class="stat-top">
-            <span class="stat-label">Total Pengajuan</span>
-            <i class="fa-solid fa-folder-open stat-icon"></i>
-        </div>
-        <div class="stat-value">{{ $totalCount }}</div>
-        <div class="stat-note">Sesuai filter yang aktif</div>
-    </div>
- 
-    <div class="stat-card c-yellow">
-        <div class="stat-top">
-            <span class="stat-label">Menunggu Review</span>
-            <i class="fa-solid fa-hourglass-half stat-icon"></i>
-        </div>
-        <div class="stat-value">{{ $totalMenunggu }}</div>
-        <div class="stat-note {{ $totalMenunggu > 0 ? 'warn' : '' }}">Diajukan s/d Review Owner</div>
-    </div>
- 
-    <div class="stat-card c-green">
-        <div class="stat-top">
-            <span class="stat-label">Telah Disetujui</span>
-            <i class="fa-solid fa-circle-check stat-icon"></i>
-        </div>
-        <div class="stat-value">{{ $totalApproved }}</div>
-        <div class="stat-note up">Disetujui, Dibayar &amp; Selesai</div>
-    </div>
-</div>
- 
-@else
- 
-{{-- ===== ADMIN: 4 kartu (seperti sebelumnya) ===== --}}
-<div class="stat-row">
-    <div class="stat-card c-red">
-        <div class="stat-top">
-            <span class="stat-label">Total Pengeluaran</span>
-            <i class="fa-solid fa-arrow-trend-down stat-icon"></i>
-        </div>
-        <div class="stat-value money">Rp {{ number_format($totalPengeluaran ?? 0, 0, ',', '.') }}</div>
-        <div class="stat-note">Reimburse &amp; pengadaan disetujui</div>
-    </div>
- 
-    <div class="stat-card">
-        <div class="stat-top">
-            <span class="stat-label">Total Pengajuan</span>
-            <i class="fa-solid fa-folder-open stat-icon"></i>
-        </div>
-        <div class="stat-value">{{ $totalCount }}</div>
-        <div class="stat-note">Semua status</div>
-    </div>
- 
-    <div class="stat-card c-yellow">
-        <div class="stat-top">
-            <span class="stat-label">Perlu Verifikasi</span>
+            <span class="stat-label">Menunggu Verifikasi</span>
             <i class="fa-solid fa-clipboard-check stat-icon"></i>
         </div>
-        <div class="stat-value">{{ $totalVerifikasi }}</div>
-        <div class="stat-note {{ $totalVerifikasi > 0 ? 'warn' : '' }}">Menunggu verifikasi Admin</div>
-    </div>
- 
-    <div class="stat-card c-green">
-        <div class="stat-top">
-            <span class="stat-label">Telah Disetujui</span>
-            <i class="fa-solid fa-circle-check stat-icon"></i>
-        </div>
-        <div class="stat-value">{{ $totalApproved }}</div>
-        <div class="stat-note up">Disetujui, Dibayar &amp; Selesai</div>
+        <div class="stat-value">{{ $totalVerifikasi }} <span style="font-size: 14px; font-weight: normal; color: #6b7280;">/ {{ $totalCount }} Total</span></div>
+        <div class="stat-note {{ $totalVerifikasi > 0 ? 'warn' : '' }}">Perlu verifikasi &amp; TTD Admin</div>
     </div>
 </div>
- 
-@endif
 
 {{-- FILTER (otomatis terfilter saat pilihan diubah) --}}
 <form method="GET" class="toolbar" id="filterForm">
+    <div style="position: relative; flex: 1; min-width: 200px;">
+        <input type="text" name="q" class="select-chip" style="width: 100%; padding-left: 28px;"
+               placeholder="Cari item, pengaju, catatan..." value="{{ $search ?? '' }}">
+        <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 12px;"></i>
+    </div>
+
     <select name="status" class="select-chip">
         <option value="">Semua Status</option>
         @foreach ($statusOptions as $opt)
@@ -193,6 +200,8 @@
             <option value="{{ $t->id }}" @selected($teacherId == $t->id)>{{ $t->name }}</option>
         @endforeach
     </select>
+
+    <input type="month" name="bulan" id="filterBulan" class="select-chip" value="{{ $bulan ?? '' }}" title="Pilih per Bulan">
 
     <div class="date-range" title="Filter rentang tanggal pengajuan">
         <input type="date" name="date_from" id="filterFrom" class="select-chip" value="{{ $dateFrom }}">
@@ -238,30 +247,17 @@
                             }
                         }
 
-                        $canAdminVerify  = !$isOwner && $sub->status === 'Review Admin';
-                        $canOwnerApprove = $isOwner && in_array($sub->status, ['Review Owner', 'Review Admin']);
-                        $canMarkPaid     = $isOwner && $sub->status === 'Disetujui';
+                        $canAdminVerify = $sub->status === 'Review Admin';
 
                         $verifyHint = match (true) {
                             in_array($sub->status, ['Diajukan', 'Review Kurikulum']) => 'Belum bisa diverifikasi: masih di tahap Kurikulum',
                             $sub->status === 'Ditolak'                               => 'Pengajuan ditolak',
                             default                                                  => 'Sudah diverifikasi Admin',
                         };
-                        $approveHint = match (true) {
-                            in_array($sub->status, ['Diajukan', 'Review Kurikulum']) => 'Belum sampai tahap Owner',
-                            $sub->status === 'Ditolak'                               => 'Pengajuan ditolak',
-                            default                                                  => 'Sudah diputuskan Owner',
-                        };
-                        $paidHint = match (true) {
-                            in_array($sub->status, ['Dibayar', 'Selesai']) => 'Sudah dibayar',
-                            $sub->status === 'Ditolak'                     => 'Pengajuan ditolak',
-                            default                                        => 'Belum disetujui Owner',
-                        };
                     @endphp
                     <tr>
                         <td>
                             <div class="name-cell">
-                                {{-- <div class="avatar-sm">{{ \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr($teacherName, 0, 2)) }}</div> --}}
                                 <div class="cand-name">{{ $teacherName }}</div>
                             </div>
                         </td>
@@ -274,66 +270,38 @@
                             <div class="cell-stack-main">{{ $sub->item_name }}</div>
                         </td>
 
-                        <td  style="text-align: center; vertical-align: middle;">
+                        <td style="text-align: center; vertical-align: middle;">
                             <span class="money money-main">{{ $sub->formatted_amount }}</span>
                         </td>
 
-                        <td class="cell-nowrap"  style="text-align: center; vertical-align: middle;">
+                        <td class="cell-nowrap" style="text-align: center; vertical-align: middle;">
                             {{ $sub->date?->translatedFormat('d M Y') ?? '-' }}
                         </td>
 
-                        <td  style="text-align: center; vertical-align: middle;">
+                        <td style="text-align: center; vertical-align: middle;">
                             <span class="badge {{ $badgeClass }}">{{ $sub->status }}</span>
                             <div class="cell-stack-sub" @if($rejectNote) title="Catatan: {{ $rejectNote }}" @endif>
                                 {{ $stageText }}
                             </div>
                         </td>
 
-                        <td  style="text-align: center; vertical-align: middle;">
+                        <td style="text-align: center; vertical-align: middle;">
                             <div class="row-actions" style="align-items:center;">
                                 <a href="{{ route('kurikulum.review-pengajuan.print-submission', $sub->id) }}"
                                    target="_blank" class="icon-btn" title="Cetak / Dokumen TTD">
                                     <i class="fa-solid fa-file-invoice"></i>
                                 </a>
 
-                                @if (!$isOwner)
-                                    {{-- ADMIN: kuning bila bisa verifikasi, abu bila belum/tidak bisa --}}
-                                    @if ($canAdminVerify)
-                                        <button type="button" class="sd-icon-btn" title="Verifikasi &amp; TTD Admin"
-                                                data-open-modal="modalAdminVerify{{ $sub->id }}">
-                                            <i class="fa-solid fa-clipboard-check"></i>
-                                        </button>
-                                    @else
-                                        <span class="sd-icon-btn is-disabled" title="{{ $verifyHint }}">
-                                            <i class="fa-solid fa-clipboard-check"></i>
-                                        </span>
-                                    @endif
+                                {{-- ADMIN: kuning bila bisa verifikasi, abu bila belum/tidak bisa --}}
+                                @if ($canAdminVerify)
+                                    <button type="button" class="sd-icon-btn" title="Verifikasi &amp; TTD Admin"
+                                            data-open-modal="modalAdminVerify{{ $sub->id }}">
+                                        <i class="fa-solid fa-clipboard-check"></i>
+                                    </button>
                                 @else
-                                    {{-- OWNER: persetujuan & tandai dibayar --}}
-                                    @if ($canOwnerApprove)
-                                        <button type="button" class="sd-icon-btn" title="Approve &amp; TTD Owner"
-                                                data-open-modal="modalOwnerApprove{{ $sub->id }}">
-                                            <i class="fa-solid fa-signature"></i>
-                                        </button>
-                                    @else
-                                        <span class="sd-icon-btn is-disabled" title="{{ $approveHint }}">
-                                            <i class="fa-solid fa-signature"></i>
-                                        </span>
-                                    @endif
-
-                                    @if ($canMarkPaid)
-                                        <form action="{{ route('owner.pengajuan.mark-paid', $sub->id) }}" method="POST" class="x-inline-form"
-                                              onsubmit="return confirm('Tandai pengajuan {{ e($sub->item_name) }} telah dibayar?')">
-                                            @csrf
-                                            <button type="submit" class="sd-icon-btn" title="Tandai Dibayar">
-                                                <i class="fa-solid fa-money-bill-wave"></i>
-                                            </button>
-                                        </form>
-                                    @else
-                                        <span class="sd-icon-btn is-disabled" title="{{ $paidHint }}">
-                                            <i class="fa-solid fa-money-bill-wave"></i>
-                                        </span>
-                                    @endif
+                                    <span class="sd-icon-btn is-disabled" title="{{ $verifyHint }}">
+                                        <i class="fa-solid fa-clipboard-check"></i>
+                                    </span>
                                 @endif
                             </div>
                         </td>
@@ -417,7 +385,7 @@
     @endphp
 
     {{-- MODAL VERIFIKASI ADMIN --}}
-    @if (!$isOwner && $sub->status === 'Review Admin')
+    @if ($sub->status === 'Review Admin')
         <div class="modal-overlay" id="modalAdminVerify{{ $sub->id }}">
             <div class="modal">
                 <form action="{{ route('admin.pengajuan.verify', $sub->id) }}" method="POST" class="js-sign-form">
@@ -543,100 +511,6 @@
                             <button type="button" class="btn btn-secondary" data-close-modal>Batal</button>
                             <button type="submit" class="btn btn-primary">
                                 <i class="fa-solid fa-check"></i> Kirim Hasil Verifikasi
-                            </button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-    @endif
-
-    {{-- MODAL PERSETUJUAN OWNER --}}
-    @if ($isOwner && in_array($sub->status, ['Review Owner', 'Review Admin']))
-        <div class="modal-overlay" id="modalOwnerApprove{{ $sub->id }}">
-            <div class="modal">
-                <form action="{{ route('owner.pengajuan.approve', $sub->id) }}" method="POST">
-                    @csrf
-
-                    <div class="modal-head">
-                        <div>
-                            <div class="modal-title">Persetujuan Owner</div>
-                            <div class="modal-sub">Setujui atau tolak pengajuan ini. TTD Owner ditempel otomatis dari profil.</div>
-                        </div>
-                        <button type="button" class="modal-close" data-close-modal aria-label="Tutup">
-                            <i class="fa-solid fa-xmark"></i>
-                        </button>
-                    </div>
-
-                    <div class="modal-body">
-                        <div class="form-section">
-                            <div class="form-section-title"><i class="fa-solid fa-receipt"></i> Detail Pengajuan</div>
-                            <div class="x-detail-grid">
-                                <div>
-                                    <div class="x-detail-label">Guru Pengaju</div>
-                                    <div class="x-detail-value">{{ $teacherName }}</div>
-                                </div>
-                                <div>
-                                    <div class="x-detail-label">Jenis Pengajuan</div>
-                                    <div class="x-detail-value">{{ $sub->type }}</div>
-                                </div>
-                                <div>
-                                    <div class="x-detail-label">Item / Keperluan</div>
-                                    <div class="x-detail-value">{{ $sub->item_name }}</div>
-                                </div>
-                                <div>
-                                    <div class="x-detail-label">Nominal</div>
-                                    <div class="x-detail-value money money-main">{{ $sub->formatted_amount }}</div>
-                                </div>
-                                <div>
-                                    <div class="x-detail-label">Disetujui Kurikulum</div>
-                                    <div class="x-detail-value">{{ $sub->curriculum_approved_at?->translatedFormat('d M Y') ?? '-' }}</div>
-                                </div>
-                                <div>
-                                    <div class="x-detail-label">Diverifikasi Admin</div>
-                                    <div class="x-detail-value">{{ $sub->admin_verified_at?->translatedFormat('d M Y') ?? '-' }}</div>
-                                </div>
-                                @if ($sub->admin_note)
-                                    <div class="full">
-                                        <div class="x-detail-label">Catatan Admin</div>
-                                        <div class="x-pre">{{ $sub->admin_note }}</div>
-                                    </div>
-                                @endif
-                            </div>
-                        </div>
-
-                        <div class="form-section">
-                            <div class="form-section-title"><i class="fa-solid fa-signature"></i> Keputusan Owner</div>
-                            <div class="x-note">
-                                <i class="fa-solid fa-signature"></i>
-                                <span>Tanda tangan Owner yang tersimpan di profil akan otomatis ditempelkan pada lembar dokumen pencairan.</span>
-                            </div>
-                            <div class="form-grid">
-                                <div class="form-field full">
-                                    <label>Keputusan *</label>
-                                    <select name="decision" required>
-                                        <option value="Approved">Setujui Pencairan (Approved)</option>
-                                        <option value="Rejected">Tolak Pengajuan (Rejected)</option>
-                                    </select>
-                                </div>
-                                <div class="form-field full">
-                                    <label>Catatan Owner <span class="opt">(opsional)</span></label>
-                                    <textarea name="note" rows="2" placeholder="Catatan persetujuan..."></textarea>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="modal-foot">
-                        <div class="modal-foot-left">
-                            <a href="{{ route('kurikulum.review-pengajuan.print-submission', $sub->id) }}" target="_blank" class="btn btn-secondary">
-                                <i class="fa-solid fa-file-invoice"></i> Lihat Dokumen
-                            </a>
-                        </div>
-                        <div class="modal-foot-right">
-                            <button type="button" class="btn btn-secondary" data-close-modal>Batal</button>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fa-solid fa-check"></i> Simpan Keputusan &amp; TTD
                             </button>
                         </div>
                     </div>
