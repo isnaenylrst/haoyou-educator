@@ -90,6 +90,7 @@ use App\Http\Controllers\Owner\AccessController as OwnerAccessController;
 use App\Http\Controllers\Owner\TrainingMaterialController as OwnerTrainingMaterialController;
 use App\Http\Controllers\Owner\ConsultationController as OwnerConsultationController;
 use App\Http\Controllers\Owner\SignatureQueueController as OwnerSignatureQueueController;
+use App\Http\Controllers\Owner\SubmissionRecapController as OwnerSubmissionRecapController;
 
 /*
 |--------------------------------------------------------------------------
@@ -851,13 +852,13 @@ Route::middleware(['auth', 'role:Owner'])
             ->name('ttd.submission');
 
         // Rekap & Approval Pengajuan Bahan Ajar / Reimburse (Poin 5)
-        Route::get('/pengajuan', [SubmissionRekapController::class, 'index'])
+        Route::get('/pengajuan', [OwnerSubmissionRecapController::class, 'index'])
             ->name('pengajuan.index');
-        Route::post('/pengajuan/{submission}/approve', [SubmissionRekapController::class, 'ownerApprove'])
+        Route::post('/pengajuan/{submission}/approve', [OwnerSubmissionRecapController::class, 'approve'])
             ->name('pengajuan.approve');
-        Route::post('/pengajuan/{submission}/mark-paid', [SubmissionRekapController::class, 'ownerMarkPaid'])
+        Route::post('/pengajuan/{submission}/mark-paid', [OwnerSubmissionRecapController::class, 'markPaid'])
             ->name('pengajuan.mark-paid');
-        Route::get('/pengajuan/{submission}/cetak', [SubmissionRekapController::class, 'printSubmission'])
+        Route::get('/pengajuan/{submission}/cetak', [OwnerSubmissionRecapController::class, 'print'])
             ->name('pengajuan.print');
 
         // Materi Training Pengajar (Poin 12)

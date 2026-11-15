@@ -201,17 +201,19 @@
 
                         <div id="itemsContainer">
                             <div class="row g-2 align-items-center mb-2 item-row">
-                                <div class="col-md-5">
+                                <div class="col-md-4">
                                     <input type="text" name="items[0][name]" class="form-control form-control-sm item-name-input" placeholder="Nama item (contoh: Kertas Origami)" required>
                                 </div>
                                 <div class="col-md-2">
                                     <input type="number" name="items[0][qty]" class="form-control form-control-sm item-qty-input" placeholder="Qty" value="1" min="1" required oninput="calculateRow(this)">
                                 </div>
-                                <div class="col-md-2">
+                                <div class="col-md-3">
                                     <input type="number" name="items[0][price]" class="form-control form-control-sm item-price-input" placeholder="Harga (Rp)" min="0" required oninput="calculateRow(this)">
+                                    <div class="item-price-preview small text-muted" style="font-size: 11px;">Rp 0</div>
                                 </div>
                                 <div class="col-md-2">
                                     <input type="number" name="items[0][amount]" class="form-control form-control-sm item-amount-input bg-white" placeholder="Subtotal" readonly>
+                                    <div class="item-amount-preview small text-success fw-semibold" style="font-size: 11px;">Rp 0</div>
                                 </div>
                                 <div class="col-md-1 text-center">
                                     <button type="button" class="btn btn-sm text-danger btn-remove-item" onclick="removeItemRow(this)" title="Hapus"><i class="fa-solid fa-trash-can"></i></button>
@@ -259,22 +261,28 @@
 <script>
 let itemIndex = 1;
 
+function formatRupiahLive(num) {
+    return 'Rp ' + Math.round(num || 0).toLocaleString('id-ID');
+}
+
 document.getElementById('btnAddItem')?.addEventListener('click', function() {
     const container = document.getElementById('itemsContainer');
     const newRow = document.createElement('div');
     newRow.className = 'row g-2 align-items-center mb-2 item-row';
     newRow.innerHTML = `
-        <div class="col-md-5">
+        <div class="col-md-4">
             <input type="text" name="items[${itemIndex}][name]" class="form-control form-control-sm item-name-input" placeholder="Nama item" required>
         </div>
         <div class="col-md-2">
             <input type="number" name="items[${itemIndex}][qty]" class="form-control form-control-sm item-qty-input" placeholder="Qty" value="1" min="1" required oninput="calculateRow(this)">
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
             <input type="number" name="items[${itemIndex}][price]" class="form-control form-control-sm item-price-input" placeholder="Harga (Rp)" min="0" required oninput="calculateRow(this)">
+            <div class="item-price-preview small text-muted" style="font-size: 11px;">Rp 0</div>
         </div>
         <div class="col-md-2">
             <input type="number" name="items[${itemIndex}][amount]" class="form-control form-control-sm item-amount-input bg-white" placeholder="Subtotal" readonly>
+            <div class="item-amount-preview small text-success fw-semibold" style="font-size: 11px;">Rp 0</div>
         </div>
         <div class="col-md-1 text-center">
             <button type="button" class="btn btn-sm text-danger btn-remove-item" onclick="removeItemRow(this)" title="Hapus"><i class="fa-solid fa-trash-can"></i></button>
@@ -289,10 +297,23 @@ function calculateRow(el) {
     const row = el.closest('.item-row');
     const qty = parseFloat(row.querySelector('.item-qty-input')?.value) || 0;
     const price = parseFloat(row.querySelector('.item-price-input')?.value) || 0;
+    const subtotal = Math.round(qty * price);
+
+    const pricePreview = row.querySelector('.item-price-preview');
+    if (pricePreview) {
+        pricePreview.innerText = formatRupiahLive(price);
+    }
+
     const amountInput = row.querySelector('.item-amount-input');
     if (amountInput) {
-        amountInput.value = Math.round(qty * price);
+        amountInput.value = subtotal;
     }
+
+    const amountPreview = row.querySelector('.item-amount-preview');
+    if (amountPreview) {
+        amountPreview.innerText = formatRupiahLive(subtotal);
+    }
+
     calculateTotal();
 }
 
@@ -312,13 +333,9 @@ function calculateTotal() {
         const qty = parseFloat(row.querySelector('.item-qty-input')?.value) || 0;
         const price = parseFloat(row.querySelector('.item-price-input')?.value) || 0;
         const subtotal = qty * price;
-        const amountInput = row.querySelector('.item-amount-input');
-        if (amountInput && !amountInput.value) {
-            amountInput.value = Math.round(subtotal);
-        }
-        total += subtotal > 0 ? subtotal : (parseFloat(amountInput?.value) || 0);
+        total += subtotal;
     });
-    document.getElementById('displayTotalAmount').innerText = 'Rp ' + Math.round(total).toLocaleString('id-ID');
+    document.getElementById('displayTotalAmount').innerText = formatRupiahLive(total);
     document.getElementById('inputTotalAmount').value = Math.round(total);
 }
 </script>

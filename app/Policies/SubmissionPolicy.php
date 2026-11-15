@@ -67,7 +67,11 @@ class SubmissionPolicy
             return false;
         }
 
-        return !empty($submission->curriculum_approved_at) || in_array($submission->status, ['Review Owner', 'Review Admin']);
+        // Pengajuan WAJIB sudah di-ACC Kurikulum
+        $curriculumAcc = !empty($submission->curriculum_approved_at)
+            || in_array($submission->status, ['Review Owner', 'Disetujui', 'Dibayar', 'Selesai']);
+
+        return $curriculumAcc && in_array($submission->status, ['Review Owner', 'Review Admin', 'Disetujui']);
     }
 
     /**
@@ -75,7 +79,14 @@ class SubmissionPolicy
      */
     public function markPaidOwner(User $user, Submission $submission): bool
     {
-        return $user->level?->nama_level === 'Owner' && in_array($submission->status, ['Disetujui', 'Review Owner']);
+        if ($user->level?->nama_level !== 'Owner') {
+            return false;
+        }
+
+        $curriculumAcc = !empty($submission->curriculum_approved_at)
+            || in_array($submission->status, ['Review Owner', 'Disetujui', 'Dibayar', 'Selesai']);
+
+        return $curriculumAcc && in_array($submission->status, ['Disetujui', 'Review Owner']);
     }
 }
 

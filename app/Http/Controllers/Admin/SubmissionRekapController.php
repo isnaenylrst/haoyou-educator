@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\OwnerApproveSubmissionRequest;
 use App\Models\Payment;
 use App\Models\Submission;
 use App\Models\Teacher;
@@ -26,18 +25,25 @@ class SubmissionRekapController extends Controller
         $status    = $request->query('status');
         $type      = $request->query('type');
         $teacherId = $request->query('teacher_id');
+        $search    = $request->query('q');
 
-        // Filter periode (berdasarkan tanggal pengajuan). Rentang tanggal lebih diutamakan daripada bulan.
+        // Filter periode (berdasarkan tanggal pengajuan)
         $bulan    = preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', (string) $request->query('bulan')) ? $request->query('bulan') : null;
         $dateFrom = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->query('date_from')) ? $request->query('date_from') : null;
         $dateTo   = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->query('date_to')) ? $request->query('date_to') : null;
 
-        $isOwner = (Auth::user()->level?->nama_level === 'Owner');
-
+        // Base query Admin: Menampilkan SEMUA pengajuan (termasuk Diajukan Kurikulum)
         $query = Submission::with(['teacher', 'curriculum', 'admin', 'owner'])
             ->when($status, fn ($q) => $q->where('status', $status))
             ->when($type, fn ($q) => $q->where('type', $type))
             ->when($teacherId, fn ($q) => $q->where('teacher_id', $teacherId))
+            ->when($search, function ($q) use ($search) {
+                $q->where(function ($subQ) use ($search) {
+                    $subQ->where('item_name', 'like', "%{$search}%")
+                         ->orWhere('description', 'like', "%{$search}%")
+                         ->orWhereHas('teacher', fn ($tQ) => $tQ->where('name', 'like', "%{$search}%"));
+                });
+            })
             ->when(
                 $dateFrom || $dateTo,
                 function ($q) use ($dateFrom, $dateTo) {
@@ -52,56 +58,41 @@ class SubmissionRekapController extends Controller
                 }
             );
 
-        if ($isOwner) {
-            // Hanya yang sudah ACC Kurikulum yang muncul untuk Owner
-            $query->where(function ($q) {
-                $q->whereNotNull('curriculum_approved_at')
-                  ->orWhereIn('status', ['Review Owner', 'Disetujui', 'Dibayar', 'Selesai']);
-            });
-        }
-
         // ---------------------------------------------------------------
-        // KARTU RINGKASAN
-        // Semua kartu dihitung dari $query yang sama, jadi ikut berubah mengikuti filter
+        // 6 KARTU RINGKASAN KEUANGAN ADMIN
         // ---------------------------------------------------------------
+        // a. Total Pemasukan: SUM amount_paid pembayaran siswa status Paid/Partial berdasarkan payment_date
+        $totalPemasukan = (float) Payment::whereIn('status', ['Paid', 'Partial'])
+            ->when(
+                $dateFrom || $dateTo,
+                function ($q) use ($dateFrom, $dateTo) {
+                    $q->when($dateFrom, fn ($qq) => $qq->whereDate('payment_date', '>=', $dateFrom))
+                      ->when($dateTo, fn ($qq) => $qq->whereDate('payment_date', '<=', $dateTo));
+                },
+                function ($q) use ($bulan) {
+                    $q->when($bulan, function ($qq) use ($bulan) {
+                        [$y, $m] = explode('-', $bulan);
+                        $qq->whereYear('payment_date', (int) $y)->whereMonth('payment_date', (int) $m);
+                    });
+                }
+            )
+            ->sum('amount_paid');
 
-        // Dipakai KEDUA role (Admin: 4 kartu, Owner: 6 kartu)
-        $totalCount       = (clone $query)->count();
-        $totalPengeluaran = (float) (clone $query)->whereIn('status', ['Disetujui', 'Dibayar', 'Selesai'])->sum('amount');
-        $totalVerifikasi  = (clone $query)->where('status', 'Review Admin')->count();   // kartu Admin: "Perlu Verifikasi"
-        $totalApproved    = (clone $query)->whereIn('status', ['Disetujui', 'Dibayar', 'Selesai'])->count();
+        // b. Pengeluaran Dibayar: SUM nominal pengajuan status Dibayar + Selesai
+        $totalPengeluaranDibayar = (float) (clone $query)->whereIn('status', ['Dibayar', 'Selesai'])->sum('amount');
 
-        // Khusus Owner (Admin tidak butuh angka ini, jadi tidak di-query)
-        $totalPemasukan = null;
-        $totalMenunggu  = null;
-        $saldo          = null;
+        // c. Disetujui Belum Dibayar: SUM nominal status Disetujui
+        $disetujuiBelumDibayar = (float) (clone $query)->where('status', 'Disetujui')->sum('amount');
 
-        if ($isOwner) {
-            // Menunggu Review = semua yang belum final: Diajukan s/d Review Owner
-            $totalMenunggu = (clone $query)
-                ->whereIn('status', ['Diajukan', 'Review Kurikulum', 'Review Admin', 'Review Owner'])
-                ->count();
+        // d. Saldo = a - b
+        $saldo = $totalPemasukan - $totalPengeluaranDibayar;
 
-            // Pemasukan = pembayaran siswa (Paid/Partial), mengikuti filter periode yang sama
-            // tetapi berdasarkan tanggal pembayaran (payment_date).
-            $totalPemasukan = (float) Payment::whereIn('status', ['Paid', 'Partial'])
-                ->when(
-                    $dateFrom || $dateTo,
-                    function ($q) use ($dateFrom, $dateTo) {
-                        $q->when($dateFrom, fn ($qq) => $qq->whereDate('payment_date', '>=', $dateFrom))
-                          ->when($dateTo, fn ($qq) => $qq->whereDate('payment_date', '<=', $dateTo));
-                    },
-                    function ($q) use ($bulan) {
-                        $q->when($bulan, function ($qq) use ($bulan) {
-                            [$y, $m] = explode('-', $bulan);
-                            $qq->whereYear('payment_date', (int) $y)->whereMonth('payment_date', (int) $m);
-                        });
-                    }
-                )
-                ->sum('amount_paid');
+        // e. Saldo Setelah Komitmen = a - b - c
+        $saldoSetelahKomitmen = $saldo - $disetujuiBelumDibayar;
 
-            $saldo = $totalPemasukan - $totalPengeluaran;
-        }
+        // f. Menunggu Verifikasi: jumlah pengajuan status Review Admin (perlu verifikasi Admin), tampil X / Y Total
+        $totalVerifikasi = (clone $query)->where('status', 'Review Admin')->count();
+        $totalCount      = (clone $query)->count();
 
         // Label periode untuk ditampilkan di atas kartu
         if ($dateFrom || $dateTo) {
@@ -111,13 +102,11 @@ class SubmissionRekapController extends Controller
         } elseif ($bulan) {
             $periodLabel = Carbon::createFromFormat('!Y-m', $bulan)->translatedFormat('F Y');
         } else {
-            $periodLabel = 'Semua periode';
+            $periodLabel = 'Semua Periode';
         }
 
-        // Urutan tabel: yang perlu ditindaklanjuti peran ini paling atas, sisanya mengikuti alur
-        $priority = $isOwner
-            ? ['Review Owner', 'Disetujui', 'Review Admin', 'Review Kurikulum', 'Diajukan', 'Dibayar', 'Selesai', 'Ditolak']
-            : ['Review Admin', 'Review Kurikulum', 'Diajukan', 'Review Owner', 'Disetujui', 'Dibayar', 'Selesai', 'Ditolak'];
+        // Urutan tabel untuk Admin: Review Admin paling atas
+        $priority = ['Review Admin', 'Review Kurikulum', 'Diajukan', 'Review Owner', 'Disetujui', 'Dibayar', 'Selesai', 'Ditolak'];
 
         $orderCase = 'CASE status';
         foreach ($priority as $i => $st) {
@@ -129,10 +118,10 @@ class SubmissionRekapController extends Controller
         $teachers    = Teacher::where('status', 'Active')->orderBy('name')->get();
 
         return view('admin.pengajuan.index', compact(
-            'submissions', 'teachers', 'totalCount', 'totalPengeluaran',
-            'totalVerifikasi', 'totalApproved', 'periodLabel',
-            'totalPemasukan', 'totalMenunggu', 'saldo',
-            'status', 'type', 'teacherId', 'bulan', 'dateFrom', 'dateTo', 'isOwner'
+            'submissions', 'teachers', 'totalCount', 'totalVerifikasi',
+            'totalPemasukan', 'totalPengeluaranDibayar', 'disetujuiBelumDibayar',
+            'saldo', 'saldoSetelahKomitmen', 'periodLabel',
+            'status', 'type', 'teacherId', 'bulan', 'dateFrom', 'dateTo', 'search'
         ));
     }
 
@@ -227,156 +216,6 @@ class SubmissionRekapController extends Controller
         Storage::disk('public')->put($path, $binary);
 
         return $path;
-    }
-
-    /** Approval khusus Owner jika pengajuan diteruskan ke Owner */
-    public function ownerApprove(OwnerApproveSubmissionRequest $request, Submission $submission)
-    {
-        Gate::authorize('approveOwner', $submission);
-
-        $owner = Auth::user();
-
-        return DB::transaction(function () use ($request, $submission, $owner) {
-            if ($request->decision === 'Approved') {
-                $submission->update([
-                    'status'               => 'Disetujui',
-                    'owner_id'             => $owner->id,
-                    'owner_note'           => $request->note,
-                    'owner_approved_at'    => now(),
-                    'owner_signature_path' => $owner->signature_path,
-                ]);
-
-                // Notifikasi Guru
-                if ($submission->teacher?->user) {
-                    $submission->teacher->user->notify(new AppNotification(
-                        title: "Pengajuan Disetujui Owner",
-                        message: "Pengajuan {$submission->item_name} sebesar {$submission->formatted_amount} telah disetujui penuh oleh Owner.",
-                        url: url('/guru/pengajuan'),
-                        type: 'pengajuan',
-                        icon: 'fa-circle-check'
-                    ));
-                }
-
-                // Notifikasi Kurikulum
-                $kurikulums = User::whereHas('level', fn ($q) => $q->whereIn('nama_level', ['Curriculum', 'Kurikulum']))->get();
-                foreach ($kurikulums as $kur) {
-                    $kur->notify(new AppNotification(
-                        title: "Pengajuan Disetujui Owner",
-                        message: "Owner telah menyetujui pengajuan {$submission->item_name} ({$submission->type}) dari {$submission->teacher?->name}.",
-                        url: url('/kurikulum/review-pengajuan?tab=pengajuan'),
-                        type: 'pengajuan',
-                        icon: 'fa-circle-check'
-                    ));
-                }
-
-                // Notifikasi Admin
-                $admins = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Admin'))->get();
-                foreach ($admins as $adm) {
-                    $adm->notify(new AppNotification(
-                        title: "Pengajuan Disetujui Owner",
-                        message: "Owner telah menyetujui pengajuan {$submission->item_name} sebesar {$submission->formatted_amount}. Siap diproses pembayaran.",
-                        url: url('/admin/pengajuan'),
-                        type: 'pengajuan',
-                        icon: 'fa-receipt'
-                    ));
-                }
-
-                $msg = 'Pengajuan berhasil disetujui Owner' . ($owner->signature_path ? ' dan TTD Owner telah ditempel otomatis pada dokumen.' : ' (Catatan: Anda belum menyimpan TTD digital di Profil).');
-                return back()->with('success', $msg);
-            }
-
-            $submission->update([
-                'status'     => 'Ditolak',
-                'owner_id'   => $owner->id,
-                'owner_note' => $request->note ?? 'Ditolak oleh Owner',
-            ]);
-
-            // Notifikasi Guru
-            if ($submission->teacher?->user) {
-                $submission->teacher->user->notify(new AppNotification(
-                    title: "Pengajuan Ditolak Owner",
-                    message: "Pengajuan {$submission->item_name} ditolak oleh Owner. Catatan: " . ($request->note ?? '-'),
-                    url: url('/guru/pengajuan'),
-                    type: 'pengajuan',
-                    icon: 'fa-circle-xmark'
-                ));
-            }
-
-            // Notifikasi Kurikulum
-            $kurikulums = User::whereHas('level', fn ($q) => $q->whereIn('nama_level', ['Curriculum', 'Kurikulum']))->get();
-            foreach ($kurikulums as $kur) {
-                $kur->notify(new AppNotification(
-                    title: "Pengajuan Ditolak Owner",
-                    message: "Pengajuan {$submission->item_name} dari {$submission->teacher?->name} ditolak Owner.",
-                    url: url('/kurikulum/review-pengajuan?tab=pengajuan'),
-                    type: 'pengajuan',
-                    icon: 'fa-circle-xmark'
-                ));
-            }
-
-            // Notifikasi Admin
-            $admins = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Admin'))->get();
-            foreach ($admins as $adm) {
-                $adm->notify(new AppNotification(
-                    title: "Pengajuan Ditolak Owner",
-                    message: "Pengajuan {$submission->item_name} dari {$submission->teacher?->name} ditolak Owner.",
-                    url: url('/admin/pengajuan'),
-                    type: 'pengajuan',
-                    icon: 'fa-circle-xmark'
-                ));
-            }
-
-            return back()->with('success', 'Pengajuan telah ditolak oleh Owner.');
-        });
-    }
-
-    /** Tandai pengajuan sebagai Dibayar oleh Owner */
-    public function ownerMarkPaid(Request $request, Submission $submission)
-    {
-        Gate::authorize('markPaidOwner', $submission);
-
-        return DB::transaction(function () use ($submission) {
-            $submission->update([
-                'status' => 'Dibayar',
-            ]);
-
-            // Notifikasi Guru
-            if ($submission->teacher?->user) {
-                $submission->teacher->user->notify(new AppNotification(
-                    title: "Pengajuan Telah Dibayar",
-                    message: "Pengajuan {$submission->item_name} sebesar {$submission->formatted_amount} telah ditandai Dibayar oleh Owner.",
-                    url: url('/guru/pengajuan'),
-                    type: 'pengajuan',
-                    icon: 'fa-money-bill-wave'
-                ));
-            }
-
-            // Notifikasi Kurikulum
-            $kurikulums = User::whereHas('level', fn ($q) => $q->whereIn('nama_level', ['Curriculum', 'Kurikulum']))->get();
-            foreach ($kurikulums as $kur) {
-                $kur->notify(new AppNotification(
-                    title: "Pengajuan Telah Dibayar",
-                    message: "Pengajuan {$submission->item_name} dari {$submission->teacher?->name} telah dibayarkan.",
-                    url: url('/kurikulum/review-pengajuan?tab=pengajuan'),
-                    type: 'pengajuan',
-                    icon: 'fa-money-bill-wave'
-                ));
-            }
-
-            // Notifikasi Admin
-            $admins = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Admin'))->get();
-            foreach ($admins as $adm) {
-                $adm->notify(new AppNotification(
-                    title: "Pengajuan Telah Dibayar",
-                    message: "Pengajuan {$submission->item_name} sebesar {$submission->formatted_amount} telah dibayarkan oleh Owner.",
-                    url: url('/admin/pengajuan'),
-                    type: 'pengajuan',
-                    icon: 'fa-money-bill-wave'
-                ));
-            }
-
-            return back()->with('success', "Pengajuan {$submission->item_name} berhasil ditandai Dibayar.");
-        });
     }
 
     /** Cetak / preview formulir lembar persetujuan pengajuan dengan TTD */

@@ -91,7 +91,7 @@ class Submission extends Model
 
     public function getFormattedAmountAttribute(): string
     {
-        return 'Rp ' . number_format($this->amount, 0, ',', '.');
+        return format_rupiah($this->amount);
     }
 
     public function getStatusBadgeAttribute(): string

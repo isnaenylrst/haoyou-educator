@@ -48,20 +48,35 @@ class SubmissionController extends Controller
             $photoPath = $request->file('photo_file')->store('submission-photos', 'public');
         }
 
-        // Hitung total nominal jika multi-item (nama, qty, harga, total otomatis)
+        // Helper sanitasi string nominal numerik (mis. "25.000" atau "25,000" -> 25000)
+        $cleanNumber = function ($val) {
+            if ($val === null || $val === '') {
+                return 0.0;
+            }
+            if (is_numeric($val)) {
+                return (float) $val;
+            }
+            // Hapus titik/koma ribuan
+            $clean = preg_replace('/[^\d]/', '', (string) $val);
+            return (float) $clean;
+        };
+
+        // Hitung total nominal jika multi-item (nama, qty, harga, total otomatis dari server qty * price)
         $items = !empty($data['items']) ? array_values(array_filter($data['items'], fn ($it) => !empty($it['name']))) : null;
         if ($items) {
             foreach ($items as &$it) {
-                $qty = !empty($it['qty']) ? (float) $it['qty'] : 1;
-                $price = isset($it['price']) && $it['price'] !== '' ? (float) $it['price'] : (!empty($it['amount']) ? (float) $it['amount'] : 0);
+                $qty = !empty($it['qty']) ? max(1, (float) $it['qty']) : 1;
+                $rawPrice = isset($it['price']) && $it['price'] !== '' ? $it['price'] : (!empty($it['amount']) ? $it['amount'] : 0);
+                $price = $cleanNumber($rawPrice);
+
                 $it['qty'] = $qty;
                 $it['price'] = $price;
-                $it['amount'] = $qty * $price;
+                $it['amount'] = round($qty * $price, 2);
             }
             unset($it);
             $totalAmount = array_sum(array_column($items, 'amount'));
         } else {
-            $totalAmount = $data['amount'] ?? 0;
+            $totalAmount = $cleanNumber($data['amount'] ?? 0);
         }
 
         DB::transaction(function () use ($teacher, $data, $items, $totalAmount, $receiptPath, $photoPath) {

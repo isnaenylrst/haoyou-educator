@@ -15,7 +15,12 @@ class OwnerApproveSubmissionRequest extends FormRequest
     {
         return [
             'decision' => ['required', 'in:Approved,Rejected'],
-            'note'     => ['nullable', 'string', 'max:1000'],
+            'note'     => [
+                \Illuminate\Validation\Rule::requiredIf($this->input('decision') === 'Rejected'),
+                'nullable',
+                'string',
+                'max:1000',
+            ],
         ];
     }
 
@@ -24,6 +29,7 @@ class OwnerApproveSubmissionRequest extends FormRequest
         return [
             'decision.required' => 'Keputusan approval wajib dipilih.',
             'decision.in'       => 'Keputusan harus berupa Approved atau Rejected.',
+            'note.required'     => 'Catatan wajib diisi jika menolak pengajuan.',
             'note.max'          => 'Catatan maksimal 1000 karakter.',
         ];
     }
