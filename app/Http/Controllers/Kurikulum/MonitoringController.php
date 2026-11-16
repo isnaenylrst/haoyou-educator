@@ -86,9 +86,9 @@ class MonitoringController extends Controller
         $totalTeacher = Teacher::count();
         $totalSession = TeachingJournal::where('class_status', 'Conducted')->count();
 
-        // Total jam mengajar
+        // Total jam mengajar (hanya dari pola aktif)
         $totalHour = 0;
-        $schedules = ClassSchedule::all();
+        $schedules = ClassSchedule::current()->get();
         foreach ($schedules as $schedule) {
             if ($schedule->start_time && $schedule->end_time) {
                 $start = strtotime($schedule->start_time);
@@ -116,7 +116,8 @@ class MonitoringController extends Controller
             ->whereNull('reviewed_at')
             ->count();
 
-        $weeklySchedules = ClassSchedule::with(['class.teacher', 'class.programPackage'])
+        $weeklySchedules = ClassSchedule::current()
+            ->with(['class.teacher', 'class.programPackage'])
             ->orderBy('day')
             ->orderBy('start_time')
             ->get();

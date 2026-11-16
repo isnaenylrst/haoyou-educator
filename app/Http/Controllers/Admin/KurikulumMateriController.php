@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ClassSchedule;
+use App\Models\ClassSession;
 use App\Models\Material;
 use App\Models\ProgramLevel;
 use App\Models\Teacher;
@@ -101,7 +102,43 @@ class KurikulumMateriController extends Controller
         $teacherId = $request->integer('teacher_id') ?: null;
         $search = trim((string) $request->query('search', ''));
 
-        $schedules = ClassSchedule::query()
+        // 1) Ambil class_sessions pada tanggal ini
+        $daySessions = ClassSession::with([
+                'class.teacher',
+                'class.level.program',
+                'class.level.category',
+                'class.programPackage.program',
+                'class.enrollments' => fn ($q) => $q->where('status', 'Active')->with('student:id,name'),
+                'schedule',
+                'journal',
+            ])
+            ->whereDate('session_date', $dateStr)
+            ->whereIn('status', ['Scheduled', 'Completed'])
+            ->whereHas('class', function ($q) use ($teacherId, $search) {
+                $q->whereIn('status', ['Open', 'Running', 'Completed'])
+                    ->when($teacherId, fn ($t) => $t->where('teacher_id', $teacherId))
+                    ->when($search !== '', fn ($s) => $s->where(function ($w) use ($search) {
+                        $w->where('class_name', 'like', "%{$search}%")
+                            ->orWhereHas('enrollments', fn ($e) => $e->where('status', 'Active')
+                                ->whereHas('student', fn ($st) => $st->where('name', 'like', "%{$search}%")));
+                    }));
+            })
+            ->orderBy('start_time')
+            ->get();
+
+        $classesWithSessions = $daySessions->pluck('class_id')->unique()->values()->all();
+
+        // Cari kelas yang aslinya hari ini tapi dipindah keluar dari tanggal ini
+        $movedOutClassIds = ClassSession::whereDate('original_date', $dateStr)
+            ->whereDate('session_date', '!=', $dateStr)
+            ->where('status', '!=', 'Cancelled')
+            ->pluck('class_id')
+            ->unique()
+            ->values()
+            ->all();
+
+        // 2) Pola mingguan untuk kelas tanpa pertemuan bertanggal hari ini dan tidak dipindah keluar
+        $fallbackSchedules = ClassSchedule::query()
             ->with([
                 'class.teacher',
                 'class.level.program',
@@ -110,6 +147,8 @@ class KurikulumMateriController extends Controller
                 'class.enrollments' => fn ($q) => $q->where('status', 'Active')->with('student:id,name'),
             ])
             ->where('day', $dayName)
+            ->whereNull('effective_until')
+            ->whereNotIn('class_id', array_merge($classesWithSessions, $movedOutClassIds))
             ->whereHas('class', function ($q) use ($dateStr, $teacherId, $search) {
                 $q->whereIn('status', ['Open', 'Running', 'Completed'])
                     ->whereDate('start_date', '<=', $dateStr)
@@ -124,12 +163,48 @@ class KurikulumMateriController extends Controller
             ->orderBy('start_time')
             ->get();
 
-        if ($schedules->isEmpty()) {
+        $items = collect();
+        foreach ($daySessions as $cs) {
+            $class = $cs->class;
+            if (! $class) continue;
+
+            $sch = $cs->schedule ?? new ClassSchedule([
+                'id'         => $cs->class_schedule_id,
+                'class_id'   => $cs->class_id,
+                'day'        => $dayName,
+                'start_time' => $cs->start_time,
+                'end_time'   => $cs->end_time,
+                'room'       => $cs->room,
+            ]);
+            $sch->id = $cs->class_schedule_id ?? $sch->id;
+            $sch->setRelation('class', $class);
+            $sch->start_time = $cs->start_time;
+            $sch->end_time   = $cs->end_time;
+            if ($cs->room) {
+                $sch->room = $cs->room;
+            }
+
+            $items->push((object) [
+                'schedule'     => $sch,
+                'classSession' => $cs,
+                'class'        => $class,
+            ]);
+        }
+
+        foreach ($fallbackSchedules as $fs) {
+            $items->push((object) [
+                'schedule'     => $fs,
+                'classSession' => null,
+                'class'        => $fs->class,
+            ]);
+        }
+
+        if ($items->isEmpty()) {
             return collect();
         }
 
-        $classIds = $schedules->pluck('class_id')->unique()->values();
-        $levelIds = $schedules->pluck('class.level_id')->filter()->unique()->values();
+        $classIds = $items->pluck('class.id')->unique()->values();
+        $levelIds = $items->pluck('class.level_id')->filter()->unique()->values();
 
         $past = TeachingJournal::with('material:id,meeting_number,title')
             ->whereIn('class_id', $classIds)
@@ -140,10 +215,10 @@ class KurikulumMateriController extends Controller
             ->groupBy('class_id');
 
         $todayJournals = TeachingJournal::with('material:id,meeting_number,title')
-            ->whereIn('class_schedule_id', $schedules->pluck('id'))
             ->whereDate('session_date', $dateStr)
-            ->get()
-            ->keyBy('class_schedule_id');
+            ->get();
+        $todayBySession = $todayJournals->whereNotNull('class_session_id')->keyBy('class_session_id');
+        $todayBySchedule = $todayJournals->keyBy('class_schedule_id');
 
         $materials = Material::query()
             ->where('audience', 'Guru')
@@ -155,8 +230,10 @@ class KurikulumMateriController extends Controller
 
         $now = now();
 
-        return $schedules->map(function ($schedule) use ($past, $todayJournals, $materials, $dateStr, $now) {
-            $class = $schedule->class;
+        return $items->map(function ($item) use ($past, $todayBySession, $todayBySchedule, $materials, $dateStr, $now) {
+            $schedule = $item->schedule;
+            $classSession = $item->classSession;
+            $class = $item->class;
             $levelMaterials = $class->level_id ? ($materials->get($class->level_id) ?? collect()) : collect();
 
             $lastJournal = $past->get($class->id, collect())
@@ -164,7 +241,9 @@ class KurikulumMateriController extends Controller
                 ->last();
 
             $expected = ($lastJournal?->material?->meeting_number ?? 0) + 1;
-            $journal = $todayJournals->get($schedule->id);
+            $journal = $classSession
+                ? ($todayBySession->get($classSession->id) ?? ($schedule->id ? $todayBySchedule->get($schedule->id) : null))
+                : ($schedule->id ? $todayBySchedule->get($schedule->id) : null);
 
             $state = 'rencana';
             $number = $expected;
