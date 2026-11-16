@@ -4,6 +4,27 @@
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
+    <style>
+        .ta-box{border:1px solid #e2e8f0;border-radius:10px;padding:12px;background:#f8fafc}
+        .ta-status{font-size:13px;font-weight:600;margin-bottom:8px}
+        .ta-status.ok{color:#15803d}.ta-status.warn{color:#b45309}.ta-status.bad{color:#b91c1c}
+        .ta-title{font-size:12px;color:#64748b;margin-bottom:6px}
+        .ta-chips{display:flex;flex-wrap:wrap;gap:6px}
+        .ta-chip{border:1px solid #86efac;background:#f0fdf4;color:#166534;border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer}
+        .ta-chip.short{border-color:#e2e8f0;background:#fff;color:#94a3b8;cursor:default}
+        .ta-busy{font-size:12px;color:#64748b;margin-top:8px}
+        .ta-week summary{cursor:pointer;font-size:12px;margin-top:10px;color:#475569}
+        .ta-row{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px dashed #e2e8f0}
+        .ta-row.is-current{background:#eef2ff}
+        .ta-day{width:92px;flex-shrink:0;font-size:12px;font-weight:600;cursor:pointer}
+        .ta-day small{display:block;font-weight:400;color:#94a3b8}
+        .ta-none{font-size:12px;color:#94a3b8}
+        .uj-left{display:flex;flex-direction:column;gap:16px;min-width:0}
+        #ses_list{max-height:max(360px, calc(100vh - 340px));overflow-y:auto;padding-right:6px;scroll-behavior:auto}
+        .uj-side{position:sticky;top:100px;align-self:start;max-height:max(520px, calc(100vh - 120px));overflow-y:auto}
+        .ta-row:first-child{border-top:0}
+        @media (max-width: 1100px){ .uj-side{position:static;max-height:none;overflow:visible} }
+    </style>
 @endpush
 
 @section('content')
@@ -45,6 +66,7 @@
 
     <div class="uj-grid">
 
+        <div class="uj-left">
         {{-- ========================= DAFTAR PERTEMUAN ========================= --}}
         <div class="uj-card">
             <h2>Pertemuan Kelas</h2>
@@ -61,6 +83,15 @@
             @endif
 
             <div class="ms-list" id="ses_list"></div>
+        </div>
+
+        {{-- ========================= KETERSEDIAAN GURU (ringkasan semua hari) ========================= --}}
+        <div class="uj-card" id="rs_week_card" style="display:none;">
+            <h2>Ketersediaan Guru</h2>
+            <p class="uj-sub" id="rs_week_sub">-</p>
+            <div id="rs_week_body"></div>
+            <span class="form-hint">Klik nama hari untuk pindah ke hari itu, atau klik jam untuk mengisi hari dan Jam Mulai sekaligus. Jam abu-abu lebih pendek dari durasi pertemuan.</span>
+        </div>
         </div>
 
         {{-- ========================= FORM UBAH JADWAL ========================= --}}
@@ -92,13 +123,13 @@
                     {{-- "Pertemuan ini saja": pilih tanggal --}}
                     <div class="form-field" id="rs_date_field">
                         <label>Tanggal Baru *</label>
-                        <input type="date" id="rs_date">
+                        <input type="date" id="rs_date" onchange="refreshAvailability()">
                     </div>
 
                     {{-- "Pertemuan ini dan seterusnya": pilih hari (pola mingguan baru) --}}
                     <div class="form-field" id="rs_day_field" style="display:none;">
                         <label>Hari Baru *</label>
-                        <select id="rs_day" onchange="updateFollowingPreview()">
+                        <select id="rs_day" onchange="updateFollowingPreview(); refreshAvailability()">
                             <option value="Senin">Senin</option>
                             <option value="Selasa">Selasa</option>
                             <option value="Rabu">Rabu</option>
@@ -112,8 +143,15 @@
 
                     <div class="form-field">
                         <label>Jam Mulai *</label>
-                        <input type="time" id="rs_start" required>
+                        <input type="time" id="rs_start" required oninput="refreshAvailability()">
                         <span class="form-hint">Durasi pertemuan tetap sama.</span>
+                    </div>
+
+                    {{-- Ketersediaan guru: jam yang diisi guru dikurangi jadwal kelas lain --}}
+                    <div class="form-field full" id="rs_avail" style="display:none;">
+                        <label>Ketersediaan Guru</label>
+                        <div class="ta-box" id="rs_avail_body"></div>
+                        <span class="form-hint">Jam kosong = jam yang diisi guru, dikurangi jadwal kelas lain dan tugas sebagai guru pengganti. Klik jam untuk mengisi Jam Mulai. Ringkasan semua hari ada di kartu Ketersediaan Guru.</span>
                     </div>
 
                     <div class="form-field full" id="rs_confirm_wrap">
@@ -280,6 +318,180 @@
     SESSIONS.forEach(s => { sesData[s.id] = s; });
     let rsSession = null;
 
+    const TEACHER_SLOTS = @json($teacherSlots);
+
+    const toMin  = t => { const [h, m] = String(t).split(':'); return (+h) * 60 + (+m); };
+    const fmtMin = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+
+    function mergeIntervals(list) {
+        const sorted = list.filter(i => i.end > i.start).sort((a, b) => a.start - b.start);
+        const out = [];
+        sorted.forEach(i => {
+            const last = out[out.length - 1];
+            if (last && i.start <= last.end) last.end = Math.max(last.end, i.end);
+            else out.push({ start: i.start, end: i.end });
+        });
+        return out;
+    }
+
+    function subtractIntervals(base, busy) {
+        const res = [];
+        base.forEach(b => {
+            let cur = b.start;
+            busy.forEach(x => {
+                if (x.end <= cur || x.start >= b.end) return;
+                if (x.start > cur) res.push({ start: cur, end: x.start });
+                cur = Math.max(cur, x.end);
+            });
+            if (cur < b.end) res.push({ start: cur, end: b.end });
+        });
+        return res;
+    }
+
+    // Jam kosong guru pada satu hari.
+    // "one"       -> bentrok dari pertemuan bertanggal di tanggal itu (+ tugas guru pengganti)
+    // "following" -> bentrok dari pola mingguan kelas aktif guru
+    function teacherDayInfo(s, dayName, scope, iso) {
+        const key   = 't' + s.teacher_id;
+        const avail = mergeIntervals((TEACHER_SLOTS.availability[key] || [])
+            .filter(a => a.day === dayName)
+            .map(a => ({ start: toMin(a.start), end: toMin(a.end) })));
+
+        const raw = scope === 'one'
+            ? (TEACHER_SLOTS.dated[key] || []).filter(b => b.date === iso && b.session_id !== s.id)
+            : (TEACHER_SLOTS.weekly[key] || []).filter(b => b.day === dayName && b.schedule_id !== s.schedule_id);
+
+        const busy = raw.map(b => ({ start: toMin(b.start), end: toMin(b.end), name: b.class_name }))
+            .sort((a, b) => a.start - b.start);
+
+        const free = subtractIntervals(avail, mergeIntervals(busy.map(({ start, end }) => ({ start, end }))));
+        return { avail, busy, free };
+    }
+
+    function availTarget() {
+        if (currentRescheduleScope() === 'following') {
+            return { scope: 'following', day: document.getElementById('rs_day').value, iso: null };
+        }
+        const iso = document.getElementById('rs_date').value;
+        return { scope: 'one', day: iso ? DAY_ORDER[weekdayIndex(iso)] : null, iso };
+    }
+
+    function chipsHtml(windows, dur, onclickFor) {
+        return windows.map(w => {
+            const label = `${fmtMin(w.start)}–${fmtMin(w.end)}`;
+            return (w.end - w.start) >= dur
+                ? `<button type="button" class="ta-chip" onclick="${onclickFor(w)}">${label}</button>`
+                : `<span class="ta-chip short" title="Lebih pendek dari durasi pertemuan">${label}</span>`;
+        }).join('');
+    }
+
+    function refreshAvailability() {
+        const wrap     = document.getElementById('rs_avail');
+        const body     = document.getElementById('rs_avail_body');
+        const weekCard = document.getElementById('rs_week_card');
+        const weekBody = document.getElementById('rs_week_body');
+        const s = rsSession;
+
+        if (! s) { wrap.style.display = 'none'; weekCard.style.display = 'none'; return; }
+        wrap.style.display = '';
+
+        if (! s.teacher_id) {
+            body.innerHTML = '<div class="ta-none">Kelas ini belum punya guru, jadi ketersediaan guru belum bisa ditampilkan.</div>';
+            weekCard.style.display = 'none';
+            return;
+        }
+
+        const t = availTarget();
+        if (! t.day) {
+            body.innerHTML = '<div class="ta-none">Pilih tanggal baru untuk melihat ketersediaan guru.</div>';
+            weekCard.style.display = 'none';
+            return;
+        }
+
+        const dur   = toMin(s.end) - toMin(s.start);
+        const start = toMin(document.getElementById('rs_start').value || s.start);
+        const end   = start + dur;
+        const info  = teacherDayInfo(s, t.day, t.scope, t.iso);
+
+        // Status untuk jam yang sedang diisi
+        let status;
+        if (info.free.some(w => start >= w.start && end <= w.end)) {
+            status = ['ok', `Jam ${fmtMin(start)}–${fmtMin(end)} tersedia untuk guru.`];
+        } else {
+            const clash = info.busy.find(b => start < b.end && end > b.start);
+            if (clash) {
+                status = ['bad', `Bentrok: guru mengajar ${clash.name} pukul ${fmtMin(clash.start)}–${fmtMin(clash.end)}.`];
+            } else if (t.scope === 'following') {
+                status = ['bad', `Jam ${fmtMin(start)}–${fmtMin(end)} di luar jam tersedia guru. Untuk "ini dan seterusnya" tidak bisa disimpan, minta guru mengisi ketersediaan dulu.`];
+            } else {
+                status = ['warn', `Jam ${fmtMin(start)}–${fmtMin(end)} di luar jam tersedia guru (boleh, centang konfirmasi kalau guru sudah setuju).`];
+            }
+        }
+
+        const title = t.scope === 'following' ? `${t.day}, setiap minggu` : `${t.day}, ${formatDateId(t.iso)}`;
+
+        const freeHtml = info.free.length
+            ? chipsHtml(info.free, dur, w => `pickStart('${fmtMin(w.start)}')`)
+            : `<span class="ta-none">${info.avail.length
+                ? 'Semua jam tersedia guru sudah terpakai.'
+                : 'Guru tidak mengisi jam tersedia di hari ini.'}</span>`;
+
+        const busyHtml = info.busy.length
+            ? `<div class="ta-busy">Sudah mengajar: ${info.busy.map(b =>
+                `${escapeHtml(b.name)} ${fmtMin(b.start)}–${fmtMin(b.end)}`).join('; ')}</div>`
+            : '';
+
+        // Form (kanan): hanya status + jam kosong hari yang dipilih
+        body.innerHTML = `
+            <div class="ta-status ${status[0]}">${escapeHtml(status[1])}</div>
+            <div class="ta-title">Jam kosong ${escapeHtml(title)} &middot; durasi pertemuan ${dur} menit</div>
+            <div class="ta-chips">${freeHtml}</div>
+            ${busyHtml}`;
+
+        // Kartu kiri: ringkasan semua hari
+        document.getElementById('rs_week_sub').textContent = (s.teacher || 'Guru') + ' · ' + (t.scope === 'following'
+            ? 'pola mingguan (setiap minggu)'
+            : `minggu ${formatDateId(sameWeekDate(t.iso, 0))} s/d ${formatDateId(sameWeekDate(t.iso, 6))}`);
+
+        weekBody.innerHTML = DAY_ORDER.map((day, idx) => {
+            const iso  = t.scope === 'one' ? sameWeekDate(t.iso, idx) : null;
+            const past = iso && iso < todayIso();
+            const i    = teacherDayInfo(s, day, t.scope, iso);
+            const chips = past
+                ? '<span class="ta-none">Sudah lewat</span>'
+                : (i.free.length
+                    ? chipsHtml(i.free, dur, w => `pickSlot(${idx}, '${fmtMin(w.start)}')`)
+                    : '<span class="ta-none">Tidak ada jam kosong</span>');
+
+            return `<div class="ta-row ${day === t.day ? 'is-current' : ''}">
+                <div class="ta-day" ${past ? '' : `onclick="pickDay(${idx})"`}>${day}${iso ? `<small>${formatDateId(iso)}</small>` : ''}</div>
+                <div class="ta-chips">${chips}</div>
+            </div>`;
+        }).join('');
+        weekCard.style.display = '';
+    }
+
+    function pickStart(hhmm) {
+        document.getElementById('rs_start').value = hhmm;
+        refreshAvailability();
+    }
+
+    function pickDay(idx) {
+        if (currentRescheduleScope() === 'following') {
+            document.getElementById('rs_day').value = DAY_ORDER[idx];
+            updateFollowingPreview();
+        } else {
+            const el = document.getElementById('rs_date');
+            if (el.value) el.value = sameWeekDate(el.value, idx);
+        }
+        refreshAvailability();
+    }
+
+    function pickSlot(idx, hhmm) {
+        pickDay(idx);
+        pickStart(hhmm);
+    }
+
     function attrEscape(str) {
         return String(str ?? '')
             .replace(/&/g, '&amp;')
@@ -354,6 +566,17 @@
         list.innerHTML = SESSIONS.length
             ? SESSIONS.map(renderSessionItem).join('')
             : '<div class="ms-empty">Kelas ini belum punya pertemuan bertanggal.</div>';
+
+        // Buka di pertemuan pertama yang belum berlangsung; pertemuan sebelumnya tetap ada di atasnya (scroll ke atas)
+        const focusUpcoming = () => {
+            const target = SESSIONS.find(s => ! s.started && s.status === 'Scheduled')
+                || SESSIONS[SESSIONS.length - 1];
+            const el = target && document.getElementById('ses_item_' + target.id);
+            if (! el) return;
+            list.scrollTop += el.getBoundingClientRect().top - list.getBoundingClientRect().top;
+        };
+        focusUpcoming();
+        window.addEventListener('load', focusUpcoming); // ulangi setelah font/CSS selesai dimuat
     })();
 
     /* ============================================================
@@ -387,6 +610,7 @@
         document.getElementById('rs_placeholder').style.display = 'none';
         document.getElementById('rs_form').style.display = 'none';
         document.getElementById('jr_view').style.display = '';
+        refreshAvailability();
         document.getElementById('rescheduleCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
@@ -452,6 +676,7 @@
         document.querySelectorAll('#ses_list .ms-item').forEach(el => el.classList.remove('is-selected'));
         document.getElementById('rs_form').style.display = 'none';
         document.getElementById('rs_placeholder').style.display = '';
+        refreshAvailability();
     }
 
     // 0 = Senin ... 6 = Minggu
@@ -477,6 +702,10 @@
         document.getElementById('rs_day_field').style.display = following ? '' : 'none';
         updateFollowingPreview();
         refreshHomeVisitUi();
+
+        // Konfirmasi "di luar jam tersedia" hanya berlaku untuk satu pertemuan; "seterusnya" selalu ketat di server
+        document.getElementById('rs_confirm_wrap').style.display = following ? 'none' : '';
+        refreshAvailability();
     }
 
     function updateFollowingPreview() {

@@ -12,6 +12,13 @@
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
+    <style>
+        /* Dropdown pencarian (paket program, level, paket private) harus bisa keluar dari batas card.
+           Ditaruh di sini (bukan hanya di index.css) supaya tidak tergantung cache CSS browser. */
+        .convert-layout .card { overflow: visible !important; }
+        .convert-layout .search-select { position: relative; }
+        .convert-layout .search-select-list { z-index: 50; }
+    </style>
 @endpush
 
 @section('content')

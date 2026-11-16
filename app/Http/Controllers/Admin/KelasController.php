@@ -95,15 +95,119 @@ class KelasController extends Controller
     ============================================================ */
     public function ubahJadwal($id)
     {
-        $kelas = ClassModel::with(['teacher:id,name', 'level', 'schedules'])->findOrFail($id);
+        $kelas        = ClassModel::with(['teacher:id,name', 'level', 'schedules'])->findOrFail($id);
+        $sessionsData = $this->sessionList($kelas);
 
         return view('admin.kelas.ubahjadwal', [
             'kelas'           => $kelas,
-            'sessionsData'    => $this->sessionList($kelas),
+            'sessionsData'    => $sessionsData,
+            'teacherSlots'    => $this->teacherSlots($kelas, $sessionsData),
             'roomSuggestions' => $this->roomSuggestions(),
             'payers'          => $this->payersFor($kelas),
             'homeVisitFee'    => ExtraFeeService::FEE_HOME_VISIT,
         ]);
+    }
+
+    /**
+     * Data ketersediaan guru untuk panel "Ketersediaan Guru" di halaman Ubah Jadwal.
+     * - availability: jam yang diisi guru (mingguan)
+     * - weekly      : jadwal mingguan kelas aktif guru (dipakai untuk "ini dan seterusnya")
+     * - dated       : pertemuan bertanggal guru + tugas sebagai guru pengganti (dipakai untuk "pertemuan ini saja")
+     * Kunci memakai prefix "t" supaya JSON selalu berupa object, bukan array.
+     * Aturannya mengikuti ClassSessionRescheduleService (cek guru per tanggal / per pola mingguan).
+     */
+    private function teacherSlots(ClassModel $kelas, $sessionsData): array
+    {
+        $ids = collect($sessionsData)->pluck('teacher_id')->push($kelas->teacher_id)->filter()->unique()->values();
+
+        $hm  = fn ($t) => substr((string) $t, 0, 5);
+        $key = fn ($teacherId) => 't' . $teacherId;
+
+        $availability = TeacherAvailability::whereIn('teacher_id', $ids)
+            ->orderBy('start_time')
+            ->get()
+            ->groupBy('teacher_id')
+            ->mapWithKeys(fn ($rows, $tid) => [$key($tid) => $rows->map(fn ($a) => [
+                'day'   => $a->day,
+                'start' => $hm($a->start_time),
+                'end'   => $hm($a->end_time),
+            ])->values()->all()])
+            ->all();
+
+        // Pola mingguan yang masih berlaku dari kelas yang sudah diterima guru
+        $weekly = ClassModel::query()
+            ->whereIn('status', self::ACTIVE_STATUSES)
+            ->where('teacher_response', 'Accepted')
+            ->whereIn('teacher_id', $ids)
+            ->with(['schedules' => fn ($q) => $q->whereNull('effective_until')])
+            ->get(['id', 'class_name', 'teacher_id'])
+            ->groupBy('teacher_id')
+            ->mapWithKeys(fn ($classes, $tid) => [$key($tid) => $classes->flatMap(
+                fn ($k) => $k->schedules->map(fn ($sc) => [
+                    'schedule_id' => $sc->id,
+                    'class_name'  => $k->class_name,
+                    'day'         => $sc->day,
+                    'start'       => $hm($sc->start_time),
+                    'end'         => $hm($sc->end_time),
+                ])
+            )->values()->all()])
+            ->all();
+
+        // Pertemuan bertanggal guru (semua yang belum dibatalkan, sama seperti scopeOverlapping)
+        $upcoming = ClassSession::query()
+            ->whereIn('teacher_id', $ids)
+            ->where('status', '!=', 'Cancelled')
+            ->whereDate('session_date', '>=', today())
+            ->get(['id', 'class_id', 'teacher_id', 'session_date', 'start_time', 'end_time']);
+
+        // Guru pengganti (izin Pending/Approved): pertemuan tetap tercatat atas guru asal,
+        // jadi jam itu harus dihitung sibuk untuk guru penggantinya.
+        $leaves = TeacherLeave::query()
+            ->whereIn('replacement_teacher_id', $ids)
+            ->whereIn('status', ['Pending', 'Approved'])
+            ->whereDate('leave_date', '>=', today())
+            ->get(['id', 'class_schedule_id', 'replacement_teacher_id', 'leave_date']);
+
+        $leaveSchedules = ClassSchedule::whereIn('id', $leaves->pluck('class_schedule_id')->filter()->unique())
+            ->get(['id', 'class_id', 'start_time', 'end_time'])
+            ->keyBy('id');
+
+        $names = ClassModel::whereIn('id', $upcoming->pluck('class_id')->merge($leaveSchedules->pluck('class_id'))->filter()->unique())
+            ->pluck('class_name', 'id');
+
+        $rows = $upcoming->map(fn ($x) => [
+            'teacher_id' => $x->teacher_id,
+            'session_id' => $x->id,
+            'label'      => $names->get($x->class_id, 'Kelas pengganti'),
+            'date'       => $x->session_date->toDateString(),
+            'start'      => $hm($x->start_time),
+            'end'        => $hm($x->end_time),
+        ])->concat(
+            $leaves->filter(fn ($l) => $leaveSchedules->has($l->class_schedule_id))->map(function ($l) use ($leaveSchedules, $names, $hm) {
+                $sc = $leaveSchedules[$l->class_schedule_id];
+
+                return [
+                    'teacher_id' => $l->replacement_teacher_id,
+                    'session_id' => null,
+                    'label'      => $names->get($sc->class_id, 'Kelas') . ' (guru pengganti)',
+                    'date'       => Carbon::parse($l->leave_date)->toDateString(),
+                    'start'      => $hm($sc->start_time),
+                    'end'        => $hm($sc->end_time),
+                ];
+            })
+        );
+
+        $dated = $rows->groupBy('teacher_id')
+            ->mapWithKeys(fn ($g, $tid) => [$key($tid) => $g->map(fn ($r) => [
+                'session_id' => $r['session_id'],
+                'class_name' => $r['label'],
+                'date'       => $r['date'],
+                'start'      => $r['start'],
+                'end'        => $r['end'],
+            ])->values()->all()])
+            ->all();
+
+        return compact('availability', 'weekly', 'dated');
     }
 
     /** Calon pembayar home visit: siswa Active di kelas ini. */
@@ -1059,6 +1163,8 @@ class KelasController extends Controller
                 'room'           => $s->room,
                 'location_type'  => $s->location_type,
                 'teacher'        => $s->teacher?->name,
+                'teacher_id'     => $s->teacher_id ?? $kelas->teacher_id,
+                'schedule_id'    => $s->class_schedule_id,
                 'replacement'    => $this->leaveReplacement($leaves, $s),
                 'status'         => $s->status,
                 'deviates'       => $s->deviatesFromPattern(),
