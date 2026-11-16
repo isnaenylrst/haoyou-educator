@@ -42,30 +42,44 @@
                        background: #dc2626; color: #fff; font-size: 10px; font-weight: 600; display: grid; place-items: center;
                        border: 2px solid #fff; line-height: 1; }
         .nb-urgent { color: #dc2626; font-weight: 600; }
+        .nb-action { color: #b45309; font-weight: 600; }
+        .nb-info   { color: #2563eb; font-weight: 600; }
         .nb-all { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: #374151;
                   text-decoration: none; padding: 7px 12px; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff;
                   transition: border-color .15s, background-color .15s; }
         .nb-all:hover { border-color: var(--yellow, #facc15); background: #fffdf3; color: #111827; }
         .nb-all i { font-size: 10px; }
 
-        .nb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+        .nb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
         a.nb-tile { position: relative; display: flex; align-items: center; gap: 12px; padding: 13px 14px 13px 16px;
                     border: 1px solid #edeef1; border-radius: 12px; background: #fff; text-decoration: none; color: inherit;
                     overflow: hidden; transition: border-color .15s, background-color .15s; }
+        /* warna kartu mengikuti level tertinggi di section itu: mendesak (merah) > perlu tindakan (kuning) > info (biru) */
         a.nb-tile::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #f59e0b; }
         a.nb-tile.is-urgent::before { background: #dc2626; }
+        a.nb-tile.is-info::before   { background: #2563eb; }
         a.nb-tile:hover { border-color: #d9dce1; background: #fbfbfc; color: inherit; }
         a.nb-tile:focus-visible { outline: 2px solid var(--yellow, #facc15); outline-offset: 2px; }
-        .nb-ico { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; font-size: 14px;
+        .nb-ico { position: relative; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; font-size: 14px;
                   background: var(--yellow-soft, #fef9c3); color: var(--gold-dark, #a16207); }
         .nb-tile.is-urgent .nb-ico { background: #fef2f2; color: #dc2626; }
+        .nb-tile.is-info .nb-ico   { background: #eff6ff; color: #2563eb; }
+        /* total notifikasi section, di pojok atas ikon */
+        .nb-count { position: absolute; top: -7px; right: -7px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+                    background: #f59e0b; color: #fff; font-size: 10px; font-weight: 600; display: grid; place-items: center;
+                    border: 2px solid #fff; line-height: 1; }
+        .nb-tile.is-urgent .nb-count { background: #dc2626; }
+        .nb-tile.is-info .nb-count   { background: #2563eb; }
         .nb-txt { flex: 1; min-width: 0; }
         /* Font judul & keterangan memakai class yang sama dengan daftar Program Kelas Aktif (.cp-title / .cp-meta),
            jadi ukuran dan berat hurufnya otomatis sama. Di sini hanya layout (block + potong teks panjang). */
         .nb-txt .cp-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .nb-txt .cp-meta  { display: block; }
-        .nb-tile.is-urgent .nb-txt .cp-meta { color: #dc2626; }
-        .nb-num { font-size: 17px; font-weight: 600; color: #374151; line-height: 1; }
+        .nb-levels { display: flex; flex-wrap: wrap; align-items: center; row-gap: 2px; }
+        /* pembatas tipis antar level */
+        .nb-lv + .nb-lv { margin-left: 8px; padding-left: 8px; border-left: 1px solid #e5e7eb; }
+        .nb-lv.lv-urgent { color: #dc2626; font-weight: 600; }
+        .nb-lv.lv-action { color: #b45309; font-weight: 600; }
+        .nb-lv.lv-info   { color: #2563eb; font-weight: 600; }
 
         .nb-empty { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 12px; background: #ecfdf5; color: #166534; font-size: 12.5px; }
         .nb-empty i { font-size: 18px; }
@@ -94,6 +108,8 @@
         $notifSections = \App\Services\AdminNotificationService::SECTIONS;
         $notifCounts   = $notif['counts'] ?? [];
         $notifUrgent   = $notif['urgent'] ?? [];
+        $notifAction   = $notif['action'] ?? [];
+        $notifInfo     = $notif['info'] ?? [];
         $notifIcons    = [
             'siswa' => 'fa-user-graduate', 'kelas' => 'fa-chalkboard-user', 'jurnal' => 'fa-book-open',
             'pembayaran' => 'fa-money-bill-wave', 'progress' => 'fa-file-lines',
@@ -101,7 +117,11 @@
         ];
     @endphp
 
-    @php $notifUrgentTotal = array_sum($notifUrgent); @endphp
+    @php
+        $notifUrgentTotal = array_sum($notifUrgent);
+        $notifActionTotal = array_sum($notifAction);
+        $notifInfoTotal   = array_sum($notifInfo);
+    @endphp
 
     <div class="dashboard-card nb-card">
         <div class="card-header nb-head">
@@ -113,8 +133,10 @@
                 <div>
                     <h3>Notifikasi</h3>
                     <p>
-                        {{ $notif['total'] }} hal perlu ditindaklanjuti
+                        {{ $notif['total'] }} notifikasi
                         @if ($notifUrgentTotal > 0) &middot; <b class="nb-urgent">{{ $notifUrgentTotal }} mendesak</b> @endif
+                        @if ($notifActionTotal > 0) &middot; <b class="nb-action">{{ $notifActionTotal }} perlu tindakan</b> @endif
+                        @if ($notifInfoTotal > 0) &middot; <b class="nb-info">{{ $notifInfoTotal }} info</b> @endif
                     </p>
                 </div>
             </div>
@@ -130,14 +152,25 @@
             <div class="nb-grid">
                 @foreach ($notifSections as $key => $label)
                     @continue(($notifCounts[$key] ?? 0) === 0)
-                    @php $isUrgent = ($notifUrgent[$key] ?? 0) > 0; @endphp
-                    <a href="{{ route('admin.notifikasi.index', ['tab' => $key]) }}" class="nb-tile {{ $isUrgent ? 'is-urgent' : '' }}">
-                        <span class="nb-ico"><i class="fa-solid {{ $notifIcons[$key] ?? 'fa-bell' }}"></i></span>
+                    @php
+                        $u = $notifUrgent[$key] ?? 0;
+                        $a = $notifAction[$key] ?? 0;
+                        $i = $notifInfo[$key] ?? 0;
+                        $level = $u > 0 ? 'urgent' : ($a > 0 ? 'action' : 'info');
+                    @endphp
+                    <a href="{{ route('admin.notifikasi.index', ['tab' => $key]) }}" class="nb-tile is-{{ $level }}">
+                        <span class="nb-ico">
+                            <i class="fa-solid {{ $notifIcons[$key] ?? 'fa-bell' }}"></i>
+                            <span class="nb-count">{{ $notifCounts[$key] > 99 ? '99+' : $notifCounts[$key] }}</span>
+                        </span>
                         <span class="nb-txt">
                             <span class="cp-title">{{ $label }}</span>
-                            <span class="cp-meta">{{ $isUrgent ? $notifUrgent[$key] . ' mendesak' : 'Perlu tindakan' }}</span>
+                            <span class="cp-meta nb-levels">
+                                @if ($u > 0)<span class="nb-lv lv-urgent">{{ $u }} Urgent</span>@endif
+                                @if ($a > 0)<span class="nb-lv lv-action">{{ $a }} Tindakan</span>@endif
+                                @if ($i > 0)<span class="nb-lv lv-info">{{ $i }} Info</span>@endif
+                            </span>
                         </span>
-                        <span class="nb-num">{{ $notifCounts[$key] }}</span>
                     </a>
                 @endforeach
             </div>
