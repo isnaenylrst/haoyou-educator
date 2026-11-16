@@ -8,7 +8,7 @@
     $audStyle = [
         'Guru'   => ['bg-primary', '👩‍🏫'],
         'Siswa'  => ['bg-success', '🎓'],
-        'Huahua' => ['bg-danger',  '🌸'],
+        'Huahua' => ['bg-danger',  '🌟'],
     ];
 
     // Nilai 'Huahua' tetap dipakai di database; hanya tulisan di layar yang diganti
