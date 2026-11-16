@@ -10,6 +10,7 @@ use App\Models\TeacherAvailability;
 use App\Models\TeacherLeave;
 use App\Services\ClassScheduleService;
 use App\Services\TeacherAvailabilityService;
+use App\Services\WeeklyScheduleGridService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -18,21 +19,11 @@ use Illuminate\Validation\ValidationException;
 
 class ScheduleController extends Controller
 {
-    private const DAYS = [
-        'Senin' => 0, 'Selasa' => 1, 'Rabu' => 2, 'Kamis' => 3,
-        'Jumat' => 4, 'Sabtu' => 5, 'Minggu' => 6,
-    ];
+    private const DAYS = WeeklyScheduleGridService::DAYS;
 
     private function colorFor(string $className): string
     {
-        $n = strtolower($className);
-        return match (true) {
-            str_contains($n, 'maochong') => 'orange',
-            str_contains($n, 'jianer'), str_contains($n, 'jian er') => 'blue',
-            str_contains($n, 'hudie')    => 'purple',
-            str_contains($n, 'feixiang') => 'red',
-            default                      => 'green', // HSK / Private / NSP
-        };
+        return WeeklyScheduleGridService::colorFor($className);
     }
 
     public function index(Request $request)
@@ -226,97 +217,13 @@ class ScheduleController extends Controller
      */
     private function weekEntries($rows, Carbon $weekStart, Carbon $weekEnd, int $myId, string $scope = 'all', ?int $teacherFilterId = null)
     {
-        $classIds     = $rows->pluck('class_id')->unique()->values()->all();
-        $classInfo    = $rows->groupBy('class_id')->map->first();
-        $withSessions = ClassSession::whereIn('class_id', $classIds)
-            ->where('kind', 'Regular')->distinct()->pluck('class_id')->flip();
-        $teacherNames = DB::table('teachers')->pluck('name', 'id');
-
-        $entries = collect();
-
-        // 1) Kelas tanpa pertemuan: pola mingguan
-        foreach ($rows as $r) {
-            if ($withSessions->has($r->class_id) || ! isset(self::DAYS[$r->day])) continue;
-
-            $date = $weekStart->copy()->addDays(self::DAYS[$r->day])->toDateString();
-            $entries->push($this->entry($r, $r->id, $date, $r->start_time, $r->end_time, $r->room,
-                $r->teacher_id, $r->teacher_name, $myId));
-        }
-
-        // 2) Kelas dengan pertemuan: pertemuan minggu ini (Cancelled disembunyikan)
-        $sessions = ClassSession::whereIn('class_id', $classIds)
-            ->where('kind', 'Regular')
-            ->whereIn('status', ['Scheduled', 'Completed'])
-            ->whereBetween('session_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
-            ->orderBy('start_time')
-            ->get();
-
-        foreach ($sessions as $s) {
-            $info = $classInfo->get($s->class_id);
-            if (! $info) continue;
-
-            $tid = $s->teacher_id ?? $info->teacher_id;
-
-            // Filter scope guru
-            if ($scope === 'mine' && (int) $tid !== $myId) {
-                // Kecuali guru adalah pengganti yang disetujui
-                $isRep = DB::table('teacher_leaves')
-                    ->where('replacement_teacher_id', $myId)
-                    ->where('status', 'Approved')
-                    ->whereDate('leave_date', $s->session_date->toDateString())
-                    ->where(function ($q) use ($s) {
-                        if ($s->class_schedule_id) {
-                            $q->where('class_schedule_id', $s->class_schedule_id);
-                        }
-                    })
-                    ->exists();
-
-                if (! $isRep) {
-                    continue;
-                }
-            } elseif ($teacherFilterId && (int) $tid !== (int) $teacherFilterId) {
-                continue;
-            }
-
-            $e = $this->entry($info, $s->class_schedule_id ?? $info->id, $s->session_date->toDateString(),
-                $s->start_time, $s->end_time,
-                $s->location_type === 'Home Visit' ? 'Home Visit' : $s->room,
-                $tid, $teacherNames[$tid] ?? null, $myId);
-
-            // Penanda kalau pertemuan ini pernah dipindah admin
-            $e->moved_note = null;
-            if ($s->original_date) {
-                $e->moved_note = $s->original_date->isSameDay($s->session_date)
-                    ? 'Jam/ruang diubah'
-                    : 'Dipindah dari ' . $s->original_date->translatedFormat('D, d M');
-            }
-
-            $entries->push($e);
-        }
-
-        return $entries->values();
+        return WeeklyScheduleGridService::weekEntries($rows, $weekStart, $weekEnd, $myId, $scope, $teacherFilterId);
     }
 
     /** Satu kartu di grid: salinan data kelas + tanggal/jam/ruang/guru pertemuannya. */
     private function entry(object $info, $scheduleId, string $date, string $start, string $end, ?string $room, $teacherId, ?string $teacherName, int $myId): object
     {
-        $e = clone $info;
-
-        $e->id           = $scheduleId;
-        $e->day          = array_search(Carbon::parse($date)->dayOfWeekIso - 1, self::DAYS, true);
-        $e->start_time   = $start;
-        $e->end_time     = $end;
-        $e->room         = $room;
-        $e->teacher_id   = $teacherId;
-        $e->teacher_name = $teacherName;
-        $e->color        = $this->colorFor($info->class_name);
-        $e->is_mine      = (int) $teacherId === $myId && $info->teacher_response === 'Accepted';
-        $e->date         = $date;
-        $e->time         = substr($start, 0, 5) . ' – ' . substr($end, 0, 5);
-        $e->is_filled    = false;
-        $e->moved_note   = null;
-
-        return $e;
+        return WeeklyScheduleGridService::entry($info, $scheduleId, $date, $start, $end, $room, $teacherId, $teacherName, $myId);
     }
 
     /**
