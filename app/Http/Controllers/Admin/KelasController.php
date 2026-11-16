@@ -1315,9 +1315,10 @@ class KelasController extends Controller
 
         $proofPath = $wantsHv ? $request->file('proof')->store('payment-proofs', 'public') : null;
         $count     = 1;
+        $journalCount = 0;
 
         try {
-            DB::transaction(function () use ($wantsHv, $classSession, $payer, $data, $proofPath, $reschedule, &$count) {
+            DB::transaction(function () use ($wantsHv, $classSession, $payer, $data, $proofPath, $reschedule, &$count, &$journalCount) {
                 // Bayar dulu, baru dijadwalkan
                 if ($wantsHv) {
                     $this->sessionSvc->makeHomeVisitMany([$classSession->id], $payer, [
@@ -1330,8 +1331,15 @@ class KelasController extends Controller
                 }
 
                 if ($data['scope'] === 'one') {
+                    $hasJournal = $classSession->journal()->exists();
                     $this->rescheduleSvc->rescheduleOne($classSession, $reschedule);
+                    $journalCount = $hasJournal ? 1 : 0;
                 } else {
+                    $oldScheduleId = $classSession->class_schedule_id;
+                    $journalCount = TeachingJournal::where('class_id', $classSession->class_id)
+                        ->where('class_schedule_id', $oldScheduleId)
+                        ->whereDate('session_date', '>=', $classSession->session_date->toDateString())
+                        ->count();
                     $count = $this->rescheduleSvc->rescheduleFollowing($classSession, $reschedule);
                 }
             });
@@ -1342,9 +1350,16 @@ class KelasController extends Controller
             throw $e;
         }
 
-        $message = $data['scope'] === 'one'
-            ? 'Jadwal pertemuan berhasil diubah.'
-            : "Jadwal {$count} pertemuan (ini dan seterusnya) berhasil diubah.";
+        $newDateLabel = Carbon::parse($data['session_date'])->locale('id')->translatedFormat('l, j M Y');
+        if ($data['scope'] === 'one') {
+            $message = "Jadwal dipindah ke {$newDateLabel}. Jadwal guru, kurikulum"
+                . ($journalCount > 0 ? ", dan {$journalCount} jurnal" : '')
+                . ' ikut diperbarui.';
+        } else {
+            $message = "Jadwal {$count} pertemuan (ini dan seterusnya) berhasil dipindah ke hari {$data['day']}. Jadwal guru, kurikulum"
+                . ($journalCount > 0 ? ", dan {$journalCount} jurnal" : '')
+                . ' ikut diperbarui.';
+        }
 
         if ($wantsHv) {
             $message .= ' Pertemuan dijadikan Home Visit, Rp'

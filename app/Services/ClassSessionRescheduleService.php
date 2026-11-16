@@ -2,10 +2,13 @@
 
 namespace App\Services;
 
+use App\Models\Attendance;
 use App\Models\ClassModel;
 use App\Models\ClassSchedule;
 use App\Models\ClassSession;
+use App\Models\ScheduleJournalUnlock;
 use App\Models\TeacherLeave;
+use App\Models\TeachingJournal;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -195,7 +198,7 @@ class ClassSessionRescheduleService
 
             // 3) Pindahkan pertemuan & arahkan ke pola yang berlaku
             foreach ($plan as [$s, $date]) {
-                $this->move($s, ['date' => $date] + $slot, $data['reason'] ?? null);
+                $this->move($s, ['date' => $date] + $slot, $data['reason'] ?? null, $new->id);
             }
 
             if ($new->id !== $old->id) {
@@ -268,23 +271,73 @@ class ClassSessionRescheduleService
         ];
     }
 
-    private function move(ClassSession $s, array $slot, ?string $reason): void
+    private function move(ClassSession $s, array $slot, ?string $reason, ?int $newScheduleId = null): void
     {
+        $oldDate = $s->session_date ? Carbon::parse($s->session_date)->toDateString() : null;
+        $targetScheduleId = $newScheduleId ?? $s->class_schedule_id;
+
         $s->update([
-            'original_date' => $s->original_date ?? $s->session_date,
-            'session_date'  => $slot['date'],
-            'start_time'    => $slot['start'],
-            'end_time'      => $slot['end'],
-            'room'          => $slot['room'],
-            'change_reason' => $reason,
+            'original_date'     => $s->original_date ?? $s->session_date,
+            'session_date'      => $slot['date'],
+            'start_time'        => $slot['start'],
+            'end_time'          => $slot['end'],
+            'room'              => $slot['room'],
+            'change_reason'     => $reason,
+            'class_schedule_id' => $targetScheduleId,
         ]);
+
+        // Sinkronkan teaching_journals terkait sesi ini
+        $journal = TeachingJournal::where('class_session_id', $s->id)->first();
+        if (! $journal && $s->class_schedule_id && $oldDate) {
+            $journal = TeachingJournal::where('class_schedule_id', $s->class_schedule_id)
+                ->whereDate('session_date', $oldDate)
+                ->whereNull('class_session_id')
+                ->first();
+        }
+
+        if ($journal) {
+            $journalUpdates = [
+                'session_date'     => $slot['date'],
+                'start_time'       => substr($slot['start'], 0, 5),
+                'end_time'         => substr($slot['end'], 0, 5),
+                'class_session_id' => $s->id,
+            ];
+            if ($targetScheduleId) {
+                $journalUpdates['class_schedule_id'] = $targetScheduleId;
+            }
+            $journal->update($journalUpdates);
+
+            // Sinkronkan attendances terkait jurnal ini
+            Attendance::where('teaching_journal_id', $journal->id)->update([
+                'attendance_date' => $slot['date'],
+                'session_date'    => $slot['date'],
+            ]);
+        }
+
+        // Sinkronkan schedule_journal_unlocks bila ada
+        if ($oldDate && ($s->class_schedule_id || $targetScheduleId)) {
+            $unlockQuery = ScheduleJournalUnlock::whereDate('session_date', $oldDate);
+            if ($s->class_schedule_id) {
+                $unlockQuery->where(function ($q) use ($s, $targetScheduleId) {
+                    $q->where('class_schedule_id', $s->class_schedule_id);
+                    if ($targetScheduleId) {
+                        $q->orWhere('class_schedule_id', $targetScheduleId);
+                    }
+                });
+            }
+            $unlockUpdates = ['session_date' => $slot['date']];
+            if ($targetScheduleId) {
+                $unlockUpdates['class_schedule_id'] = $targetScheduleId;
+            }
+            $unlockQuery->update($unlockUpdates);
+        }
     }
 
     private function assertEditable(ClassSession $s): void
     {
         if (! $s->canBeRescheduled()) {
             throw ValidationException::withMessages([
-                'session' => 'Hanya pertemuan Scheduled yang belum punya jurnal dan belum lewat yang bisa diubah jadwalnya.',
+                'session' => 'Hanya pertemuan Scheduled yang belum lewat yang bisa diubah jadwalnya.',
             ]);
         }
     }

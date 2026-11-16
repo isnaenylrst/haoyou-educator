@@ -184,14 +184,7 @@
 
         // warna per jenis kelas (sama dengan menu Schedule guru)
         $colorFor = function ($name) {
-            $n = strtolower((string) $name);
-
-            if (str_contains($n, 'maochong')) return 'orange';
-            if (str_contains($n, 'jianer') || str_contains($n, 'jian er')) return 'blue';
-            if (str_contains($n, 'hudie')) return 'purple';
-            if (str_contains($n, 'feixiang')) return 'red';
-
-            return 'green'; // HSK / Private / lainnya
+            return \App\Services\WeeklyScheduleGridService::colorFor($name);
         };
 
         $schGrid     = [];
@@ -210,9 +203,10 @@
             $schSlots[$slot]         = true;
             $schGrid[$slot][$day][]  = $schedule;
 
-            $schTeacher = optional($schedule->class)->teacher;
-            if ($schTeacher) {
-                $schTeachers[$schTeacher->id] = $schTeacher->name;
+            $tid = $schedule->teacher_id ?? optional($schedule->class ?? null)->teacher_id;
+            $tname = $schedule->teacher_name ?? optional(optional($schedule->class ?? null)->teacher)->name;
+            if ($tid && $tname) {
+                $schTeachers[$tid] = $tname;
             }
         }
 
@@ -224,6 +218,9 @@
         $hasSunday = collect($schGrid)->contains(fn ($byDay) => isset($byDay['Minggu']));
         $schDays   = array_values(array_filter($dayNames, fn ($d) => $d !== 'Minggu' || $hasSunday));
         $todayName = $dayNames[now()->dayOfWeekIso - 1];
+
+        $currentWeekStart = $weekStart ?? now()->startOfWeek(\Illuminate\Support\Carbon::MONDAY);
+        $currentWeekEnd   = $weekEnd ?? $currentWeekStart->copy()->addDays(6);
     @endphp
 
     <div class="card shadow-sm border-0 mb-5">
@@ -232,11 +229,26 @@
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <div>
                     <h5 class="mb-0 fw-bold">Jadwal Mengajar Mingguan</h5>
-                    <small class="text-muted">Jadwal berdasarkan data class schedules</small>
+                    <small class="text-muted">Jadwal berdasarkan pertemuan kelas (class sessions)</small>
                 </div>
 
-                <div class="d-flex align-items-center gap-2">
-                    <select id="schTeacher" class="form-select form-select-sm" style="min-width:190px">
+                <div class="d-flex align-items-center flex-wrap gap-2">
+                    {{-- Navigasi Minggu --}}
+                    <div class="d-flex align-items-center gap-1">
+                        <a class="btn btn-outline-secondary btn-sm"
+                           href="{{ request()->fullUrlWithQuery(['week' => $currentWeekStart->copy()->subWeek()->toDateString()]) }}"
+                           title="Minggu sebelumnya">‹</a>
+                        <div class="fw-semibold small text-center px-1" style="min-width:140px">
+                            {{ $currentWeekStart->locale('id')->translatedFormat('d M') }} – {{ $currentWeekEnd->locale('id')->translatedFormat('d M Y') }}
+                        </div>
+                        <a class="btn btn-outline-secondary btn-sm"
+                           href="{{ request()->fullUrlWithQuery(['week' => $currentWeekStart->copy()->addWeek()->toDateString()]) }}"
+                           title="Minggu berikutnya">›</a>
+                        <a class="btn btn-outline-dark btn-sm"
+                           href="{{ request()->fullUrlWithQuery(['week' => now()->startOfWeek(\Illuminate\Support\Carbon::MONDAY)->toDateString()]) }}">Minggu Ini</a>
+                    </div>
+
+                    <select id="schTeacher" class="form-select form-select-sm" style="min-width:170px">
                         <option value="">Semua guru</option>
                         @foreach($schTeachers as $tid => $tname)
                             <option value="{{ $tid }}">{{ $tname }}</option>
@@ -279,24 +291,28 @@
                                 <td>
                                     @foreach($schGrid[$slot][$d] ?? [] as $schedule)
                                         @php
-                                            $schClass   = $schedule->class;
-                                            $className  = optional($schClass)->name ?? optional($schClass)->class_name ?? 'Kelas';
-                                            $schTeacher = optional($schClass)->teacher;
-                                            $schMode    = optional($schClass)->delivery_mode;
+                                            $className  = $schedule->class_name ?? optional($schedule->class ?? null)->name ?? optional($schedule->class ?? null)->class_name ?? 'Kelas';
+                                            $teacherName = $schedule->teacher_name ?? optional(optional($schedule->class ?? null)->teacher)->name ?? 'Belum ada guru';
+                                            $teacherId = $schedule->teacher_id ?? optional($schedule->class ?? null)->teacher_id;
+                                            $schMode    = $schedule->delivery_mode ?? optional($schedule->class ?? null)->delivery_mode;
                                             $schEnd     = $schedule->end_time
                                                 ? \Carbon\Carbon::parse($schedule->end_time)->format('H:i')
                                                 : '-';
+                                            $movedNote  = $schedule->moved_note ?? null;
                                         @endphp
 
                                         <div class="sch-card {{ $colorFor($className) }}"
-                                             data-teacher="{{ optional($schTeacher)->id }}">
+                                             data-teacher="{{ $teacherId }}">
                                             <strong>{{ $className }}</strong>
                                             <small>
-                                                {{ optional($schTeacher)->name ?? 'Belum ada guru' }}{{ $schMode ? ' · ' . $schMode : '' }}
+                                                {{ $teacherName }}{{ $schMode ? ' · ' . $schMode : '' }}
                                             </small>
                                             <small class="d-block">
                                                 {{ $slot }} – {{ $schEnd }}{{ $schedule->room ? ' · ' . $schedule->room : '' }}
                                             </small>
+                                            @if(!empty($movedNote))
+                                                <small class="d-block fst-italic text-dark">{{ $movedNote }}</small>
+                                            @endif
                                         </div>
                                     @endforeach
                                 </td>

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Guru;
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\ClassSchedule;
+use App\Models\ClassSession;
 use App\Models\ScheduleJournalUnlock;
 use App\Models\Teacher;
 use App\Models\TeachingJournal;
@@ -49,36 +50,108 @@ class AttendanceController extends Controller
         $teacher = $this->teacher();
         $date    = $request->filled('date') ? Carbon::parse($request->date) : Carbon::today();
         $canFill = !$date->isFuture();
+        $dateStr = $date->toDateString();
+        $dayName = $this->dayName($date);
 
-        $schedules = ClassSchedule::with([
+        // 1) Ambil class_sessions pada tanggal ini
+        $daySessions = ClassSession::with([
+                'class.enrollments' => fn ($q) => $q->where('status', 'Active'),
+                'class.enrollments.student',
+                'class.programPackage.program',
+                'class.level',
+                'schedule',
+                'journal',
+            ])
+            ->whereDate('session_date', $dateStr)
+            ->whereIn('status', ['Scheduled', 'Completed'])
+            ->orderBy('start_time')
+            ->get();
+
+        $classesWithSessions = $daySessions->pluck('class_id')->unique()->values()->all();
+
+        // Cari juga kelas yang aslinya hari ini tapi sudah dipindah keluar dari tanggal ini
+        $movedOutClassIds = ClassSession::whereDate('original_date', $dateStr)
+            ->whereDate('session_date', '!=', $dateStr)
+            ->where('status', '!=', 'Cancelled')
+            ->pluck('class_id')
+            ->unique()
+            ->values()
+            ->all();
+
+        // 2) Pola jadwal mingguan untuk kelas yang BELUM punya sesi bertanggal hari ini dan tidak dipindah keluar
+        $fallbackSchedules = ClassSchedule::with([
                 'class.enrollments' => fn ($q) => $q->where('status', 'Active'),
                 'class.enrollments.student',
                 'class.programPackage.program',
                 'class.level',
             ])
-            ->where('day', $this->dayName($date))
+            ->where('day', $dayName)
+            ->whereNull('effective_until')
+            ->whereNotIn('class_id', array_merge($classesWithSessions, $movedOutClassIds))
+            ->whereHas('class', fn ($q) => $q->whereIn('status', ['Open', 'Running']))
             ->orderBy('start_time')
             ->get();
 
+        // Bentuk item jadwal dari daySessions
+        $sessionItems = collect();
+        foreach ($daySessions as $cs) {
+            $class = $cs->class;
+            if (! $class) continue;
+
+            $sch = $cs->schedule ?? new ClassSchedule([
+                'id'         => $cs->class_schedule_id,
+                'class_id'   => $cs->class_id,
+                'day'        => $dayName,
+                'start_time' => $cs->start_time,
+                'end_time'   => $cs->end_time,
+                'room'       => $cs->room,
+            ]);
+            $sch->id = $cs->class_schedule_id ?? $sch->id;
+            $sch->setRelation('class', $class);
+            $sch->start_time = $cs->start_time;
+            $sch->end_time   = $cs->end_time;
+            if ($cs->room) {
+                $sch->room = $cs->room;
+            }
+
+            $sessionItems->push([
+                'schedule'     => $sch,
+                'classSession' => $cs,
+                'isFromSession'=> true,
+            ]);
+        }
+
+        foreach ($fallbackSchedules as $fs) {
+            $sessionItems->push([
+                'schedule'     => $fs,
+                'classSession' => null,
+                'isFromSession'=> false,
+            ]);
+        }
+
+        $allScheduleIds = $sessionItems->pluck('schedule.id')->filter()->unique()->values()->all();
+
         $journals = TeachingJournal::with(['attendances.student', 'teacher', 'substituteTeacher'])
-            ->whereDate('session_date', $date->toDateString())
-            ->whereIn('class_schedule_id', $schedules->pluck('id'))
+            ->whereDate('session_date', $dateStr)
+            ->get();
+        $journalsBySession = $journals->whereNotNull('class_session_id')->keyBy('class_session_id');
+        $journalsBySchedule = $journals->keyBy('class_schedule_id');
+
+        $unlocks = ScheduleJournalUnlock::whereIn('class_schedule_id', $allScheduleIds)
+            ->whereDate('session_date', $dateStr)
             ->get()
             ->keyBy('class_schedule_id');
 
-        $unlocks = ScheduleJournalUnlock::whereIn('class_schedule_id', $schedules->pluck('id'))
-            ->whereDate('session_date', $date->toDateString())
-            ->get()
-            ->keyBy('class_schedule_id');
-
-        $build = function ($schedule) use ($journals, $unlocks, $date) {
-            $journal       = $journals->get($schedule->id);
-            $unlockRecord  = $unlocks->get($schedule->id);
-            $sessionEnd    = Carbon::parse($date->toDateString() . ' ' . $schedule->end_time);
-            $deadline      = $sessionEnd->copy()->addHours(24);
-            $isPast        = now()->gt($deadline);
-            $isUnlocked    = ($unlockRecord && $unlockRecord->is_open);
-            $isLocked      = $isPast && !$isUnlocked && !$journal;
+        $build = function ($item) use ($journalsBySession, $journalsBySchedule, $unlocks, $dateStr) {
+            $schedule     = $item['schedule'];
+            $classSession = $item['classSession'];
+            $journal      = $classSession ? ($journalsBySession->get($classSession->id) ?? $journalsBySchedule->get($schedule->id)) : $journalsBySchedule->get($schedule->id);
+            $unlockRecord = $unlocks->get($schedule->id);
+            $sessionEnd   = Carbon::parse($dateStr . ' ' . $schedule->end_time);
+            $deadline     = $sessionEnd->copy()->addHours(24);
+            $isPast       = now()->gt($deadline);
+            $isUnlocked   = ($unlockRecord && $unlockRecord->is_open);
+            $isLocked     = $isPast && !$isUnlocked && !$journal;
 
             $status = !$journal
                 ? ($isLocked ? 'terlambat' : 'belum_diisi')
@@ -95,6 +168,7 @@ class AttendanceController extends Controller
 
             return [
                 'schedule'            => $schedule,
+                'class_session'       => $classSession,
                 'journal'             => $journal,
                 'status'              => $status,
                 'deadline'            => $deadline,
@@ -106,19 +180,29 @@ class AttendanceController extends Controller
             ];
         };
 
-        [$own, $others] = $schedules->partition(
-            fn ($s) => (int) $s->class->teacher_id === $teacher->id
-        );
+        [$ownItems, $otherItems] = $sessionItems->partition(function ($item) use ($teacher) {
+            $cs = $item['classSession'];
+            $tid = $cs ? ($cs->teacher_id ?? $cs->class?->teacher_id) : $item['schedule']->class?->teacher_id;
+            return (int) $tid === $teacher->id;
+        });
 
-        $own = $own->filter(fn ($s) => $s->class->teacher_response === 'Accepted');
+        $ownItems = $ownItems->filter(function ($item) {
+            $cs = $item['classSession'];
+            $cls = $cs ? $cs->class : $item['schedule']->class;
+            return $cls && $cls->teacher_response === 'Accepted';
+        });
 
-        $sessions = $own->map($build)->values();
+        $sessions = $ownItems->map($build)->values();
 
-        $substituteSessions = $others
-            ->filter(fn ($s) => !$journals->has($s->id)
-                || (int) $journals[$s->id]->teacher_id === $teacher->id
-                || (int) $journals[$s->id]->filled_by === $teacher->id)
+        $substituteSessions = $otherItems
             ->map($build)
+            ->filter(function ($i) use ($teacher) {
+                $j = $i['journal'];
+                $sid = $i['schedule']->id;
+                return ! $j
+                    || (int) $j->teacher_id === $teacher->id
+                    || (int) $j->filled_by === $teacher->id;
+            })
             ->values();
 
         $totalSessionToday = $sessions->count();
@@ -240,13 +324,23 @@ class AttendanceController extends Controller
 
         $isSubstitute = $data['is_substitute'] === 'Ya';
         $date         = Carbon::parse($data['session_date']);
+        $dateStr      = $date->toDateString();
 
-        if ($this->dayName($date) !== $classSchedule->day) {
+        // Cari session terkait pada tanggal ini
+        $classSession = ClassSession::where('class_id', $classSchedule->class_id)
+            ->whereDate('session_date', $dateStr)
+            ->whereIn('status', ['Scheduled', 'Completed'])
+            ->first();
+
+        // Jika tidak ada class_session pada tanggal ini, periksa apakah hari cocok dengan class_schedules
+        if (! $classSession && $this->dayName($date) !== $classSchedule->day) {
             return back()->withInput()->with('error', "Tanggal tersebut bukan hari {$classSchedule->day}, sesuai jadwal kelas.");
         }
 
+        $sessionEndTime = $classSession ? $classSession->end_time : $classSchedule->end_time;
+
         // Cek batas 24 jam setelah sesi selesai
-        $sessionEnd = Carbon::parse($data['session_date'] . ' ' . $classSchedule->end_time);
+        $sessionEnd = Carbon::parse($data['session_date'] . ' ' . $sessionEndTime);
         $deadline   = $sessionEnd->copy()->addHours(24);
         $isPast     = now()->gt($deadline);
 
@@ -260,21 +354,29 @@ class AttendanceController extends Controller
             return back()->withInput()->with('error', 'Batas waktu pengisian jurnal (24 jam setelah jam mengajar selesai) telah lewat. Form terkunci. Silakan ajukan permohonan buka kunci kepada Kurikulum.');
         }
 
-        $alreadyFilled = TeachingJournal::where('class_schedule_id', $classSchedule->id)
-            ->whereDate('session_date', $date->toDateString())
-            ->exists();
+        $alreadyFilledQuery = TeachingJournal::query();
+        if ($classSession) {
+            $alreadyFilledQuery->where(function ($q) use ($classSession, $classSchedule, $dateStr) {
+                $q->where('class_session_id', $classSession->id)
+                  ->orWhere(fn ($sub) => $sub->where('class_schedule_id', $classSchedule->id)->whereDate('session_date', $dateStr));
+            });
+        } else {
+            $alreadyFilledQuery->where('class_schedule_id', $classSchedule->id)
+                ->whereDate('session_date', $dateStr);
+        }
 
-        if ($alreadyFilled) {
+        if ($alreadyFilledQuery->exists()) {
             return back()->withInput()->with('error', 'Jurnal untuk sesi ini sudah diisi.');
         }
 
         try {
-            $journal = DB::transaction(function () use ($data, $classSchedule, $class, $me, $isSubstitute, $running, $isPast, $unlocked) {
+            $journal = DB::transaction(function () use ($data, $classSchedule, $classSession, $class, $me, $isSubstitute, $running, $isPast, $unlocked) {
                 $journal = TeachingJournal::create(
                     $this->journalAttributes($data, $running, $isSubstitute) + [
                         'filled_by'         => $me->id,                 // guru yang mengisi form
                         'class_id'          => $classSchedule->class_id,
                         'class_schedule_id' => $classSchedule->id,
+                        'class_session_id'  => $classSession?->id,
                         'session_date'      => $data['session_date'],
                         'status'            => 'Pending',
                         'is_late'           => ($isPast && $unlocked !== null),

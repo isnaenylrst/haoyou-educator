@@ -8,6 +8,7 @@ use App\Models\ClassSchedule;
 use App\Models\ProgressReport;
 use App\Models\Teacher;
 use App\Models\TeachingJournal;
+use App\Services\WeeklyScheduleGridService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -86,9 +87,9 @@ class MonitoringController extends Controller
         $totalTeacher = Teacher::count();
         $totalSession = TeachingJournal::where('class_status', 'Conducted')->count();
 
-        // Total jam mengajar
+        // Total jam mengajar (hanya dari pola aktif)
         $totalHour = 0;
-        $schedules = ClassSchedule::all();
+        $schedules = ClassSchedule::current()->get();
         foreach ($schedules as $schedule) {
             if ($schedule->start_time && $schedule->end_time) {
                 $start = strtotime($schedule->start_time);
@@ -116,10 +117,34 @@ class MonitoringController extends Controller
             ->whereNull('reviewed_at')
             ->count();
 
-        $weeklySchedules = ClassSchedule::with(['class.teacher', 'class.programPackage'])
-            ->orderBy('day')
-            ->orderBy('start_time')
+        // Navigasi minggu untuk jadwal monitoring (seperti Schedule guru)
+        try {
+            $weekStart = $request->filled('week')
+                ? Carbon::parse($request->week)->startOfWeek(Carbon::MONDAY)
+                : now()->startOfWeek(Carbon::MONDAY);
+        } catch (\Throwable $e) {
+            $weekStart = now()->startOfWeek(Carbon::MONDAY);
+        }
+        $weekEnd = $weekStart->copy()->addDays(6);
+
+        // Pola mingguan aktif
+        $rows = DB::table('class_schedules as cs')
+            ->join('classes as c', 'c.id', '=', 'cs.class_id')
+            ->leftJoin('teachers as t', 't.id', '=', 'c.teacher_id')
+            ->whereIn('c.status', ['Open', 'Running'])
+            ->whereNull('cs.effective_until')
+            ->select(
+                'cs.id', 'cs.class_id', 'cs.day', 'cs.start_time', 'cs.end_time', 'cs.room',
+                'c.class_name', 'c.delivery_mode', 'c.teacher_id', 'c.teacher_response', 't.name as teacher_name',
+                DB::raw("(select count(*) from class_enrollments ce
+                          where ce.class_id = c.id and ce.status = 'Active') as students")
+            )
+            ->orderBy('cs.start_time')
             ->get();
+
+        // Entri jadwal minggu terpilih: pakai pertemuan nyata (class_sessions),
+        // fallback ke class_schedules jika kelas belum ada pertemuannya.
+        $weeklySchedules = WeeklyScheduleGridService::weekEntries($rows, $weekStart, $weekEnd, null, 'all', null);
 
         return view('kurikulum.monitoring', compact(
             'teachers',
@@ -135,6 +160,8 @@ class MonitoringController extends Controller
             'totalTidakHadirHariIni',
             'progressReportPending',
             'weeklySchedules',
+            'weekStart',
+            'weekEnd',
             'date',
             'teacherId',
             'status'
