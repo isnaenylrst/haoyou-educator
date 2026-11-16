@@ -101,7 +101,7 @@ class ScheduleController extends Controller
 
         // Entri jadwal minggu ini. Sumber kebenaran = pertemuan nyata (class_sessions), supaya perubahan dari
         // admin (Ubah Jadwal) ikut terlihat. Kelas yang belum punya pertemuan memakai pola mingguan (class_schedules).
-        $entries = $this->weekEntries($rows, $weekStart, $weekEnd, $teacher->id);
+        $entries = $this->weekEntries($rows, $weekStart, $weekEnd, $teacher->id, $scope, $teacherFilterId ? (int)$teacherFilterId : null);
 
         foreach ($entries as $e) {
             $e->is_filled = isset($filled[$e->id . '|' . $e->date]);
@@ -224,7 +224,7 @@ class ScheduleController extends Controller
      * - Kelas yang punya pertemuan Regular: pakai class_sessions (tanggal/jam/ruang nyata, termasuk yang dipindah admin).
      * - Kelas tanpa pertemuan sama sekali: pakai pola mingguan (class_schedules), seperti sebelumnya.
      */
-    private function weekEntries($rows, Carbon $weekStart, Carbon $weekEnd, int $myId)
+    private function weekEntries($rows, Carbon $weekStart, Carbon $weekEnd, int $myId, string $scope = 'all', ?int $teacherFilterId = null)
     {
         $classIds     = $rows->pluck('class_id')->unique()->values()->all();
         $classInfo    = $rows->groupBy('class_id')->map->first();
@@ -256,6 +256,27 @@ class ScheduleController extends Controller
             if (! $info) continue;
 
             $tid = $s->teacher_id ?? $info->teacher_id;
+
+            // Filter scope guru
+            if ($scope === 'mine' && (int) $tid !== $myId) {
+                // Kecuali guru adalah pengganti yang disetujui
+                $isRep = DB::table('teacher_leaves')
+                    ->where('replacement_teacher_id', $myId)
+                    ->where('status', 'Approved')
+                    ->whereDate('leave_date', $s->session_date->toDateString())
+                    ->where(function ($q) use ($s) {
+                        if ($s->class_schedule_id) {
+                            $q->where('class_schedule_id', $s->class_schedule_id);
+                        }
+                    })
+                    ->exists();
+
+                if (! $isRep) {
+                    continue;
+                }
+            } elseif ($teacherFilterId && (int) $tid !== (int) $teacherFilterId) {
+                continue;
+            }
 
             $e = $this->entry($info, $s->class_schedule_id ?? $info->id, $s->session_date->toDateString(),
                 $s->start_time, $s->end_time,
@@ -344,6 +365,7 @@ class ScheduleController extends Controller
             ->where('c.teacher_id', $teacherId)
             ->where('c.teacher_response', 'Accepted')
             ->whereIn('c.status', ['Open', 'Running'])
+            ->whereNull('cs.effective_until')
             ->whereNotIn('c.id', $withSessions)
             ->select('cs.*', 'c.class_name', 'c.delivery_mode')
             ->get();
