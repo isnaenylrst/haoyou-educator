@@ -203,11 +203,9 @@ class ExtraFeeService
                 ]),
             };
 
-            return Payment::create([
+            $payment = new Payment([
                 'enrollment_id' => $enrollment->id,
                 'class_session_id' => $lockedSession->id,
-                'invoice_number' => $this->installments
-                    ->generateInvoiceNumber(),
                 'payment_type' => $type,
                 'payment_stage' => $paymentStage,
                 'total_bill' => $amount,
@@ -218,6 +216,57 @@ class ExtraFeeService
                 'payment_date' => $paymentDate->toDateString(),
                 'payment_proof_path' => $pay['payment_proof_path'] ?? null,
             ]);
+
+            // Nomor dibuat otomatis oleh Payment (InvoiceNumberService),
+            // kecuali pemanggil mengirim nomor bersama untuk invoice gabungan.
+            if (! empty($pay['invoice_number'])) {
+                $payment->invoice_number = $pay['invoice_number'];
+                $payment->useGivenInvoiceNumber = true;
+            }
+
+            $payment->save();
+
+            return $payment;
+        });
+    }
+
+    /**
+     * Mencatat beberapa biaya tambahan untuk satu pertemuan dalam SATU invoice.
+     * Dipakai saat pertemuan pengganti sekaligus Home Visit: dua baris payments,
+     * satu nomor invoice (INV-tanggal-ISNPHV-FXG).
+     *
+     * @param  string[]  $types  mis. [Payment::TYPE_REPLACEMENT, Payment::TYPE_HOME_VISIT]
+     * @param  array     $pay    sama seperti record(); nominal per tipe lewat $pay['amounts'][tipe]
+     * @return \Illuminate\Support\Collection<int, Payment>
+     */
+    public function recordBundle(
+        ClassEnrollment $enrollment,
+        array $types,
+        ClassSession $session,
+        array $pay,
+    ): \Illuminate\Support\Collection {
+        $types = array_values(array_unique($types));
+
+        if ($types === []) {
+            throw ValidationException::withMessages([
+                'type' => 'Tipe biaya tambahan tidak valid.',
+            ]);
+        }
+
+        $number = app(InvoiceNumberService::class)->forExtra(
+            $enrollment,
+            $types,
+            $pay['payment_date'] ?? today(),
+        );
+
+        return DB::transaction(function () use ($enrollment, $types, $session, $pay, $number) {
+            return collect($types)->map(function (string $type) use ($enrollment, $session, $pay, $number) {
+                $line = $pay;
+                $line['invoice_number'] = $number;
+                $line['amount'] = $pay['amounts'][$type] ?? null;
+
+                return $this->record($enrollment, $type, $session, $line);
+            });
         });
     }
 }

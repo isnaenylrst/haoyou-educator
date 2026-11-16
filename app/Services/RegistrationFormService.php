@@ -172,6 +172,12 @@ class RegistrationFormService
         $activityFee = (float) $enrollment->activity_fee;
         // Total biaya les = harga paket (sama dengan yang dipakai total_bill)
         $lesTotal = (float) ($this->installments()->packageTotal($enrollment) ?? 0);
+
+        // Paket private: kalau service belum menghitung total, pakai harga paket langsung
+        if ($lesTotal <= 0 && $package) {
+            $lesTotal = (float) ($package->price ?? 0);
+        }
+
         $discount = (float) $enrollment->discount;
 
         $firstSession = $this->firstSessionFor($enrollment);
@@ -329,6 +335,20 @@ class RegistrationFormService
                     $values['termin1_lunas_nominal'] = $this->rupiah($amount);
                     $values['termin1_lunas_tanggal'] = $paid ? $fmt($paid['date']) : '';
                 }
+            }
+        }
+
+        // Formulir private (kolom DP / Lunas): nominal terisi otomatis dari tagihan,
+        // tanggal tetap kosong sampai benar-benar dibayar.
+        if ($enrollment->private_package_id) {
+            $total  = max($lesTotal + $registrationFee + $activityFee - $discount, 0);
+            $dpPaid = (float) ($slots['dp']->amount_paid ?? 0);
+
+            if (! isset($slots['lunas'])) {
+                $remaining = $total - $dpPaid;
+
+                $values['lunas_nominal'] = $remaining > 0 ? $this->rupiah($remaining) : '';
+                $values['lunas_tanggal'] = '';
             }
         }
 

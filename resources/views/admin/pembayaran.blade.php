@@ -242,18 +242,10 @@
                                     </button>
 
                                     @if ($remaining > 0)
-                                        <button type="button" class="icon-btn convert" title="Catat pembayaran"
-                                                data-id="{{ $enrollment->id }}"
-                                                data-name="{{ $enrollment->student?->name }}"
-                                                data-package="{{ $packageName }}"
-                                                data-remaining="{{ $remaining }}"
-                                                data-next-stage="{{ $enrollment->next_stage }}"
-                                                data-next-amount="{{ $enrollment->next_amount }}"
-                                                data-next-min="{{ $enrollment->next_min }}"
-                                                data-next-exact="{{ $enrollment->next_exact ? 1 : 0 }}"
-                                                onclick="openPayModal(this)">
+                                        <a class="icon-btn convert" title="Catat pembayaran lanjutan"
+                                           href="{{ route('admin.pembayaran.settle', $enrollment) }}">
                                             <i class="fa-solid fa-money-bill-wave"></i>
-                                        </button>
+                                        </a>
                                     @endif
                                 </div>
                             </td>
@@ -400,65 +392,6 @@
         </div>
     </div>
 
-    {{-- ========================= MODAL — CATAT PEMBAYARAN ========================= --}}
-    <div class="modal-overlay" id="payModalOverlay">
-        <div class="modal modal-sm">
-            <form id="payForm" method="POST" enctype="multipart/form-data">
-                @csrf
-
-                <div class="modal-head">
-                    <div>
-                        <div class="modal-title">Catat Pembayaran</div>
-                        <div class="modal-sub" id="pay_sub">-</div>
-                    </div>
-                    <button type="button" class="modal-close" onclick="closePayModal()"><i class="fa-solid fa-xmark"></i></button>
-                </div>
-
-                <div class="modal-body">
-                    <div class="form-grid">
-                        {{-- Tahap ditentukan sistem (DP / Termin 1-3 / Pelunasan), hanya ditampilkan --}}
-                        <div class="form-field">
-                            <label>Tahap Pembayaran</label>
-                            <input type="text" id="pay_stage" readonly>
-                        </div>
-
-                        <div class="form-field">
-                            <label>Nominal Dibayar *</label>
-                            <input type="number" name="amount_paid" id="pay_amount" min="1" step="0.01" required>
-                            <small id="pay_remaining_hint" style="font-size:11px;color:#6b7280;"></small>
-                        </div>
-
-                        <div class="form-field">
-                            <label>Metode Pembayaran *</label>
-                            <select name="payment_method" required>
-                                <option value="">Pilih Metode</option>
-                                @foreach ($methods as $method)
-                                    <option value="{{ $method }}">{{ $method }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <div class="form-field">
-                            <label>Tanggal Pembayaran *</label>
-                            <input type="date" name="payment_date" value="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}" required>
-                        </div>
-
-                        <div class="form-field full">
-                            <label>Bukti Pembayaran (opsional)</label>
-                            <input type="file" name="payment_proof" accept=".jpg,.jpeg,.png,.pdf">
-                            <small style="font-size:11px;color:#6b7280;">JPG, PNG, atau PDF, maksimal 2 MB.</small>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="modal-foot">
-                    <button type="button" class="btn" onclick="closePayModal()">Batal</button>
-                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Simpan Pembayaran</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     {{-- ========================= MODAL — RIWAYAT ========================= --}}
     <div class="modal-overlay" id="historyModalOverlay">
         <div class="modal">
@@ -568,49 +501,6 @@
             });
         }
     })();
-
-    /* ============================================================
-       MODAL: CATAT PEMBAYARAN
-    ============================================================ */
-    function openPayModal(btn) {
-        const remaining = Number(btn.dataset.remaining);
-
-        document.getElementById('payForm').action = `/admin/pembayaran/${btn.dataset.id}`;
-        document.getElementById('pay_sub').textContent = `${btn.dataset.name} · ${btn.dataset.package}`;
-        document.getElementById('pay_stage').value = btn.dataset.nextStage || '';
-
-        const amount = document.getElementById('pay_amount');
-        const hint = document.getElementById('pay_remaining_hint');
-        const exact = btn.dataset.nextExact === '1';
-        const nextAmount = Number(btn.dataset.nextAmount);
-        const nextMin = Number(btn.dataset.nextMin);
-
-        amount.max = remaining;
-
-        if (exact && nextAmount > 0) {
-            // Termin 1-3 / Pelunasan: nominal ditentukan sistem
-            amount.value = nextAmount;
-            amount.min = nextAmount;
-            amount.readOnly = true;
-            hint.textContent = `Nominal ${btn.dataset.nextStage} sesuai jadwal. Sisa tagihan ${rupiah(remaining)}`;
-        } else {
-            // DP: nominal bebas, minimal sebesar biaya pendaftaran
-            amount.value = '';
-            amount.min = nextMin > 0 ? nextMin : 1;
-            amount.readOnly = false;
-            hint.textContent = `Minimal DP ${rupiah(nextMin)}. Sisa tagihan ${rupiah(remaining)}`;
-        }
-
-        document.getElementById('payModalOverlay').classList.add('open');
-    }
-
-    function closePayModal() {
-        document.getElementById('payModalOverlay').classList.remove('open');
-    }
-
-    document.getElementById('payModalOverlay').addEventListener('click', function (e) {
-        if (e.target === this) closePayModal();
-    });
 
     /* ============================================================
        MODAL: RIWAYAT PEMBAYARAN

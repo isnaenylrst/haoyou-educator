@@ -485,10 +485,7 @@ class PrintTemplateSeeder extends Seeder
         <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:70%;">Rincian Biaya</td>
         <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:30%;text-align:right;">Jumlah(Rp)</td>
         </tr>
-        <tr>
-        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;">{jenis_biaya}</td>
-        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;text-align:right;white-space:nowrap;">{jumlah_dibayar}</td>
-        </tr>
+        {rincian_biaya}
         <tr>
         <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFF2CC;font-weight:bold;">Total dibayarkan</td>
         <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFF2CC;font-weight:bold;text-align:right;white-space:nowrap;">{jumlah_dibayar}</td>

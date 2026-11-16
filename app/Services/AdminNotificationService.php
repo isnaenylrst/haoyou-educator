@@ -85,6 +85,8 @@ class AdminNotificationService
             'total'  => $all->count(),
             'counts' => $all->countBy('section')->all(),
             'urgent' => $all->where('priority', 3)->countBy('section')->all(),
+            'action' => $all->where('priority', 2)->countBy('section')->all(),   // perlu tindakan
+            'info'   => $all->where('priority', 1)->countBy('section')->all(),   // info
             // tanggal disimpan sebagai string: objek Carbon tidak aman untuk di-cache
             'top'    => $all->take(5)
                 ->map(fn ($n) => ['date' => $n['date']->toIso8601String()] + $n)

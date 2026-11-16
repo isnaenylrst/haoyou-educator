@@ -264,6 +264,110 @@ class PembayaranController extends Controller
     }
 
     /* ============================================================
+       PEMBAYARAN LANJUTAN (halaman penuh, sama seperti alur Siswa)
+       step 1: pembayaran & bukti, step 2: invoice & formulir terbaru
+    ============================================================ */
+    public function settleForm(ClassEnrollment $enrollment)
+    {
+        abort_if($enrollment->status === 'Cancelled', 404);
+
+        $enrollment->loadMissing([
+            'student.currentLevel',
+            'programPackage.program',
+            'privatePackage',
+            'class.programPackage',
+        ]);
+
+        if ($this->payments->totalBillFor($enrollment) === null || $this->payments->isFullyPaid($enrollment)) {
+            return redirect()->route('admin.pembayaran')
+                ->with('success', 'Tagihan enrollment ini sudah lunas.');
+        }
+
+        $package = $enrollment->programPackage
+            ?? $enrollment->class?->programPackage
+            ?? $enrollment->privatePackage;
+
+        $total     = (float) $this->payments->totalBillFor($enrollment);
+        $paid      = (float) $this->payments->totalPaid($enrollment);
+        $remaining = (float) $this->payments->remainingBill($enrollment);
+
+        return view('admin.calon-siswa.convert', [
+            'step'           => 2,
+            'personName'     => $enrollment->student?->name,
+            'personLabel'    => 'Siswa',
+            'eyebrow'        => 'Pelunasan:',
+            'subtitle'       => 'Catat pembayaran lanjutan untuk tagihan program ini.',
+            'formAction'     => route('admin.pembayaran.settle.store', $enrollment),
+            'backUrl'        => route('admin.pembayaran'),
+            'cancelUrl'      => route('admin.pembayaran'),
+            'package'        => $package,
+            'isPrivate'      => (bool) $enrollment->private_package_id,
+            'totalBill'      => $remaining,
+            'canInstallment' => $this->payments->enrollmentAllowsInstallment($enrollment),
+            'settlement'     => ['total' => $total, 'paid' => $paid, 'remaining' => $remaining],
+            'nextPayment'    => $this->payments->nextPayment($enrollment),
+            'stepLabels'     => [1 => 'Pembayaran & Bukti', 2 => 'Invoice & Formulir'],
+            'stepDisplay'    => 1,
+        ]);
+    }
+
+    public function settleStore(Request $request, ClassEnrollment $enrollment)
+    {
+        abort_if($enrollment->status === 'Cancelled', 404);
+
+        $enrollment->loadMissing(['student', 'programPackage', 'privatePackage']);
+
+        if ($this->payments->totalBillFor($enrollment) === null || $this->payments->isFullyPaid($enrollment)) {
+            return redirect()->route('admin.pembayaran')->with('success', 'Tagihan enrollment ini sudah lunas.');
+        }
+
+        $remaining = (float) $this->payments->remainingBill($enrollment);
+
+        // Tahap dan nominal ditentukan PaymentInstallmentService::nextPayment; service menolak nominal yang tidak sesuai.
+        $data = $request->validate([
+            'amount_paid'    => ['required', 'numeric', 'min:1', 'max:' . $remaining],
+            'payment_method' => ['required', Rule::in(self::METHODS)],
+            'payment_date'   => ['required', 'date', 'before_or_equal:today'],
+            'proof'          => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'],
+        ], [
+            'amount_paid.max' => 'Nominal melebihi sisa tagihan (Rp ' . number_format($remaining, 0, ',', '.') . ').',
+        ]);
+
+        $amount = (float) $data['amount_paid'];
+        $stage  = $this->payments->nextPayment($enrollment)['stage'] ?? 'Pelunasan';
+
+        $proofPath = $request->file('proof')->store('payment-proofs', 'public');
+
+        try {
+            DB::transaction(fn () => $this->payments->recordPayment(
+                $enrollment,
+                $stage,
+                $amount,
+                $data['payment_method'],
+                $data['payment_date'],
+                $proofPath,
+            ));
+        } catch (ValidationException $e) {
+            Storage::disk('public')->delete($proofPath); // jangan tinggalkan file yatim
+            throw $e;
+        }
+
+        $after = max($remaining - $amount, 0);
+
+        // Halaman akhir (invoice + formulir pendaftaran terbaru) dipakai bersama dengan alur Siswa
+        return redirect()
+            ->route('admin.siswa.continue.done', [
+                $enrollment->student_id,
+                $enrollment,
+                'jenis' => 'pelunasan',
+                'dari'  => 'pembayaran',
+            ])
+            ->with('success', $after <= 0
+                ? 'Pembayaran ' . $enrollment->student?->name . ' sudah lunas.'
+                : 'Pembayaran dicatat. Sisa tagihan Rp ' . number_format($after, 0, ',', '.') . '.');
+    }
+
+    /* ============================================================
        Filter & rentang tanggal
     ============================================================ */
 
