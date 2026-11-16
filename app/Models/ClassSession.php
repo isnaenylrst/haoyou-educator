@@ -153,7 +153,6 @@ class ClassSession extends Model
     public function canBeRescheduled(): bool
     {
         return $this->status === 'Scheduled'
-            && ! $this->isLocked()
             && $this->session_date->gte(today());
     }
 
