@@ -52,7 +52,7 @@ class ConsultationResultController extends Controller
 
         // 2. DATA KONSULTASI REVISI GURU (DOKUMEN: MATERI, PROGRESS REPORT, LP, PPT)
         $revisionConsultations = RevisionConsultation::where('teacher_id', $teacher->id)
-            ->with(['class', 'curriculum'])
+            ->with(['class', 'curriculum', 'messages.user'])
             ->latest()
             ->paginate(10, ['*'], 'revisi_page')
             ->withQueryString();
@@ -127,6 +127,78 @@ class ConsultationResultController extends Controller
 
         return redirect()->route('teacher.hasil-konsultasi', ['tab' => 'revisi'])
             ->with('success', 'Pengajuan konsultasi revisi berhasil dikirim ke Kurikulum. Notifikasi telah terkirim.');
+    }
+
+    /**
+     * Guru mengunggah ulang dokumen revisi pada tiket yang sama
+     */
+    public function reuploadRevision(Request $request, RevisionConsultation $revisionConsultation)
+    {
+        $teacher = Auth::user()->teacher;
+        abort_unless($teacher, 403, 'Profil guru belum terhubung dengan akun Anda.');
+        abort_unless($revisionConsultation->teacher_id === $teacher->id, 403, 'Tiket konsultasi bukan milik Anda.');
+
+        $validated = $request->validate([
+            'notes'      => ['required', 'string', 'min:5', 'max:3000'],
+            'attachment' => ['required', 'file', 'mimes:pdf,doc,docx,ppt,pptx,jpg,jpeg,png', 'max:20480'],
+        ], [
+            'notes.required'      => 'Catatan atau ringkasan perbaikan wajib diisi.',
+            'attachment.required' => 'File revisi dokumen wajib diunggah.',
+            'attachment.max'      => 'Ukuran lampiran maksimal 20 MB.',
+        ]);
+
+        $file = $request->file('attachment');
+        $fileName = $file->getClientOriginalName();
+        $filePath = $file->store('revision-consultations', 'public');
+
+        // Update tiket: status kembali Menunggu review, update berkas utama
+        $revisionConsultation->update([
+            'status'          => 'Menunggu',
+            'attachment_path' => $filePath,
+            'attachment_name' => $fileName,
+        ]);
+
+        // Simpan pesan riwayat pengunggahan ulang
+        $revisionConsultation->messages()->create([
+            'sender_type'     => 'teacher',
+            'user_id'         => Auth::id(),
+            'message'         => $validated['notes'],
+            'attachment_path' => $filePath,
+            'attachment_name' => $fileName,
+            'decision'        => 'Upload Ulang',
+        ]);
+
+        // Notifikasi ke seluruh tim Kurikulum
+        $curriculums = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Curriculum'))->get();
+        foreach ($curriculums as $cUser) {
+            $className = $revisionConsultation->class ? " ({$revisionConsultation->class->class_name})" : '';
+            $cUser->notify(new AppNotification(
+                title: "Dokumen Revisi Diunggah Ulang: {$revisionConsultation->document_type}",
+                message: "Guru {$teacher->name} telah mengunggah ulang dokumen revisi {$revisionConsultation->document_type}{$className}. Silakan periksa kembali.",
+                url: url('/kurikulum/hasil-konsultasi?tab=revisi'),
+                type: 'konsultasi_revisi',
+                icon: 'fa-upload'
+            ));
+        }
+
+        return redirect()->route('teacher.hasil-konsultasi', ['tab' => 'revisi'])
+            ->with('success', 'Dokumen revisi berhasil diunggah ulang dan telah dikirim kembali ke Kurikulum.');
+    }
+
+    /**
+     * Unduh lampiran dari pesan riwayat konsultasi revisi
+     */
+    public function downloadMessageAttachment(\App\Models\RevisionConsultationMessage $message)
+    {
+        $teacher = Auth::user()->teacher;
+        abort_unless($teacher, 403, 'Akses tidak diizinkan.');
+        abort_unless($message->revisionConsultation?->teacher_id === $teacher->id, 403, 'Akses tidak diizinkan.');
+        abort_unless($message->attachment_path && Storage::disk('public')->exists($message->attachment_path), 404, 'File lampiran tidak ditemukan.');
+
+        return Storage::disk('public')->download(
+            $message->attachment_path,
+            $message->attachment_name ?: basename($message->attachment_path)
+        );
     }
 
     /**

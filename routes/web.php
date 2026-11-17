@@ -634,8 +634,12 @@ Route::middleware(['auth', 'role:Curriculum'])
             ->name('hasil-konsultasi.revisi.accept');
         Route::patch('/hasil-konsultasi/revisi/{revisionConsultation}/complete', [KurikulumConsultationResultController::class, 'completeRevision'])
             ->name('hasil-konsultasi.revisi.complete');
-         Route::get('/hasil-konsultasi/revisi/{revisionConsultation}/download', [KurikulumConsultationResultController::class, 'downloadRevision'])
+        Route::patch('/hasil-konsultasi/revisi/{revisionConsultation}/decide', [KurikulumConsultationResultController::class, 'decideRevision'])
+            ->name('hasil-konsultasi.revisi.decide');
+        Route::get('/hasil-konsultasi/revisi/{revisionConsultation}/download', [KurikulumConsultationResultController::class, 'downloadRevision'])
             ->name('hasil-konsultasi.revisi.download');
+        Route::get('/hasil-konsultasi/revisi/message/{message}/download', [KurikulumConsultationResultController::class, 'downloadMessageAttachment'])
+            ->name('hasil-konsultasi.revisi.message-download');
     });
 
     // Cetak Lembar Pengajuan (Dapat diakses Kurikulum, Admin, Owner, dan Guru Pengaju)
@@ -785,8 +789,10 @@ Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
         // Hasil Konsultasi & Konsultasi Revisi (Poin 2 & 13)
         Route::get('/hasil-konsultasi', [GuruConsultationResultController::class, 'index'])->name('hasil-konsultasi');
         Route::post('/hasil-konsultasi/revisi', [GuruConsultationResultController::class, 'storeRevision'])->name('hasil-konsultasi.revisi.store');
+        Route::post('/hasil-konsultasi/revisi/{revisionConsultation}/reupload', [GuruConsultationResultController::class, 'reuploadRevision'])->name('hasil-konsultasi.revisi.reupload');
         Route::get('/hasil-konsultasi/{id}/download', [GuruConsultationResultController::class, 'download'])->name('hasil-konsultasi.download');
         Route::get('/hasil-konsultasi/revisi/{id}/download', [GuruConsultationResultController::class, 'downloadRevisionAttachment'])->name('hasil-konsultasi.revisi.download');
+        Route::get('/hasil-konsultasi/revisi/message/{message}/download', [GuruConsultationResultController::class, 'downloadMessageAttachment'])->name('hasil-konsultasi.revisi.message-download');
     });
 
 /*
