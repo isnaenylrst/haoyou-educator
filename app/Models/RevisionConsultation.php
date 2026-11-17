@@ -45,12 +45,18 @@ class RevisionConsultation extends Model
         return $this->belongsTo(User::class, 'curriculum_id');
     }
 
+    public function messages()
+    {
+        return $this->hasMany(RevisionConsultationMessage::class, 'revision_consultation_id')->orderBy('created_at', 'asc');
+    }
+
     public function getStatusBadgeAttribute(): string
     {
         return match ($this->status) {
-            'Selesai'   => 'bg-success text-white',
-            'Diterima'  => 'bg-info text-dark',
-            default     => 'bg-warning text-dark',
+            'Selesai', 'Diterima'  => 'bg-success text-white',
+            'Perlu Revisi'         => 'bg-danger text-white',
+            'Menunggu'             => 'bg-warning text-dark',
+            default                => 'bg-secondary text-white',
         };
     }
 }

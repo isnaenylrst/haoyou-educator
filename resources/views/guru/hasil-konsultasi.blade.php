@@ -226,11 +226,38 @@
 
                                     {{-- ARAHAN / BALASAN KURIKULUM --}}
                                     <div class="col-md-6">
-                                        <div class="p-3 rounded-4 {{ $rc->status === 'Selesai' ? 'bg-success-subtle border border-success-subtle' : 'bg-light border' }} h-100">
-                                            <h6 class="fw-bold {{ $rc->status === 'Selesai' ? 'text-success-emphasis' : 'text-primary' }} mb-2">
-                                                <i class="fa-solid fa-reply me-1"></i> Balasan & Arahan Kurikulum:
+                                        <div class="p-3 rounded-4 {{ in_array($rc->status, ['Selesai', 'Diterima']) ? 'bg-success-subtle border border-success-subtle' : ($rc->status === 'Perlu Revisi' ? 'bg-danger-subtle border border-danger-subtle' : 'bg-light border') }} h-100">
+                                            <h6 class="fw-bold {{ in_array($rc->status, ['Selesai', 'Diterima']) ? 'text-success-emphasis' : ($rc->status === 'Perlu Revisi' ? 'text-danger' : 'text-primary') }} mb-2">
+                                                <i class="fa-solid fa-reply me-1"></i> Balasan & Catatan Kurikulum:
                                             </h6>
-                                            @if($rc->curriculum_reply)
+
+                                            {{-- Riwayat Catatan / Pesan --}}
+                                            @if($rc->messages && $rc->messages->count() > 0)
+                                                <div class="d-flex flex-column gap-2 mb-3">
+                                                    @foreach($rc->messages as $msg)
+                                                        <div class="p-2 rounded-3 small border {{ $msg->sender_type === 'curriculum' ? ($msg->decision === 'Terima' ? 'bg-success-subtle border-success-subtle' : 'bg-warning-subtle border-warning-subtle') : 'bg-white' }}">
+                                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                                <strong style="font-size: 11px;">
+                                                                    @if($msg->sender_type === 'curriculum')
+                                                                        <i class="fa-solid fa-user-tie me-1"></i> Kurikulum ({{ $msg->decision ?? 'Catatan' }}):
+                                                                    @else
+                                                                        <i class="fa-solid fa-chalkboard-user me-1"></i> Anda ({{ $msg->decision ?? 'Unggahan' }}):
+                                                                    @endif
+                                                                </strong>
+                                                                <span class="text-muted" style="font-size: 10px;">{{ $msg->created_at->format('d/m/Y H:i') }}</span>
+                                                            </div>
+                                                            <div class="text-dark">{{ $msg->message }}</div>
+                                                            @if($msg->attachment_path)
+                                                                <div class="mt-1">
+                                                                    <a href="{{ route('teacher.hasil-konsultasi.revisi.message-download', $msg->id) }}" class="small text-decoration-none">
+                                                                        <i class="fa-solid fa-paperclip me-1"></i> Unduh Lampiran: {{ $msg->attachment_name ?: 'Berkas' }}
+                                                                    </a>
+                                                                </div>
+                                                            @endif
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            @elseif($rc->curriculum_reply)
                                                 <p class="text-dark mb-0 small" style="white-space: pre-line;">{{ $rc->curriculum_reply }}</p>
                                                 <small class="text-muted d-block mt-2">Dijawab oleh: <strong>{{ $rc->curriculum?->display_name ?? 'Kurikulum' }}</strong> ({{ $rc->completed_at?->translatedFormat('d M Y H:i') }})</small>
                                             @elseif($rc->status === 'Diterima')
@@ -242,12 +269,62 @@
                                                     Menunggu respon dari Tim Kurikulum.
                                                 </p>
                                             @endif
+
+                                            {{-- Tombol Unggah Ulang jika Perlu Revisi --}}
+                                            @if($rc->status === 'Perlu Revisi')
+                                                <div class="mt-3 pt-2 border-top">
+                                                    <button type="button" class="btn btn-sm btn-danger rounded-pill px-3 fw-bold"
+                                                            data-bs-toggle="modal" data-bs-target="#modalUploadUlang{{ $rc->id }}">
+                                                        <i class="fa-solid fa-upload me-1"></i> Unggah Ulang Dokumen Revisi
+                                                    </button>
+                                                </div>
+                                            @endif
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+
+                    {{-- MODAL UPLOAD ULANG REVISI --}}
+                    @if($rc->status === 'Perlu Revisi')
+                        <div class="modal fade" id="modalUploadUlang{{ $rc->id }}" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <form class="modal-content border-0 shadow rounded-4" action="{{ route('teacher.hasil-konsultasi.revisi.reupload', $rc->id) }}" method="POST" enctype="multipart/form-data">
+                                    @csrf
+                                    <div class="modal-header border-bottom">
+                                        <h5 class="modal-title fw-bold">
+                                            <i class="fa-solid fa-upload text-danger me-2"></i> Unggah Ulang Dokumen Revisi
+                                        </h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body p-4 text-start">
+                                        <div class="p-3 bg-light rounded-3 border mb-3">
+                                            <div class="small fw-bold text-muted mb-1">Tiket Dokumen:</div>
+                                            <div class="small text-dark fw-semibold">{{ $rc->document_type }} {{ $rc->class ? "({$rc->class->class_name})" : '' }}</div>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label fw-semibold">Catatan / Keterangan Perbaikan <span class="text-danger">*</span></label>
+                                            <textarea name="notes" rows="3" class="form-control" placeholder="Jelaskan ringkasan bagian dokumen yang telah diperbaiki..." required></textarea>
+                                        </div>
+
+                                        <div class="mb-0">
+                                            <label class="form-label fw-semibold">Berkas Dokumen Baru <span class="text-danger">*</span></label>
+                                            <input type="file" name="attachment" class="form-control" required>
+                                            <small class="text-muted d-block mt-1">Format: PDF, Word, PPT, atau Gambar (Maks. 20 MB)</small>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer border-top">
+                                        <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Batal</button>
+                                        <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">
+                                            <i class="fa-solid fa-paper-plane me-1"></i> Kirim Revisi
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    @endif
                 @endforeach
             </div>
 

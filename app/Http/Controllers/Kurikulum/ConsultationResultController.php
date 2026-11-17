@@ -48,7 +48,7 @@ class ConsultationResultController extends Controller
         $teachers = Teacher::orderBy('name')->get();
         $observations = TeacherObservation::with(['teacher', 'class'])->latest('observation_date')->get();
 
-        $revisionConsultations = RevisionConsultation::with(['teacher.user', 'class', 'curriculum'])
+        $revisionConsultations = RevisionConsultation::with(['teacher.user', 'class', 'curriculum', 'messages.user'])
             ->latest()
             ->paginate(10, ['*'], 'revisi_page')
             ->withQueryString();
@@ -258,6 +258,68 @@ class ConsultationResultController extends Controller
         }
 
         return back()->with('success', 'Konsultasi revisi berhasil diselesaikan dan balasan telah terkirim ke Guru.');
+    }
+
+    /**
+     * Kurikulum memberikan keputusan (Terima atau Perlu Revisi) beserta catatan
+     */
+    public function decideRevision(Request $request, RevisionConsultation $revisionConsultation)
+    {
+        $validated = $request->validate([
+            'decision' => ['required', 'in:Terima,Perlu Revisi'],
+            'note'     => ['required', 'string', 'max:3000'],
+        ], [
+            'decision.required' => 'Pilih keputusan: Terima atau Perlu Revisi.',
+            'decision.in'       => 'Pilihan keputusan tidak valid.',
+            'note.required'     => 'Catatan arahan / keputusan Kurikulum wajib diisi.',
+        ]);
+
+        $status = $validated['decision'] === 'Terima' ? 'Diterima' : 'Perlu Revisi';
+
+        $revisionConsultation->update([
+            'status'           => $status,
+            'curriculum_id'    => Auth::id(),
+            'curriculum_reply' => $validated['note'],
+            'completed_at'     => $status === 'Diterima' ? now() : null,
+        ]);
+
+        // Simpan pesan riwayat
+        $revisionConsultation->messages()->create([
+            'sender_type' => 'curriculum',
+            'user_id'     => Auth::id(),
+            'message'     => $validated['note'],
+            'decision'    => $validated['decision'],
+        ]);
+
+        if ($revisionConsultation->teacher?->user) {
+            $title = $status === 'Diterima'
+                ? "Konsultasi Revisi Diterima: {$revisionConsultation->document_type}"
+                : "Konsultasi Revisi Perlu Revisi: {$revisionConsultation->document_type}";
+            $icon = $status === 'Diterima' ? 'fa-circle-check' : 'fa-rotate-left';
+
+            $revisionConsultation->teacher->user->notify(new AppNotification(
+                title: $title,
+                message: "Keputusan Kurikulum: {$status}. Catatan: " . \Illuminate\Support\Str::limit($validated['note'], 120),
+                url: url('/guru/hasil-konsultasi?tab=revisi'),
+                type: 'konsultasi_revisi',
+                icon: $icon
+            ));
+        }
+
+        return back()->with('success', "Keputusan konsultasi revisi berhasil disimpan ({$status}) dan notifikasi telah dikirim ke Guru.");
+    }
+
+    /**
+     * Unduh lampiran dari pesan riwayat konsultasi revisi
+     */
+    public function downloadMessageAttachment(\App\Models\RevisionConsultationMessage $message)
+    {
+        abort_unless($message->attachment_path && Storage::disk('public')->exists($message->attachment_path), 404, 'File lampiran tidak ditemukan.');
+
+        return Storage::disk('public')->download(
+            $message->attachment_path,
+            $message->attachment_name ?: basename($message->attachment_path)
+        );
     }
 
     /**
