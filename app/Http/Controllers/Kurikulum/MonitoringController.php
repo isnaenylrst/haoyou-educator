@@ -71,6 +71,132 @@ class MonitoringController extends Controller
 
         /*
         |--------------------------------------------------------------------------
+        | RETENTION RATE & RANKING RETENSI GURU (KURIKULUM 5)
+        |--------------------------------------------------------------------------
+        | Siswa selesai: siswa di kelas yang statusnya Selesai/Completed/Closed ATAU end_date sudah lewat.
+        | Siswa lanjut: siswa selesai yang terdaftar di kelas baru/paket lanjutan setelah end_date kelas tersebut.
+        */
+        $todayStr = now()->toDateString();
+
+        // 1. Ambil semua kelas yang telah berakhir (status selesai atau end_date < hari ini)
+        $endedClasses = \App\Models\ClassModel::with(['teacher', 'enrollments.student'])
+            ->where(function ($q) use ($todayStr) {
+                $q->whereIn('status', ['Selesai', 'Completed', 'Closed', 'Finished'])
+                  ->orWhere(function ($q2) use ($todayStr) {
+                      $q2->whereNotNull('end_date')
+                         ->where('end_date', '<', $todayStr);
+                  });
+            })
+            ->when($periode === 'minggu', fn ($q) => $q->where('end_date', '>=', $startDate))
+            ->when($periode === 'bulan', fn ($q) => $q->where('end_date', '>=', $startDate))
+            ->when($periode === 'semester', fn ($q) => $q->where('end_date', '>=', $startDate))
+            ->get();
+
+        // 2. Ambil semua pendaftaran aktif / valid dari seluruh siswa
+        $allEnrollments = DB::table('class_enrollments as ce')
+            ->join('classes as c', 'c.id', '=', 'ce.class_id')
+            ->whereNull('ce.deleted_at')
+            ->where('ce.status', '!=', 'Cancelled')
+            ->select('ce.id', 'ce.student_id', 'ce.class_id', 'ce.enrollment_date', 'ce.created_at', 'c.start_date', 'c.end_date')
+            ->get();
+
+        $enrollmentsByStudent = $allEnrollments->groupBy('student_id');
+
+        // Evaluasi per kelas
+        $classRetentionList = collect();
+        $teacherRetentionMap = [];
+
+        foreach ($endedClasses as $cls) {
+            $teacherId = $cls->teacher_id;
+            $teacherName = $cls->teacher?->name ?? 'Belum ada guru';
+            $clsEndDate = $cls->end_date ? Carbon::parse($cls->end_date)->startOfDay() : null;
+
+            // Siswa di kelas yang berakhir
+            $classStudents = $cls->enrollments->pluck('student')->filter()->unique('id');
+            $totalFinishedStudents = $classStudents->count();
+            $continuedStudentsList = collect();
+
+            foreach ($classStudents as $student) {
+                $studentAllEnr = $enrollmentsByStudent->get($student->id, collect());
+                // Siswa dianggap lanjut jika memiliki enrollment lain dengan enrollment_date / start_date > end_date kelas ini (atau class_id berbeda yang dibuat setelahnya)
+                $isContinued = $studentAllEnr->contains(function ($other) use ($cls, $clsEndDate) {
+                    if ($other->class_id == $cls->id) {
+                        return false;
+                    }
+                    if ($clsEndDate) {
+                        $otherDate = $other->enrollment_date ?: ($other->start_date ?: $other->created_at);
+                        return $otherDate && Carbon::parse($otherDate)->startOfDay()->gte($clsEndDate);
+                    }
+                    return $other->id > $cls->id;
+                });
+
+                if ($isContinued) {
+                    $continuedStudentsList->push($student);
+                }
+            }
+
+            $continuedCount = $continuedStudentsList->count();
+            $ratePercent = $totalFinishedStudents > 0
+                ? round(($continuedCount / $totalFinishedStudents) * 100, 1)
+                : null;
+
+            $classRetentionList->push((object) [
+                'class_id'           => $cls->id,
+                'class_name'         => $cls->class_name,
+                'teacher_name'       => $teacherName,
+                'end_date'           => $cls->end_date,
+                'finished_count'     => $totalFinishedStudents,
+                'continued_count'    => $continuedCount,
+                'rate_percent'       => $ratePercent,
+                'rate_label'         => $ratePercent !== null ? "{$ratePercent}%" : '-',
+                'continued_students' => $continuedStudentsList,
+            ]);
+
+            if ($teacherId) {
+                if (!isset($teacherRetentionMap[$teacherId])) {
+                    $teacherRetentionMap[$teacherId] = [
+                        'teacher_id'         => $teacherId,
+                        'teacher_name'       => $teacherName,
+                        'finished_count'     => 0,
+                        'continued_count'    => 0,
+                        'continued_students' => collect(),
+                    ];
+                }
+                $teacherRetentionMap[$teacherId]['finished_count'] += $totalFinishedStudents;
+                $teacherRetentionMap[$teacherId]['continued_count'] += $continuedCount;
+                foreach ($continuedStudentsList as $st) {
+                    if (!$teacherRetentionMap[$teacherId]['continued_students']->contains('id', $st->id)) {
+                        $teacherRetentionMap[$teacherId]['continued_students']->push($st);
+                    }
+                }
+            }
+        }
+
+        // Hitung ranking guru berdasarkan retention
+        $teacherRetentionRankings = collect($teacherRetentionMap)->map(function ($row) {
+            $finished = $row['finished_count'];
+            $continued = $row['continued_count'];
+            $percent = $finished > 0 ? round(($continued / $finished) * 100, 1) : null;
+
+            return (object) [
+                'teacher_id'         => $row['teacher_id'],
+                'teacher_name'       => $row['teacher_name'],
+                'finished_count'     => $finished,
+                'continued_count'    => $continued,
+                'retention_percent'  => $percent,
+                'retention_label'    => $percent !== null ? "{$percent}%" : '-',
+                'continued_students' => $row['continued_students'],
+            ];
+        })->sort(function ($a, $b) {
+            // Urutkan berdasarkan siswa lanjut terbanyak, lalu persentase
+            if ($a->continued_count === $b->continued_count) {
+                return ($b->retention_percent ?? 0) <=> ($a->retention_percent ?? 0);
+            }
+            return $b->continued_count <=> $a->continued_count;
+        })->values();
+
+        /*
+        |--------------------------------------------------------------------------
         | DATA GURU DENGAN FILTER
         |--------------------------------------------------------------------------
         */
@@ -150,6 +276,8 @@ class MonitoringController extends Controller
             'teachers',
             'allTeachers',
             'activeRankings',
+            'classRetentionList',
+            'teacherRetentionRankings',
             'periode',
             'totalTeacher',
             'totalSession',

@@ -137,10 +137,10 @@
             ['Dashboard', 'fa-house', '/kurikulum/dashboard', 'kurikulum/dashboard*'],
         ]],
         ['label' => 'Akademik', 'items' => [
-            ['Materi & Silabus', 'fa-folder-open', '/kurikulum/materi', 'kurikulum/materi*'],
+            ['Materi', 'fa-folder-open', '/kurikulum/materi', 'kurikulum/materi*'],
             ['SOP', 'fa-file-lines', '/kurikulum/sop', 'kurikulum/sop*'],
             ['Jadwal Konsultasi', 'fa-calendar-days', '/kurikulum/jadwal-konsultasi', 'kurikulum/jadwal-konsultasi*'],
-            ['Tugas Kelas', 'fa-clipboard-list', '/kurikulum/tugas-kelas', 'kurikulum/tugas-kelas*'],
+            ['Tugas Perbaikan Materi', 'fa-clipboard-list', '/kurikulum/tugas-kelas', 'kurikulum/tugas-kelas*'],
             ['Video Pembelajaran', 'fa-circle-play', '/kurikulum/video', 'kurikulum/video*'],
             ['Materi Training', 'fa-graduation-cap', '/kurikulum/training', 'kurikulum/training*'],
             ['Request Belajar', 'fa-book-open-reader', '/kurikulum/request-belajar', 'kurikulum/request-belajar*'],

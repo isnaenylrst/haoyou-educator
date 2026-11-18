@@ -82,7 +82,29 @@
         </div>
     @endif
 
-    {{-- SARAN KONSULTASI MATERI BARU --}}
+    {{-- NAV TABS KONSULTASI: JADWAL KONSULTASI | SLOT AVAILABLE | CATATAN PERTEMUAN --}}
+    <ul class="nav nav-pills mb-4 gap-2" id="consultationFeatureTabs" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active rounded-pill fw-semibold px-4" id="tab-jadwal-konsultasi" data-bs-toggle="pill" data-bs-target="#pane-jadwal-konsultasi" type="button">
+                <i class="fa-solid fa-calendar-check me-1"></i> Kalender & Jadwal Konsultasi
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link rounded-pill fw-semibold px-4" id="tab-slot-available" data-bs-toggle="pill" data-bs-target="#pane-slot-available" type="button">
+                <i class="fa-solid fa-clock me-1"></i> Slot Available Kurikulum
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link rounded-pill fw-semibold px-4" id="tab-catatan-pertemuan" data-bs-toggle="pill" data-bs-target="#pane-catatan-pertemuan" type="button">
+                <i class="fa-solid fa-book-bookmark me-1"></i> Catatan Pertemuan (Blok 4 Sesi)
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content mb-4">
+        {{-- PANE 1: JADWAL KONSULTASI LAMA --}}
+        <div class="tab-pane fade show active" id="pane-jadwal-konsultasi">
+            {{-- SARAN KONSULTASI MATERI BARU --}}
     @if ($suggestions->isNotEmpty())
         <div class="card shadow-sm border-0 mb-4 border-start border-warning border-4">
             <div class="card-header bg-white">
@@ -438,8 +460,248 @@
             </form>
         </div>
     </div>
+</div> {{-- End of #pane-jadwal-konsultasi --}}
 
-</div>
+{{-- PANE 2: SLOT AVAILABLE KURIKULUM (BARU) --}}
+<div class="tab-pane fade" id="pane-slot-available">
+    {{-- TAMPILAN GRID MINGGUAN KONSULTASI (KURIKULUM & OWNER) --}}
+    <div class="mb-4">
+        <h5 class="fw-bold mb-2"><i class="fa-solid fa-calendar-week text-primary me-2"></i>Kalender Grid Slot Konsultasi</h5>
+        <p class="text-muted small">
+            Pantau slot ketersediaan konsultasi Kurikulum dan slot ketersediaan Owner secara visual per hari dan jam.
+            Slot Owner bersifat <strong>read-only</strong> bagi Kurikulum.
+        </p>
+
+        @include('partials.consultation-grid', [
+            'grid'                => $consultationGrid,
+            'userRole'            => 'Curriculum',
+            'canManageCurriculum' => true,
+            'canManageOwner'      => false,
+            'weekRoute'           => 'kurikulum.jadwal-konsultasi',
+            'editSlotRoute'       => 'kurikulum.jadwal-konsultasi.slots.update',
+            'deleteSlotRoute'     => 'kurikulum.jadwal-konsultasi.slots.destroy',
+        ])
+    </div>
+
+    <div class="row">
+        {{-- FORM INPUT SLOT AVAILABLE --}}
+        <div class="col-lg-4 mb-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white fw-bold">
+                    <i class="fa-solid fa-plus-circle text-primary me-1"></i> Tambah Slot Available
+                </div>
+                <div class="card-body">
+                    <form action="{{ route('kurikulum.jadwal-konsultasi.slots.store') }}" method="POST" onsubmit="return lockSubmit(this, 'Menyimpan Slot...')">
+                        @csrf
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Tanggal Konsultasi <span class="text-danger">*</span></label>
+                            <input type="date" name="date" class="form-control" min="{{ today()->toDateString() }}" value="{{ old('date', today()->toDateString()) }}" required>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">Jam Mulai <span class="text-danger">*</span></label>
+                                <input type="time" name="start_time" class="form-control" value="{{ old('start_time', '09:00') }}" required>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">Jam Selesai <span class="text-danger">*</span></label>
+                                <input type="time" name="end_time" class="form-control" value="{{ old('end_time', '10:00') }}" required>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Catatan / Link Ruangan (opsional)</label>
+                            <textarea name="notes" rows="2" class="form-control" placeholder="mis. Ruang Kurikulum / Google Meet...">{{ old('notes') }}</textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100 fw-semibold">
+                            <i class="fa-solid fa-save me-1"></i> Simpan Slot Available
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        {{-- DAFTAR SLOT AVAILABLE & PENGAJUAN GURU --}}
+        <div class="col-lg-8 mb-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <span class="fw-bold"><i class="fa-solid fa-clock text-warning me-1"></i> Daftar Slot Available Kurikulum</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Tanggal & Waktu</th>
+                                <th>Status Slot</th>
+                                <th>Dipesan Oleh</th>
+                                <th>Catatan Booking</th>
+                                <th class="text-end">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse ($curriculumSlots as $slot)
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold">{{ $slot->date->translatedFormat('d M Y') }}</div>
+                                        <small class="text-muted">{{ substr($slot->start_time, 0, 5) }} - {{ substr($slot->end_time, 0, 5) }} WIB</small>
+                                        @if ($slot->notes)
+                                            <div class="small text-secondary">{{ $slot->notes }}</div>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        @if ($slot->is_past)
+                                            <span class="badge bg-light text-muted border">Sudah Lewat</span>
+                                        @elseif ($slot->status === 'Available')
+                                            <span class="badge bg-success">Tersedia</span>
+                                        @elseif ($slot->status === 'Booked')
+                                            <span class="badge bg-primary">Dipesan</span>
+                                        @else
+                                            <span class="badge bg-secondary">Dibatalkan</span>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        @if ($slot->teacher)
+                                            <div class="fw-semibold">{{ $slot->teacher->name }}</div>
+                                            <small class="text-muted">{{ $slot->class->class_name ?? 'Konsultasi Umum' }}</small>
+                                            @if ($slot->teacher_booking_status === 'Pending')
+                                                <div><span class="badge bg-warning text-dark">Menunggu Konfirmasi</span></div>
+                                            @elseif ($slot->teacher_booking_status === 'Confirmed')
+                                                <div><span class="badge bg-success">Terkonfirmasi</span></div>
+                                            @endif
+                                        @else
+                                            <span class="text-muted">-</span>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        <small class="text-dark">{{ $slot->booking_notes ?: '-' }}</small>
+                                    </td>
+                                    <td class="text-end">
+                                        @if ($slot->teacher && $slot->teacher_booking_status === 'Pending' && !$slot->is_past)
+                                            <div class="d-inline-flex gap-1 mb-1">
+                                                <form action="{{ route('kurikulum.jadwal-konsultasi.slots.confirm', $slot) }}" method="POST" onsubmit="return confirm('Konfirmasi pemesanan slot ini?')">
+                                                    @csrf
+                                                    <input type="hidden" name="action" value="confirm">
+                                                    <button class="btn btn-sm btn-success" title="Konfirmasi Booking"><i class="fa-solid fa-check"></i></button>
+                                                </form>
+                                                <form action="{{ route('kurikulum.jadwal-konsultasi.slots.confirm', $slot) }}" method="POST" onsubmit="return confirm('Tolak pengajuan slot ini?')">
+                                                    @csrf
+                                                    <input type="hidden" name="action" value="reject">
+                                                    <button class="btn btn-sm btn-danger" title="Tolak"><i class="fa-solid fa-xmark"></i></button>
+                                                </form>
+                                            </div>
+                                        @endif
+
+                                        @if ($slot->status !== 'Booked')
+                                            <form action="{{ route('kurikulum.jadwal-konsultasi.slots.destroy', $slot) }}" method="POST" class="d-inline" onsubmit="return confirm('Hapus slot ini?')">
+                                                @csrf @method('DELETE')
+                                                <button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                                            </form>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="5" class="text-center py-4 text-muted">Belum ada slot available yang dibuat.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+                @if ($curriculumSlots->hasPages())
+                    <div class="card-footer bg-white">{{ $curriculumSlots->links() }}</div>
+                @endif
+            </div>
+        </div>
+    </div>
+</div> {{-- End of #pane-slot-available --}}
+
+{{-- PANE 3: CATATAN PERTEMUAN (BLOK 4 PERTEMUAN - BARU) --}}
+<div class="tab-pane fade" id="pane-catatan-pertemuan">
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white">
+            <h5 class="fw-bold mb-1"><i class="fa-solid fa-book-bookmark text-primary me-2"></i>Catatan Pertemuan Konsultasi per Kelas (Blok 4 Sesi)</h5>
+            <small class="text-muted">
+                Aturan Konsultasi Materi: Pertemuan dihitung per blok 4 sesi. Batas konsultasi blok = <strong>H-14</strong> hari sebelum sesi pertama blok.
+                Setelah konsultasi dilakukan, batas konsultasi revisi adalah paling lambat <strong>H+3</strong> hari.
+            </small>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 20%;">Kelas & Guru</th>
+                            <th style="width: 15%;">Blok Pertemuan</th>
+                            <th style="width: 15%;">Sesi Pertama Blok</th>
+                            <th style="width: 15%;">Batas Konsultasi (H-14)</th>
+                            <th style="width: 15%;">Status Konsultasi</th>
+                            <th style="width: 20%;">Batas Revisi (H+3) & Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($meetingRecords as $rec)
+                            @php
+                                $cl = $rec['class'];
+                                $t = $rec['teacher'];
+                                $blocks = $rec['blocks'];
+                            @endphp
+                            @foreach ($blocks as $b)
+                                <tr>
+                                    @if ($loop->first)
+                                        <td rowspan="{{ $blocks->count() }}" class="align-top bg-light">
+                                            <div class="fw-bold text-dark">{{ $cl->class_name }}</div>
+                                            <small class="text-muted d-block"><i class="fa-solid fa-chalkboard-user me-1"></i>{{ $t->name ?? 'Belum ada guru' }}</small>
+                                            <small class="text-muted d-block">Mulai: {{ $cl->start_date ? \Carbon\Carbon::parse($cl->start_date)->translatedFormat('d M Y') : '-' }}</small>
+                                        </td>
+                                    @endif
+                                    <td>
+                                        <span class="fw-semibold">{{ $b['block_label'] }}</span>
+                                    </td>
+                                    <td>
+                                        @if ($b['first_session_date'])
+                                            <span class="text-dark">{{ $b['first_session_date']->translatedFormat('d M Y') }}</span>
+                                        @else
+                                            <span class="text-muted">-</span>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        @if ($b['consultation_deadline'])
+                                            <span class="{{ $b['is_overdue'] ? 'text-danger fw-bold' : 'text-dark' }}">
+                                                {{ $b['consultation_deadline']->translatedFormat('d M Y') }}
+                                            </span>
+                                        @else
+                                            <span class="text-muted">-</span>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ $b['consultation_status_badge'] }} px-2 py-1">
+                                            {{ $b['consultation_status'] }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        @if ($b['revision_deadline'])
+                                            <div>Batas: <strong>{{ $b['revision_deadline']->translatedFormat('d M Y') }}</strong></div>
+                                            <span class="badge bg-{{ $b['revision_status_badge'] }} mt-1">
+                                                Revisi: {{ $b['revision_status'] }}
+                                            </span>
+                                        @else
+                                            <span class="text-muted">-</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        @empty
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-muted">Belum ada data kelas aktif untuk catatan pertemuan.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div> {{-- End of #pane-catatan-pertemuan --}}
+</div> {{-- End of .tab-content --}}
+
+</div> {{-- End of .container-fluid --}}
 
 <script>
     const CLASS_INFO = @json($classInfo);

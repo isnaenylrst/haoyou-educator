@@ -60,6 +60,18 @@
             </a>
         </li>
         <li class="nav-item">
+            <a class="nav-link rounded-pill px-4 fw-semibold {{ $activeTab === 'pengajuan' ? 'active bg-dark text-white' : 'bg-white text-dark shadow-sm' }}"
+               href="{{ route('owner.konsultasi.index', ['tab' => 'pengajuan']) }}">
+                <i class="fa-solid fa-inbox me-2"></i> Pengajuan Guru ({{ $ownerBookingRequests->total() }})
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link rounded-pill px-4 fw-semibold {{ $activeTab === 'slot' ? 'active bg-dark text-white' : 'bg-white text-dark shadow-sm' }}"
+               href="{{ route('owner.konsultasi.index', ['tab' => 'slot']) }}">
+                <i class="fa-solid fa-calendar-week me-2"></i> Slot Available & Grid
+            </a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link rounded-pill px-4 fw-semibold {{ $activeTab === 'revisi' ? 'active bg-dark text-white' : 'bg-white text-dark shadow-sm' }}"
                href="{{ route('owner.konsultasi.index', ['tab' => 'revisi']) }}">
                 <i class="fa-solid fa-arrows-rotate me-2"></i> Permintaan Revisi Guru ({{ $revisionConsultations->total() }})
@@ -467,7 +479,187 @@
                 </div>
             </div>
         @endif
-    @endif
+
+    {{-- TAB 4: SLOT AVAILABLE & GRID --}}
+    @elseif ($activeTab === 'slot')
+            <div class="row">
+                {{-- Form Tambah Slot Owner --}}
+                <div class="col-lg-4 mb-4">
+                    <div class="card shadow-sm border-0 rounded-4">
+                        <div class="card-header bg-white fw-bold py-3">
+                            <i class="fa-solid fa-plus-circle text-warning me-2"></i> Tambah Slot Available Owner
+                        </div>
+                        <div class="card-body">
+                            <form action="{{ route('owner.konsultasi.slots.store') }}" method="POST">
+                                @csrf
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Tanggal Konsultasi <span class="text-danger">*</span></label>
+                                    <input type="date" name="date" class="form-control" min="{{ today()->toDateString() }}" value="{{ old('date', today()->toDateString()) }}" required>
+                                </div>
+                                <div class="row g-2 mb-3">
+                                    <div class="col-6">
+                                        <label class="form-label fw-semibold">Jam Mulai <span class="text-danger">*</span></label>
+                                        <input type="time" name="start_time" class="form-control" value="{{ old('start_time', '13:00') }}" required>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label fw-semibold">Jam Selesai <span class="text-danger">*</span></label>
+                                        <input type="time" name="end_time" class="form-control" value="{{ old('end_time', '14:00') }}" required>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Catatan / Keterangan (opsional)</label>
+                                    <textarea name="notes" rows="2" class="form-control" placeholder="mis. Ruang Direksi / Online via Zoom...">{{ old('notes') }}</textarea>
+                                </div>
+                                <button type="submit" class="btn btn-warning w-100 fw-bold shadow-sm">
+                                    <i class="fa-solid fa-save me-1"></i> Simpan Slot Owner
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Komponen Grid Kalender Bersama --}}
+                <div class="col-lg-8 mb-4">
+                    <h5 class="fw-bold mb-2"><i class="fa-solid fa-calendar-week text-warning me-2"></i>Kalender Grid Slot Konsultasi (Owner & Kurikulum)</h5>
+                    <p class="text-muted small">
+                        Owner dapat melihat slot Kurikulum (read-only) dan mengelola slot miliknya sendiri.
+                    </p>
+
+                    @include('partials.consultation-grid', [
+                        'grid'                => $consultationGrid,
+                        'userRole'            => 'Owner',
+                        'canManageCurriculum' => false,
+                        'canManageOwner'      => true,
+                        'weekRoute'           => 'owner.konsultasi.index',
+                        'editSlotRoute'       => 'owner.konsultasi.slots.update',
+                        'deleteSlotRoute'     => 'owner.konsultasi.slots.destroy',
+                    ])
+                </div>
+            </div>
+
+    {{-- TAB 5: PENGAJUAN GURU KE OWNER --}}
+    @elseif ($activeTab === 'pengajuan')
+            <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4">
+                <div class="card-header bg-white py-3 fw-bold">
+                    <i class="fa-solid fa-inbox text-warning me-2"></i> Daftar Pengajuan Konsultasi Guru ke Owner
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Guru</th>
+                                <th>Topik & Catatan</th>
+                                <th>Slot Waktu</th>
+                                <th>Waktu Pengajuan</th>
+                                <th>Status</th>
+                                <th class="text-end">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse ($ownerBookingRequests as $req)
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold">{{ $req->teacher->name ?? 'Guru' }}</div>
+                                        <small class="text-muted">{{ $req->teacher->phone ?? '-' }}</small>
+                                    </td>
+                                    <td>
+                                        <div class="fw-semibold text-dark">{{ $req->topic ?: '-' }}</div>
+                                        @if ($req->booking_notes)
+                                            <small class="text-muted d-block">{{ $req->booking_notes }}</small>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold">{{ $req->date->translatedFormat('d M Y') }}</div>
+                                        <small class="text-muted">{{ substr($req->start_time, 0, 5) }} - {{ substr($req->end_time, 0, 5) }} WIB</small>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ $req->booked_at ? $req->booked_at->translatedFormat('d M Y H:i') : '-' }}</small>
+                                    </td>
+                                    <td>
+                                        @if ($req->teacher_booking_status === 'Pending')
+                                            <span class="badge bg-warning text-dark"><i class="fa-regular fa-clock me-1"></i>Menunggu</span>
+                                        @elseif ($req->teacher_booking_status === 'Confirmed')
+                                            <span class="badge bg-success"><i class="fa-solid fa-check me-1"></i>Dikonfirmasi</span>
+                                        @elseif ($req->teacher_booking_status === 'Rejected')
+                                            <span class="badge bg-danger"><i class="fa-solid fa-xmark me-1"></i>Ditolak</span>
+                                        @else
+                                            <span class="badge bg-secondary">-</span>
+                                        @endif
+                                    </td>
+                                    <td class="text-end">
+                                        @if ($req->teacher_booking_status === 'Pending')
+                                            <button type="button" class="btn btn-sm btn-success rounded-pill fw-semibold me-1"
+                                                    data-bs-toggle="modal" data-bs-target="#modalConfirmOwner{{ $req->id }}">
+                                                <i class="fa-solid fa-check me-1"></i> Konfirmasi
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger rounded-pill fw-semibold"
+                                                    data-bs-toggle="modal" data-bs-target="#modalRejectOwner{{ $req->id }}">
+                                                <i class="fa-solid fa-xmark me-1"></i> Tolak
+                                            </button>
+
+                                            {{-- Modal Konfirmasi --}}
+                                            <div class="modal fade text-start" id="modalConfirmOwner{{ $req->id }}" tabindex="-1" aria-hidden="true">
+                                                <div class="modal-dialog modal-dialog-centered modal-sm">
+                                                    <form action="{{ route('owner.konsultasi.slots.confirm', $req->id) }}" method="POST" class="modal-content rounded-4 border-0">
+                                                        @csrf
+                                                        <input type="hidden" name="action" value="confirm">
+                                                        <div class="modal-header">
+                                                            <h6 class="modal-title fw-bold">Konfirmasi Pengajuan</h6>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <p class="small text-muted mb-2">Terima pengajuan dari <strong>{{ $req->teacher->name ?? 'Guru' }}</strong>?</p>
+                                                            <label class="form-label small fw-semibold">Catatan / Link Ruangan (opsional):</label>
+                                                            <textarea name="notes" rows="2" class="form-control form-control-sm" placeholder="mis. Ruang Owner / Zoom..."></textarea>
+                                                        </div>
+                                                        <div class="modal-footer py-2">
+                                                            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                                                            <button type="submit" class="btn btn-success btn-sm">Ya, Konfirmasi</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+
+                                            {{-- Modal Tolak --}}
+                                            <div class="modal fade text-start" id="modalRejectOwner{{ $req->id }}" tabindex="-1" aria-hidden="true">
+                                                <div class="modal-dialog modal-dialog-centered modal-sm">
+                                                    <form action="{{ route('owner.konsultasi.slots.confirm', $req->id) }}" method="POST" class="modal-content rounded-4 border-0">
+                                                        @csrf
+                                                        <input type="hidden" name="action" value="reject">
+                                                        <div class="modal-header">
+                                                            <h6 class="modal-title fw-bold text-danger">Tolak Pengajuan</h6>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <p class="small text-muted mb-2">Tolak pengajuan dari <strong>{{ $req->teacher->name ?? 'Guru' }}</strong>?</p>
+                                                            <label class="form-label small fw-semibold">Alasan Penolakan (opsional):</label>
+                                                            <textarea name="notes" rows="2" class="form-control form-control-sm" placeholder="mis. Jadwal bertabrakan dengan rapat direksi..."></textarea>
+                                                        </div>
+                                                        <div class="modal-footer py-2">
+                                                            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                                                            <button type="submit" class="btn btn-danger btn-sm">Tolak Pengajuan</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        @else
+                                            <span class="text-muted small">Sudah diproses</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="6" class="text-center py-4 text-muted">Belum ada pengajuan konsultasi guru ke Owner.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+                <div class="p-3 border-top bg-light">
+                    {{ $ownerBookingRequests->links() }}
+                </div>
+            </div>
+        @endif
 
 </div>
 

@@ -31,8 +31,10 @@ class KetersediaanGuruController extends Controller
 
     // ------------------------------------------------------------------ HALAMAN
 
-    public function index()
+    public function index(Request $request)
     {
+        $urgencyFilter = $request->query('urgency', 'all'); // all | urgent | not_urgent
+
         $teachers = Teacher::with('availabilities')
             ->where('status', 'Active')
             ->orderBy('name')
@@ -52,12 +54,33 @@ class KetersediaanGuruController extends Controller
             ->get();
 
         // Sudah dikirim ke guru, menunggu jawaban
-        $waiting = ClassModel::with(['teacher', 'schedules'])
+        $waitingRaw = ClassModel::with(['teacher', 'schedules'])
             ->whereIn('status', ['Open', 'Running'])
             ->whereNotNull('teacher_id')
             ->where('teacher_response', 'Pending')
-            ->orderBy('class_name')
             ->get();
+
+        // Hitung urgensi tiap kelas menunggu jawaban
+        $waiting = $waitingRaw->map(function ($class) {
+            $class->urgency_info = \App\Services\TeacherAvailabilityUrgencyService::evaluateClass($class);
+            return $class;
+        })
+        ->when($urgencyFilter === 'urgent', function ($c) {
+            return $c->filter(fn ($item) => in_array($item->urgency_info['level'], ['urgent', 'past']));
+        })
+        ->when($urgencyFilter === 'not_urgent', function ($c) {
+            return $c->filter(fn ($item) => in_array($item->urgency_info['level'], ['medium', 'neutral']));
+        })
+        // Urutkan yang urgent di atas (level urgent = 1, past = 2, medium = 3, neutral = 4)
+        ->sortBy(function ($item) {
+            return match ($item->urgency_info['level']) {
+                'urgent'  => 1,
+                'past'    => 2,
+                'medium'  => 3,
+                default   => 4,
+            };
+        })
+        ->values();
 
         // Satu kali query untuk semua jadwal yang sudah diterima guru
         $busy = TeacherAvailabilityService::busyIndex($teachers->pluck('id'));

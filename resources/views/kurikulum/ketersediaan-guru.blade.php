@@ -310,14 +310,40 @@
     </div>
 
     {{-- ===== MENUNGGU JAWABAN ===== --}}
-    @if ($waiting->isNotEmpty())
-        <div class="card shadow-sm border-0 mb-4">
-            <div class="card-header bg-white fw-bold">Menunggu Jawaban Guru ({{ $waiting->count() }})</div>
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="fw-bold">
+                Menunggu Jawaban Guru ({{ $waiting->count() }})
+            </div>
+            <div class="btn-group btn-group-sm" role="group">
+                <a href="{{ request()->fullUrlWithQuery(['urgency' => 'all']) }}"
+                   class="btn {{ request('urgency', 'all') === 'all' ? 'btn-primary' : 'btn-outline-secondary' }}">
+                    Semua
+                </a>
+                <a href="{{ request()->fullUrlWithQuery(['urgency' => 'urgent']) }}"
+                   class="btn {{ request('urgency') === 'urgent' ? 'btn-danger text-white' : 'btn-outline-danger' }}">
+                    Urgent
+                </a>
+                <a href="{{ request()->fullUrlWithQuery(['urgency' => 'not_urgent']) }}"
+                   class="btn {{ request('urgency') === 'not_urgent' ? 'btn-secondary text-white' : 'btn-outline-secondary' }}">
+                    Tidak Urgent
+                </a>
+            </div>
+        </div>
+        @if ($waiting->isNotEmpty())
             <div class="list-group list-group-flush">
                 @foreach ($waiting as $class)
+                    @php
+                        $u = $class->urgency_info ?? \App\Services\TeacherAvailabilityUrgencyService::evaluateClass($class);
+                    @endphp
                     <div class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <div>
-                            <span class="fw-semibold">{{ $class->class_name }}</span>
+                            <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                                <span class="fw-semibold">{{ $class->class_name }}</span>
+                                <span class="badge {{ $u['badge_class'] ?? 'bg-secondary' }}">
+                                    <i class="fa-solid fa-clock me-1"></i> {{ $u['label'] ?? 'Tidak Urgent' }}
+                                </span>
+                            </div>
                             <small class="text-muted"> — {{ $class->teacher->name ?? '-' }}</small>
                             <small class="text-muted d-block">
                                 @foreach ($class->schedules as $s)
@@ -337,8 +363,12 @@
                     </div>
                 @endforeach
             </div>
-        </div>
-    @endif
+        @else
+            <div class="card-body text-center py-4 text-muted">
+                Tidak ada kelas yang menunggu jawaban guru{{ request('urgency') && request('urgency') !== 'all' ? ' untuk filter ini' : '' }}.
+            </div>
+        @endif
+    </div>
 
     {{-- TAMBAH KETERSEDIAAN --}}
     <div class="card shadow-sm border-0 mb-4" id="formTambah">

@@ -93,6 +93,39 @@ class ConsultationController extends Controller
         $teachers = Teacher::where('status', 'Active')->orderBy('name')->get();
         $observations = TeacherObservation::with(['teacher', 'class'])->latest('observation_date')->get();
 
+        // 4. Slot Available Owner & Grid Mingguan (Owner melihat slot sendiri & slot Kurikulum)
+        $weekParam = $request->query('week');
+        try {
+            $startOfWeek = $weekParam ? Carbon::parse($weekParam)->startOfWeek(Carbon::MONDAY) : now()->startOfWeek(Carbon::MONDAY);
+        } catch (\Throwable) {
+            $startOfWeek = now()->startOfWeek(Carbon::MONDAY);
+        }
+        $endOfWeek = $startOfWeek->copy()->endOfWeek(Carbon::SUNDAY);
+
+        $weekSlots = \App\Models\CurriculumConsultationSlot::with(['curriculumUser', 'teacher', 'class'])
+            ->whereBetween('date', [$startOfWeek->toDateString(), $endOfWeek->toDateString()])
+            ->where('status', '!=', 'Cancelled')
+            ->orderBy('date')
+            ->orderBy('start_time')
+            ->get();
+
+        $consultationGrid = \App\Services\ConsultationSlotGridService::buildWeeklyGrid(
+            startOfWeek: $startOfWeek,
+            slots: $weekSlots,
+            viewerUserId: Auth::id(),
+            viewerRole: 'Owner'
+        );
+
+        // 5. Daftar Pengajuan Guru khusus ke Owner (status: Pending/Confirmed/Rejected)
+        $ownerBookingRequests = \App\Models\CurriculumConsultationSlot::with(['teacher', 'class'])
+            ->where('owner_role', 'Owner')
+            ->whereNotNull('booked_by_teacher_id')
+            ->when($status, function ($q) use ($status) {
+                $q->where('teacher_booking_status', $status);
+            })
+            ->latest('booked_at')
+            ->paginate(10, ['*'], 'pengajuan_page');
+
         return view('owner.konsultasi', compact(
             'consultations',
             'scheduledConsultations',
@@ -104,7 +137,9 @@ class ConsultationController extends Controller
             'dateFrom',
             'dateTo',
             'status',
-            'q'
+            'q',
+            'consultationGrid',
+            'ownerBookingRequests'
         ));
     }
 
@@ -300,6 +335,180 @@ class ConsultationController extends Controller
         abort_unless($revisionConsultation->attachment_path && Storage::disk('public')->exists($revisionConsultation->attachment_path), 404, 'File lampiran revisi tidak ditemukan.');
 
         return Storage::disk('public')->download($revisionConsultation->attachment_path, $revisionConsultation->attachment_name);
+    }
+
+    // ------------------------------------------------------------------ SLOT AVAILABLE OWNER
+
+    /**
+     * Owner menambah slot available.
+     */
+    public function storeSlot(Request $request)
+    {
+        $data = $request->validate([
+            'date'       => ['required', 'date', 'after_or_equal:today'],
+            'start_time' => ['required', 'date_format:H:i'],
+            'end_time'   => ['required', 'date_format:H:i', 'after:start_time'],
+            'notes'      => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $userId = Auth::id();
+        $startTime = substr($data['start_time'], 0, 5);
+        $endTime   = substr($data['end_time'], 0, 5);
+
+        // Cegah tabrakan slot pada Owner yang sama
+        $overlap = \App\Models\CurriculumConsultationSlot::where('curriculum_user_id', $userId)
+            ->whereDate('date', $data['date'])
+            ->where('status', '!=', 'Cancelled')
+            ->where(function ($q) use ($startTime, $endTime) {
+                $q->where(function ($q1) use ($startTime, $endTime) {
+                    $q1->where('start_time', '<', $endTime)
+                       ->where('end_time', '>', $startTime);
+                });
+            })
+            ->exists();
+
+        if ($overlap) {
+            return back()->withInput()->withErrors([
+                'start_time' => 'Anda sudah memiliki slot konsultasi aktif pada rentang jam tersebut.',
+            ]);
+        }
+
+        \App\Models\CurriculumConsultationSlot::create([
+            'curriculum_user_id' => $userId,
+            'owner_role'         => 'Owner',
+            'date'               => $data['date'],
+            'start_time'         => $data['start_time'],
+            'end_time'           => $data['end_time'],
+            'notes'              => $data['notes'] ?? null,
+            'status'             => 'Available',
+        ]);
+
+        return redirect()->route('owner.konsultasi.index', ['tab' => 'slot'])
+            ->with('success', 'Slot konsultasi Owner berhasil ditambahkan.');
+    }
+
+    /**
+     * Owner mengedit slot miliknya yang belum dipesan.
+     */
+    public function updateSlot(Request $request, \App\Models\CurriculumConsultationSlot $slot)
+    {
+        // Owner tidak boleh mengubah slot Kurikulum atau slot milik user lain
+        if ($slot->effective_role !== 'Owner' || $slot->curriculum_user_id != Auth::id()) {
+            return back()->with('error', 'Anda tidak memiliki hak untuk mengubah slot ini.');
+        }
+
+        if ($slot->status === 'Booked') {
+            return back()->with('error', 'Slot yang sudah dipesan tidak dapat diubah jamnya secara langsung.');
+        }
+
+        $data = $request->validate([
+            'date'       => ['required', 'date', 'after_or_equal:today'],
+            'start_time' => ['required', 'date_format:H:i'],
+            'end_time'   => ['required', 'date_format:H:i', 'after:start_time'],
+            'notes'      => ['nullable', 'string', 'max:500'],
+            'status'     => ['required', 'in:Available,Cancelled'],
+        ]);
+
+        $slot->update($data);
+
+        return redirect()->route('owner.konsultasi.index', ['tab' => 'slot'])
+            ->with('success', 'Slot konsultasi Owner berhasil diperbarui.');
+    }
+
+    /**
+     * Owner menghapus slot miliknya.
+     */
+    public function destroySlot(\App\Models\CurriculumConsultationSlot $slot)
+    {
+        if ($slot->effective_role !== 'Owner' || $slot->curriculum_user_id != Auth::id()) {
+            return back()->with('error', 'Anda tidak memiliki hak untuk menghapus slot ini.');
+        }
+
+        if ($slot->status === 'Booked') {
+            return back()->with('error', 'Slot yang sudah dipesan tidak boleh dihapus. Batalkan konfirmasinya terlebih dahulu.');
+        }
+
+        $slot->delete();
+
+        return redirect()->route('owner.konsultasi.index', ['tab' => 'slot'])
+            ->with('success', 'Slot konsultasi Owner berhasil dihapus.');
+    }
+
+    /**
+     * Owner mengonfirmasi atau menolak pengajuan konsultasi dari Guru.
+     */
+    public function confirmBooking(Request $request, \App\Models\CurriculumConsultationSlot $slot)
+    {
+        $validated = $request->validate([
+            'action' => ['required', 'in:confirm,reject'],
+            'notes'  => ['nullable', 'string', 'max:500'],
+        ]);
+
+        return DB::transaction(function () use ($slot, $validated) {
+            $lockedSlot = \App\Models\CurriculumConsultationSlot::where('id', $slot->id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedSlot->is_past) {
+                return back()->with('error', 'Slot konsultasi ini sudah lewat batas waktunya.');
+            }
+
+            $teacher = $lockedSlot->teacher;
+
+            if ($validated['action'] === 'confirm') {
+                $lockedSlot->update([
+                    'status'                 => 'Booked',
+                    'teacher_booking_status' => 'Confirmed',
+                    'booking_notes'          => $validated['notes'] ? ($lockedSlot->booking_notes . "\nCatatan Owner: " . $validated['notes']) : $lockedSlot->booking_notes,
+                ]);
+
+                // Buat entri jadwal di consultations
+                Consultation::create([
+                    'teacher_id'   => $lockedSlot->booked_by_teacher_id,
+                    'class_id'     => $lockedSlot->class_id,
+                    'type'         => 'Evaluasi',
+                    'scheduled_at' => Carbon::parse($lockedSlot->date->toDateString() . ' ' . $lockedSlot->start_time),
+                    'status'       => 'Terjadwal',
+                    'notes'        => 'Dipesan via Slot Konsultasi Owner. Topik: ' . ($lockedSlot->topic ?? '-') . '. ' . ($validated['notes'] ?? ''),
+                    'created_by'   => Auth::id(),
+                ]);
+
+                // Notifikasi ke Guru
+                if ($teacher?->user) {
+                    $teacher->user->notify(new AppNotification(
+                        title: 'Pengajuan Konsultasi Dikonfirmasi Owner',
+                        message: "Pengajuan konsultasi Anda untuk tanggal {$lockedSlot->date->translatedFormat('d M Y')} jam " . substr($lockedSlot->start_time, 0, 5) . " telah dikonfirmasi oleh Owner.",
+                        url: url('/guru/jadwal-konsultasi'),
+                        type: 'konsultasi',
+                        icon: 'fa-calendar-check'
+                    ));
+                }
+
+                $msg = 'Pengajuan konsultasi guru berhasil dikonfirmasi.';
+            } else {
+                $prevTeacherId = $lockedSlot->booked_by_teacher_id;
+                $lockedSlot->update([
+                    'status'                 => 'Available',
+                    'teacher_booking_status' => 'Rejected',
+                    'booked_by_teacher_id'   => null,
+                    'class_id'               => null,
+                    'booking_notes'          => $validated['notes'] ? "Ditolak: " . $validated['notes'] : null,
+                ]);
+
+                // Notifikasi penolakan ke guru
+                if ($teacher?->user) {
+                    $teacher->user->notify(new AppNotification(
+                        title: 'Pengajuan Konsultasi Ditolak Owner',
+                        message: "Pengajuan konsultasi Anda untuk tanggal {$lockedSlot->date->translatedFormat('d M Y')} ditolak oleh Owner. Catatan: " . ($validated['notes'] ?? '-'),
+                        url: url('/guru/jadwal-konsultasi'),
+                        type: 'konsultasi',
+                        icon: 'fa-circle-xmark'
+                    ));
+                }
+
+                $msg = 'Pengajuan booking slot ditolak. Slot kini kembali tersedia.';
+            }
+
+            return redirect()->route('owner.konsultasi.index', ['tab' => 'pengajuan'])->with('success', $msg);
+        });
     }
 }
 

@@ -47,8 +47,29 @@ class StoreMaterialRequest extends FormRequest
             'box_code'       => ['nullable', 'string', 'max:50'],
             'equipment_list' => ['nullable', 'string'],
             'material_file'  => ['required', 'file', "mimes:{$mimes}", 'max:10240'],
+            'cco_file'       => ['nullable', 'file', 'mimes:doc,docx,ppt,pptx,pdf,xls,xlsx', 'max:20480'],
+            'lesson_plan_file' => ['nullable', 'file', 'mimes:doc,docx,ppt,pptx,pdf,xls,xlsx', 'max:20480'],
+            'module_file'    => ['nullable', 'file', 'mimes:doc,docx,ppt,pptx,pdf,xls,xlsx', 'max:20480'],
             'vocabularies'   => ['nullable', 'string', 'max:100000'],
         ];
+    }
+
+    public function withValidator($validator)
+    {
+        $validator->after(function ($validator) {
+            // Jika audience Guru baru, CCO / Lesson Plan / Modul tidak boleh berupa teks baru jika file tidak diunggah
+            if ($this->input('audience') === 'Guru') {
+                if ($this->filled('cco') && !$this->hasFile('cco_file')) {
+                    $validator->errors()->add('cco_file', 'Field CCO harus berupa upload file (doc, docx, ppt, pptx, pdf, xls, xlsx). Input teks tidak diizinkan lagi.');
+                }
+                if ($this->filled('lesson_plan') && !$this->hasFile('lesson_plan_file')) {
+                    $validator->errors()->add('lesson_plan_file', 'Field Lesson Plan harus berupa upload file (doc, docx, ppt, pptx, pdf, xls, xlsx). Input teks tidak diizinkan lagi.');
+                }
+                if ($this->filled('syllabus') && !$this->hasFile('module_file')) {
+                    $validator->errors()->add('module_file', 'Field Modul harus berupa upload file (doc, docx, ppt, pptx, pdf, xls, xlsx). Input teks tidak diizinkan lagi.');
+                }
+            }
+        });
     }
 
     public function messages(): array
