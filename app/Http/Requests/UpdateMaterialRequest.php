@@ -50,8 +50,31 @@ class UpdateMaterialRequest extends FormRequest
             'box_code'       => ['nullable', 'string', 'max:50'],
             'equipment_list' => ['nullable', 'string'],
             'material_file'  => ['nullable', 'file', "mimes:{$mimes}", 'max:10240'],
+            'cco_file'       => ['nullable', 'file', 'mimes:doc,docx,ppt,pptx,pdf,xls,xlsx', 'max:20480'],
+            'lesson_plan_file' => ['nullable', 'file', 'mimes:doc,docx,ppt,pptx,pdf,xls,xlsx', 'max:20480'],
+            'module_file'    => ['nullable', 'file', 'mimes:doc,docx,ppt,pptx,pdf,xls,xlsx', 'max:20480'],
             'vocabularies'   => ['nullable', 'string', 'max:100000'],
         ];
+    }
+
+    public function withValidator($validator)
+    {
+        $validator->after(function ($validator) {
+            $material = $this->route('material');
+            $audience = $material?->audience ?? $this->input('audience');
+
+            if ($audience === 'Guru') {
+                if ($this->filled('cco') && $this->input('cco') !== $material?->cco && !$this->hasFile('cco_file')) {
+                    $validator->errors()->add('cco_file', 'Field CCO harus berupa upload file (doc, docx, ppt, pptx, pdf, xls, xlsx). Input teks baru tidak diizinkan.');
+                }
+                if ($this->filled('lesson_plan') && $this->input('lesson_plan') !== $material?->lesson_plan && !$this->hasFile('lesson_plan_file')) {
+                    $validator->errors()->add('lesson_plan_file', 'Field Lesson Plan harus berupa upload file (doc, docx, ppt, pptx, pdf, xls, xlsx). Input teks baru tidak diizinkan.');
+                }
+                if ($this->filled('syllabus') && $this->input('syllabus') !== $material?->syllabus && !$this->hasFile('module_file')) {
+                    $validator->errors()->add('module_file', 'Field Modul harus berupa upload file (doc, docx, ppt, pptx, pdf, xls, xlsx). Input teks baru tidak diizinkan.');
+                }
+            }
+        });
     }
 
     public function messages(): array

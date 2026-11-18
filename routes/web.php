@@ -412,6 +412,9 @@ Route::middleware(['auth', 'role:Curriculum'])
         Route::get('/materi/{material}/download', [MaterialController::class, 'download'])
             ->name('materi.download');
 
+        Route::get('/materi/{material}/download/{type}', [MaterialController::class, 'downloadAttachment'])
+            ->name('materi.download-attachment');
+
         Route::get('/materi/{material}/preview', [MaterialController::class, 'preview'])
             ->name('materi.preview');
 
@@ -445,6 +448,16 @@ Route::middleware(['auth', 'role:Curriculum'])
 
         Route::delete('/jadwal-konsultasi/{consultation}', [JadwalKonsultasiController::class, 'destroy'])
             ->name('jadwal-konsultasi.destroy');
+
+        // Slot Available Konsultasi Kurikulum
+        Route::post('/jadwal-konsultasi/slots', [JadwalKonsultasiController::class, 'storeSlot'])
+            ->name('jadwal-konsultasi.slots.store');
+        Route::put('/jadwal-konsultasi/slots/{slot}', [JadwalKonsultasiController::class, 'updateSlot'])
+            ->name('jadwal-konsultasi.slots.update');
+        Route::delete('/jadwal-konsultasi/slots/{slot}', [JadwalKonsultasiController::class, 'destroySlot'])
+            ->name('jadwal-konsultasi.slots.destroy');
+        Route::post('/jadwal-konsultasi/slots/{slot}/confirm', [JadwalKonsultasiController::class, 'confirmBooking'])
+            ->name('jadwal-konsultasi.slots.confirm');
 
         /*
         | REVIEW PENGAJUAN
@@ -793,6 +806,12 @@ Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
         Route::get('/hasil-konsultasi/{id}/download', [GuruConsultationResultController::class, 'download'])->name('hasil-konsultasi.download');
         Route::get('/hasil-konsultasi/revisi/{id}/download', [GuruConsultationResultController::class, 'downloadRevisionAttachment'])->name('hasil-konsultasi.revisi.download');
         Route::get('/hasil-konsultasi/revisi/message/{message}/download', [GuruConsultationResultController::class, 'downloadMessageAttachment'])->name('hasil-konsultasi.revisi.message-download');
+
+        // Jadwal Konsultasi Guru (Slot Available Kurikulum & Owner, Booking, Reschedule Ganti Hari/Jam)
+        Route::get('/jadwal-konsultasi', [\App\Http\Controllers\Guru\ConsultationScheduleController::class, 'index'])->name('jadwal-konsultasi.index');
+        Route::post('/jadwal-konsultasi/book', [\App\Http\Controllers\Guru\ConsultationScheduleController::class, 'book'])->name('jadwal-konsultasi.book');
+        Route::post('/jadwal-konsultasi/{slot}/reschedule', [\App\Http\Controllers\Guru\ConsultationScheduleController::class, 'reschedule'])->name('jadwal-konsultasi.reschedule');
+        Route::post('/jadwal-konsultasi/{slot}/cancel', [\App\Http\Controllers\Guru\ConsultationScheduleController::class, 'cancel'])->name('jadwal-konsultasi.cancel');
     });
 
 /*
@@ -825,7 +844,7 @@ Route::middleware(['auth', 'role:Owner'])
         Route::get('/video-panduan', [VocabGuideVideoController::class, 'edit'])->name('video-panduan');
         Route::post('/video-panduan', [VocabGuideVideoController::class, 'save'])->name('video-panduan.save');
 
-        // Konsultasi Owner (Hasil, Jadwal, dan Revisi)
+        // Konsultasi Owner (Hasil, Jadwal, Revisi, Slot Available & Konfirmasi Pengajuan)
         Route::get('/konsultasi', [OwnerConsultationController::class, 'index'])
             ->name('konsultasi.index');
         Route::post('/konsultasi', [OwnerConsultationController::class, 'store'])
@@ -842,6 +861,14 @@ Route::middleware(['auth', 'role:Owner'])
             ->name('konsultasi.revisi.complete');
         Route::get('/konsultasi/revisi/{revisionConsultation}/download', [OwnerConsultationController::class, 'downloadRevision'])
             ->name('konsultasi.revisi.download');
+        Route::post('/konsultasi/slots', [OwnerConsultationController::class, 'storeSlot'])
+            ->name('konsultasi.slots.store');
+        Route::put('/konsultasi/slots/{slot}', [OwnerConsultationController::class, 'updateSlot'])
+            ->name('konsultasi.slots.update');
+        Route::delete('/konsultasi/slots/{slot}', [OwnerConsultationController::class, 'destroySlot'])
+            ->name('konsultasi.slots.destroy');
+        Route::post('/konsultasi/slots/{slot}/confirm', [OwnerConsultationController::class, 'confirmBooking'])
+            ->name('konsultasi.slots.confirm');
 
         // Antrean TTD Owner (Progress Report, Sertifikat & Pengajuan)
         Route::get('/ttd', [OwnerSignatureQueueController::class, 'index'])

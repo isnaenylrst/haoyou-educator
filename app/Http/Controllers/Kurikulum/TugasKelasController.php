@@ -67,7 +67,7 @@ class TugasKelasController extends Controller
         $status = $request->query('status');
         $q      = trim((string) $request->query('q', ''));
 
-        $tasks = ClassTask::with(['class.teacher', 'teacher', 'creator'])
+        $tasks = ClassTask::with(['class.teacher', 'teacher', 'creator', 'material'])
             ->when($status === 'Open', fn ($x) => $x->open())
             ->when($status === 'Overdue', fn ($x) => $x->overdue())
             ->when($status === 'Done', fn ($x) => $x->where('status', 'Done'))
@@ -75,7 +75,8 @@ class TugasKelasController extends Controller
                 $x->where(function ($w) use ($q) {
                     $w->where('title', 'like', "%{$q}%")
                         ->orWhereHas('class', fn ($c) => $c->where('class_name', 'like', "%{$q}%"))
-                        ->orWhereHas('teacher', fn ($t) => $t->where('name', 'like', "%{$q}%"));
+                        ->orWhereHas('teacher', fn ($t) => $t->where('name', 'like', "%{$q}%"))
+                        ->orWhereHas('material', fn ($m) => $m->where('title', 'like', "%{$q}%"));
                 });
             })
             ->orderByRaw(DB::getDriverName() === 'mysql' ? "FIELD(status,'Open','Done')" : "CASE status WHEN 'Open' THEN 1 WHEN 'Done' THEN 2 ELSE 3 END")
@@ -92,6 +93,9 @@ class TugasKelasController extends Controller
             ->orderBy('class_name')
             ->get();
 
+        $teachers = \App\Models\Teacher::where('status', 'Active')->orderBy('name')->get(['id', 'name']);
+        $materials = \App\Models\Material::orderBy('title')->get(['id', 'title', 'meeting_number']);
+
         $counts = [
             'all'     => ClassTask::count(),
             'Open'    => ClassTask::open()->count(),
@@ -99,13 +103,86 @@ class TugasKelasController extends Controller
             'Done'    => ClassTask::where('status', 'Done')->count(),
         ];
 
-        return view('kurikulum.tugas-kelas', compact('tasks', 'classes', 'counts', 'status', 'q'));
+        return view('kurikulum.tugas-kelas', compact('tasks', 'classes', 'teachers', 'materials', 'counts', 'status', 'q'));
     }
 
     // ------------------------------------------------------------------ BUAT
 
     public function store(Request $request)
     {
+        $taskType = $request->input('task_type', 'class_task');
+
+        if ($taskType === 'material_revision') {
+            $data = $request->validate([
+                'task_type'    => ['required', 'in:material_revision'],
+                'teacher_ids'  => ['required', 'array', 'min:1'],
+                'teacher_ids.*'=> ['required', 'integer', 'exists:teachers,id'],
+                'material_id'  => ['nullable', 'integer', 'exists:materials,id'],
+                'title'        => ['required', 'string', 'max:255'],
+                'description'  => ['required', 'string', 'max:2000'],
+                'due_date'     => ['nullable', 'date', 'after_or_equal:today'],
+                'priority'     => ['required', 'in:Low,Medium,High'],
+                'attachment'   => ['nullable', 'file', 'max:10240', 'mimes:pdf,doc,docx,jpg,jpeg,png'],
+            ], [
+                'teacher_ids.required' => 'Pilih minimal satu guru tujuan.',
+                'teacher_ids.min'      => 'Pilih minimal satu guru tujuan.',
+                'title.required'       => 'Judul tugas wajib diisi.',
+                'description.required' => 'Instruksi perbaikan materi wajib diisi.',
+            ]);
+
+            [$attachPath, $attachName] = $this->storeAttachment($request);
+
+            try {
+                DB::transaction(function () use ($data, $attachPath, $attachName) {
+                    foreach ($data['teacher_ids'] as $teacherId) {
+                        // Cari kelas aktif/terdaftar yang diampu guru ini sebagai fallback bila class_id required di level schema
+                        $assignedClass = ClassModel::where('teacher_id', $teacherId)
+                            ->whereIn('status', ['Open', 'Running'])
+                            ->first() ?? ClassModel::where('teacher_id', $teacherId)->first() ?? ClassModel::first();
+
+                        $task = ClassTask::create([
+                            'class_id'        => $assignedClass?->id,
+                            'teacher_id'      => $teacherId,
+                            'task_type'       => 'material_revision',
+                            'material_id'     => $data['material_id'] ?? null,
+                            'title'           => trim($data['title']),
+                            'description'     => $data['description'],
+                            'due_date'        => $data['due_date'] ?? null,
+                            'priority'        => $data['priority'],
+                            'status'          => 'Open',
+                            'created_by'      => Auth::id(),
+                            'attachment_path' => $attachPath,
+                            'attachment_name' => $attachName,
+                        ]);
+
+                        // Kirim notifikasi ke guru
+                        $teacher = \App\Models\Teacher::with('user')->find($teacherId);
+                        if ($teacher?->user) {
+                            $dueTxt = $task->due_date ? ' (Tenggat: ' . $task->due_date->translatedFormat('d M Y') . ')' : '';
+                            $teacher->user->notify(new \App\Notifications\AppNotification(
+                                title: 'Tugas Perbaikan Materi: ' . $task->title,
+                                message: 'Kurikulum memberikan tugas perbaikan materi: ' . \Illuminate\Support\Str::limit($task->description, 100) . $dueTxt,
+                                url: url('/guru/tugas-kelas'),
+                                type: 'tugas_materi',
+                                icon: 'fa-clipboard-check',
+                                actionLabel: 'Lihat Tugas'
+                            ));
+                        }
+                    }
+                });
+            } catch (\Throwable $e) {
+                $this->deleteAttachment($attachPath);
+                report($e);
+
+                return back()->withInput()->with('error', 'Gagal mengirim tugas perbaikan materi: ' . $e->getMessage());
+            }
+
+            return redirect()
+                ->route('kurikulum.tugas-kelas')
+                ->with('success', 'Tugas perbaikan materi berhasil ditugaskan ke guru terkait.');
+        }
+
+        // --- Alur tugas kelas lama ---
         $data = $request->validate([
             'class_id'    => ['required', 'integer', 'exists:classes,id'],
             'title'       => ['required', 'string', 'max:255'],
@@ -137,17 +214,31 @@ class TugasKelasController extends Controller
         [$attachPath, $attachName] = $this->storeAttachment($request);
 
         try {
-            ClassTask::create([
+            $task = ClassTask::create([
                 'class_id'        => $class->id,
                 'teacher_id'      => $class->teacher_id,
+                'task_type'       => 'class_task',
                 'title'           => trim($data['title']),
                 'description'     => $data['description'] ?? null,
                 'due_date'        => $data['due_date'] ?? null,
                 'status'          => 'Open',
+                'priority'        => 'Medium',
                 'created_by'      => Auth::id(),
                 'attachment_path' => $attachPath,
                 'attachment_name' => $attachName,
             ]);
+
+            if ($class->teacher?->user) {
+                $dueTxt = $task->due_date ? ' (Tenggat: ' . $task->due_date->translatedFormat('d M Y') . ')' : '';
+                $class->teacher->user->notify(new \App\Notifications\AppNotification(
+                    title: 'Tugas Kelas: ' . $task->title,
+                    message: 'Kurikulum menugaskan perbaikan untuk kelas ' . $class->class_name . $dueTxt,
+                    url: url('/guru/tugas-kelas'),
+                    type: 'tugas_kelas',
+                    icon: 'fa-clipboard-list',
+                    actionLabel: 'Lihat Tugas'
+                ));
+            }
         } catch (\Throwable $e) {
             // Hapus file yang baru diupload jika create gagal
             $this->deleteAttachment($attachPath);

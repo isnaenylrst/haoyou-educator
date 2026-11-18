@@ -168,6 +168,134 @@
         </div>
     </div>
 
+    {{-- ===== RETENTION RATE & RANKING RETENSI GURU (KURIKULUM 5) ===== --}}
+    <div class="row g-4 mb-4">
+        {{-- Ranking Retensi Guru --}}
+        <div class="col-lg-6">
+            <div class="card shadow-sm border-0 rounded-4 h-100">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="fw-bold mb-0 text-dark">
+                        <i class="fa-solid fa-user-check text-primary me-2"></i> Ranking Guru Berdasarkan Siswa Lanjut
+                    </h5>
+                    <small class="text-muted">
+                        Dihitung dari siswa yang mendaftar ke kelas/paket baru setelah kelasnya berakhir.
+                    </small>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 60px;" class="text-center">Rank</th>
+                                <th>Guru</th>
+                                <th class="text-center">Selesai</th>
+                                <th class="text-center">Lanjut</th>
+                                <th class="text-center">Retention Rate</th>
+                                <th>Siswa Lanjut</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($teacherRetentionRankings as $index => $tr)
+                                <tr>
+                                    <td class="text-center fw-bold">#{{ $index + 1 }}</td>
+                                    <td>
+                                        <div class="fw-bold text-dark">{{ $tr->teacher_name }}</div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-light text-dark border">{{ $tr->finished_count }}</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-success-subtle text-success border border-success fw-bold">
+                                            {{ $tr->continued_count }}
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="fw-bold {{ $tr->retention_percent !== null ? 'text-primary' : 'text-muted' }}">
+                                            {{ $tr->retention_label }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        @if($tr->continued_students->isNotEmpty())
+                                            <div class="d-flex flex-wrap gap-1">
+                                                @foreach($tr->continued_students as $st)
+                                                    <span class="badge bg-primary-subtle text-primary border" style="font-size: 11px;">
+                                                        {{ $st->name }}
+                                                    </span>
+                                                @endforeach
+                                            </div>
+                                        @else
+                                            <span class="text-muted small">-</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="6" class="text-center py-4 text-muted">Belum ada kelas yang berakhir untuk dievaluasi retensinya pada periode ini.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {{-- Retensi per Kelas Selesai --}}
+        <div class="col-lg-6">
+            <div class="card shadow-sm border-0 rounded-4 h-100">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="fw-bold mb-0 text-dark">
+                        <i class="fa-solid fa-graduation-cap text-success me-2"></i> Retensi per Kelas Selesai
+                    </h5>
+                    <small class="text-muted">
+                        Kelas berstatus selesai atau tanggal berakhir (end date) telah terlewat.
+                    </small>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Kelas</th>
+                                <th>Guru</th>
+                                <th class="text-center">Selesai</th>
+                                <th class="text-center">Lanjut</th>
+                                <th class="text-center">Persentase</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($classRetentionList as $cr)
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold text-dark">{{ $cr->class_name }}</div>
+                                        <small class="text-muted">Berakhir: {{ $cr->end_date ? \Carbon\Carbon::parse($cr->end_date)->translatedFormat('d M Y') : '-' }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="small">{{ $cr->teacher_name }}</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-light text-dark border">{{ $cr->finished_count }}</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-success-subtle text-success border border-success fw-bold">
+                                            {{ $cr->continued_count }}
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="fw-bold {{ $cr->rate_percent !== null ? 'text-primary' : 'text-muted' }}">
+                                            {{ $cr->rate_label }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="5" class="text-center py-4 text-muted">Belum ada kelas selesai untuk periode ini.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {{-- ===== JADWAL MENGAJAR MINGGUAN ===== --}}
     @php
         $dayNames = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];

@@ -172,6 +172,7 @@
             ['Pengajuan Reimburse & Bahan', 'fa-receipt', '/guru/pengajuan', 'guru/pengajuan*'],
             ['Cuti / Ganti Kelas', 'fa-plane-departure', '/guru/cuti', 'guru/cuti*'],
             ['Observasi Mengajar', 'fa-magnifying-glass-chart', '/guru/observasi', 'guru/observasi*'],
+            ['Jadwal Konsultasi',  'fa-calendar-check', '/guru/jadwal-konsultasi', 'guru/jadwal-konsultasi*'],
             ['Hasil Konsultasi',   'fa-comments', '/guru/hasil-konsultasi', 'guru/hasil-konsultasi*'],
         ]],
         ['label' => 'Komunikasi', 'items' => [

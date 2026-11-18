@@ -1,6 +1,6 @@
 @extends('layouts.kurikulum')
 
-@section('title', 'Materi & Silabus')
+@section('title', 'Materi')
 
 @section('content')
 
@@ -45,7 +45,7 @@
 
     {{-- HEADER --}}
     <div class="mb-4">
-        <h3 class="fw-bold mb-1">Materi & Silabus</h3>
+        <h3 class="fw-bold mb-1">Materi</h3>
         <small class="text-muted">
             Upload materi untuk <strong>Guru</strong>, <strong>Siswa</strong>, atau <strong>Belajar Mandiri</strong> (Belajar Vocab &amp; Belajar Grammar).
             Setiap tujuan punya file sendiri dan hanya tampil ke pihak yang dituju.
@@ -142,7 +142,7 @@
                 <div class="col-md-4">
                     <label class="form-label fw-semibold mb-1">Cari</label>
                     <input type="text" name="q" value="{{ request('q') }}" maxlength="100" class="form-control"
-                           placeholder="Judul, silabus, deskripsi, kode box, atau nomor pertemuan">
+                           placeholder="Judul, modul, deskripsi, kode box, atau nomor pertemuan">
                 </div>
 
                 <div class="col-md-2 d-flex gap-2">
@@ -200,19 +200,73 @@
                                 <div class="text-muted mb-3"><strong>Tanggal Upload :</strong> {{ $material->created_at?->format('d M Y H:i') }}</div>
 
                                 @if ($material->audience === 'Guru')
-                                    @foreach (['syllabus' => 'Silabus', 'cco' => 'CCO', 'lesson_plan' => 'Lesson Plan', 'activity' => 'Aktivitas'] as $field => $label)
-                                        @if ($material->{$field})
-                                            <div class="mb-3">
-                                                <strong>{{ $label }}</strong>
-                                                <div class="border rounded p-3 bg-light mt-2">{!! nl2br(e($material->{$field})) !!}</div>
+                                    {{-- Modul File / Lama --}}
+                                    <div class="mb-3">
+                                        <strong>Modul</strong>
+                                        @if ($material->module_file_path)
+                                            <div class="mt-2">
+                                                <a href="{{ route('kurikulum.materi.download-attachment', ['material' => $material, 'type' => 'module']) }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fa-solid fa-download me-1"></i> Unduh Modul ({{ $material->module_file_name ?: 'File' }})
+                                                </a>
                                             </div>
                                         @endif
-                                    @endforeach
+                                        @if ($material->syllabus)
+                                            <div class="border rounded p-3 bg-light mt-2 small text-muted">
+                                                <strong class="d-block text-dark mb-1"><i class="fa-solid fa-clock-rotate-left me-1"></i> Isi lama (teks):</strong>
+                                                {!! nl2br(e($material->syllabus)) !!}
+                                            </div>
+                                        @endif
+                                        @if (!$material->module_file_path && !$material->syllabus)
+                                            <div class="text-muted small mt-1">-</div>
+                                        @endif
+                                    </div>
+
+                                    {{-- CCO File / Lama --}}
+                                    <div class="mb-3">
+                                        <strong>CCO</strong>
+                                        @if ($material->cco_file_path)
+                                            <div class="mt-2">
+                                                <a href="{{ route('kurikulum.materi.download-attachment', ['material' => $material, 'type' => 'cco']) }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fa-solid fa-download me-1"></i> Unduh CCO ({{ $material->cco_file_name ?: 'File' }})
+                                                </a>
+                                            </div>
+                                        @endif
+                                        @if ($material->cco)
+                                            <div class="border rounded p-3 bg-light mt-2 small text-muted">
+                                                <strong class="d-block text-dark mb-1"><i class="fa-solid fa-clock-rotate-left me-1"></i> Isi lama (teks):</strong>
+                                                {!! nl2br(e($material->cco)) !!}
+                                            </div>
+                                        @endif
+                                        @if (!$material->cco_file_path && !$material->cco)
+                                            <div class="text-muted small mt-1">-</div>
+                                        @endif
+                                    </div>
+
+                                    {{-- Lesson Plan File / Lama --}}
+                                    <div class="mb-3">
+                                        <strong>Lesson Plan</strong>
+                                        @if ($material->lesson_plan_file_path)
+                                            <div class="mt-2">
+                                                <a href="{{ route('kurikulum.materi.download-attachment', ['material' => $material, 'type' => 'lesson_plan']) }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fa-solid fa-download me-1"></i> Unduh Lesson Plan ({{ $material->lesson_plan_file_name ?: 'File' }})
+                                                </a>
+                                            </div>
+                                        @endif
+                                        @if ($material->lesson_plan)
+                                            <div class="border rounded p-3 bg-light mt-2 small text-muted">
+                                                <strong class="d-block text-dark mb-1"><i class="fa-solid fa-clock-rotate-left me-1"></i> Isi lama (teks):</strong>
+                                                {!! nl2br(e($material->lesson_plan)) !!}
+                                            </div>
+                                        @endif
+                                        @if (!$material->lesson_plan_file_path && !$material->lesson_plan)
+                                            <div class="text-muted small mt-1">-</div>
+                                        @endif
+                                    </div>
 
                                     @if ($material->box_code || $material->equipment_list)
                                         <div class="mb-3">
                                             <strong>
-                                                Box Perlengkapan
+                                                Perlengkapan Aktivitas
                                                 @if ($material->box_code)
                                                     <span class="badge bg-dark ms-1">{{ $material->box_code }}</span>
                                                 @endif

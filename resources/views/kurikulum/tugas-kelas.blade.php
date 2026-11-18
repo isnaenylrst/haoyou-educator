@@ -1,6 +1,6 @@
 @extends('layouts.kurikulum')
 
-@section('title', 'Tugas Kelas')
+@section('title', 'Tugas Perbaikan Materi')
 
 @section('content')
 
@@ -20,9 +20,9 @@
 <div class="container-fluid">
 
     <div class="mb-4">
-        <h3 class="fw-bold mb-1">Tugas Perbaikan Kelas</h3>
+        <h3 class="fw-bold mb-1">Tugas Perbaikan Materi</h3>
         <small class="text-muted">
-            Buat tugas untuk kelas yang perlu diperbaiki. Tugas langsung masuk ke notifikasi guru pengampu.
+            Tugaskan perbaikan materi / modul mengajar kepada satu atau beberapa guru pengampu, serta kelola tugas perbaikan kelas.
         </small>
     </div>
 
@@ -51,74 +51,200 @@
         </div>
     @endif
 
-    {{-- FORM BUAT TUGAS --}}
-    <div class="card shadow-sm border-0 mb-4">
-        <div class="card-header bg-white fw-bold">Buat Tugas Baru</div>
-        <div class="card-body">
-            <form action="{{ route('kurikulum.tugas-kelas.store') }}" method="POST"
-                  enctype="multipart/form-data"
-                  onsubmit="return lockSubmit(this, 'Mengirim...')">
-                @csrf
+    {{-- NAV TABS TIPE FORM --}}
+    <ul class="nav nav-pills mb-3 gap-2" id="taskFormTabs" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active rounded-pill fw-semibold" id="tab-material-task" data-bs-toggle="pill" data-bs-target="#pane-material-task" type="button">
+                <i class="fa-solid fa-file-pen me-1"></i> Tugas Perbaikan Materi Guru
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link rounded-pill fw-semibold" id="tab-class-task" data-bs-toggle="pill" data-bs-target="#pane-class-task" type="button">
+                <i class="fa-solid fa-chalkboard-user me-1"></i> Tugas Perbaikan Kelas
+            </button>
+        </li>
+    </ul>
 
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label fw-semibold">Kelas</label>
-                        <select name="class_id" class="form-select {{ $addErr('class_id') ? 'is-invalid' : '' }}" required>
-                            <option value="">— pilih kelas —</option>
-                            @foreach ($classes as $c)
-                                <option value="{{ $c->id }}" @selected($editId === '' && old('class_id') == $c->id)>
-                                    {{ $c->class_name }} — {{ $c->teacher->name ?? '-' }}
-                                </option>
-                            @endforeach
-                        </select>
-                        <small class="text-muted">Tugas dikirim ke guru pengampu kelas yang dipilih.</small>
-                        @if ($addErr('class_id'))
-                            <div class="invalid-feedback d-block">{{ $addErr('class_id') }}</div>
-                        @endif
-                    </div>
-
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label fw-semibold">Batas Waktu (opsional)</label>
-                        <input type="date" name="due_date"
-                               class="form-control {{ $addErr('due_date') ? 'is-invalid' : '' }}"
-                               min="{{ today()->toDateString() }}"
-                               value="{{ $editId === '' ? old('due_date') : '' }}">
-                        @if ($addErr('due_date'))
-                            <div class="invalid-feedback">{{ $addErr('due_date') }}</div>
-                        @endif
-                    </div>
+    <div class="tab-content mb-4">
+        {{-- FORM 1: TUGAS PERBAIKAN MATERI (BARU) --}}
+        <div class="tab-pane fade show active" id="pane-material-task">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white fw-bold">
+                    <i class="fa-solid fa-plus-circle text-primary me-1"></i> Buat Tugas Perbaikan Materi Baru
                 </div>
+                <div class="card-body">
+                    <form action="{{ route('kurikulum.tugas-kelas.store') }}" method="POST" enctype="multipart/form-data" onsubmit="return lockSubmit(this, 'Mengirim Tugas...')">
+                        @csrf
+                        <input type="hidden" name="task_type" value="material_revision">
 
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Judul Tugas</label>
-                    <input type="text" name="title" maxlength="255"
-                           class="form-control {{ $addErr('title') ? 'is-invalid' : '' }}"
-                           placeholder="mis. Perbaiki PPT pertemuan 5"
-                           value="{{ $editId === '' ? old('title') : '' }}" required>
-                    @if ($addErr('title'))
-                        <div class="invalid-feedback">{{ $addErr('title') }}</div>
-                    @endif
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-label fw-semibold mb-0">Guru Tujuan <span class="text-danger">*</span></label>
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" id="btnSelectAllTeachers" style="font-size: 11px;">
+                                            <i class="fa-solid fa-check-double me-1"></i> Pilih Semua
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" id="btnClearTeachers" style="font-size: 11px;">
+                                            <i class="fa-solid fa-xmark me-1"></i> Hapus Pilihan
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {{-- Input Pencarian Guru --}}
+                                <div class="input-group input-group-sm mb-2">
+                                    <span class="input-group-text bg-white"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
+                                    <input type="text" id="teacherSearchInput" class="form-control" placeholder="Cari nama guru...">
+                                </div>
+
+                                {{-- Multi Select Guru --}}
+                                <select name="teacher_ids[]" id="teacherMultiSelect" class="form-select {{ $addErr('teacher_ids') ? 'is-invalid' : '' }}" multiple size="5" required>
+                                    @foreach ($teachers as $t)
+                                        <option value="{{ $t->id }}" @selected(is_array(old('teacher_ids')) && in_array($t->id, old('teacher_ids')))>
+                                            {{ $t->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+
+                                {{-- Chip Guru Terpilih --}}
+                                <div class="mt-2">
+                                    <div class="small fw-semibold text-muted mb-1">Guru Terpilih (<span id="selectedTeacherCount">0</span>):</div>
+                                    <div id="selectedTeacherChips" class="d-flex flex-wrap gap-1 p-2 border rounded bg-light" style="min-height: 42px;">
+                                        <span class="text-muted small align-self-center fst-italic" id="noTeacherSelectedHint">Belum ada guru yang dipilih.</span>
+                                    </div>
+                                </div>
+
+                                @if ($addErr('teacher_ids'))
+                                    <div class="invalid-feedback d-block">{{ $addErr('teacher_ids') }}</div>
+                                @endif
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Materi / Modul Terkait (opsional)</label>
+                                    <select name="material_id" class="form-select">
+                                        <option value="">— Tidak terikat materi spesifik —</option>
+                                        @foreach ($materials as $m)
+                                            <option value="{{ $m->id }}" @selected(old('material_id') == $m->id)>
+                                                Pertemuan {{ $m->meeting_number }}: {{ $m->title }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-semibold">Prioritas</label>
+                                        <select name="priority" class="form-select" required>
+                                            <option value="Low" @selected(old('priority') === 'Low')>Rendah (Low)</option>
+                                            <option value="Medium" @selected(old('priority', 'Medium') === 'Medium')>Sedang (Medium)</option>
+                                            <option value="High" @selected(old('priority') === 'High')>Tinggi (High / Urgent)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-semibold">Tenggat Waktu</label>
+                                        <input type="date" name="due_date" class="form-control" min="{{ today()->toDateString() }}" value="{{ old('due_date') }}">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Judul Tugas <span class="text-danger">*</span></label>
+                            <input type="text" name="title" maxlength="255" class="form-control" placeholder="mis. Revisi Slide PPT & Aktivitas Belajar Modul 3" value="{{ old('title') }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Instruksi & Poin Perbaikan <span class="text-danger">*</span></label>
+                            <textarea name="description" rows="4" maxlength="2000" class="form-control" placeholder="Tuliskan detail poin yang perlu diperbaiki oleh guru..." required>{{ old('description') }}</textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Lampiran Dokumen / Contoh (opsional)</label>
+                            <input type="file" name="attachment" class="form-control" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+                            <small class="text-muted">Format: PDF, Word, JPG, PNG — maks. 10 MB.</small>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary fw-semibold">
+                            <i class="fa-solid fa-paper-plane me-1"></i> Tugaskan ke Guru
+                        </button>
+                    </form>
                 </div>
+            </div>
+        </div>
 
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Yang Perlu Diperbaiki</label>
-                    <textarea name="description" rows="4" maxlength="2000" class="form-control"
-                              placeholder="Jelaskan bagian kelas yang perlu diperbaiki">{{ $editId === '' ? old('description') : '' }}</textarea>
+        {{-- FORM 2: TUGAS KELAS (LAMA) --}}
+        <div class="tab-pane fade" id="pane-class-task">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white fw-bold">Buat Tugas Perbaikan Kelas</div>
+                <div class="card-body">
+                    <form action="{{ route('kurikulum.tugas-kelas.store') }}" method="POST"
+                          enctype="multipart/form-data"
+                          onsubmit="return lockSubmit(this, 'Mengirim...')">
+                        @csrf
+                        <input type="hidden" name="task_type" value="class_task">
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-semibold">Kelas</label>
+                                <select name="class_id" class="form-select {{ $addErr('class_id') ? 'is-invalid' : '' }}" required>
+                                    <option value="">— pilih kelas —</option>
+                                    @foreach ($classes as $c)
+                                        <option value="{{ $c->id }}" @selected($editId === '' && old('class_id') == $c->id)>
+                                            {{ $c->class_name }} — {{ $c->teacher->name ?? '-' }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <small class="text-muted">Tugas dikirim ke guru pengampu kelas yang dipilih.</small>
+                                @if ($addErr('class_id'))
+                                    <div class="invalid-feedback d-block">{{ $addErr('class_id') }}</div>
+                                @endif
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-semibold">Batas Waktu (opsional)</label>
+                                <input type="date" name="due_date"
+                                       class="form-control {{ $addErr('due_date') ? 'is-invalid' : '' }}"
+                                       min="{{ today()->toDateString() }}"
+                                       value="{{ $editId === '' ? old('due_date') : '' }}">
+                                @if ($addErr('due_date'))
+                                    <div class="invalid-feedback">{{ $addErr('due_date') }}</div>
+                                @endif
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Judul Tugas</label>
+                            <input type="text" name="title" maxlength="255"
+                                   class="form-control {{ $addErr('title') ? 'is-invalid' : '' }}"
+                                   placeholder="mis. Perbaiki PPT pertemuan 5"
+                                   value="{{ $editId === '' ? old('title') : '' }}" required>
+                            @if ($addErr('title'))
+                                <div class="invalid-feedback">{{ $addErr('title') }}</div>
+                            @endif
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Yang Perlu Diperbaiki</label>
+                            <textarea name="description" rows="4" maxlength="2000" class="form-control"
+                                      placeholder="Jelaskan bagian kelas yang perlu diperbaiki">{{ $editId === '' ? old('description') : '' }}</textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Lampiran (opsional)</label>
+                            <input type="file" name="attachment"
+                                   class="form-control {{ $addErr('attachment') ? 'is-invalid' : '' }}"
+                                   accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+                            @if ($addErr('attachment'))
+                                <div class="invalid-feedback">{{ $addErr('attachment') }}</div>
+                            @endif
+                            <small class="text-muted">Format: PDF, Word, JPG, PNG — maks. 10 MB.</small>
+                        </div>
+
+                        <button type="submit" class="btn btn-secondary">Kirim Tugas Kelas</button>
+                    </form>
                 </div>
-
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Lampiran (opsional)</label>
-                    <input type="file" name="attachment"
-                           class="form-control {{ $addErr('attachment') ? 'is-invalid' : '' }}"
-                           accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
-                    @if ($addErr('attachment'))
-                        <div class="invalid-feedback">{{ $addErr('attachment') }}</div>
-                    @endif
-                    <small class="text-muted">Format: PDF, Word, JPG, PNG — maks. 10 MB.</small>
-                </div>
-
-                <button type="submit" class="btn btn-primary">Kirim ke Guru</button>
-            </form>
+            </div>
         </div>
     </div>
 
@@ -167,11 +293,37 @@
                     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
 
                         <div>
-                            <div class="fw-semibold">{{ $t->title }}</div>
-                            <small class="text-muted">
-                                {{ $t->class->class_name ?? '-' }} · {{ $t->teacher->name ?? '-' }}
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <span class="fw-semibold">{{ $t->title }}</span>
+                                @if ($t->task_type === 'material_revision')
+                                    <span class="badge bg-purple text-white" style="background-color: #6f42c1;">
+                                        <i class="fa-solid fa-file-pen me-1"></i> Perbaikan Materi
+                                    </span>
+                                @else
+                                    <span class="badge bg-secondary">
+                                        <i class="fa-solid fa-chalkboard-user me-1"></i> Tugas Kelas
+                                    </span>
+                                @endif
+
+                                @if ($t->priority === 'High')
+                                    <span class="badge bg-danger">Prioritas Tinggi</span>
+                                @elseif ($t->priority === 'Medium')
+                                    <span class="badge bg-warning text-dark">Prioritas Sedang</span>
+                                @elseif ($t->priority === 'Low')
+                                    <span class="badge bg-light text-muted border">Prioritas Rendah</span>
+                                @endif
+                            </div>
+
+                            <small class="text-muted d-block mt-1">
+                                <strong>Guru:</strong> {{ $t->teacher->name ?? '-' }}
+                                @if ($t->class)
+                                    · <strong>Kelas:</strong> {{ $t->class->class_name }}
+                                @endif
+                                @if ($t->material)
+                                    · <strong>Materi:</strong> P-{{ $t->material->meeting_number }} ({{ $t->material->title }})
+                                @endif
                                 @if ($t->due_date)
-                                    · Batas
+                                    · <strong>Batas:</strong>
                                     <span class="{{ $t->is_overdue ? 'text-danger fw-semibold' : '' }}">
                                         {{ $t->due_date->translatedFormat('d M Y') }}
                                     </span>
@@ -432,6 +584,89 @@
             if (el && window.bootstrap) { new bootstrap.Modal(el).show(); }
         });
     @endif
+
+    // Script Multi-select Guru dengan Pencarian, Chips, Pilih Semua, Hapus Pilihan
+    document.addEventListener('DOMContentLoaded', function () {
+        const select = document.getElementById('teacherMultiSelect');
+        const searchInput = document.getElementById('teacherSearchInput');
+        const chipsContainer = document.getElementById('selectedTeacherChips');
+        const countSpan = document.getElementById('selectedTeacherCount');
+        const emptyHint = document.getElementById('noTeacherSelectedHint');
+        const btnSelectAll = document.getElementById('btnSelectAllTeachers');
+        const btnClear = document.getElementById('btnClearTeachers');
+
+        if (!select || !chipsContainer) return;
+
+        function updateChips() {
+            chipsContainer.innerHTML = '';
+            let selectedCount = 0;
+
+            Array.from(select.options).forEach(opt => {
+                if (opt.selected) {
+                    selectedCount++;
+                    const chip = document.createElement('span');
+                    chip.className = 'badge bg-primary text-white d-inline-flex align-items-center gap-1 p-2 rounded-pill';
+                    chip.style.fontSize = '12px';
+                    chip.innerHTML = `<span>${opt.text}</span>
+                        <i class="fa-solid fa-xmark cursor-pointer ms-1" style="cursor: pointer;" title="Hapus guru ini"></i>`;
+
+                    chip.querySelector('i').addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        opt.selected = false;
+                        updateChips();
+                    });
+
+                    chipsContainer.appendChild(chip);
+                }
+            });
+
+            if (countSpan) countSpan.innerText = selectedCount;
+            if (emptyHint) {
+                if (selectedCount === 0) {
+                    chipsContainer.appendChild(emptyHint);
+                }
+            }
+        }
+
+        // Event change pada select
+        select.addEventListener('change', updateChips);
+
+        // Pencarian guru dalam select list
+        if (searchInput) {
+            searchInput.addEventListener('input', function () {
+                const keyword = this.value.toLowerCase().trim();
+                Array.from(select.options).forEach(opt => {
+                    const match = opt.text.toLowerCase().includes(keyword);
+                    opt.style.display = match ? '' : 'none';
+                });
+            });
+        }
+
+        // Pilih Semua (yang sedang tampak)
+        if (btnSelectAll) {
+            btnSelectAll.addEventListener('click', function () {
+                Array.from(select.options).forEach(opt => {
+                    if (opt.style.display !== 'none') {
+                        opt.selected = true;
+                    }
+                });
+                updateChips();
+            });
+        }
+
+        // Hapus Pilihan
+        if (btnClear) {
+            btnClear.addEventListener('click', function () {
+                Array.from(select.options).forEach(opt => {
+                    opt.selected = false;
+                });
+                updateChips();
+            });
+        }
+
+        // Render chips inisial (mis. old value)
+        updateChips();
+    });
 </script>
 
 @endsection

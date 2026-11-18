@@ -111,23 +111,49 @@ class MaterialController extends Controller
     }
 
     /** Kolom khusus Guru dikosongkan untuk materi Siswa/Belajar Mandiri (dan sebaliknya). */
-    private function payload(Request $request, string $audience): array
+    private function payload(Request $request, string $audience, ?Material $existing = null): array
     {
         $isGuru = $audience === 'Guru';
 
-        return [
+        $data = [
             'program_id'     => $request->program_id ?: null,
             'level_id'       => $request->level_id ?: null,
             'meeting_number' => $request->meeting_number,
             'title'          => trim($request->title),
-            'syllabus'       => $isGuru ? $request->syllabus : null,
-            'cco'            => $isGuru ? $request->cco : null,
-            'lesson_plan'    => $isGuru ? $request->lesson_plan : null,
-            'activity'       => $isGuru ? $request->activity : null,
+            'syllabus'       => $isGuru ? ($existing ? $existing->syllabus : $request->syllabus) : null,
+            'cco'            => $isGuru ? ($existing ? $existing->cco : $request->cco) : null,
+            'lesson_plan'    => $isGuru ? ($existing ? $existing->lesson_plan : $request->lesson_plan) : null,
+            'activity'       => $isGuru ? ($existing ? $existing->activity : $request->activity) : null,
             'box_code'       => $isGuru && $request->box_code ? strtoupper(trim($request->box_code)) : null,
             'equipment_list' => $isGuru ? $request->equipment_list : null,
             'description'    => $isGuru ? null : $request->description,
         ];
+
+        if ($isGuru) {
+            if ($request->hasFile('cco_file')) {
+                if ($existing && $existing->cco_file_path && Storage::disk('public')->exists($existing->cco_file_path)) {
+                    Storage::disk('public')->delete($existing->cco_file_path);
+                }
+                $data['cco_file_path'] = $request->file('cco_file')->store('materials/cco', 'public');
+                $data['cco_file_name'] = $request->file('cco_file')->getClientOriginalName();
+            }
+            if ($request->hasFile('lesson_plan_file')) {
+                if ($existing && $existing->lesson_plan_file_path && Storage::disk('public')->exists($existing->lesson_plan_file_path)) {
+                    Storage::disk('public')->delete($existing->lesson_plan_file_path);
+                }
+                $data['lesson_plan_file_path'] = $request->file('lesson_plan_file')->store('materials/lesson-plan', 'public');
+                $data['lesson_plan_file_name'] = $request->file('lesson_plan_file')->getClientOriginalName();
+            }
+            if ($request->hasFile('module_file')) {
+                if ($existing && $existing->module_file_path && Storage::disk('public')->exists($existing->module_file_path)) {
+                    Storage::disk('public')->delete($existing->module_file_path);
+                }
+                $data['module_file_path'] = $request->file('module_file')->store('materials/modules', 'public');
+                $data['module_file_name'] = $request->file('module_file')->getClientOriginalName();
+            }
+        }
+
+        return $data;
     }
 
     // ------------------------------------------------------------ SIMPAN
@@ -184,7 +210,7 @@ class MaterialController extends Controller
 
         try {
             DB::transaction(function () use ($request, $material, $newPath, &$summary) {
-                $data = $this->payload($request, $material->audience);
+                $data = $this->payload($request, $material->audience, $material);
                 if ($newPath) {
                     $data['material_file_path'] = $newPath;
                 }
@@ -265,6 +291,30 @@ class MaterialController extends Controller
             . '.' . $material->file_extension;
 
         return response()->download(storage_path('app/public/' . $material->material_file_path), $name);
+    }
+
+    public function downloadAttachment(Material $material, string $type)
+    {
+        $path = match ($type) {
+            'cco'         => $material->cco_file_path,
+            'lesson_plan' => $material->lesson_plan_file_path,
+            'module'      => $material->module_file_path,
+            default       => null,
+        };
+
+        $originalName = match ($type) {
+            'cco'         => $material->cco_file_name,
+            'lesson_plan' => $material->lesson_plan_file_name,
+            'module'      => $material->module_file_name,
+            default       => null,
+        };
+
+        abort_unless($path && Storage::disk('public')->exists($path), 404, 'File lampiran tidak ditemukan.');
+
+        $ext = pathinfo($path, PATHINFO_EXTENSION);
+        $name = $originalName ?: ($type . '-' . $material->id . ($ext ? '.' . $ext : ''));
+
+        return response()->download(storage_path('app/public/' . $path), $name);
     }
 
     /** PDF dibuka di browser; Word/PowerPoint/Excel otomatis diunduh. */

@@ -11,16 +11,24 @@ class ClassTask extends Model
     protected $fillable = [
         'class_id',
         'teacher_id',
+        'task_type',
+        'material_id',
         'title',
         'description',
         'due_date',
         'status',
+        'priority',
         'done_at',
         'teacher_note',
         'attachment_path',
         'attachment_name',
         'created_by',
     ];
+
+    public function material()
+    {
+        return $this->belongsTo(Material::class, 'material_id');
+    }
 
     protected $casts = [
         'due_date' => 'date',

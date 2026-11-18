@@ -33,7 +33,7 @@
     $vocabValue = $useOld ? old('vocabularies', $vocabText) : $vocabText;
 
     $audCards = [
-        'Guru'   => ['👩‍🏫', 'Guru', 'Materi mengajar: silabus, CCO, lesson plan, box perlengkapan. Dipakai guru di menu Materi dan Kelas.'],
+        'Guru'   => ['👩‍🏫', 'Guru', 'Materi mengajar: modul, CCO, lesson plan, box perlengkapan aktivitas. Dipakai guru di menu Materi dan Kelas.'],
         'Siswa'  => ['🎓', 'Siswa', 'Materi belajar siswa. Tampil di Program Belajar siswa sesuai level kelas yang diikuti.'],
         'Huahua' => ['🌟', 'Belajar Mandiri', 'Materi untuk Belajar Vocab dan Belajar Grammar. Bisa upload file Excel template agar kosakata dan grammar otomatis masuk ke akun siswa.'],
     ];
@@ -121,28 +121,73 @@
 
 {{-- ====== KHUSUS GURU ====== --}}
 <div class="aud-field" data-aud="Guru">
+    {{-- MODUL (Upload File, Teks Lama Read-only) --}}
     <div class="mb-3">
-        <label class="form-label fw-semibold">Silabus</label>
-        <textarea name="syllabus" rows="5" class="form-control">{{ $val('syllabus') }}</textarea>
+        <label class="form-label fw-semibold">Modul <span class="text-muted fw-normal">(Upload File: doc, docx, ppt, pptx, pdf, xls, xlsx)</span></label>
+        @if ($m && $m->module_file_path)
+            <div class="d-flex align-items-center gap-2 mb-2 p-2 bg-light border rounded">
+                <i class="fa-solid fa-file-lines text-primary"></i>
+                <span class="small fw-semibold text-truncate">{{ $m->module_file_name ?: 'File Modul' }}</span>
+                <a href="{{ route('kurikulum.materi.download-attachment', ['material' => $m, 'type' => 'module']) }}" class="btn btn-xs btn-outline-primary ms-auto">
+                    <i class="fa-solid fa-download"></i> Unduh
+                </a>
+            </div>
+        @endif
+        <input type="file" name="module_file" class="form-control {{ $err('module_file') ? 'is-invalid' : '' }}" accept=".doc,.docx,.ppt,.pptx,.pdf,.xls,.xlsx">
+        {!! $fb('module_file') !!}
+        @if ($m && $m->syllabus)
+            <div class="mt-2 p-2 rounded bg-light border small text-muted">
+                <strong class="d-block text-secondary mb-1"><i class="fa-solid fa-clock-rotate-left me-1"></i> Isi lama (teks):</strong>
+                <div style="white-space: pre-wrap;">{{ $m->syllabus }}</div>
+            </div>
+        @endif
     </div>
 
+    {{-- CCO (Upload File, Teks Lama Read-only) --}}
     <div class="mb-3">
-        <label class="form-label fw-semibold">CCO</label>
-        <textarea name="cco" rows="3" class="form-control"
-            placeholder="Capaian pembelajaran / tujuan (CCO) pertemuan ini">{{ $val('cco') }}</textarea>
+        <label class="form-label fw-semibold">CCO <span class="text-muted fw-normal">(Upload File: doc, docx, ppt, pptx, pdf, xls, xlsx)</span></label>
+        @if ($m && $m->cco_file_path)
+            <div class="d-flex align-items-center gap-2 mb-2 p-2 bg-light border rounded">
+                <i class="fa-solid fa-file-lines text-primary"></i>
+                <span class="small fw-semibold text-truncate">{{ $m->cco_file_name ?: 'File CCO' }}</span>
+                <a href="{{ route('kurikulum.materi.download-attachment', ['material' => $m, 'type' => 'cco']) }}" class="btn btn-xs btn-outline-primary ms-auto">
+                    <i class="fa-solid fa-download"></i> Unduh
+                </a>
+            </div>
+        @endif
+        <input type="file" name="cco_file" class="form-control {{ $err('cco_file') ? 'is-invalid' : '' }}" accept=".doc,.docx,.ppt,.pptx,.pdf,.xls,.xlsx">
+        {!! $fb('cco_file') !!}
+        @if ($m && $m->cco)
+            <div class="mt-2 p-2 rounded bg-light border small text-muted">
+                <strong class="d-block text-secondary mb-1"><i class="fa-solid fa-clock-rotate-left me-1"></i> Isi lama (teks):</strong>
+                <div style="white-space: pre-wrap;">{{ $m->cco }}</div>
+            </div>
+        @endif
     </div>
 
+    {{-- LESSON PLAN (Upload File, Teks Lama Read-only) --}}
     <div class="mb-3">
-        <label class="form-label fw-semibold">Lesson Plan</label>
-        <textarea name="lesson_plan" rows="4" class="form-control"
-            placeholder="Urutan kegiatan belajar dalam satu pertemuan">{{ $val('lesson_plan') }}</textarea>
+        <label class="form-label fw-semibold">Lesson Plan <span class="text-muted fw-normal">(Upload File: doc, docx, ppt, pptx, pdf, xls, xlsx)</span></label>
+        @if ($m && $m->lesson_plan_file_path)
+            <div class="d-flex align-items-center gap-2 mb-2 p-2 bg-light border rounded">
+                <i class="fa-solid fa-file-lines text-primary"></i>
+                <span class="small fw-semibold text-truncate">{{ $m->lesson_plan_file_name ?: 'File Lesson Plan' }}</span>
+                <a href="{{ route('kurikulum.materi.download-attachment', ['material' => $m, 'type' => 'lesson_plan']) }}" class="btn btn-xs btn-outline-primary ms-auto">
+                    <i class="fa-solid fa-download"></i> Unduh
+                </a>
+            </div>
+        @endif
+        <input type="file" name="lesson_plan_file" class="form-control {{ $err('lesson_plan_file') ? 'is-invalid' : '' }}" accept=".doc,.docx,.ppt,.pptx,.pdf,.xls,.xlsx">
+        {!! $fb('lesson_plan_file') !!}
+        @if ($m && $m->lesson_plan)
+            <div class="mt-2 p-2 rounded bg-light border small text-muted">
+                <strong class="d-block text-secondary mb-1"><i class="fa-solid fa-clock-rotate-left me-1"></i> Isi lama (teks):</strong>
+                <div style="white-space: pre-wrap;">{{ $m->lesson_plan }}</div>
+            </div>
+        @endif
     </div>
 
-    <div class="mb-3">
-        <label class="form-label fw-semibold">Aktivitas</label>
-        <textarea name="activity" rows="3" class="form-control"
-            placeholder="Aktivitas / permainan yang dilakukan di kelas">{{ $val('activity') }}</textarea>
-    </div>
+    {{-- Field Aktivitas disembunyikan sesuai kebutuhan --}}
 
     <div class="row">
         <div class="col-md-4 mb-3">
@@ -154,7 +199,7 @@
         </div>
 
         <div class="col-md-8 mb-3">
-            <label class="form-label fw-semibold">Perlengkapan di Box</label>
+            <label class="form-label fw-semibold">Perlengkapan Aktivitas</label>
             <textarea name="equipment_list" rows="3" class="form-control"
                 placeholder="Satu perlengkapan per baris, mis.&#10;Kartu kosakata&#10;Dadu&#10;Spidol papan">{{ $val('equipment_list') }}</textarea>
         </div>
@@ -211,7 +256,7 @@
 @endif
 
 <div class="mb-3">
-    <label class="form-label fw-semibold">{{ $m ? 'Ganti File Materi' : 'Upload File Materi' }}</label>
+    <label class="form-label fw-semibold">{{ $m ? 'Ganti PPT' : 'Upload PPT' }}</label>
     <input type="file" name="material_file" data-file-input
            class="form-control {{ $err('material_file') ? 'is-invalid' : '' }}"
            accept="{{ $fileAccept }}" @if (!$m) required @endif>
