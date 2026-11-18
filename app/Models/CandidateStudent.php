@@ -59,6 +59,43 @@ class CandidateStudent extends Model
         return $this->birth_date->age;
     }
 
+    // Nomor WhatsApp format internasional (62xxx) untuk link wa.me.
+    // Memakai nomor calon siswa (kolom phone).
+    public function getWhatsappNumberAttribute()
+    {
+        $number = $this->phone;
+
+        if (!$number) {
+            return null;
+        }
+
+        $number = preg_replace('/\D/', '', $number); // buang spasi, +, -, dll
+
+        if ($number === '') {
+            return null;
+        }
+
+        if (str_starts_with($number, '0')) {
+            $number = '62' . substr($number, 1);
+        } elseif (str_starts_with($number, '8')) {
+            $number = '62' . $number;
+        }
+
+        return $number;
+    }
+
+    // Link wa.me dengan pesan follow up yang sudah terisi.
+    public function getWhatsappUrlAttribute()
+    {
+        if (!$this->whatsapp_number) {
+            return null;
+        }
+
+        $message = "Ni Hao! 你好 {$this->name}";
+
+        return 'https://wa.me/' . $this->whatsapp_number . '?text=' . rawurlencode($message);
+    }
+
     public function availableSchedules()
     {
         return $this->hasMany(CandidateStudentAvailableSchedule::class);
