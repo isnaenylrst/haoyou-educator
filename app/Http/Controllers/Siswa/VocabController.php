@@ -23,11 +23,9 @@ class VocabController extends Controller
 
     /**
      * Level (HSK 1/2/3...) milik siswa yang sedang login.
-     * !!! SESUAIKAN baris ini dengan struktur project kamu !!!
-     * Contoh lain: auth()->user()->student->program_level_id
      * Jika null => semua kata tampil (tidak difilter).
      */
-       private function levelId(): ?int
+    private function levelId(): ?int
     {
         return \App\Support\StudentLevel::id();
     }
@@ -97,8 +95,14 @@ class VocabController extends Controller
 
         [$chapters, $bab, $chapterId] = $this->chapterContext($r);
 
-        $q = VocabWord::forLevel($level)->with('examples')->orderBy('order_number');
-        if ($chapterId) $q->where('vocab_chapter_id', $chapterId);
+        $q = VocabWord::forLevel($level)->with('examples');
+
+        // <-- DIUBAH: per bab tetap urut nomor; "Semua bab" urut abjad A-Z (pinyin)
+        if ($chapterId) {
+            $q->where('vocab_chapter_id', $chapterId)->orderBy('order_number');
+        } else {
+            $q->orderBy('pinyin')->orderBy('order_number');
+        }
 
         if ($s = trim((string) $r->q)) {
             $q->where(fn ($w) => $w->where('hanzi', 'like', "%$s%")->orWhere('pinyin', 'like', "%$s%")
@@ -279,7 +283,7 @@ class VocabController extends Controller
         ]);
     }
 
-  public function understood(VocabWord $word)
+    public function understood(VocabWord $word)
     {
         $key = ['user_id' => auth()->id(), 'vocab_word_id' => $word->id];
         $row = VocabTrapUnderstood::where($key)->first();
@@ -322,11 +326,10 @@ class VocabController extends Controller
         return [$levelIds, $categoryIds];
     }
 
-
     /**
      * Memeriksa otorisasi materi Huahua untuk siswa yang sedang login.
      */
-     private function authorizeHuahuaMaterial(Material $material): void
+    private function authorizeHuahuaMaterial(Material $material): void
     {
         abort_unless($material->audience === 'Huahua', 404);
 
@@ -406,4 +409,3 @@ class VocabController extends Controller
         return Storage::disk('public')->download($material->material_file_path, $name);
     }
 }
-

@@ -72,7 +72,7 @@
   .hy-pics > img{ position:relative; display:block; width:100%; aspect-ratio:4/4.6; object-fit:cover; border-radius:200px 200px 28px 28px; border:6px solid var(--deep); }
   .hy-chip{ position:absolute; z-index:2; background:var(--cream); color:var(--deep); border:2px solid var(--deep); border-radius:999px; padding:10px 18px; font-weight:800; font-size:14px; display:flex; gap:10px; align-items:center; }
   .hy-chip em{ font:normal 800 22px 'Bricolage Grotesque',serif; color:var(--deep); }
-  .hy-c1{ left:-46px; top:22%; } .hy-c2{ right:-34px; bottom:14%; background:var(--deep); color:var(--cream); } .hy-c3{ left:-26px; bottom:-18px; }
+  .hy-c1{ left:-46px; top:22%; } .hy-c2{ right:-34px; bottom:14%; background:var(--ink); color:var(--deep); } .hy-c3{ left:-26px; bottom:-18px; }
   .hy-big{ position:absolute; right:-24px; top:-30px; z-index:2; width:96px; height:96px; border-radius:50%; background:#fff; border:4px solid var(--yellow); box-shadow:0 10px 24px rgba(47,75,59,.22); display:grid; place-items:center; padding:6px; transform:rotate(10deg); }
   .hy-big img{ width:100%; height:100%; object-fit:contain; border-radius:50%; }
  
@@ -90,7 +90,7 @@
   .hy-light{ background:var(--cream); color:var(--deep); }
   .hy-lavs{ background:var(--soft); color:var(--deep); }
   #program{ --ac:var(--sun); }
-  #ourservice{ --ac:var(--cream); background:var(--yellow); }
+  #ourservice{ --ac:var(--cream); background:var(--sun); }
   #reward{ --ac:var(--ink); }
   #event{ --ac:var(--ink); }
   #testimoni{ --ac:var(--yellow); background:var(--ink); }
@@ -186,7 +186,7 @@
   .hy-price .hy-btn{ background:var(--deep); color:var(--yellow); border-color:var(--deep); margin-top:20px; }
  
   /* Footer */
-  .hy-footer{ background:var(--ink); color:var(--deep); padding:56px 0 28px; border-top:6px solid var(--deep); }
+  .hy-footer{ background:var(--ink); color:var(--deep); padding:56px 0 28px; border-top:6px solid var(--cream); }
   .hy-footer h3{ text-align:center; font-size:22px; color:var(--deep); margin:0 0 28px; }
   .hy-ct{ display:grid; grid-template-columns:repeat(4,1fr); gap:20px; }
   .hy-ct > a, .hy-ct > div{ display:flex; gap:12px; align-items:center; background:var(--cream); border-radius:18px; padding:16px; color:var(--deep); box-shadow:0 5px 0 var(--yellow); transition:transform .2s; }
