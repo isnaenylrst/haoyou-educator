@@ -1,5 +1,4 @@
-@extends('layouts.dashboard') {{-- ganti dengan nama layout dashboard kamu --}}
-
+@extends('layouts.dashboard') 
 @section('page-heading')
   <h1 class="mt-2 text-[28px] md:text-[34px] font-bold leading-tight">Vocabulary list</h1>
   <p class="text-sm text-[#6b6652] mt-1">Tempat semua vocab &amp; progres bintang kamu terkumpul.</p>
@@ -12,6 +11,7 @@
   $stageNames = ['Seed','Watering','Growing','Blooming'];
   $starHtml = fn ($n) => '<span class="vb-stars">'.str_repeat('★', $n).'<i>'.str_repeat('★', 3 - $n).'</i></span>';
   $q = request('q');
+  $firstNo = $words->firstItem(); // DIUBAH: nomor awal halaman (1, 51, 101, ...)
 @endphp
 
 <div class="vb-card" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
@@ -55,8 +55,12 @@
       <thead><tr><th>No</th><th>Hanzi</th><th>Pinyin</th><th>Arti (Indo)</th><th>Meaning (English)</th><th>Jenis kata</th><th style="text-align:center">Contoh kalimat</th><th>Progress</th></tr></thead>
       <tbody>
         @forelse($words as $w)
+          @php
+            // DIUBAH: "Semua bab" => nomor urut 1,2,3... ; per bab => nomor asli kata
+            $no = $bab ? $w->order_number : ($firstNo + $loop->index);
+          @endphp
           <tr>
-            <td>{{ $w->order_number }}{{ $w->trap_only ? '*' : '' }}</td>
+            <td>{{ $no }}{{ $w->trap_only ? '*' : '' }}</td>
             <td class="vb-hanzi">{{ $w->hanzi }}</td>
             <td>{{ $w->pinyin }}</td>
             <td>{{ $w->meaning_id }}</td>

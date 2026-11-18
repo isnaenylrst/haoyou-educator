@@ -968,6 +968,14 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
         Route::get('/{siswa}/detail', [SiswaController::class, 'detail'])
         ->name('siswa.detail');
 
+        // DETAIL SISWA
+        Route::get('/{siswa}/detail', [SiswaController::class, 'detail'])
+            ->name('siswa.detail');
+
+        // TAMBAH POIN SISWA
+        Route::post('/{siswa}/poin', [SiswaController::class, 'storePoint'])
+            ->name('siswa.point.store');
+
         // SISWA: LANJUT PROGRAM
         Route::get('/{siswa}/continue', fn (\App\Models\Student $siswa) => redirect()->route('admin.siswa.continue.program', $siswa))
             ->name('siswa.continue.form');

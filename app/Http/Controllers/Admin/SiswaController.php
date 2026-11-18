@@ -24,6 +24,7 @@ use App\Services\ClassSessionService;
 use App\Services\ClassSessionOfferService;
 use App\Services\ExtraFeeService;
 use App\Services\PaymentInstallmentService;
+use App\Services\PointService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -234,16 +235,16 @@ class SiswaController extends Controller
 
     public function update(Request $request, Student $siswa)
     {
+        // Poin tidak lagi diedit langsung di sini: poin hanya bertambah lewat storePoint()
+        // atau jurnal guru, supaya setiap perubahan tercatat di riwayat (point_logs).
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'status' => ['required', 'in:Active,Inactive,Graduated'],
-            'points' => ['required', 'integer', 'min:0'],
         ]);
 
         $siswa->update([
             'name' => $validated['name'],
             'status' => $validated['status'],
-            'points' => $validated['points'],
         ]);
 
         // Dari halaman Detail & Edit: tetap di halaman itu setelah menyimpan
@@ -260,6 +261,29 @@ class SiswaController extends Controller
 
         return $redirect
             ->with('success', "Data siswa {$siswa->name} berhasil diperbarui.");
+    }
+
+    /**
+     * Admin memberi poin pada tanggal tertentu.
+     * Ditolak kalau slot tanggal itu sudah diisi (oleh guru atau admin).
+     */
+    public function storePoint(Request $request, Student $siswa, PointService $points)
+    {
+        $data = $request->validate([
+            'session_date' => ['required', 'date', 'before_or_equal:today'],
+            'type'         => ['required', Rule::in(['kuning', 'merah'])],
+        ], [
+            'session_date.before_or_equal' => 'Tanggal tidak boleh di masa depan.',
+        ]);
+
+        try {
+            $points->give($siswa, $data['session_date'], $data['type'], auth()->id(), 'admin');
+        } catch (\DomainException $e) {
+            return redirect()->route('admin.siswa.detail', $siswa)->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('admin.siswa.detail', $siswa)
+            ->with('success', "Poin {$data['type']} untuk {$siswa->name} berhasil dicatat.");
     }
 
     /** Halaman penuh Detail & Edit siswa (menggantikan modal di daftar siswa). */
@@ -313,6 +337,10 @@ class SiswaController extends Controller
             'programs'     => $programs,
             'schedules'    => $siswa->activeEnrollment?->class?->schedules ?? collect(),
             'payments'     => $this->paymentRows($siswa),
+            // Riwayat poin (siapa yang input, kapan, sebelum -> sesudah)
+            'pointLogs'    => $siswa->pointLogs()
+                ->with('inputBy')
+                ->paginate(10, ['*'], 'poin_page'),
         ]);
     }
 
