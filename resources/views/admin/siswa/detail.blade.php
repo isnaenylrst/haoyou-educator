@@ -1,4 +1,3 @@
-{{-- resources/views/admin/siswa/detail.blade.php --}}
 @extends('admin.app')
 
 @section('title', 'Detail Siswa | Siswa')
@@ -102,8 +101,12 @@
                 </div>
 
                 <div class="form-field">
-                    <label for="points">Poin</label>
-                    <input type="number" name="points" id="points" min="0" value="{{ old('points', $siswa->points ?? 0) }}">
+                    <label>Total Poin</label>
+                    <div class="sd-info">{{ $siswa->points ?? 0 }}</div>
+                    <small>
+                        <i class="fa-solid fa-circle-info"></i>
+                        Bertambah otomatis dari form "Beri Poin" di bawah atau dari jurnal guru.
+                    </small>
                 </div>
             </div>
         </div>
@@ -116,6 +119,68 @@
             </button>
         </div>
     </form>
+
+    {{-- ===== Poin & riwayat ===== --}}
+    <div class="sd-card">
+        <div class="form-section" style="margin-bottom:0;">
+            <div class="form-section-title"><i class="fa-solid fa-star"></i> Poin Siswa</div>
+
+            <form method="POST" action="{{ route('admin.siswa.point.store', $siswa) }}" class="form-grid" style="margin-bottom:16px;">
+                @csrf
+                <div class="form-field">
+                    <label for="point_date">Tanggal Sesi *</label>
+                    <input type="date" name="session_date" id="point_date" max="{{ now()->toDateString() }}"
+                           value="{{ old('session_date', now()->toDateString()) }}" required>
+                </div>
+                <div class="form-field">
+                    <label for="point_type">Jenis Poin *</label>
+                    <select name="type" id="point_type" required>
+                        <option value="kuning">Kuning (+10)</option>
+                        <option value="merah">Merah (+5)</option>
+                    </select>
+                </div>
+                <div class="sd-actions" style="grid-column:1/-1;">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa-solid fa-plus"></i> Beri Poin
+                    </button>
+                </div>
+            </form>
+
+            <div class="form-section-title" style="margin-top:8px;">Riwayat Poin</div>
+            <div class="sd-scroll">
+                <table class="table-mini">
+                    <thead>
+                        <tr>
+                            <th>Tanggal Sesi</th>
+                            <th style="text-align: center; vertical-align: middle;">Jenis</th>
+                            <th style="text-align: center; vertical-align: middle;">Poin</th>
+                            <th style="text-align: center; vertical-align: middle;">Sebelum → Sesudah</th>
+                            <th>Diinput Oleh</th>
+                            <th style="text-align: center; vertical-align: middle;">Waktu Input</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($pointLogs as $log)
+                            <tr>
+                                <td>{{ $log->session_date->format('d M Y') }}</td>
+                                <td style="text-align: center; vertical-align: middle;">{{ $log->type === 'kuning' ? '🟡 Kuning' : '🔴 Merah' }}</td>
+                                <td style="text-align: center; vertical-align: middle;">+{{ $log->points }}</td>
+                                <td style="text-align: center; vertical-align: middle;">{{ $log->points_before }} → {{ $log->points_after }}</td>
+                                <td>{{ $log->inputter_label }}</td>
+                                <td style="text-align: center; vertical-align: middle;">{{ $log->created_at->format('d/m/Y H:i') }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="6" style="text-align: center; vertical-align: middle;">Belum ada riwayat poin.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="margin-top:12px;">{{ $pointLogs->links() }}</div>
+        </div>
+    </div>
 
     {{-- ===== Jadwal kelas aktif ===== --}}
     <div class="sd-card">
@@ -184,7 +249,7 @@
                                 </td>
                                 <td style="text-align: center; vertical-align: middle;">
                                     {{ $enrollmentLabels[$p['status']] ?? $p['status'] }}
-                                </td style="text-align: center; vertical-align: middle;">
+                                </td>
                                 <td style="text-align: center; vertical-align: middle;">
                                     {{ $p['enrollment_date'] ?? '-' }}
                                 </td>
