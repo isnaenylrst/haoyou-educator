@@ -82,21 +82,23 @@
         <thead>
             <tr>
                 <th style="width: 6%;">NO</th>
-                <th style="width: 40%;">Learning Materials</th>
+                <th style="width: 14%;">Tanggal<br>Pertemuan</th>
+                <th style="width: 32%;">Learning Materials</th>
                 <th style="width: 14%;">Achievement<br>Level</th>
-                <th style="width: 40%;">Description</th>
+                <th style="width: 34%;">Description</th>
             </tr>
         </thead>
         <tbody>
         @forelse($doc['rows'] as $row)
             <tr>
                 <td class="hy-c">{{ $row['no'] }}</td>
+                <td class="hy-c" style="font-size: 11px; white-space: nowrap;">{{ $row['meeting_date'] ?? '-' }}</td>
                 <td><div class="rt">{!! $rt($row['material']) !!}</div></td>
                 <td class="hy-lvl">{{ $row['level'] }}</td>
                 <td><div class="rt">{!! $rt($row['description']) !!}</div></td>
             </tr>
         @empty
-            <tr><td colspan="4" class="hy-c">Belum ada materi pembelajaran.</td></tr>
+            <tr><td colspan="5" class="hy-c">Belum ada materi pembelajaran.</td></tr>
         @endforelse
         </tbody>
     </table>

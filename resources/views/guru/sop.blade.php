@@ -123,42 +123,7 @@
         </div>
     @endif
 
-    {{-- TEMPLATE PROGRESS REPORT --}}
-    <div class="card border-0 shadow-sm rounded-4 mt-4">
-        <div class="card-body p-0">
-            <div class="p-4 border-bottom">
-                <h5 class="fw-bold mb-1">Template Progress Report</h5>
-                <small class="text-muted">
-                    Acuan format dari Kurikulum. Pengisian progress report dilakukan di menu Progress Report.
-                </small>
-            </div>
-
-            @forelse ($templates as $template)
-                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 p-4 {{ !$loop->last ? 'border-bottom' : '' }}">
-                    <div>
-                        <div class="fw-semibold">{{ $template->name }}</div>
-                        <small class="text-muted">
-                            {{ strtoupper($template->file_extension) }} • {{ $template->file_size_label }}
-                            • diperbarui {{ $template->updated_at->diffForHumans() }}
-                        </small>
-                    </div>
-
-                    @if ($template->file_exists)
-                        <a href="{{ route('teacher.sop.template', $template) }}"
-                           class="btn btn-outline-dark rounded-3">
-                            <i class="fas fa-download me-2"></i> Download
-                        </a>
-                    @else
-                        <span class="badge bg-secondary">File belum tersedia</span>
-                    @endif
-                </div>
-            @empty
-                <div class="text-center text-muted py-5">
-                    Belum ada template dari Kurikulum.
-                </div>
-            @endforelse
-        </div>
-    </div>
+    {{-- Card Template Progress Report disembunyikan agar konsisten dengan Kurikulum --}}
 
 </div>
 

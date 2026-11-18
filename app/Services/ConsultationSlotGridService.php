@@ -88,6 +88,14 @@ class ConsultationSlotGridService
                 $badgeClass  = 'bg-success text-white';
             }
 
+            $isBookedByMe = false;
+            if ($viewerRole === 'Teacher' && $viewerUserId) {
+                $viewerTeacher = \App\Models\Teacher::where('user_id', $viewerUserId)->first();
+                if ($viewerTeacher && $slot->booked_by_teacher_id == $viewerTeacher->id) {
+                    $isBookedByMe = true;
+                }
+            }
+
             foreach ($hours as $h) {
                 $cellStart = $h * 60;
                 $cellEnd   = ($h + 1) * 60;
@@ -104,6 +112,7 @@ class ConsultationSlotGridService
                             'status_label'           => $statusLabel,
                             'badge_class'            => $badgeClass,
                             'is_mine'                => $isMine,
+                            'is_booked_by_me'        => $isBookedByMe,
                             'is_past'                => $isPast,
                             'teacher_name'           => $slot->teacher?->name,
                             'topic'                  => $slot->topic ?: ($slot->booking_notes ? \Illuminate\Support\Str::limit($slot->booking_notes, 25) : null),

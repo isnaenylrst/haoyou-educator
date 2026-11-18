@@ -24,11 +24,18 @@ class SubmissionController extends Controller
         abort_unless($teacher, 403, 'Akses khusus guru.');
 
         $submissions = Submission::where('teacher_id', $teacher->id)
+            ->with(['class.schedules'])
             ->latest('date')
             ->paginate(10)
             ->withQueryString();
 
-        return view('guru.pengajuan', compact('submissions'));
+        $classes = \App\Models\ClassModel::where('teacher_id', $teacher->id)
+            ->whereIn('status', ['Open', 'Running'])
+            ->with('schedules')
+            ->orderBy('class_name')
+            ->get();
+
+        return view('guru.pengajuan', compact('submissions', 'classes', 'teacher'));
     }
 
     public function store(StoreSubmissionRequest $request)
@@ -61,17 +68,24 @@ class SubmissionController extends Controller
             return (float) $clean;
         };
 
-        // Hitung total nominal jika multi-item (nama, qty, harga, total otomatis dari server qty * price)
+        // Hitung total nominal jika multi-item (nama, qty, harga, ongkir, total baris: qty * harga + ongkir)
         $items = !empty($data['items']) ? array_values(array_filter($data['items'], fn ($it) => !empty($it['name']))) : null;
         if ($items) {
             foreach ($items as &$it) {
-                $qty = !empty($it['qty']) ? max(1, (float) $it['qty']) : 1;
+                $qty = isset($it['qty']) && $it['qty'] !== '' ? max(0, (float) $it['qty']) : 1;
                 $rawPrice = isset($it['price']) && $it['price'] !== '' ? $it['price'] : (!empty($it['amount']) ? $it['amount'] : 0);
                 $price = $cleanNumber($rawPrice);
+                $shipping = isset($it['shipping']) && $it['shipping'] !== '' ? $cleanNumber($it['shipping']) : 0.0;
 
                 $it['qty'] = $qty;
                 $it['price'] = $price;
-                $it['amount'] = round($qty * $price, 2);
+                $it['shipping'] = $shipping;
+                $it['amount'] = round(($qty * $price) + $shipping, 2);
+                $it['class'] = $it['class'] ?? null;
+                $it['buy_date'] = $it['buy_date'] ?? null;
+                $it['link'] = $it['link'] ?? null;
+                $it['check_date'] = $it['check_date'] ?? null;
+                $it['return_date'] = $it['return_date'] ?? null;
             }
             unset($it);
             $totalAmount = array_sum(array_column($items, 'amount'));
@@ -81,17 +95,21 @@ class SubmissionController extends Controller
 
         DB::transaction(function () use ($teacher, $data, $items, $totalAmount, $receiptPath, $photoPath) {
             $submission = Submission::create([
-                'teacher_id'   => $teacher->id,
-                'created_by'   => Auth::id(),
-                'type'         => $data['type'],
-                'item_name'    => $data['item_name'],
-                'items'        => $items,
-                'amount'       => $totalAmount,
-                'date'         => $data['date'],
-                'description'  => $data['description'] ?? null,
-                'receipt_path' => $receiptPath,
-                'photo_path'   => $photoPath,
-                'status'       => 'Diajukan',
+                'teacher_id'     => $teacher->id,
+                'created_by'     => Auth::id(),
+                'type'           => $data['type'],
+                'item_name'      => $data['item_name'],
+                'items'          => $items,
+                'amount'         => $totalAmount,
+                'shipping_cost'  => $items ? array_sum(array_column($items, 'shipping')) : ($data['shipping_cost'] ?? 0),
+                'account_number' => $data['account_number'] ?? null,
+                'account_name'   => $data['account_name'] ?? null,
+                'class_id'       => $data['class_id'] ?? null,
+                'date'           => $data['date'],
+                'description'    => $data['description'] ?? null,
+                'receipt_path'   => $receiptPath,
+                'photo_path'     => $photoPath,
+                'status'         => 'Diajukan',
             ]);
 
             // Kirim notifikasi database ke seluruh tim Kurikulum

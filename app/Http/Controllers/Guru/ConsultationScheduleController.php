@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Guru;
 
 use App\Http\Controllers\Controller;
 use App\Models\ClassModel;
+use App\Models\ClassSession;
 use App\Models\CurriculumConsultationSlot;
 use App\Models\Teacher;
 use App\Models\User;
 use App\Notifications\AppNotification;
 use App\Services\ConsultationSlotGridService;
+use App\Services\MeetingConsultationRuleService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -78,75 +80,152 @@ class ConsultationScheduleController extends Controller
             ->orderBy('class_name')
             ->get();
 
-        return view('guru.jadwal-konsultasi', compact('grid', 'availableSlots', 'myBookings', 'classes', 'teacher'));
+        // Catatan Pertemuan (Blok 4 Pertemuan dinamis dari class_sessions) untuk Guru ini (GURU 4e)
+        $meetingRuleSvc = app(MeetingConsultationRuleService::class);
+        $meetingRecords = collect();
+        foreach ($classes as $cl) {
+            $blocks = $meetingRuleSvc->getBlocksForClass($cl);
+            $meetingRecords->push([
+                'class'   => $cl,
+                'teacher' => $teacher,
+                'blocks'  => $blocks,
+            ]);
+        }
+
+        return view('guru.jadwal-konsultasi', compact('grid', 'availableSlots', 'myBookings', 'classes', 'meetingRecords', 'teacher'));
     }
 
     /**
      * Guru mengajukan konsultasi (Booking slot)
+     * Mendukung: ke Kurikulum saja, ke Owner saja, atau KEDUANYA (GURU 4b).
+     * Transaksi atomik dengan pengecekan lock, slot lewat, dan double booking.
      */
     public function book(Request $request)
     {
         $data = $request->validate([
-            'slot_id'       => ['required', 'integer', 'exists:curriculum_consultation_slots,id'],
+            'booking_type'  => ['nullable', 'in:single,both'],
+            'slot_id'       => ['required_without:slot_curriculum_id', 'nullable', 'integer', 'exists:curriculum_consultation_slots,id'],
+            'slot_curriculum_id' => ['nullable', 'integer', 'exists:curriculum_consultation_slots,id'],
+            'slot_owner_id'      => ['nullable', 'integer', 'exists:curriculum_consultation_slots,id'],
             'topic'         => ['required', 'string', 'max:255'],
             'class_id'      => ['nullable', 'integer', 'exists:classes,id'],
             'booking_notes' => ['nullable', 'string', 'max:1000'],
         ], [
             'topic.required' => 'Topik konsultasi wajib diisi.',
-            'slot_id.required' => 'Pilih slot konsultasi yang tersedia.',
+            'slot_id.required_without' => 'Pilih slot konsultasi yang tersedia.',
         ]);
 
         $teacher = Auth::user()->teacher;
         abort_unless($teacher, 403);
 
-        return DB::transaction(function () use ($data, $teacher) {
-            // Lock slot untuk mencegah double booking race-condition
-            $slot = CurriculumConsultationSlot::where('id', $data['slot_id'])
+        $bookingType = $data['booking_type'] ?? 'single';
+        $slotIdsToBook = [];
+
+        if ($bookingType === 'both') {
+            if (empty($data['slot_curriculum_id']) || empty($data['slot_owner_id'])) {
+                return back()->withInput()->with('error', 'Untuk mengajukan ke Kurikulum dan Owner sekaligus, pilih satu slot Kurikulum dan satu slot Owner.');
+            }
+            if ($data['slot_curriculum_id'] == $data['slot_owner_id']) {
+                return back()->withInput()->with('error', 'Slot Kurikulum dan Owner tidak boleh slot yang sama.');
+            }
+            $slotIdsToBook = [(int) $data['slot_curriculum_id'], (int) $data['slot_owner_id']];
+        } else {
+            $slotId = $data['slot_id'] ?? ($data['slot_curriculum_id'] ?? $data['slot_owner_id']);
+            if (!$slotId) {
+                return back()->withInput()->with('error', 'Silakan pilih slot konsultasi yang tersedia.');
+            }
+            $slotIdsToBook = [(int) $slotId];
+        }
+
+        // Cek bentrok dengan jadwal mengajar (class_sessions) guru ini (GURU 4c)
+        $conflictWarnings = [];
+        $slotsInfo = CurriculumConsultationSlot::whereIn('id', $slotIdsToBook)->get();
+        foreach ($slotsInfo as $chkSlot) {
+            $sDate = $chkSlot->date->toDateString();
+            $sStart = substr($chkSlot->start_time, 0, 5) . ':00';
+            $sEnd = substr($chkSlot->end_time, 0, 5) . ':00';
+
+            $teachingClash = ClassSession::where('teacher_id', $teacher->id)
+                ->whereDate('session_date', $sDate)
+                ->where('status', '!=', 'Cancelled')
+                ->where('start_time', '<', $sEnd)
+                ->where('end_time', '>', $sStart)
+                ->with('class:id,class_name')
+                ->first();
+
+            if ($teachingClash) {
+                $cName = $teachingClash->class?->class_name ?? 'Kelas Mengajar';
+                $conflictWarnings[] = "Peringatan: Jadwal slot " . $chkSlot->date->translatedFormat('d M Y') . " ({$sStart}-{$sEnd}) bentrok dengan jadwal sesi mengajar kelas \"{$cName}\".";
+            }
+        }
+
+        return DB::transaction(function () use ($slotIdsToBook, $data, $teacher, $conflictWarnings) {
+            // Lock semua slot yang akan dipesan dalam urutan ID untuk mencegah deadlock
+            sort($slotIdsToBook);
+            $lockedSlots = CurriculumConsultationSlot::whereIn('id', $slotIdsToBook)
                 ->lockForUpdate()
-                ->firstOrFail();
+                ->get()
+                ->keyBy('id');
 
-            if ($slot->is_past) {
-                return back()->withInput()->with('error', 'Slot konsultasi ini sudah lewat batas waktunya.');
-            }
-
-            if ($slot->status !== 'Available') {
-                return back()->withInput()->with('error', 'Maaf, slot konsultasi ini sudah penuh dipesan oleh guru lain.');
-            }
-
-            $slot->update([
-                'status'                 => 'Booked',
-                'booked_by_teacher_id'   => $teacher->id,
-                'class_id'               => $data['class_id'] ?? null,
-                'topic'                  => trim($data['topic']),
-                'booking_notes'          => $data['booking_notes'] ?? null,
-                'booked_at'              => now(),
-                'teacher_booking_status' => 'Pending',
-            ]);
-
-            // Kirim notifikasi ke Kurikulum atau Owner yang memiliki slot ini
-            $targetUser = $slot->curriculumUser;
-            if (!$targetUser) {
-                if ($slot->effective_role === 'Owner') {
-                    $ownerLevel = \App\Models\Level::where('nama_level', 'Owner')->first();
-                    $targetUser = User::where('level_id', $ownerLevel?->id_level)->first();
-                } else {
-                    $currLevel = \App\Models\Level::where('nama_level', 'Curriculum')->first();
-                    $targetUser = User::where('level_id', $currLevel?->id_level)->first();
+            foreach ($slotIdsToBook as $sId) {
+                $slot = $lockedSlots->get($sId);
+                if (!$slot) {
+                    return back()->withInput()->with('error', 'Slot konsultasi tidak ditemukan.');
+                }
+                if ($slot->is_past) {
+                    return back()->withInput()->with('error', "Slot konsultasi tanggal {$slot->date->translatedFormat('d M Y')} sudah lewat batas waktunya.");
+                }
+                if ($slot->status !== 'Available') {
+                    return back()->withInput()->with('error', "Maaf, slot konsultasi tanggal {$slot->date->translatedFormat('d M Y')} jam " . substr($slot->start_time, 0, 5) . " sudah penuh atau dipesan guru lain.");
                 }
             }
 
-            if ($targetUser) {
-                $targetRoleName = $slot->effective_role;
-                $targetUser->notify(new AppNotification(
-                    title: "Pengajuan Konsultasi Baru dari {$teacher->name}",
-                    message: "{$teacher->name} mengajukan konsultasi untuk tanggal {$slot->date->translatedFormat('d M Y')} jam " . substr($slot->start_time, 0, 5) . " dengan topik: \"{$data['topic']}\".",
-                    url: $targetRoleName === 'Owner' ? url('/owner/konsultasi?tab=pengajuan') : url('/kurikulum/jadwal-konsultasi'),
-                    type: 'konsultasi',
-                    icon: 'fa-calendar-plus'
-                ));
+            // Eksekusi booking masing-masing slot
+            foreach ($slotIdsToBook as $sId) {
+                $slot = $lockedSlots->get($sId);
+                $slot->update([
+                    'status'                 => 'Booked',
+                    'booked_by_teacher_id'   => $teacher->id,
+                    'class_id'               => $data['class_id'] ?? null,
+                    'topic'                  => trim($data['topic']),
+                    'booking_notes'          => $data['booking_notes'] ?? null,
+                    'booked_at'              => now(),
+                    'teacher_booking_status' => 'Pending',
+                ]);
+
+                // Kirim notifikasi ke penanggung jawab slot
+                $targetUser = $slot->curriculumUser;
+                if (!$targetUser) {
+                    if ($slot->effective_role === 'Owner') {
+                        $ownerLevel = \App\Models\Level::where('nama_level', 'Owner')->first();
+                        $targetUser = User::where('level_id', $ownerLevel?->id_level)->first();
+                    } else {
+                        $currLevel = \App\Models\Level::where('nama_level', 'Curriculum')->first();
+                        $targetUser = User::where('level_id', $currLevel?->id_level)->first();
+                    }
+                }
+
+                if ($targetUser) {
+                    $targetRoleName = $slot->effective_role;
+                    $targetUser->notify(new AppNotification(
+                        title: "Pengajuan Konsultasi Baru dari {$teacher->name}",
+                        message: "{$teacher->name} mengajukan konsultasi untuk tanggal {$slot->date->translatedFormat('d M Y')} jam " . substr($slot->start_time, 0, 5) . " dengan topik: \"{$data['topic']}\".",
+                        url: $targetRoleName === 'Owner' ? url('/owner/konsultasi?tab=pengajuan') : url('/kurikulum/jadwal-konsultasi'),
+                        type: 'konsultasi',
+                        icon: 'fa-calendar-plus'
+                    ));
+                }
             }
 
-            return back()->with('success', 'Pengajuan konsultasi berhasil dikirim dan menunggu konfirmasi.');
+            $successMsg = count($slotIdsToBook) > 1
+                ? 'Dua pengajuan konsultasi (Kurikulum dan Owner) berhasil dikirim dalam satu transaksi dan menunggu konfirmasi masing-masing.'
+                : 'Pengajuan konsultasi berhasil dikirim dan menunggu konfirmasi.';
+
+            if (!empty($conflictWarnings)) {
+                return back()->with('success', $successMsg)->with('warning', implode(' ', $conflictWarnings));
+            }
+
+            return back()->with('success', $successMsg);
         });
     }
 

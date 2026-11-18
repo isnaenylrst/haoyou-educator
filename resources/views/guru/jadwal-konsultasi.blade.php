@@ -45,7 +45,7 @@
         </div>
     @endif
 
-    {{-- NAV TABS: KALENDER GRID SLOT & RIWAYAT PENGAJUAN --}}
+    {{-- NAV TABS: KALENDER GRID SLOT, RIWAYAT PENGAJUAN, & CATATAN PERTEMUAN --}}
     <ul class="nav nav-pills mb-4 gap-2" id="guruConsultationTabs">
         <li class="nav-item">
             <button class="nav-link active rounded-pill px-4 fw-semibold shadow-sm" id="tab-grid" data-bs-toggle="pill" data-bs-target="#pane-grid" type="button">
@@ -55,6 +55,11 @@
         <li class="nav-item">
             <button class="nav-link rounded-pill px-4 fw-semibold shadow-sm" id="tab-riwayat" data-bs-toggle="pill" data-bs-target="#pane-riwayat" type="button">
                 <i class="fa-solid fa-clock-rotate-left me-2"></i> Riwayat Pengajuan Saya ({{ $myBookings->total() }})
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link rounded-pill px-4 fw-semibold shadow-sm" id="tab-catatan" data-bs-toggle="pill" data-bs-target="#pane-catatan" type="button">
+                <i class="fa-solid fa-book-bookmark me-2"></i> Catatan Pertemuan (Blok 4 Sesi)
             </button>
         </li>
     </ul>
@@ -238,13 +243,98 @@
                 </div>
             </div>
         </div>
+
+        {{-- PANE 3: CATATAN PERTEMUAN (GURU 4e: READ-ONLY BLOK 4 SESI & REVISI H+3) --}}
+        <div class="tab-pane fade" id="pane-catatan">
+            <div class="card shadow-sm border-0 mb-4 rounded-4 overflow-hidden">
+                <div class="card-header bg-white py-3">
+                    <h5 class="fw-bold mb-1"><i class="fa-solid fa-book-bookmark text-primary me-2"></i>Catatan Pertemuan Konsultasi per Kelas (Blok 4 Sesi)</h5>
+                    <small class="text-muted">
+                        Aturan Konsultasi Materi: Pertemuan dihitung per blok 4 sesi. Batas konsultasi blok = <strong>H-14</strong> hari sebelum sesi pertama blok.
+                        Setelah konsultasi dilakukan, batas konsultasi revisi adalah paling lambat <strong>H+3</strong> hari.
+                    </small>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 20%;">Kelas</th>
+                                    <th style="width: 15%;">Blok Pertemuan</th>
+                                    <th style="width: 15%;">Sesi Pertama Blok</th>
+                                    <th style="width: 15%;">Batas Konsultasi (H-14)</th>
+                                    <th style="width: 15%;">Status Konsultasi</th>
+                                    <th style="width: 20%;">Batas Revisi (H+3) &amp; Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse ($meetingRecords as $rec)
+                                    @php
+                                        $cl = $rec['class'];
+                                        $blocks = $rec['blocks'];
+                                    @endphp
+                                    @foreach ($blocks as $b)
+                                        <tr>
+                                            @if ($loop->first)
+                                                <td rowspan="{{ $blocks->count() }}" class="align-top bg-light">
+                                                    <div class="fw-bold text-dark">{{ $cl->class_name }}</div>
+                                                    <small class="text-muted d-block">Mulai: {{ $cl->start_date ? \Carbon\Carbon::parse($cl->start_date)->translatedFormat('d M Y') : '-' }}</small>
+                                                </td>
+                                            @endif
+                                            <td>
+                                                <span class="fw-semibold">{{ $b['block_label'] }}</span>
+                                            </td>
+                                            <td>
+                                                @if ($b['first_session_date'])
+                                                    <span class="text-dark">{{ $b['first_session_date']->translatedFormat('d M Y') }}</span>
+                                                @else
+                                                    <span class="text-muted">-</span>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                @if ($b['consultation_deadline'])
+                                                    <span class="{{ $b['is_overdue'] ? 'text-danger fw-bold' : 'text-dark' }}">
+                                                        {{ $b['consultation_deadline']->translatedFormat('d M Y') }}
+                                                    </span>
+                                                @else
+                                                    <span class="text-muted">-</span>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-{{ $b['consultation_status_badge'] }} px-2 py-1">
+                                                    {{ $b['consultation_status'] }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                @if ($b['revision_deadline'])
+                                                    <div>Batas: <strong>{{ $b['revision_deadline']->translatedFormat('d M Y') }}</strong></div>
+                                                    <span class="badge bg-{{ $b['revision_status_badge'] }} mt-1">
+                                                        Revisi: {{ $b['revision_status'] }}
+                                                    </span>
+                                                @else
+                                                    <span class="text-muted">-</span>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                @empty
+                                    <tr>
+                                        <td colspan="6" class="text-center py-4 text-muted">Belum ada data kelas aktif untuk catatan pertemuan Anda.</td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
 </div>
 
-{{-- MODAL AJUKAN KONSULTASI BARU --}}
+{{-- MODAL AJUKAN KONSULTASI BARU (GURU 4b: Kurikulum, Owner, atau Keduanya) --}}
 <div class="modal fade" id="modalAjukanKonsultasi" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <form action="{{ route('teacher.jadwal-konsultasi.book') }}" method="POST" class="modal-content rounded-4 border-0">
             @csrf
             <div class="modal-header">
@@ -252,17 +342,74 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                {{-- Pilihan Tujuan Konsultasi --}}
                 <div class="mb-3">
+                    <label class="form-label fw-semibold">Pihak yang Dituju <span class="text-danger">*</span></label>
+                    <div class="d-flex flex-wrap gap-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="booking_target" id="targetCurriculum" value="curriculum" checked onchange="updateBookingTarget()">
+                            <label class="form-check-label fw-semibold text-primary" for="targetCurriculum">
+                                <i class="fa-solid fa-chalkboard-user me-1"></i> Kurikulum Saja
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="booking_target" id="targetOwner" value="owner" onchange="updateBookingTarget()">
+                            <label class="form-check-label fw-semibold text-warning" for="targetOwner">
+                                <i class="fa-solid fa-user-tie me-1"></i> Owner Saja
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="booking_target" id="targetBoth" value="both" onchange="updateBookingTarget()">
+                            <label class="form-check-label fw-semibold text-success" for="targetBoth">
+                                <i class="fa-solid fa-people-arrows me-1"></i> Keduanya (Kurikulum &amp; Owner)
+                            </label>
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mt-1">Jika memilih keduanya, sistem akan membuat 2 pengajuan terpisah dalam satu transaksi yang aman.</small>
+                </div>
+
+                <input type="hidden" name="booking_type" id="inputBookingType" value="single">
+
+                {{-- Opsi 1: Pilihan Slot Tunggal (Kurikulum / Owner) --}}
+                <div class="mb-3" id="singleSlotGroup">
                     <label class="form-label fw-semibold">Pilih Slot Ketersediaan <span class="text-danger">*</span></label>
-                    <select name="slot_id" class="form-select" required>
+                    <select name="slot_id" id="selectSingleSlot" class="form-select">
                         <option value="">-- Pilih Slot Konsultasi --</option>
                         @foreach ($availableSlots as $slot)
-                            <option value="{{ $slot->id }}">
+                            <option value="{{ $slot->id }}" data-role="{{ $slot->effective_role }}">
                                 [{{ $slot->effective_role }}] {{ $slot->date->translatedFormat('d M Y') }} ({{ substr($slot->start_time, 0, 5) }} - {{ substr($slot->end_time, 0, 5) }} WIB) {{ $slot->notes ? '- ' . $slot->notes : '' }}
                             </option>
                         @endforeach
                     </select>
                     <small class="text-muted">Hanya slot bertanda Tersedia dan masa depan yang dapat dipilih.</small>
+                </div>
+
+                {{-- Opsi 2: Pilihan Dua Slot Sekaligus (Kurikulum dan Owner) --}}
+                <div id="bothSlotGroup" style="display: none;">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold text-primary"><i class="fa-solid fa-chalkboard-user me-1"></i> Slot Kurikulum <span class="text-danger">*</span></label>
+                            <select name="slot_curriculum_id" id="selectCurriculumSlot" class="form-select">
+                                <option value="">-- Pilih Slot Kurikulum --</option>
+                                @foreach ($availableSlots->where('effective_role', 'Curriculum') as $slot)
+                                    <option value="{{ $slot->id }}">
+                                        {{ $slot->date->translatedFormat('d M Y') }} ({{ substr($slot->start_time, 0, 5) }} - {{ substr($slot->end_time, 0, 5) }} WIB)
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold text-warning"><i class="fa-solid fa-user-tie me-1"></i> Slot Owner <span class="text-danger">*</span></label>
+                            <select name="slot_owner_id" id="selectOwnerSlot" class="form-select">
+                                <option value="">-- Pilih Slot Owner --</option>
+                                @foreach ($availableSlots->where('effective_role', 'Owner') as $slot)
+                                    <option value="{{ $slot->id }}">
+                                        {{ $slot->date->translatedFormat('d M Y') }} ({{ substr($slot->start_time, 0, 5) }} - {{ substr($slot->end_time, 0, 5) }} WIB)
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="mb-3">
@@ -292,4 +439,51 @@
         </form>
     </div>
 </div>
+
+@push('scripts')
+<script>
+function updateBookingTarget() {
+    const isBoth = document.getElementById('targetBoth').checked;
+    const isOwner = document.getElementById('targetOwner').checked;
+    const isCurr = document.getElementById('targetCurriculum').checked;
+
+    const singleGroup = document.getElementById('singleSlotGroup');
+    const bothGroup = document.getElementById('bothSlotGroup');
+    const inputType = document.getElementById('inputBookingType');
+    const selectSingle = document.getElementById('selectSingleSlot');
+
+    if (isBoth) {
+        inputType.value = 'both';
+        singleGroup.style.display = 'none';
+        bothGroup.style.display = 'block';
+        selectSingle.removeAttribute('required');
+    } else {
+        inputType.value = 'single';
+        singleGroup.style.display = 'block';
+        bothGroup.style.display = 'none';
+        selectSingle.setAttribute('required', 'required');
+
+        // Filter opsi di single select sesuai role yang dipilih
+        const targetRole = isOwner ? 'Owner' : 'Curriculum';
+        [...selectSingle.options].forEach((opt, idx) => {
+            if (idx === 0) return;
+            const r = opt.dataset.role;
+            if (r === targetRole) {
+                opt.style.display = '';
+            } else {
+                opt.style.display = 'none';
+            }
+        });
+        if (selectSingle.selectedOptions[0]?.style.display === 'none') {
+            selectSingle.value = '';
+        }
+    }
+}
+
+// Inisialisasi filter pertama kali
+document.addEventListener('DOMContentLoaded', function() {
+    updateBookingTarget();
+});
+</script>
+@endpush
 @endsection

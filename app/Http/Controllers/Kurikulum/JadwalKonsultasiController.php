@@ -554,6 +554,8 @@ class JadwalKonsultasiController extends Controller
                 return back()->with('error', 'Slot konsultasi ini sudah lewat batas waktunya.');
             }
 
+            $teacher = $lockedSlot->teacher;
+
             if ($validated['action'] === 'confirm') {
                 $lockedSlot->update([
                     'status'                 => 'Booked',
@@ -572,6 +574,17 @@ class JadwalKonsultasiController extends Controller
                     'created_by'   => Auth::id(),
                 ]);
 
+                // Kirim notifikasi ke Guru (GURU 4g)
+                if ($teacher?->user) {
+                    $teacher->user->notify(new \App\Notifications\AppNotification(
+                        title: 'Pengajuan Konsultasi Dikonfirmasi Kurikulum',
+                        message: "Pengajuan konsultasi Anda untuk tanggal {$lockedSlot->date->translatedFormat('d M Y')} jam " . substr($lockedSlot->start_time, 0, 5) . " telah dikonfirmasi oleh Kurikulum.",
+                        url: url('/guru/jadwal-konsultasi'),
+                        type: 'konsultasi',
+                        icon: 'fa-calendar-check'
+                    ));
+                }
+
                 $msg = 'Booking slot konsultasi guru berhasil dikonfirmasi.';
             } else {
                 $lockedSlot->update([
@@ -581,6 +594,17 @@ class JadwalKonsultasiController extends Controller
                     'class_id'               => null,
                     'booking_notes'          => $validated['notes'] ? "Ditolak: " . $validated['notes'] : null,
                 ]);
+
+                // Kirim notifikasi penolakan ke Guru (GURU 4g)
+                if ($teacher?->user) {
+                    $teacher->user->notify(new \App\Notifications\AppNotification(
+                        title: 'Pengajuan Konsultasi Ditolak Kurikulum',
+                        message: "Pengajuan konsultasi Anda untuk tanggal {$lockedSlot->date->translatedFormat('d M Y')} ditolak oleh Kurikulum. Catatan: " . ($validated['notes'] ?? '-'),
+                        url: url('/guru/jadwal-konsultasi'),
+                        type: 'konsultasi',
+                        icon: 'fa-circle-xmark'
+                    ));
+                }
 
                 $msg = 'Pengajuan booking slot ditolak. Slot kini kembali tersedia.';
             }

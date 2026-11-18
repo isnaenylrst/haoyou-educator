@@ -6,10 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\ClassModel;
 use App\Models\ClassSession;
 use App\Models\ClassSessionTeacherOffer;
+use App\Models\CurriculumConsultationSlot;
 use App\Models\TeacherAvailability;
 use App\Models\TeacherLeave;
 use App\Services\ClassScheduleService;
+use App\Services\ConsultationSlotGridService;
 use App\Services\TeacherAvailabilityService;
+use App\Services\TeacherAvailabilityUrgencyService;
 use App\Services\WeeklyScheduleGridService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -147,13 +150,47 @@ class ScheduleController extends Controller
                   ->orWhereHas('teacherOffers', fn ($o) => $o->where('teacher_id', $teacher->id)->where('status', 'Pending'))
                   ->orWhere(fn ($q) => $q->where('broadcast_to_all', true)->whereNull('teacher_id'));
             })
-            ->orderBy('class_name')
             ->get()
             ->map(function ($c) use ($myAvailabilities, $teacher) {
-                $c->fits     = TeacherAvailabilityService::coversClass($myAvailabilities, $c);
-                $c->conflict = TeacherAvailabilityService::conflictWith($teacher->id, $c);
+                $c->fits         = TeacherAvailabilityService::coversClass($myAvailabilities, $c);
+                $c->conflict     = TeacherAvailabilityService::conflictWith($teacher->id, $c);
+                $c->urgency_info = TeacherAvailabilityUrgencyService::evaluateClass($c);
                 return $c;
-            });
+            })
+            // Urutkan dari paling dekat/urgent (urgent = 1, past = 2, medium = 3, neutral = 4) lalu hari terdekat
+            ->sortBy([
+                fn ($a, $b) => match ($a->urgency_info['level']) {
+                    'urgent' => 1,
+                    'past'   => 2,
+                    'medium' => 3,
+                    default  => 4,
+                } <=> match ($b->urgency_info['level']) {
+                    'urgent' => 1,
+                    'past'   => 2,
+                    'medium' => 3,
+                    default  => 4,
+                },
+                fn ($a, $b) => ($a->urgency_info['days_diff'] ?? 999) <=> ($b->urgency_info['days_diff'] ?? 999),
+            ])
+            ->values();
+
+        // Jumlah kelas menunggu yang berstatus urgent untuk penanda badge
+        $urgentPendingCount = $pendingClasses->filter(fn ($c) => in_array($c->urgency_info['level'] ?? '', ['urgent', 'past']))->count();
+
+        // Lapisan Slot Konsultasi Kurikulum & Owner (GURU 4f)
+        $consultationSlotsWeek = CurriculumConsultationSlot::with(['curriculumUser', 'teacher'])
+            ->whereBetween('date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+            ->where('status', '!=', 'Cancelled')
+            ->orderBy('date')
+            ->orderBy('start_time')
+            ->get();
+
+        $consultationGrid = ConsultationSlotGridService::buildWeeklyGrid(
+            startOfWeek: $weekStart,
+            slots: $consultationSlotsWeek,
+            viewerUserId: Auth::id(),
+            viewerRole: 'Teacher'
+        );
 
         // Kelas pengganti (satu pertemuan untuk satu siswa) yang diajukan kepada saya. Siapa cepat dia dapat.
         $scheduleSvc = app(ClassScheduleService::class);
@@ -205,7 +242,8 @@ class ScheduleController extends Controller
         return view('guru.schedule', compact(
             'weekStart', 'weekEnd', 'scope', 'teacherFilterId', 'teachers',
             'slots', 'cells', 'dayHeaders', 'next',
-            'myAvailabilities', 'days', 'pendingClasses',
+            'myAvailabilities', 'days', 'pendingClasses', 'urgentPendingCount',
+            'consultationGrid',
             'replacementRequests', 'replacementOffers', 'availabilityGrid', 'myTeacherId'
         ));
     }

@@ -207,6 +207,27 @@
         }
     }
 
+    // Hitung penanda merah untuk menu Schedule jika ada kelas menunggu konfirmasi yang urgent
+    $urgentScheduleCount = 0;
+    if ($teacher) {
+        try {
+            $pendingForUrgency = \App\Models\ClassModel::whereIn('status', ['Open', 'Running'])
+                ->where(function ($q) use ($teacher) {
+                    $q->where(fn ($q) => $q->where('teacher_id', $teacher->id)->where('teacher_response', 'Pending'))
+                      ->orWhereHas('teacherOffers', fn ($o) => $o->where('teacher_id', $teacher->id)->where('status', 'Pending'))
+                      ->orWhere(fn ($q) => $q->where('broadcast_to_all', true)->whereNull('teacher_id'));
+                })->get();
+            foreach ($pendingForUrgency as $pcu) {
+                $uInfo = \App\Services\TeacherAvailabilityUrgencyService::evaluateClass($pcu);
+                if (in_array($uInfo['level'] ?? '', ['urgent', 'past'])) {
+                    $urgentScheduleCount++;
+                }
+            }
+        } catch (\Throwable $e) {
+            // Abaikan error agar layout tidak gagal render
+        }
+    }
+
     // ===== OWNER: sidebar menampilkan SEMUA fitur Admin, Kurikulum, dan Guru =====
     if (($authUser->level->nama_level ?? null) === 'Owner') {
         $menu      = \App\Support\OwnerMenu::asLayoutMenu();
@@ -233,6 +254,9 @@
                 <a href="{{ url($url) }}" class="nav-link-item {{ request()->is($pattern) ? 'active' : '' }}" title="{{ $text }}">
                     <i class="fa-solid {{ $icon }}"></i>
                     <span class="nav-text">{{ $text }}</span>
+                    @if($text === 'Schedule' && !empty($urgentScheduleCount) && $urgentScheduleCount > 0)
+                        <span class="badge bg-danger rounded-pill ms-auto px-2" style="font-size: 10px;" title="{{ $urgentScheduleCount }} kelas menunggu konfirmasi mendesak">{{ $urgentScheduleCount }}</span>
+                    @endif
                 </a>
             @endforeach
         @endforeach
