@@ -199,9 +199,23 @@
                                     <i class="fa-regular fa-pen-to-square"></i>
                                 </button>
 
-                                <button class="icon-btn wa" title="Follow Up">
-                                    <i class="fa-brands fa-whatsapp"></i>
-                                </button>
+                                @if ($candidate->whatsapp_url)
+                                    <a href="{{ $candidate->whatsapp_url }}"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="icon-btn wa"
+                                        title="Follow Up via WhatsApp">
+                                        <i class="fa-brands fa-whatsapp"></i>
+                                    </a>
+                                @else
+                                    <button type="button"
+                                        class="icon-btn wa"
+                                        title="Nomor WhatsApp belum diisi"
+                                        disabled
+                                        style="opacity:.4;cursor:not-allowed;">
+                                        <i class="fa-brands fa-whatsapp"></i>
+                                    </button>
+                                @endif
 
                                 <a href="{{ route('admin.calon-siswa.convert', $candidate->id) }}"
                                     class="icon-btn convert"
