@@ -106,7 +106,13 @@
                                             @endphp
                                             <div class="slot-card p-2 mb-1 rounded-3 text-start shadow-sm position-relative border-start border-3 {{ $layerBorder }}"
                                                  data-role="{{ $item['role'] }}"
-                                                 style="background-color: {{ $isCurriculum ? '#f0f7ff' : '#fffdf0' }}; font-size: 11px; line-height: 1.3;">
+                                                 @if($userRole === 'Teacher' && $item['status'] === 'Available' && !$item['is_past'])
+                                                    onclick="handleTeacherSlotClick({{ $item['id'] }}, '{{ $item['role'] }}')"
+                                                    style="background-color: {{ $isCurriculum ? '#f0f7ff' : '#fffdf0' }}; font-size: 11px; line-height: 1.3; cursor: pointer;"
+                                                    title="Klik untuk memilih slot ini pada formulir pengajuan"
+                                                 @else
+                                                    style="background-color: {{ $isCurriculum ? '#f0f7ff' : '#fffdf0' }}; font-size: 11px; line-height: 1.3;"
+                                                 @endif>
                                                 <div class="d-flex justify-content-between align-items-center mb-1">
                                                     {!! $roleBadge !!}
                                                     <span class="badge {{ $item['badge_class'] }}" style="font-size: 9px;">
@@ -120,13 +126,32 @@
 
                                                 {{-- Jika booked / penuh --}}
                                                 @if ($item['status'] === 'Booked')
-                                                    <div class="mt-1 text-danger fw-semibold">
-                                                        <i class="fa-solid fa-user me-1"></i>{{ $item['teacher_name'] ?? 'Guru' }}
-                                                    </div>
-                                                    @if ($item['topic'])
-                                                        <div class="text-muted text-truncate" title="{{ $item['topic'] }}">
-                                                            <i class="fa-solid fa-tag me-1"></i>{{ $item['topic'] }}
+                                                    @if ($userRole === 'Teacher')
+                                                        @if (!empty($item['is_booked_by_me']))
+                                                            <div class="mt-1 text-primary fw-bold">
+                                                                <i class="fa-solid fa-user-check me-1"></i>Slot Anda ({{ $item['teacher_booking_status'] ?? 'Dipesan' }})
+                                                            </div>
+                                                            @if ($item['topic'])
+                                                                <div class="text-muted text-truncate" title="{{ $item['topic'] }}">
+                                                                    <i class="fa-solid fa-tag me-1"></i>{{ $item['topic'] }}
+                                                                </div>
+                                                            @endif
+                                                        @else
+                                                            {{-- Privasi Guru: Jangan tampilkan nama guru lain yang memesan --}}
+                                                            <div class="mt-1 text-danger fw-semibold">
+                                                                <i class="fa-solid fa-lock me-1"></i>Penuh
+                                                            </div>
+                                                        @endif
+                                                    @else
+                                                        {{-- Kurikulum / Owner melihat identitas pemesan --}}
+                                                        <div class="mt-1 text-danger fw-semibold">
+                                                            <i class="fa-solid fa-user me-1"></i>{{ $item['teacher_name'] ?? 'Guru' }}
                                                         </div>
+                                                        @if ($item['topic'])
+                                                            <div class="text-muted text-truncate" title="{{ $item['topic'] }}">
+                                                                <i class="fa-solid fa-tag me-1"></i>{{ $item['topic'] }}
+                                                            </div>
+                                                        @endif
                                                     @endif
                                                 @elseif ($item['notes'])
                                                     <div class="text-muted text-truncate mt-1" title="{{ $item['notes'] }}">
@@ -223,6 +248,35 @@
 </div>
 
 <script>
+    function handleTeacherSlotClick(slotId, role) {
+        const modalEl = document.getElementById('modalAjukanKonsultasi');
+        if (modalEl) {
+            const radioCurr = document.getElementById('targetCurriculum');
+            const radioOwner = document.getElementById('targetOwner');
+            const selectSingle = document.getElementById('selectSingleSlot');
+
+            if (role === 'Owner' && radioOwner) {
+                radioOwner.checked = true;
+            } else if (radioCurr) {
+                radioCurr.checked = true;
+            }
+            if (typeof updateBookingTarget === 'function') {
+                updateBookingTarget();
+            }
+            if (selectSingle) {
+                selectSingle.value = slotId;
+            }
+
+            if (window.bootstrap && bootstrap.Modal) {
+                const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                modal.show();
+            }
+        } else {
+            // Jika berada di Schedule dan modal tidak ada di halaman ini, arahkan ke Jadwal Konsultasi
+            window.location.href = "{{ route('teacher.jadwal-konsultasi.index') }}";
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         const layerButtons = document.querySelectorAll('.filter-layer-btn');
         layerButtons.forEach(btn => {

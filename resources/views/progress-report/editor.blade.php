@@ -68,12 +68,22 @@
             @if($lock)<div class="small text-muted mb-2 no-print"><i class="fa-solid fa-list-check me-1"></i> Pertemuan terisi: <b id="prCounter">0</b> dari {{ count($rowsOld) }}. Kosongkan Level &amp; Description pada pertemuan yang belum berjalan.</div>@endif
             <table class="pr-t" id="rowsTable">
                 <thead>
-                    <tr><th style="width:7%">NO<br><span class="small fw-normal">(pertemuan)</span></th><th style="width:37%">Learning Materials</th><th style="width:14%">Achievement<br>Level</th><th style="width:38%">Description</th><th style="width:4%" class="no-print"></th></tr>
+                    <tr>
+                        <th style="width:7%">NO<br><span class="small fw-normal">(pertemuan)</span></th>
+                        <th style="width:14%">Tanggal<br><span class="small fw-normal">(otomatis)</span></th>
+                        <th style="width:30%">Learning Materials</th>
+                        <th style="width:13%">Achievement<br>Level</th>
+                        <th style="width:32%">Description</th>
+                        <th style="width:4%" class="no-print"></th>
+                    </tr>
                 </thead>
                 <tbody>
                 @foreach($rowsOld as $i => $r)
                     <tr class="pr-row">
                         <td><input class="pr-in text-center" name="materials[{{ $i }}][meeting]" value="{{ $r['meeting'] ?? ($i + 1) }}" maxlength="10" @if($lock) readonly style="background:#eee" @endif></td>
+                        <td>
+                            <input class="pr-in text-center" name="materials[{{ $i }}][meeting_date]" value="{{ $r['meeting_date'] ?? '-' }}" readonly style="background:#f8f9fa; font-size:11px; cursor:default;" title="Tanggal pertemuan otomatis dari sistem">
+                        </td>
                         <td>
                             @if($lock)
                                 <div class="pr-locked rt-view">{!! RichText::render($r['material'] ?? '') !!}</div>
@@ -221,6 +231,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const i = tbody.querySelectorAll('tr.pr-row').length;
         const tr = document.createElement('tr'); tr.className = 'pr-row';
         tr.innerHTML = '<td><input class="pr-in text-center" name="materials[' + i + '][meeting]" value="' + (i + 1) + '" maxlength="10"></td>'
+            + '<td><input class="pr-in text-center" name="materials[' + i + '][meeting_date]" value="-" readonly style="background:#f8f9fa; font-size:11px; cursor:default;"></td>'
             + '<td><textarea class="rt-field" name="materials[' + i + '][material]" placeholder="Student learned ..."></textarea></td>'
             + '<td><select class="pr-in" name="materials[' + i + '][level]"><option value="">-- pilih --</option>' + levels.map(l => '<option value="' + esc(l) + '">' + esc(l) + '</option>').join('') + '</select></td>'
             + '<td><textarea class="rt-field" name="materials[' + i + '][description]" placeholder="The student ..."></textarea></td>'

@@ -26,31 +26,47 @@ class TeacherAvailabilityUrgencyService
             ->first();
 
         $nearestDate = null;
+        $nearestTime = null;
         if ($nearestSession?->session_date) {
             $nearestDate = Carbon::parse($nearestSession->session_date)->startOfDay();
+            if ($nearestSession->start_time) {
+                $nearestTime = substr($nearestSession->start_time, 0, 5) . ($nearestSession->end_time ? ' - ' . substr($nearestSession->end_time, 0, 5) : '');
+            }
         } elseif ($class->start_date) {
             $nearestDate = Carbon::parse($class->start_date)->startOfDay();
         }
 
+        // Jika belum ada session time, coba ambil dari schedules kelas
+        if (!$nearestTime && $class->relationLoaded('schedules') && $class->schedules->isNotEmpty()) {
+            $sc = $class->schedules->first();
+            $nearestTime = substr($sc->start_time, 0, 5) . ($sc->end_time ? ' - ' . substr($sc->end_time, 0, 5) : '');
+        }
+
         if (!$nearestDate) {
             return [
-                'level'       => 'neutral',
-                'label'       => 'Tidak Urgent',
-                'badge_class' => 'bg-secondary',
-                'days_diff'   => 999,
-                'target_date' => null,
+                'level'        => 'neutral',
+                'label'        => 'Tidak Urgent',
+                'badge_class'  => 'bg-secondary',
+                'days_diff'    => 999,
+                'target_date'  => null,
+                'target_time'  => $nearestTime,
+                'datetime_str' => '-',
             ];
         }
+
+        $datetimeStr = $nearestDate->locale('id')->isoFormat('ddd, D MMM Y') . ($nearestTime ? " ({$nearestTime} WIB)" : '');
 
         $diffDays = $today->diffInDays($nearestDate, false);
 
         if ($diffDays < 0) {
             return [
-                'level'       => 'past',
-                'label'       => 'Terlewat (' . abs($diffDays) . ' hari lalu)',
-                'badge_class' => 'bg-dark text-white',
-                'days_diff'   => $diffDays,
-                'target_date' => $nearestDate,
+                'level'        => 'past',
+                'label'        => 'Terlewat (' . abs($diffDays) . ' hari lalu)',
+                'badge_class'  => 'bg-dark text-white',
+                'days_diff'    => $diffDays,
+                'target_date'  => $nearestDate,
+                'target_time'  => $nearestTime,
+                'datetime_str' => $datetimeStr,
             ];
         }
 
@@ -58,30 +74,36 @@ class TeacherAvailabilityUrgencyService
             $label = $diffDays === 0 ? 'Urgent (Hari Ini!)' : ($diffDays === 1 ? 'Urgent (Besok!)' : "Urgent ({$diffDays} hari lagi)");
 
             return [
-                'level'       => 'urgent',
-                'label'       => $label,
-                'badge_class' => 'bg-danger text-white',
-                'days_diff'   => $diffDays,
-                'target_date' => $nearestDate,
+                'level'        => 'urgent',
+                'label'        => $label,
+                'badge_class'  => 'bg-danger text-white',
+                'days_diff'    => $diffDays,
+                'target_date'  => $nearestDate,
+                'target_time'  => $nearestTime,
+                'datetime_str' => $datetimeStr,
             ];
         }
 
         if ($diffDays <= 7) {
             return [
-                'level'       => 'medium',
-                'label'       => "Menengah ({$diffDays} hari lagi)",
-                'badge_class' => 'bg-warning text-dark',
-                'days_diff'   => $diffDays,
-                'target_date' => $nearestDate,
+                'level'        => 'medium',
+                'label'        => "Menengah ({$diffDays} hari lagi)",
+                'badge_class'  => 'bg-warning text-dark',
+                'days_diff'    => $diffDays,
+                'target_date'  => $nearestDate,
+                'target_time'  => $nearestTime,
+                'datetime_str' => $datetimeStr,
             ];
         }
 
         return [
-            'level'       => 'neutral',
-            'label'       => "Tidak Urgent ({$diffDays} hari lagi)",
-            'badge_class' => 'bg-info text-dark',
-            'days_diff'   => $diffDays,
-            'target_date' => $nearestDate,
+            'level'        => 'neutral',
+            'label'        => "Tidak Urgent ({$diffDays} hari lagi)",
+            'badge_class'  => 'bg-info text-dark',
+            'days_diff'    => $diffDays,
+            'target_date'  => $nearestDate,
+            'target_time'  => $nearestTime,
+            'datetime_str' => $datetimeStr,
         ];
     }
 }
