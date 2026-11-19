@@ -73,16 +73,25 @@ class ConsultationSlotGridService
             $isMine = ($viewerUserId && $slot->curriculum_user_id == $viewerUserId);
             $isPast = $slot->is_past;
 
+            // Info pemesanan sebagian jam / sub-bookings
+            $availMinutes = $slot->available_minutes;
+            $totalMinutes = max(0, $eMin - $sMin);
+            $isFullyBooked = ($slot->status === 'Booked' && $slot->booked_by_teacher_id) || ($totalMinutes > 0 && $availMinutes <= 0);
+            $isPartiallyBooked = ($availMinutes > 0 && $availMinutes < $totalMinutes);
+
             // Status display
-            if ($isPast && $slot->status === 'Available') {
+            if ($isPast && ($slot->status === 'Available' || $availMinutes > 0)) {
                 $statusLabel = 'Terlewat';
                 $badgeClass  = 'bg-secondary text-white';
             } elseif ($slot->status === 'Cancelled') {
                 $statusLabel = 'Nonaktif';
                 $badgeClass  = 'bg-light text-muted border';
-            } elseif ($slot->status === 'Booked') {
+            } elseif ($isFullyBooked) {
                 $statusLabel = 'Penuh';
                 $badgeClass  = 'bg-danger text-white';
+            } elseif ($isPartiallyBooked) {
+                $statusLabel = 'Sisa ' . ($availMinutes / 60) . 'j';
+                $badgeClass  = 'bg-warning text-dark';
             } else {
                 $statusLabel = 'Tersedia';
                 $badgeClass  = 'bg-success text-white';
@@ -93,6 +102,24 @@ class ConsultationSlotGridService
                 $viewerTeacher = \App\Models\Teacher::where('user_id', $viewerUserId)->first();
                 if ($viewerTeacher && $slot->booked_by_teacher_id == $viewerTeacher->id) {
                     $isBookedByMe = true;
+                }
+            }
+
+            // Sub-booking items untuk slot ini jika ada
+            $subsData = [];
+            foreach ($slot->subBookings as $sub) {
+                if ($sub->status === 'Booked') {
+                    $subTeacherId = $sub->booked_by_teacher_id;
+                    $isSubBookedByMe = ($viewerRole === 'Teacher' && $viewerUserId && $viewerTeacher && $subTeacherId == $viewerTeacher->id);
+                    $subsData[] = [
+                        'id'                     => $sub->id,
+                        'start_time'             => $sub->effective_start_time,
+                        'end_time'               => $sub->effective_end_time,
+                        'teacher_name'           => $sub->teacher?->name,
+                        'topic'                  => $sub->topic,
+                        'is_booked_by_me'        => $isSubBookedByMe,
+                        'teacher_booking_status' => $sub->teacher_booking_status,
+                    ];
                 }
             }
 
@@ -108,7 +135,7 @@ class ConsultationSlotGridService
                             'role'                   => $role,
                             'start_time'             => substr($slot->start_time, 0, 5),
                             'end_time'               => substr($slot->end_time, 0, 5),
-                            'status'                 => $slot->status,
+                            'status'                 => $isFullyBooked ? 'Booked' : $slot->status,
                             'status_label'           => $statusLabel,
                             'badge_class'            => $badgeClass,
                             'is_mine'                => $isMine,
@@ -118,6 +145,11 @@ class ConsultationSlotGridService
                             'topic'                  => $slot->topic ?: ($slot->booking_notes ? \Illuminate\Support\Str::limit($slot->booking_notes, 25) : null),
                             'notes'                  => $slot->notes,
                             'teacher_booking_status' => $slot->teacher_booking_status,
+                            'available_minutes'      => $availMinutes,
+                            'total_minutes'          => $totalMinutes,
+                            'is_partially_booked'    => $isPartiallyBooked,
+                            'is_fully_booked'        => $isFullyBooked,
+                            'sub_bookings'           => $subsData,
                         ];
                     }
                 }

@@ -24,9 +24,11 @@ class KetersediaanGuruController extends Controller
         'day.required'           => 'Pilih hari.',
         'start_time.required'    => 'Jam mulai wajib diisi.',
         'start_time.date_format' => 'Format jam mulai tidak valid.',
+        'start_time.after_or_equal' => 'Jam mulai minimal pukul 09:00.',
         'end_time.required'      => 'Jam selesai wajib diisi.',
         'end_time.date_format'   => 'Format jam selesai tidak valid.',
         'end_time.after'         => 'Jam selesai harus setelah jam mulai.',
+        'end_time.before_or_equal' => 'Jam selesai maksimal pukul 21:00.',
     ];
 
     // ------------------------------------------------------------------ HALAMAN
@@ -155,8 +157,8 @@ class KetersediaanGuruController extends Controller
             'teacher_id' => ['required', 'integer', Rule::exists('teachers', 'id')->where('status', 'Active')],
             'days'       => ['required', 'array', 'min:1'],
             'days.*'     => ['required', Rule::in(TeacherAvailability::DAYS)],
-            'start_time' => ['required', 'date_format:H:i'],
-            'end_time'   => ['required', 'date_format:H:i', 'after:start_time'],
+            'start_time' => ['required', 'date_format:H:i', 'after_or_equal:09:00'],
+            'end_time'   => ['required', 'date_format:H:i', 'after:start_time', 'before_or_equal:21:00'],
             'note'       => ['nullable', 'string', 'max:255'],
         ], self::MESSAGES);
 
@@ -181,8 +183,8 @@ class KetersediaanGuruController extends Controller
     {
         $data = $request->validate([
             'day'        => ['required', Rule::in(TeacherAvailability::DAYS)],
-            'start_time' => ['required', 'date_format:H:i'],
-            'end_time'   => ['required', 'date_format:H:i', 'after:start_time'],
+            'start_time' => ['required', 'date_format:H:i', 'after_or_equal:09:00'],
+            'end_time'   => ['required', 'date_format:H:i', 'after:start_time', 'before_or_equal:21:00'],
             'note'       => ['nullable', 'string', 'max:255'],
         ], self::MESSAGES);
 

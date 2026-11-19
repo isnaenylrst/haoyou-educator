@@ -376,10 +376,12 @@
                     </div>
                     <div class="col-md-2">
                         <input form="upd{{ $a->id }}" type="time" name="start_time"
+                               min="09:00" max="21:00"
                                value="{{ substr($a->start_time, 0, 5) }}" class="form-control form-control-sm" required>
                     </div>
                     <div class="col-md-2">
                         <input form="upd{{ $a->id }}" type="time" name="end_time"
+                               min="09:00" max="21:00"
                                value="{{ substr($a->end_time, 0, 5) }}" class="form-control form-control-sm" required>
                     </div>
                     <div class="col-md-4">
@@ -426,13 +428,15 @@
 
                 <div class="row g-2 align-items-end">
                     <div class="col-md-3">
-                        <label class="form-label small fw-semibold mb-1">Mulai</label>
+                        <label class="form-label small fw-semibold mb-1">Mulai (min 09:00)</label>
                         <input type="time" name="start_time" class="form-control form-control-sm"
+                               min="09:00" max="21:00"
                                value="{{ $addOld ? old('start_time') : '' }}" required>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label small fw-semibold mb-1">Selesai</label>
+                        <label class="form-label small fw-semibold mb-1">Selesai (max 21:00)</label>
                         <input type="time" name="end_time" class="form-control form-control-sm"
+                               min="09:00" max="21:00"
                                value="{{ $addOld ? old('end_time') : '' }}" required>
                     </div>
                     <div class="col-md-4">
