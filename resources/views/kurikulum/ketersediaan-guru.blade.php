@@ -389,13 +389,15 @@
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label fw-semibold">Mulai</label>
+                        <label class="form-label fw-semibold">Mulai (min 09:00)</label>
                         <input type="time" name="start_time" id="fStart" class="form-control"
+                               min="09:00" max="21:00"
                                value="{{ $addOld ? old('start_time') : '' }}" required>
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label fw-semibold">Selesai</label>
+                        <label class="form-label fw-semibold">Selesai (max 21:00)</label>
                         <input type="time" name="end_time" id="fEnd" class="form-control"
+                               min="09:00" max="21:00"
                                value="{{ $addOld ? old('end_time') : '' }}" required>
                     </div>
                     <div class="col-md-4">
@@ -467,10 +469,12 @@
                                 </div>
                                 <div class="col-md-2">
                                     <input form="upd{{ $a->id }}" type="time" name="start_time"
+                                           min="09:00" max="21:00"
                                            value="{{ substr($a->start_time, 0, 5) }}" class="form-control form-control-sm" required>
                                 </div>
                                 <div class="col-md-2">
                                     <input form="upd{{ $a->id }}" type="time" name="end_time"
+                                           min="09:00" max="21:00"
                                            value="{{ substr($a->end_time, 0, 5) }}" class="form-control form-control-sm" required>
                                 </div>
                                 <div class="col-md-4">
@@ -524,8 +528,8 @@ document.addEventListener('avail:cell', function (e) {
 
     if (d.teacher && d.teacher !== 'all' && teacher) teacher.value = d.teacher;
     dayChecks().forEach(c => c.checked = (c.value === d.day));
-    if (start) start.value = pad(d.hour) + ':00';
-    if (end)   end.value   = pad(Math.min(d.hour + 1, 23)) + ':' + (d.hour + 1 > 23 ? '59' : '00');
+    if (start) start.value = pad(Math.max(d.hour, 9)) + ':00';
+    if (end)   end.value   = pad(Math.min(d.hour + 1, 21)) + ':00';
 
     const form = document.getElementById('formTambah');
     if (form) {

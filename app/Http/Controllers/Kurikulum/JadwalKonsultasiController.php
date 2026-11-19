@@ -117,8 +117,9 @@ class JadwalKonsultasiController extends Controller
         }
         $endOfWeek = $startOfWeek->copy()->endOfWeek(Carbon::SUNDAY);
 
-        // Ambil slot Kurikulum dan Owner pada minggu tersebut
-        $weekSlots = \App\Models\CurriculumConsultationSlot::with(['curriculumUser', 'teacher', 'class'])
+        // Ambil slot Kurikulum dan Owner pada minggu tersebut (hanya parent window)
+        $weekSlots = \App\Models\CurriculumConsultationSlot::with(['curriculumUser', 'teacher', 'class', 'subBookings.teacher'])
+            ->whereNull('parent_slot_id')
             ->whereBetween('date', [$startOfWeek->toDateString(), $endOfWeek->toDateString()])
             ->where('status', '!=', 'Cancelled')
             ->orderBy('date')

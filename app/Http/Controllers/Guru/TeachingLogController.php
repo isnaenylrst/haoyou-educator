@@ -9,6 +9,7 @@ use App\Models\ClassSession;
 use App\Models\ProgressReport;
 use App\Models\ScheduleJournalUnlock;
 use App\Models\TeachingJournal;
+use App\Services\JournalStatusResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -26,9 +27,11 @@ class TeachingLogController extends Controller
         $teacher = Auth::user()->teacher;
         abort_unless($teacher, 403, 'Akun Anda belum terhubung dengan data guru.');
 
-        // Filter periode (default: bulan ini) & kelas
-        $month   = $request->get('month', now()->format('Y-m'));
-        $classId = $request->get('class_id');
+        // Filter periode (default: bulan ini), kelas, jurnal & progress report
+        $month        = $request->get('month', now()->format('Y-m'));
+        $classId      = $request->get('class_id');
+        $jurnalFilter = $request->get('jurnal'); // sudah_diisi, belum_diisi, terlambat
+        $reportFilter = $request->get('report'); // disetujui, diajukan, draft, belum_diisi
 
         try {
             $startDate = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
@@ -133,8 +136,7 @@ class TeachingLogController extends Controller
 
             $startTime = substr($cs->start_time, 0, 5);
             $endTime = substr($cs->end_time, 0, 5);
-            $sessionEnd = Carbon::parse($dateStr . ' ' . $endTime);
-            $deadline = $sessionEnd->copy()->addHours(24);
+            $deadline = JournalStatusResolver::calculateDeadline($dateStr, $endTime);
             $isPastDeadline = now()->gt($deadline);
 
             $journal = $journalsBySession->get($cs->id)
@@ -142,11 +144,14 @@ class TeachingLogController extends Controller
 
             $isUnlocked = $isSessionUnlocked($cs->class_schedule_id, $dateStr);
 
+            $rawStatus = JournalStatusResolver::resolveStatus($journal, $deadline, $isPastDeadline, $isUnlocked);
+
+            // Backward compatibility untuk teks label status & counter
             if ($journal) {
                 $jStatus = 'Terisi';
                 $jBadge = 'bg-success';
                 $journalFilledCount++;
-            } elseif ($isPastDeadline && !$isUnlocked) {
+            } elseif ($rawStatus === JournalStatusResolver::STATUS_TERKUNCI || $rawStatus === JournalStatusResolver::STATUS_TERLAMBAT) {
                 $jStatus = 'Terlambat';
                 $jBadge = 'bg-danger';
                 $journalLateCount++;
@@ -156,22 +161,27 @@ class TeachingLogController extends Controller
                 $journalUnfilledCount++;
             }
 
-            // Status progress report kelas ini
+            $rawPrStatus = 'belum_diisi';
             if ($prApproved > 0 && $prUnfilled === 0) {
                 $prStatus = 'Disetujui';
                 $prBadge = 'bg-success';
+                $rawPrStatus = 'disetujui';
             } elseif ($prSubmitted > 0) {
                 $prStatus = 'Diajukan';
                 $prBadge = 'bg-info text-dark';
+                $rawPrStatus = 'diajukan';
             } elseif ($prRevision > 0) {
                 $prStatus = 'Perlu Revisi';
                 $prBadge = 'bg-danger';
+                $rawPrStatus = 'revisi';
             } elseif ($prDraft > 0) {
                 $prStatus = 'Draft';
                 $prBadge = 'bg-secondary';
+                $rawPrStatus = 'draft';
             } else {
                 $prStatus = 'Belum Diisi';
                 $prBadge = 'bg-light text-dark border';
+                $rawPrStatus = 'belum_diisi';
             }
 
             $sessionsList->push((object) [
@@ -186,8 +196,10 @@ class TeachingLogController extends Controller
                 'journal'          => $journal,
                 'journal_status'   => $jStatus,
                 'journal_badge'    => $jBadge,
+                'raw_status'       => $rawStatus,
                 'pr_status'        => $prStatus,
                 'pr_badge'         => $prBadge,
+                'raw_pr_status'    => $rawPrStatus,
                 'is_past_deadline' => $isPastDeadline,
                 'is_unlocked'      => $isUnlocked,
                 'deadline'         => $deadline,
@@ -240,18 +252,19 @@ class TeachingLogController extends Controller
                         continue;
                     }
 
-                    $sessionEnd = Carbon::parse($dateStr . ' ' . $sched->end_time);
-                    $deadline = $sessionEnd->copy()->addHours(24);
+                    $deadline = JournalStatusResolver::calculateDeadline($dateStr, $sched->end_time);
                     $isPastDeadline = now()->gt($deadline);
 
                     $journal = $journals->first(fn ($j) => (int) $j->class_id === (int) $sched->class_id && $j->session_date->format('Y-m-d') === $dateStr);
                     $isUnlocked = $isSessionUnlocked($sched->id, $dateStr);
 
+                    $rawStatus = JournalStatusResolver::resolveStatus($journal, $deadline, $isPastDeadline, $isUnlocked);
+
                     if ($journal) {
                         $jStatus = 'Terisi';
                         $jBadge = 'bg-success';
                         $journalFilledCount++;
-                    } elseif ($isPastDeadline && !$isUnlocked) {
+                    } elseif ($rawStatus === JournalStatusResolver::STATUS_TERKUNCI || $rawStatus === JournalStatusResolver::STATUS_TERLAMBAT) {
                         $jStatus = 'Terlambat';
                         $jBadge = 'bg-danger';
                         $journalLateCount++;
@@ -261,21 +274,27 @@ class TeachingLogController extends Controller
                         $journalUnfilledCount++;
                     }
 
+                    $rawPrStatus = 'belum_diisi';
                     if ($prApproved > 0 && $prUnfilled === 0) {
                         $prStatus = 'Disetujui';
                         $prBadge = 'bg-success';
+                        $rawPrStatus = 'disetujui';
                     } elseif ($prSubmitted > 0) {
                         $prStatus = 'Diajukan';
                         $prBadge = 'bg-info text-dark';
+                        $rawPrStatus = 'diajukan';
                     } elseif ($prRevision > 0) {
                         $prStatus = 'Perlu Revisi';
                         $prBadge = 'bg-danger';
+                        $rawPrStatus = 'revisi';
                     } elseif ($prDraft > 0) {
                         $prStatus = 'Draft';
                         $prBadge = 'bg-secondary';
+                        $rawPrStatus = 'draft';
                     } else {
                         $prStatus = 'Belum Diisi';
                         $prBadge = 'bg-light text-dark border';
+                        $rawPrStatus = 'belum_diisi';
                     }
 
                     $sessionsList->push((object) [
@@ -290,8 +309,10 @@ class TeachingLogController extends Controller
                         'journal'          => $journal,
                         'journal_status'   => $jStatus,
                         'journal_badge'    => $jBadge,
+                        'raw_status'       => $rawStatus,
                         'pr_status'        => $prStatus,
                         'pr_badge'         => $prBadge,
+                        'raw_pr_status'    => $rawPrStatus,
                         'is_past_deadline' => $isPastDeadline,
                         'is_unlocked'      => $isUnlocked,
                         'deadline'         => $deadline,
@@ -301,8 +322,35 @@ class TeachingLogController extends Controller
             }
         }
 
+        // Filter list sesi sesuai parameter filter jurnal / progress report
+        $filteredSessions = $sessionsList;
+        if ($jurnalFilter === 'sudah_diisi') {
+            $filteredSessions = $filteredSessions->filter(fn ($s) => in_array($s->raw_status, [
+                JournalStatusResolver::STATUS_SUDAH_DIISI,
+                JournalStatusResolver::STATUS_DIKUNCI,
+                JournalStatusResolver::STATUS_REVISI,
+            ]) || $s->journal !== null);
+        } elseif ($jurnalFilter === 'belum_diisi') {
+            $filteredSessions = $filteredSessions->filter(fn ($s) => $s->raw_status === JournalStatusResolver::STATUS_BELUM_DIISI);
+        } elseif ($jurnalFilter === 'terlambat') {
+            $filteredSessions = $filteredSessions->filter(fn ($s) => in_array($s->raw_status, [
+                JournalStatusResolver::STATUS_TERLAMBAT,
+                JournalStatusResolver::STATUS_TERKUNCI,
+            ]));
+        }
+
+        if ($reportFilter === 'disetujui') {
+            $filteredSessions = $filteredSessions->filter(fn ($s) => $s->raw_pr_status === 'disetujui');
+        } elseif ($reportFilter === 'diajukan') {
+            $filteredSessions = $filteredSessions->filter(fn ($s) => $s->raw_pr_status === 'diajukan');
+        } elseif ($reportFilter === 'draft') {
+            $filteredSessions = $filteredSessions->filter(fn ($s) => $s->raw_pr_status === 'draft');
+        } elseif ($reportFilter === 'belum_diisi') {
+            $filteredSessions = $filteredSessions->filter(fn ($s) => $s->raw_pr_status === 'belum_diisi');
+        }
+
         // Urutkan pertemuan dari tanggal terbaru
-        $sortedSessions = $sessionsList->sortByDesc('date')->values();
+        $sortedSessions = $filteredSessions->sortByDesc('date')->values();
 
         // Pagination manual untuk daftar pertemuan
         $page = (int) $request->get('page', 1);
@@ -331,7 +379,7 @@ class TeachingLogController extends Controller
         ];
 
         return view('guru.teaching-log', compact(
-            'myClasses', 'classId', 'month', 'stats', 'paginatedSessions'
+            'myClasses', 'classId', 'month', 'stats', 'paginatedSessions', 'jurnalFilter', 'reportFilter'
         ));
     }
 }

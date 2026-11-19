@@ -45,23 +45,46 @@
     @endif
 
     {{-- Stat cards --}}
+    @php
+        $activeTab = $filterStatus ?? 'all';
+    @endphp
     <div class="row g-3 mb-4">
-        <div class="col-md-3 col-6"><div class="card border-0 shadow-sm p-3">
-            <small class="text-muted text-uppercase">Sesi Hari Ini</small>
-            <h3 class="fw-bold mb-0">{{ $totalSessionToday }}</h3><small class="text-muted">Terjadwal</small>
-        </div></div>
-        <div class="col-md-3 col-6"><div class="card border-0 shadow-sm p-3">
-            <small class="text-muted text-uppercase">Sudah Diisi</small>
-            <h3 class="fw-bold mb-0 text-success">{{ $filledCount }}</h3><small class="text-muted">Jurnal selesai</small>
-        </div></div>
-        <div class="col-md-3 col-6"><div class="card border-0 shadow-sm p-3">
-            <small class="text-muted text-uppercase">Belum Diisi</small>
-            <h3 class="fw-bold mb-0 text-warning">{{ $unfilledCount }}</h3><small class="text-muted">Perlu diisi</small>
-        </div></div>
-        <div class="col-md-3 col-6"><div class="card border-0 shadow-sm p-3">
-            <small class="text-muted text-uppercase">Terlambat / Kunci</small>
-            <h3 class="fw-bold mb-0 text-danger">{{ $lateCount }}</h3><small class="text-muted">Lewat 24 jam</small>
-        </div></div>
+        <div class="col-md-3 col-6">
+            <a href="{{ route('teacher.attendance', ['date' => $date->format('Y-m-d')]) }}" class="text-decoration-none">
+                <div class="card border-0 shadow-sm p-3 h-100 hover-card {{ $activeTab === 'all' && !$isCrossDate ? 'border border-primary border-2' : '' }}">
+                    <small class="text-muted text-uppercase fw-semibold">Sesi Hari Ini</small>
+                    <h3 class="fw-bold mb-0 text-dark">{{ $totalSessionToday }}</h3>
+                    <small class="text-muted">Jadwal tanggal ini</small>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3 col-6">
+            <a href="{{ route('teacher.attendance', ['status' => 'sudah_diisi']) }}" class="text-decoration-none">
+                <div class="card border-0 shadow-sm p-3 h-100 hover-card {{ $activeTab === 'sudah_diisi' ? 'border border-success border-2' : '' }}">
+                    <small class="text-muted text-uppercase fw-semibold">Sudah Diisi</small>
+                    <h3 class="fw-bold mb-0 text-success">{{ $statusCounts['filled'] ?? 0 }}</h3>
+                    <small class="text-muted">semua tanggal</small>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3 col-6">
+            <a href="{{ route('teacher.attendance', ['status' => 'belum_diisi']) }}" class="text-decoration-none">
+                <div class="card border-0 shadow-sm p-3 h-100 hover-card {{ $activeTab === 'belum_diisi' ? 'border border-warning border-2' : '' }}">
+                    <small class="text-muted text-uppercase fw-semibold">Belum Diisi</small>
+                    <h3 class="fw-bold mb-0 text-warning">{{ $statusCounts['unfilled'] ?? 0 }}</h3>
+                    <small class="text-muted">semua tanggal</small>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3 col-6">
+            <a href="{{ route('teacher.attendance', ['status' => 'terlambat']) }}" class="text-decoration-none">
+                <div class="card border-0 shadow-sm p-3 h-100 hover-card {{ in_array($activeTab, ['terlambat', 'terkunci']) ? 'border border-danger border-2' : '' }}">
+                    <small class="text-muted text-uppercase fw-semibold">Terlambat / Kunci</small>
+                    <h3 class="fw-bold mb-0 text-danger">{{ $statusCounts['late_or_locked'] ?? 0 }}</h3>
+                    <small class="text-muted">semua tanggal</small>
+                </div>
+            </a>
+        </div>
     </div>
 
     @if ($lateCount > 0)
@@ -84,26 +107,78 @@
     @endunless
 
     {{-- Filter tabs --}}
+    @php
+        $activeTab = $filterStatus ?? 'all';
+    @endphp
     <div class="mb-3 d-flex flex-wrap gap-2" id="sessionFilterTabs">
-        <button class="btn btn-dark rounded-pill btn-sm px-3" onclick="filterSessions('all', this)">Semua</button>
-        <button class="btn btn-outline-secondary rounded-pill btn-sm px-3" onclick="filterSessions('belum_diisi', this)">Belum Diisi</button>
-        <button class="btn btn-outline-secondary rounded-pill btn-sm px-3" onclick="filterSessions('terlambat', this)">
+        <a href="{{ route('teacher.attendance', ['date' => $date->format('Y-m-d')]) }}"
+           class="btn {{ $activeTab === 'all' ? 'btn-dark' : 'btn-outline-secondary' }} rounded-pill btn-sm px-3">
+            Semua
+            <span class="badge {{ $activeTab === 'all' ? 'bg-light text-dark' : 'bg-secondary' }} ms-1">{{ $statusCounts['total'] ?? 0 }}</span>
+        </a>
+        <a href="{{ route('teacher.attendance', ['status' => 'belum_diisi']) }}"
+           class="btn {{ $activeTab === 'belum_diisi' ? 'btn-dark' : 'btn-outline-secondary' }} rounded-pill btn-sm px-3">
+            Belum Diisi
+            <span class="badge {{ ($statusCounts['unfilled'] ?? 0) > 0 ? 'bg-warning text-dark' : 'bg-secondary' }} ms-1">{{ $statusCounts['unfilled'] ?? 0 }}</span>
+        </a>
+        <a href="{{ route('teacher.attendance', ['status' => 'terlambat']) }}"
+           class="btn {{ in_array($activeTab, ['terlambat', 'terkunci']) ? 'btn-dark' : 'btn-outline-secondary' }} rounded-pill btn-sm px-3">
             Terlambat / Terkunci
-            @if ($lateCount > 0)<span class="badge bg-danger ms-1">{{ $lateCount }}</span>@endif
-        </button>
-        <button class="btn btn-outline-secondary rounded-pill btn-sm px-3" onclick="filterSessions('sudah_diisi', this)">Sudah Diisi</button>
-        <button class="btn btn-outline-secondary rounded-pill btn-sm px-3" onclick="filterSessions('dikunci', this)">Dikunci Kurikulum</button>
-        <button class="btn btn-outline-secondary rounded-pill btn-sm px-3" onclick="filterSessions('revisi', this)">
+            @if (($statusCounts['late_or_locked'] ?? 0) > 0)
+                <span class="badge bg-danger ms-1">{{ $statusCounts['late_or_locked'] }}</span>
+            @else
+                <span class="badge bg-secondary ms-1">0</span>
+            @endif
+        </a>
+        <a href="{{ route('teacher.attendance', ['status' => 'sudah_diisi']) }}"
+           class="btn {{ $activeTab === 'sudah_diisi' ? 'btn-dark' : 'btn-outline-secondary' }} rounded-pill btn-sm px-3">
+            Sudah Diisi
+            <span class="badge {{ ($statusCounts['filled'] ?? 0) > 0 ? 'bg-info text-dark' : 'bg-secondary' }} ms-1">{{ $statusCounts['filled'] ?? 0 }}</span>
+        </a>
+        <a href="{{ route('teacher.attendance', ['status' => 'revisi']) }}"
+           class="btn {{ $activeTab === 'revisi' ? 'btn-dark' : 'btn-outline-secondary' }} rounded-pill btn-sm px-3">
             Perlu Revisi
-            @if ($revisionCount > 0)<span class="badge bg-danger ms-1">{{ $revisionCount }}</span>@endif
-        </button>
+            @if (($statusCounts['revision'] ?? 0) > 0)
+                <span class="badge bg-danger ms-1">{{ $statusCounts['revision'] }}</span>
+            @else
+                <span class="badge bg-secondary ms-1">0</span>
+            @endif
+        </a>
     </div>
+
+    @if ($isCrossDate)
+        <div class="alert alert-light border py-2 px-3 small d-flex align-items-center justify-content-between mb-3 rounded-3">
+            <span>
+                <i class="fa-solid fa-filter me-1 text-primary"></i> Menampilkan hasil filter <strong>{{ \App\Services\JournalStatusResolver::label($activeTab) }}</strong> lintas tanggal.
+            </span>
+            <a href="{{ route('teacher.attendance') }}" class="text-decoration-none fw-semibold small">
+                Reset ke Jadwal Hari Ini &rarr;
+            </a>
+        </div>
+    @endif
 
     <div id="sessionWrapper">
         @forelse ($sessions as $item)
-            @include('guru.attendance._card', ['item' => $item, 'isSubstitute' => false])
+            @include('guru.attendance._card', ['item' => $item, 'isSubstitute' => false, 'showDate' => $isCrossDate])
         @empty
-            <div class="text-center text-muted py-5 card border-0 shadow-sm rounded-4">Tidak ada jadwal kelas Anda pada tanggal ini.</div>
+            <div class="text-center text-muted py-5 card border-0 shadow-sm rounded-4">
+                @if ($activeTab === 'belum_diisi')
+                    <i class="fa-solid fa-circle-check fs-2 text-success d-block mb-2"></i>
+                    Tidak ada jurnal yang belum diisi. Semua jurnal Anda sudah terisi!
+                @elseif (in_array($activeTab, ['terlambat', 'terkunci']))
+                    <i class="fa-solid fa-lock-open fs-2 text-success d-block mb-2"></i>
+                    Tidak ada jurnal yang terlambat atau terkunci.
+                @elseif ($activeTab === 'revisi')
+                    <i class="fa-solid fa-check-double fs-2 text-success d-block mb-2"></i>
+                    Tidak ada jurnal yang perlu direvisi saat ini.
+                @elseif ($activeTab === 'sudah_diisi')
+                    <i class="fa-regular fa-clipboard fs-2 text-secondary d-block mb-2"></i>
+                    Tidak ada jurnal yang menunggu review.
+                @else
+                    <i class="fa-solid fa-calendar-xmark fs-2 text-secondary d-block mb-2"></i>
+                    Tidak ada jadwal kelas Anda pada tanggal ini.
+                @endif
+            </div>
         @endforelse
     </div>
 

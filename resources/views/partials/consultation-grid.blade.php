@@ -124,8 +124,28 @@
                                                     <i class="fa-regular fa-clock me-1 text-muted"></i>{{ $item['start_time'] }} - {{ $item['end_time'] }}
                                                 </div>
 
-                                                {{-- Jika booked / penuh --}}
-                                                @if ($item['status'] === 'Booked')
+                                                {{-- Jika ada sub_bookings (pemesanan sebagian jam) --}}
+                                                @if (!empty($item['sub_bookings']))
+                                                    <div class="mt-1 pt-1 border-top">
+                                                        @foreach ($item['sub_bookings'] as $sub)
+                                                            <div class="small mb-1 p-1 rounded" style="background: rgba(0,0,0,0.03);">
+                                                                <span class="badge bg-secondary" style="font-size: 8px;">{{ $sub['start_time'] }}-{{ $sub['end_time'] }}</span>
+                                                                @if ($userRole === 'Teacher')
+                                                                    @if (!empty($sub['is_booked_by_me']))
+                                                                        <span class="text-primary fw-bold" style="font-size: 9px;"><i class="fa-solid fa-user-check"></i> Anda</span>
+                                                                    @else
+                                                                        <span class="text-danger fw-semibold" style="font-size: 9px;"><i class="fa-solid fa-lock"></i> Penuh</span>
+                                                                    @endif
+                                                                @else
+                                                                    <span class="text-danger fw-semibold" style="font-size: 9px;"><i class="fa-solid fa-user"></i> {{ $sub['teacher_name'] ?? 'Guru' }}</span>
+                                                                @endif
+                                                            </div>
+                                                        @endforeach
+                                                    </div>
+                                                @endif
+
+                                                {{-- Jika booked / penuh (slot tunggal tanpa sub-booking) --}}
+                                                @if ($item['status'] === 'Booked' && empty($item['sub_bookings']))
                                                     @if ($userRole === 'Teacher')
                                                         @if (!empty($item['is_booked_by_me']))
                                                             <div class="mt-1 text-primary fw-bold">

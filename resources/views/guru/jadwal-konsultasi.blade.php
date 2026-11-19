@@ -373,15 +373,37 @@
                 {{-- Opsi 1: Pilihan Slot Tunggal (Kurikulum / Owner) --}}
                 <div class="mb-3" id="singleSlotGroup">
                     <label class="form-label fw-semibold">Pilih Slot Ketersediaan <span class="text-danger">*</span></label>
-                    <select name="slot_id" id="selectSingleSlot" class="form-select">
+                    <select name="slot_id" id="selectSingleSlot" class="form-select" onchange="updateSubSlotOptions()">
                         <option value="">-- Pilih Slot Konsultasi --</option>
                         @foreach ($availableSlots as $slot)
-                            <option value="{{ $slot->id }}" data-role="{{ $slot->effective_role }}">
+                            @php
+                                $subSlots = $slot->getAvailableSubSlots();
+                            @endphp
+                            <option value="{{ $slot->id }}" data-role="{{ $slot->effective_role }}"
+                                    data-start="{{ substr($slot->start_time, 0, 5) }}"
+                                    data-end="{{ substr($slot->end_time, 0, 5) }}"
+                                    data-subslots="{{ json_encode($subSlots) }}">
                                 [{{ $slot->effective_role }}] {{ $slot->date->translatedFormat('d M Y') }} ({{ substr($slot->start_time, 0, 5) }} - {{ substr($slot->end_time, 0, 5) }} WIB) {{ $slot->notes ? '- ' . $slot->notes : '' }}
                             </option>
                         @endforeach
                     </select>
                     <small class="text-muted">Hanya slot bertanda Tersedia dan masa depan yang dapat dipilih.</small>
+                </div>
+
+                {{-- Pilihan Jam Mulai & Selesai / Sub-slot (Pemesanan Sebagian Jam) --}}
+                <div class="row g-2 mb-3" id="timeBookingGroup">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Jam Mulai</label>
+                        <input type="time" name="booked_start_time" id="inputBookedStartTime" class="form-control" placeholder="09:00">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Jam Selesai</label>
+                        <input type="time" name="booked_end_time" id="inputBookedEndTime" class="form-control" placeholder="10:00">
+                    </div>
+                    <div class="col-12">
+                        <div id="subSlotBadges" class="d-flex flex-wrap gap-1 mt-1"></div>
+                        <small class="text-muted">Default memesan seluruh jendela waktu. Anda boleh memilih sebagian jam (per blok 60 menit) bila slot lebih dari 1 jam.</small>
+                    </div>
                 </div>
 
                 {{-- Opsi 2: Pilihan Dua Slot Sekaligus (Kurikulum dan Owner) --}}
@@ -480,9 +502,73 @@ function updateBookingTarget() {
     }
 }
 
+function updateSubSlotOptions() {
+    const select = document.getElementById('selectSingleSlot');
+    const startInput = document.getElementById('inputBookedStartTime');
+    const endInput = document.getElementById('inputBookedEndTime');
+    const badgesDiv = document.getElementById('subSlotBadges');
+    if (!select || !startInput || !endInput) return;
+
+    badgesDiv.innerHTML = '';
+    const selectedOpt = select.selectedOptions[0];
+    if (!selectedOpt || !selectedOpt.value) {
+        startInput.value = '';
+        endInput.value = '';
+        return;
+    }
+
+    const defaultStart = selectedOpt.dataset.start || '';
+    const defaultEnd = selectedOpt.dataset.end || '';
+    startInput.value = defaultStart;
+    endInput.value = defaultEnd;
+
+    try {
+        const subslots = JSON.parse(selectedOpt.dataset.subslots || '[]');
+        if (subslots && subslots.length > 1) {
+            badgesDiv.innerHTML = '<span class="small fw-bold text-muted me-1">Pilihan Blok 60m:</span>';
+            subslots.forEach(b => {
+                const badge = document.createElement('button');
+                badge.type = 'button';
+                badge.className = 'btn btn-xs btn-outline-primary rounded-pill py-0 px-2';
+                badge.style.fontSize = '11px';
+                badge.innerText = b.start + ' - ' + b.end;
+                badge.onclick = function() {
+                    startInput.value = b.start;
+                    endInput.value = b.end;
+                };
+                badgesDiv.appendChild(badge);
+            });
+        }
+    } catch (e) {}
+}
+
+function handleTeacherSlotClick(slotId, role) {
+    const modalEl = document.getElementById('modalAjukanKonsultasi');
+    if (!modalEl) return;
+    const modal = new bootstrap.Modal(modalEl);
+
+    // Set radio target
+    if (role === 'Owner') {
+        const radOwner = document.getElementById('targetOwner');
+        if (radOwner) radOwner.checked = true;
+    } else {
+        const radCurr = document.getElementById('targetCurriculum');
+        if (radCurr) radCurr.checked = true;
+    }
+    updateBookingTarget();
+
+    const select = document.getElementById('selectSingleSlot');
+    if (select) {
+        select.value = slotId;
+        updateSubSlotOptions();
+    }
+    modal.show();
+}
+
 // Inisialisasi filter pertama kali
 document.addEventListener('DOMContentLoaded', function() {
     updateBookingTarget();
+    updateSubSlotOptions();
 });
 </script>
 @endpush
