@@ -60,7 +60,8 @@ class VocabController extends Controller
         $hafal = VocabTestResult::where('user_id', $uid)->where('status', 'hafal');
 
         return view('Siswa.vocab.guide', [
-            'title'   => 'Belajar Vocab › Panduan',
+            'title'     => 'Belajar Vocab › Panduan',
+            'selfVideo' => \App\Models\SelfLearningVideo::activeFor('vocab'),
             'videoId' => VocabSetting::youtubeId(VocabSetting::read('guide_video')),
             'progress' => [
                 'plan'    => VocabStudyPlan::where('user_id', $uid)->exists(),

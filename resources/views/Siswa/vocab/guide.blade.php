@@ -75,19 +75,9 @@
   ];
 @endphp
 
-{{-- ================= VIDEO TUTORIAL ================= --}}
+ {{-- ================= VIDEO TUTORIAL ================= --}}
 <div class="fl-sec"><span>Video</span> Tutorial belajar Vocab</div>
-<div class="fl-video">
-  @if($videoId)
-    <div class="ratio">
-      <iframe src="https://www.youtube-nocookie.com/embed/{{ $videoId }}" title="Tutorial Belajar Vocab"
-              loading="lazy" allowfullscreen
-              allow="accelerometer; encrypted-media; picture-in-picture"></iframe>
-    </div>
-  @else
-    <div class="fl-empty">🎬 Video tutorial belum tersedia.</div>
-  @endif
-</div>
+@include('Siswa.partials.guide-video', ['selfVideo' => $selfVideo ?? null, 'videoId' => $videoId ?? null])
 
 {{-- ================= ALUR BELAJAR ================= --}}
 <div class="fl-hero">
