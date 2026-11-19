@@ -174,14 +174,11 @@ class AttendanceController extends Controller
                 ->where('class_status', 'Conducted')
                 ->count() + ($journal ? 0 : 1);
 
-            // Status poin siswa kelas ini pada tanggal tersebut
+            // Poin yang sudah tercatat per siswa pada tanggal ini: [student_id => PointLog]
             $classStudentIds = $schedule->class?->enrollments?->pluck('student_id') ?? collect();
-            $existingPoints  = $classStudentIds
-                ->map(fn ($id) => $pointLogs->get($id)?->first())
-                ->filter()
-                ->values();
-            $pointLocked = $classStudentIds->isNotEmpty()
-                && $existingPoints->count() === $classStudentIds->count();
+            $pointByStudent  = $classStudentIds
+                ->mapWithKeys(fn ($id) => [$id => $pointLogs->get($id)?->first()])
+                ->filter();
 
             return [
                 'schedule'            => $schedule,
@@ -194,8 +191,7 @@ class AttendanceController extends Controller
                 'unlocked_until'      => $unlockRecord?->unlocked_until,
                 'unlock_record'       => $unlockRecord,
                 'auto_meeting_number' => max(1, $autoMeetingNumber),
-                'point_locked'        => $pointLocked,
-                'point_logs'          => $existingPoints,
+                'point_by_student'    => $pointByStudent,
             ];
         };
 
@@ -244,7 +240,7 @@ class AttendanceController extends Controller
 
     // ------------------------------------------------------------------ VALIDASI & HELPER BERSAMA
 
-    private function validated(Request $request, ?ClassSchedule $classSchedule = null, bool $pointLocked = false): array
+    private function validated(Request $request, ?ClassSchedule $classSchedule = null): array
     {
         $running = $request->input('class_running') === 'Berjalan';
         $req     = $running ? 'required' : 'nullable';
@@ -283,8 +279,9 @@ class AttendanceController extends Controller
             'problems'              => ['required', 'string', 'max:2000'],   // kalau tidak berjalan: isi alasannya
             'solutions'             => [$req, 'string', 'max:2000'],
             'results'               => [$req, 'string', 'max:2000'],
-            // Kalau poin sudah terkunci (semua siswa sudah dapat poin / sedang revisi), tidak wajib diisi
-            'session_score'         => $pointLocked ? ['nullable'] : [$req, 'in:10,5'],
+            // Poin per siswa: point[student_id] = kuning | merah (kosong = tidak dapat poin)
+            'point'                 => ['nullable', 'array'],
+            'point.*'               => ['nullable', Rule::in(['kuning', 'merah'])],
             'attendance'            => ['nullable', 'array'],
             'attendance.*'          => [Rule::in(array_keys(config('journal.attendance_status', [
                 'Present' => 'Hadir', 'Sick' => 'Sakit', 'Permission' => 'Izin', 'Absent' => 'Alpha',
@@ -315,7 +312,6 @@ class AttendanceController extends Controller
             'problems'              => $data['problems'],
             'solutions'             => $data['solutions'] ?? null,
             'results'               => $data['results'] ?? null,
-            'session_score'         => ($running && ! empty($data['session_score'])) ? (int) $data['session_score'] : null,
         ];
     }
 
@@ -340,16 +336,7 @@ class AttendanceController extends Controller
         $me      = $this->teacher();
         $class   = $classSchedule->class;
 
-        // Cek dulu apakah semua siswa kelas ini sudah punya poin di tanggal tersebut
-        $sd = $request->input('session_date');
-        $pointLocked = ($sd && strtotime($sd))
-            ? app(PointService::class)->allHavePoint(
-                $class->enrollments()->where('status', 'Active')->pluck('student_id'),
-                $sd
-            )
-            : false;
-
-        $data    = $this->validated($request, $classSchedule, $pointLocked);
+        $data    = $this->validated($request, $classSchedule);
         $running = $data['class_running'] === 'Berjalan';
 
         $isSubstitute = $data['is_substitute'] === 'Ya';
@@ -399,6 +386,37 @@ class AttendanceController extends Controller
             return back()->withInput()->with('error', 'Jurnal untuk sesi ini sudah diisi.');
         }
 
+        // Batas poin: maksimal 1 Kuning + 1 Merah per kelas per tanggal sesi (termasuk poin dari Admin)
+        $classStudentIds = $class->enrollments()->where('status', 'Active')->pluck('student_id')->map(fn ($i) => (int) $i);
+        $selectedPoints  = collect($data['point'] ?? [])
+            ->filter()
+            ->filter(fn ($t, $sid) => $classStudentIds->contains((int) $sid));
+
+        if ($running && $selectedPoints->isNotEmpty()) {
+            $logs    = app(PointService::class)->takenLogs($classStudentIds, $dateStr);
+            $hasOwn  = $logs->pluck('student_id')->map(fn ($i) => (int) $i);
+
+            foreach (['kuning', 'merah'] as $ptype) {
+                $new = $selectedPoints->filter(fn ($t, $sid) => $t === $ptype && ! $hasOwn->contains((int) $sid));
+                if ($new->isEmpty()) {
+                    continue;
+                }
+
+                $label = ucfirst($ptype);
+                $used  = $logs->where('type', $ptype);
+
+                if ($new->count() > PointService::LIMIT_PER_TYPE) {
+                    return back()->withInput()->with('error', 'Maksimal ' . PointService::LIMIT_PER_TYPE . " siswa untuk poin {$label} per sesi.");
+                }
+
+                if ($used->count() >= PointService::LIMIT_PER_TYPE) {
+                    return back()->withInput()->with('error', "Poin {$label} di kelas ini pada " . $date->format('d/m/Y')
+                        . ' sudah diberikan kepada ' . ($used->first()->student->name ?? 'siswa lain')
+                        . ' (' . $used->first()->inputter_label . ').');
+                }
+            }
+        }
+
         $pointResult = ['awarded' => 0, 'skipped' => []];
 
         try {
@@ -421,21 +439,33 @@ class AttendanceController extends Controller
                     $this->saveAttendances($journal, $studentIds, $data);
                 }
 
-                // Poin sesi: diberikan ke siswa yang belum punya poin di tanggal ini
-                if ($running && $journal->session_score && $studentIds->isNotEmpty()) {
-                    $pointResult = app(PointService::class)->giveBulk(
-                        $studentIds,
-                        $data['session_date'],
-                        PointService::typeFromScore((int) $journal->session_score),
-                        Auth::id(),
-                        'guru',
-                        $journal->id
-                    );
+                // Poin per siswa: hanya siswa yang dipilih guru. Yang sudah punya poin di tanggal ini dilewati.
+                $selected = collect($data['point'] ?? [])->filter();
+                if ($running && $selected->isNotEmpty() && $studentIds->isNotEmpty()) {
+                    $validIds = $studentIds->map(fn ($i) => (int) $i)->all();
 
-                    // Semua siswa ternyata sudah dapat poin (mis. admin input bersamaan):
-                    // jangan simpan nilai poin di jurnal
-                    if ($pointResult['awarded'] === 0) {
-                        $journal->update(['session_score' => null]);
+                    foreach (['kuning', 'merah'] as $type) {
+                        $ids = $selected
+                            ->filter(fn ($t, $sid) => $t === $type && in_array((int) $sid, $validIds, true))
+                            ->keys()
+                            ->map(fn ($k) => (int) $k);
+
+                        if ($ids->isEmpty()) {
+                            continue;
+                        }
+
+                        $r = app(PointService::class)->giveBulk(
+                            $ids,
+                            $data['session_date'],
+                            $type,
+                            Auth::id(),
+                            'guru',
+                            $journal->id,
+                            $studentIds
+                        );
+
+                        $pointResult['awarded'] += $r['awarded'];
+                        $pointResult['skipped']  = array_merge($pointResult['skipped'], $r['skipped']);
                     }
                 }
 
@@ -454,6 +484,9 @@ class AttendanceController extends Controller
                 ));
             }
 
+        } catch (\DomainException $e) {
+            // batas poin terlewati (mis. admin menginput bersamaan): jurnal dibatalkan, tidak ada yang tersimpan
+            return back()->withInput()->with('error', $e->getMessage());
         } catch (QueryException $e) {
             report($e);
 
@@ -497,17 +530,14 @@ class AttendanceController extends Controller
         // Tanggal sesi tidak boleh diubah saat revisi
         $request->merge(['session_date' => $journal->session_date->toDateString()]);
 
-        // Poin tidak diubah saat revisi (sudah tercatat di riwayat), jadi session_score tidak wajib
-        $data         = $this->validated($request, $journal->schedule, true);
+        // Poin tidak diubah saat revisi (sudah tercatat di riwayat, koreksi lewat Admin)
+        $data         = $this->validated($request, $journal->schedule);
         $running      = $data['class_running'] === 'Berjalan';
         $isSubstitute = $data['is_substitute'] === 'Ya';
 
         try {
             DB::transaction(function () use ($journal, $class, $data, $running, $isSubstitute) {
-                $attrs = $this->journalAttributes($data, $running, $isSubstitute);
-                unset($attrs['session_score']); // poin sudah tercatat di riwayat, koreksi lewat Admin
-
-                $journal->update($attrs + [
+                $journal->update($this->journalAttributes($data, $running, $isSubstitute) + [
                     'status'      => 'Pending',   // kembali masuk antrian review Kurikulum
                     'review_note' => null,
                     'reviewed_by' => null,

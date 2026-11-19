@@ -232,67 +232,25 @@
                               placeholder="Capaian pemahaman siswa hari ini...">{{ $old('results', $j?->results) }}</textarea>
                 </div>
 
-                @php
-                    $pointLogs     = $item['point_logs'] ?? collect();
-                    $pointDisabled = ($item['point_locked'] ?? false) || $editing;
-                @endphp
-
-                <div class="mb-3 run-group">
-                    <label class="form-label fw-semibold">Poin Sesi</label>
-
-                    @if ($pointDisabled)
-                        {{-- Terkunci: semua siswa sudah dapat poin, atau sedang revisi --}}
-                        @if ($pointLogs->isNotEmpty())
-                            <div class="alert alert-secondary py-2 small mb-2">
-                                @foreach ($pointLogs as $log)
-                                    <div>
-                                        <strong>{{ $log->student->name ?? '-' }}</strong> sudah mendapat poin
-                                        {{ ucfirst($log->type) }} (+{{ $log->points }}) dari {{ $log->inputter_label }}
-                                        pada {{ $log->created_at->format('d/m/Y H:i') }}
-                                    </div>
-                                @endforeach
-                            </div>
-                        @else
-                            <div class="text-muted small mb-2">Poin sesi tidak diisi.</div>
-                        @endif
-                        @if ($editing)
-                            <div class="text-muted small">Poin tidak dapat diubah saat revisi. Koreksi dilakukan oleh Admin.</div>
-                        @endif
-                    @else
-                        @if ($pointLogs->isNotEmpty())
-                            <div class="alert alert-warning py-2 small mb-2">
-                                Siswa berikut sudah mendapat poin hari ini dan tidak akan ditambah lagi:
-                                {{ $pointLogs->map(fn ($l) => ($l->student->name ?? '-') . ' (' . ucfirst($l->type) . ', ' . ($l->input_role === 'admin' ? 'Admin' : 'Guru') . ')')->implode(', ') }}
-                            </div>
-                        @endif
-
-                        <div class="d-flex gap-4">
-                            <label class="d-flex align-items-center gap-2">
-                                <input type="radio" name="session_score" value="10" data-run="req"
-                                       @checked((string) $old('session_score', '10') === '10')> 🟡 Kuning (10)
-                            </label>
-                            <label class="d-flex align-items-center gap-2">
-                                <input type="radio" name="session_score" value="5"
-                                       @checked((string) $old('session_score') === '5')> 🔴 Merah (5)
-                            </label>
-                        </div>
-                    @endif
-                </div>
-
                 {{-- Absensi Siswa per Nama --}}
                 <h6 class="fw-bold border-top pt-3 mb-2"><i class="fa-solid fa-user-check text-warning me-1"></i> Absensi Siswa (Wajib diisi per nama)</h6>
-                <p class="text-muted small mb-3">Tentukan kehadiran tiap siswa. Bila tidak ada siswa yang hadir, jurnal tetap wajib diisi dengan absensi Alpha/Izin/Sakit (jumlah hadir 0).</p>
+                <p class="text-muted small mb-3">Tentukan kehadiran tiap siswa. Bila tidak ada siswa yang hadir, jurnal tetap wajib diisi dengan absensi Alpha/Izin/Sakit (jumlah hadir 0). Kolom Poin Sesi diisi hanya untuk siswa yang mendapat poin. Maksimal 1 siswa Kuning dan 1 siswa Merah per sesi; siswa yang tidak dipilih tidak mendapat poin.</p>
 
                 <div class="table-responsive mb-3">
                     <table class="table table-bordered align-middle">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 35%;">Nama Siswa</th>
-                                <th style="width: 25%;">Status Kehadiran</th>
+                                <th style="width: 30%;">Nama Siswa</th>
+                                <th style="width: 20%;">Status Kehadiran</th>
+                                <th style="width: 20%;" class="run-group">Poin Sesi</th>
                                 <th>Keterangan (Opsional)</th>
                             </tr>
                         </thead>
                         <tbody>
+                            @php
+                                // jenis poin yang sudah terpakai di kelas ini pada tanggal tersebut
+                                $takenTypes = ($item['point_by_student'] ?? collect())->pluck('type')->unique()->values()->all();
+                            @endphp
                             @forelse ($students as $enrollment)
                                 @php $stId = $enrollment->student_id; @endphp
                                 <tr>
@@ -304,6 +262,25 @@
                                             @endforeach
                                         </select>
                                     </td>
+                                    <td class="run-group">
+                                        @php $pLog = ($item['point_by_student'] ?? collect())->get($stId); @endphp
+                                        @if ($pLog)
+                                            <div class="small">
+                                                {{ $pLog->type === 'kuning' ? '🟡 Kuning' : '🔴 Merah' }} (+{{ $pLog->points }})
+                                            </div>
+                                            <div class="small text-muted">oleh {{ $pLog->inputter_label }}</div>
+                                        @elseif ($editing)
+                                            <span class="text-muted small">-</span>
+                                        @else
+                                            <select name="point[{{ $stId }}]" class="form-select form-select-sm point-select">
+                                                <option value="">Tidak ada</option>
+                                                <option value="kuning" data-taken="{{ in_array('kuning', $takenTypes, true) ? 1 : 0 }}"
+                                                        @selected($old("point.$stId") === 'kuning')>🟡 Kuning (+10){{ in_array('kuning', $takenTypes, true) ? ' - sudah dipakai' : '' }}</option>
+                                                <option value="merah" data-taken="{{ in_array('merah', $takenTypes, true) ? 1 : 0 }}"
+                                                        @selected($old("point.$stId") === 'merah')>🔴 Merah (+5){{ in_array('merah', $takenTypes, true) ? ' - sudah dipakai' : '' }}</option>
+                                            </select>
+                                        @endif
+                                    </td>
                                     <td>
                                         <input type="text" name="attendance_note[{{ $stId }}]" class="form-control form-control-sm"
                                                placeholder="Catatan..." value="{{ $old("attendance_note.$stId", $attNote[$stId] ?? null) }}">
@@ -311,7 +288,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="3" class="text-center text-muted py-3">Belum ada murid aktif yang terdaftar di kelas ini.</td>
+                                    <td colspan="4" class="text-center text-muted py-3">Belum ada murid aktif yang terdaftar di kelas ini.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -424,7 +401,7 @@
 
                 <dt class="col-sm-3">Poin Sesi</dt>
                 <dd class="col-sm-9">
-                    @php $summaryLogs = $item['point_logs'] ?? collect(); @endphp
+                    @php $summaryLogs = ($item['point_by_student'] ?? collect())->values(); @endphp
                     @forelse ($summaryLogs as $log)
                         <div>
                             {{ $log->student->name ?? '-' }}: {{ $log->type === 'kuning' ? '🟡 Kuning' : '🔴 Merah' }}
@@ -454,3 +431,30 @@
 
     </div>
 </div>
+
+@once
+    @push('scripts')
+    <script>
+    // Poin Sesi: maksimal 1 Kuning dan 1 Merah per sesi. Jenis yang sudah dipilih di baris lain dinonaktifkan.
+    function syncPointSelects(form) {
+        const selects = [...form.querySelectorAll('.point-select')];
+        selects.forEach(s => {
+            s.querySelectorAll('option[value]').forEach(o => {
+                if (!o.value) return;
+                const pickedElsewhere = selects.some(x => x !== s && x.value === o.value);
+                o.disabled = pickedElsewhere || o.dataset.taken === '1';
+            });
+        });
+    }
+
+    document.addEventListener('change', e => {
+        if (!e.target.classList.contains('point-select')) return;
+        syncPointSelects(e.target.closest('.journal-form'));
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.journal-form').forEach(syncPointSelects);
+    });
+    </script>
+    @endpush
+@endonce

@@ -4,21 +4,36 @@ namespace App\Services;
 
 use App\Models\PointLog;
 use App\Models\Student;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class PointService
 {
     public const POINTS = ['kuning' => 10, 'merah' => 5];
 
-    public static function typeFromScore(int $score): string
+    /** Maksimal siswa per jenis poin, per kelas, per tanggal sesi (1 Kuning + 1 Merah). */
+    public const LIMIT_PER_TYPE = 1;
+
+    /**
+     * Poin yang sudah tercatat untuk sekelompok siswa (biasanya siswa satu kelas) pada tanggal tertentu.
+     */
+    public function takenLogs(iterable $studentIds, string $date)
     {
-        return $score === 10 ? 'kuning' : 'merah';
+        return PointLog::with(['student', 'inputBy'])
+            ->whereIn('student_id', collect($studentIds)->all())
+            ->whereDate('session_date', $date)
+            ->get();
     }
 
-    /** Beri poin ke satu siswa. Melempar DomainException kalau slot tanggal itu sudah terisi. */
-    public function give(Student $student, string $date, string $type, int $userId, string $role): void
+    /**
+     * Beri poin ke satu siswa. Melempar DomainException kalau slot siswa itu di tanggal tersebut sudah terisi,
+     * atau jatah jenis poin di kelasnya sudah terpakai.
+     *
+     * $classStudentIds = siswa aktif di kelas yang sama (untuk menghitung batas per kelas).
+     */
+    public function give(Student $student, string $date, string $type, int $userId, string $role, ?iterable $classStudentIds = null): void
     {
-        $r = $this->giveBulk([$student->id], $date, $type, $userId, $role);
+        $r = $this->giveBulk([$student->id], $date, $type, $userId, $role, null, $classStudentIds);
 
         if ($r['awarded'] === 0) {
             $existing = PointLog::with('inputBy')
@@ -30,25 +45,71 @@ class PointService
         }
     }
 
-    /** Beri poin ke banyak siswa. Yang sudah punya poin di tanggal itu dilewati. */
-    public function giveBulk(iterable $studentIds, string $date, string $type, int $userId, string $role, ?int $journalId = null): array
-    {
-        $ids    = collect($studentIds)->unique()->values();
+    /**
+     * Beri poin ke banyak siswa dengan jenis yang sama. Siswa yang sudah punya poin di tanggal itu dilewati.
+     * Kalau $classStudentIds diisi, batas LIMIT_PER_TYPE per kelas per tanggal ikut dicek.
+     */
+    public function giveBulk(
+        iterable $studentIds,
+        string $date,
+        string $type,
+        int $userId,
+        string $role,
+        ?int $journalId = null,
+        ?iterable $classStudentIds = null
+    ): array {
+        $ids    = collect($studentIds)->map(fn ($i) => (int) $i)->unique()->values();
         $points = self::POINTS[$type];
 
-        return DB::transaction(function () use ($ids, $date, $type, $points, $userId, $role, $journalId) {
-            // kunci baris siswa supaya admin & guru yang simpan bersamaan tidak dobel
-            $students = Student::whereIn('id', $ids)->lockForUpdate()->get();
+        $scope = $classStudentIds !== null
+            ? collect($classStudentIds)->map(fn ($i) => (int) $i)->merge($ids)->unique()->values()
+            : $ids;
+
+        return DB::transaction(function () use ($ids, $scope, $date, $type, $points, $userId, $role, $journalId, $classStudentIds) {
+            // kunci baris siswa (satu kelas) supaya admin & guru yang simpan bersamaan tidak dobel / melewati batas
+            $locked   = Student::whereIn('id', $scope)->lockForUpdate()->get()->keyBy('id');
+            $students = $ids->map(fn ($id) => $locked->get($id))->filter();
 
             $taken = PointLog::whereIn('student_id', $ids)
                 ->whereDate('session_date', $date)
-                ->pluck('student_id')->all();
+                ->pluck('student_id')
+                ->map(fn ($i) => (int) $i)
+                ->all();
+
+            $newCount = $ids->reject(fn ($id) => in_array($id, $taken, true))->count();
+
+            // Batas per kelas per tanggal
+            if ($classStudentIds !== null && $newCount > 0) {
+                $used = PointLog::with('student')
+                    ->whereIn('student_id', $scope)
+                    ->whereDate('session_date', $date)
+                    ->where('type', $type)
+                    ->get();
+
+                $label = ucfirst($type);
+                $tgl   = Carbon::parse($date)->format('d/m/Y');
+
+                if ($used->count() >= self::LIMIT_PER_TYPE) {
+                    $names = $used->map(fn ($l) => $l->student->name ?? '-')->implode(', ');
+
+                    throw new \DomainException(
+                        "Poin {$label} di kelas ini pada {$tgl} sudah diberikan kepada {$names}. "
+                        . 'Maksimal ' . self::LIMIT_PER_TYPE . " siswa untuk poin {$label} per sesi."
+                    );
+                }
+
+                if ($used->count() + $newCount > self::LIMIT_PER_TYPE) {
+                    throw new \DomainException(
+                        'Maksimal ' . self::LIMIT_PER_TYPE . " siswa untuk poin {$label} per sesi."
+                    );
+                }
+            }
 
             $awarded = 0;
             $skipped = [];
 
             foreach ($students as $s) {
-                if (in_array($s->id, $taken, true)) {
+                if (in_array((int) $s->id, $taken, true)) {
                     $skipped[] = $s->name;
                     continue;
                 }
@@ -72,19 +133,5 @@ class PointService
 
             return ['awarded' => $awarded, 'skipped' => $skipped];
         });
-    }
-
-    /** True kalau SEMUA siswa sudah punya poin di tanggal itu (radio guru dikunci). */
-    public function allHavePoint(iterable $studentIds, string $date): bool
-    {
-        $ids = collect($studentIds)->unique();
-
-        if ($ids->isEmpty()) {
-            return false;
-        }
-
-        return PointLog::whereIn('student_id', $ids)
-            ->whereDate('session_date', $date)
-            ->distinct()->count('student_id') >= $ids->count();
     }
 }

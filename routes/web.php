@@ -988,14 +988,21 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
         Route::post('/{siswa}/poin', [SiswaController::class, 'storePoint'])
             ->name('siswa.point.store');
 
+        // HAPUS POIN SISWA (salah input)
+        Route::delete('/{siswa}/poin/{pointLog}', [SiswaController::class, 'destroyPoint'])
+            ->name('siswa.point.destroy');
+
         // SISWA: LANJUT PROGRAM
         Route::get('/{siswa}/continue', fn (\App\Models\Student $siswa) => redirect()->route('admin.siswa.continue.program', $siswa))
             ->name('siswa.continue.form');
+
         // Jalur 1 (belum lunas): pelunasan
         Route::get('/{siswa}/pelunasan', [SiswaController::class, 'settlementForm'])
             ->name('siswa.settle');
+
         Route::post('/{siswa}/pelunasan', [SiswaController::class, 'settlementStore'])
             ->name('siswa.settle.store');
+            
         // Jalur 2 (sudah lunas): pilih program
         Route::get('/{siswa}/continue/program', [SiswaController::class, 'continueProgramPage'])
             ->name('siswa.continue.program');

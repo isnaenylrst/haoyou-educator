@@ -157,6 +157,7 @@
                             <th style="text-align: center; vertical-align: middle;">Sebelum → Sesudah</th>
                             <th>Diinput Oleh</th>
                             <th style="text-align: center; vertical-align: middle;">Waktu Input</th>
+                            <th style="text-align: center; vertical-align: middle;">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -168,10 +169,21 @@
                                 <td style="text-align: center; vertical-align: middle;">{{ $log->points_before }} → {{ $log->points_after }}</td>
                                 <td>{{ $log->inputter_label }}</td>
                                 <td style="text-align: center; vertical-align: middle;">{{ $log->created_at->format('d/m/Y H:i') }}</td>
+                                <td style="text-align: center; vertical-align: middle;">
+                                    <form method="POST" action="{{ route('admin.siswa.point.destroy', [$siswa, $log]) }}"
+                                          onsubmit="return confirm('Hapus poin {{ ucfirst($log->type) }} tanggal {{ $log->session_date->format('d/m/Y') }}? Total poin siswa akan dikurangi {{ $log->points }}.')"
+                                          style="display:inline;">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="sd-icon-btn" title="Hapus poin (salah input)" aria-label="Hapus poin">
+                                            <i class="fa-regular fa-trash-can"></i>
+                                        </button>
+                                    </form>
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" style="text-align: center; vertical-align: middle;">Belum ada riwayat poin.</td>
+                                <td colspan="7" style="text-align: center; vertical-align: middle;">Belum ada riwayat poin.</td>
                             </tr>
                         @endforelse
                     </tbody>
