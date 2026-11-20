@@ -93,6 +93,7 @@ use App\Http\Controllers\Owner\ConsultationController as OwnerConsultationContro
 use App\Http\Controllers\Owner\SignatureQueueController as OwnerSignatureQueueController;
 use App\Http\Controllers\Owner\SubmissionRecapController as OwnerSubmissionRecapController;
 use App\Http\Controllers\Owner\SelfLearningVideoController as OwnerSelfLearningVideoController;
+use App\Http\Controllers\Owner\SelfStudySettingController as OwnerSelfStudySettingController;
 
 /*
 |--------------------------------------------------------------------------
@@ -857,6 +858,11 @@ Route::middleware(['auth', 'role:Owner'])
         Route::patch('/self-learning/{video}/aktif', [OwnerSelfLearningVideoController::class, 'toggle'])->name('self-learning.toggle');
         Route::delete('/self-learning/{video}', [OwnerSelfLearningVideoController::class, 'destroy'])->name('self-learning.destroy');
         Route::get('/self-learning/{video}/stream', [OwnerSelfLearningVideoController::class, 'stream'])->name('self-learning.stream');
+          // Pengaturan nilai Sertifikat Belajar Mandiri (batas lulus & bobot)
+        Route::get('/pengaturan-nilai-mandiri', [OwnerSelfStudySettingController::class, 'edit'])
+            ->name('self-study.settings');
+        Route::put('/pengaturan-nilai-mandiri', [OwnerSelfStudySettingController::class, 'update'])
+            ->name('self-study.settings.update');
 
         // Konsultasi Owner (Hasil, Jadwal, Revisi, Slot Available & Konfirmasi Pengajuan)
         Route::get('/konsultasi', [OwnerConsultationController::class, 'index'])
