@@ -158,6 +158,9 @@ class TeacherAvailabilityService
         return [$created, $skipped];
     }
 
+    public const DEFAULT_START_HOUR = 9;
+    public const DEFAULT_END_HOUR   = 21;
+
     /**
      * Susun data kalender mingguan ketersediaan semua guru
      * (baris = jam, kolom = hari), dipakai di halaman Kurikulum dan Schedule guru.
@@ -168,22 +171,10 @@ class TeacherAvailabilityService
     {
         $slots = $slots->filter(fn ($a) => $a->teacher !== null)->values();
 
-        // rentang jam default 07:00 - 21:00, melebar otomatis jika ada slot di luar itu
-        $startHour = 7;
-        $endHour   = 21;
+        // Rentang jam tetap 09:00 - 21:00 sesuai aturan sistem
+        $startHour = self::DEFAULT_START_HOUR;
+        $endHour   = self::DEFAULT_END_HOUR;
 
-        foreach ($slots as $a) {
-            $startHour = min($startHour, (int) substr($a->start_time, 0, 2));
-
-            $h = (int) substr($a->end_time, 0, 2);
-            if ((int) substr($a->end_time, 3, 2) > 0) {
-                $h++;
-            }
-            $endHour = max($endHour, $h);
-        }
-
-        $startHour = max(0, $startHour);
-        $endHour   = min(24, $endHour);
         $hours     = range($startHour, $endHour - 1);
 
         // kolom Minggu hanya tampil jika ada yang mengisi

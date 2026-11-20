@@ -38,8 +38,9 @@ class ConsultationScheduleController extends Controller
         }
         $endOfWeek = $startOfWeek->copy()->endOfWeek(Carbon::SUNDAY);
 
-        // Ambil slot dalam minggu ini
-        $weekSlots = CurriculumConsultationSlot::with(['curriculumUser', 'teacher'])
+        // Ambil slot dalam minggu ini (hanya slot utama / parent, relasikan subBookings)
+        $weekSlots = CurriculumConsultationSlot::with(['curriculumUser', 'teacher', 'subBookings.teacher'])
+            ->whereNull('parent_slot_id')
             ->whereBetween('date', [$startOfWeek->toDateString(), $endOfWeek->toDateString()])
             ->where('status', '!=', 'Cancelled')
             ->orderBy('date')
@@ -55,7 +56,8 @@ class ConsultationScheduleController extends Controller
         );
 
         // Filter slot available masa depan untuk dipilih di form pengajuan baru
-        $availableSlots = CurriculumConsultationSlot::with(['curriculumUser'])
+        $availableSlots = CurriculumConsultationSlot::with(['curriculumUser', 'subBookings'])
+            ->whereNull('parent_slot_id')
             ->where('status', 'Available')
             ->where(function ($q) {
                 $q->whereDate('date', '>', today())
@@ -103,16 +105,19 @@ class ConsultationScheduleController extends Controller
     public function book(Request $request)
     {
         $data = $request->validate([
-            'booking_type'  => ['nullable', 'in:single,both'],
-            'slot_id'       => ['required_without:slot_curriculum_id', 'nullable', 'integer', 'exists:curriculum_consultation_slots,id'],
-            'slot_curriculum_id' => ['nullable', 'integer', 'exists:curriculum_consultation_slots,id'],
-            'slot_owner_id'      => ['nullable', 'integer', 'exists:curriculum_consultation_slots,id'],
-            'topic'         => ['required', 'string', 'max:255'],
-            'class_id'      => ['nullable', 'integer', 'exists:classes,id'],
-            'booking_notes' => ['nullable', 'string', 'max:1000'],
+            'booking_type'        => ['nullable', 'in:single,both'],
+            'slot_id'             => ['required_without:slot_curriculum_id', 'nullable', 'integer', 'exists:curriculum_consultation_slots,id'],
+            'slot_curriculum_id'  => ['nullable', 'integer', 'exists:curriculum_consultation_slots,id'],
+            'slot_owner_id'       => ['nullable', 'integer', 'exists:curriculum_consultation_slots,id'],
+            'booked_start_time'   => ['nullable', 'date_format:H:i'],
+            'booked_end_time'     => ['nullable', 'date_format:H:i', 'after:booked_start_time'],
+            'topic'               => ['required', 'string', 'max:255'],
+            'class_id'            => ['nullable', 'integer', 'exists:classes,id'],
+            'booking_notes'       => ['nullable', 'string', 'max:1000'],
         ], [
             'topic.required' => 'Topik konsultasi wajib diisi.',
             'slot_id.required_without' => 'Pilih slot konsultasi yang tersedia.',
+            'booked_end_time.after' => 'Jam selesai harus setelah jam mulai.',
         ]);
 
         $teacher = Auth::user()->teacher;
@@ -142,8 +147,8 @@ class ConsultationScheduleController extends Controller
         $slotsInfo = CurriculumConsultationSlot::whereIn('id', $slotIdsToBook)->get();
         foreach ($slotsInfo as $chkSlot) {
             $sDate = $chkSlot->date->toDateString();
-            $sStart = substr($chkSlot->start_time, 0, 5) . ':00';
-            $sEnd = substr($chkSlot->end_time, 0, 5) . ':00';
+            $sStart = ($data['booked_start_time'] ?? substr($chkSlot->start_time, 0, 5)) . ':00';
+            $sEnd = ($data['booked_end_time'] ?? substr($chkSlot->end_time, 0, 5)) . ':00';
 
             $teachingClash = ClassSession::where('teacher_id', $teacher->id)
                 ->whereDate('session_date', $sDate)
@@ -178,20 +183,89 @@ class ConsultationScheduleController extends Controller
                 if ($slot->status !== 'Available') {
                     return back()->withInput()->with('error', "Maaf, slot konsultasi tanggal {$slot->date->translatedFormat('d M Y')} jam " . substr($slot->start_time, 0, 5) . " sudah penuh atau dipesan guru lain.");
                 }
+
+                // Cek ketersediaan jam parsial
+                $reqStart = $data['booked_start_time'] ?? substr($slot->start_time, 0, 5);
+                $reqEnd   = $data['booked_end_time'] ?? substr($slot->end_time, 0, 5);
+
+                $slotStartMin = ((int) substr($slot->start_time, 0, 2) * 60) + (int) substr($slot->start_time, 3, 2);
+                $slotEndMin   = ((int) substr($slot->end_time, 0, 2) * 60) + (int) substr($slot->end_time, 3, 2);
+                $reqStartMin  = ((int) substr($reqStart, 0, 2) * 60) + (int) substr($reqStart, 3, 2);
+                $reqEndMin    = ((int) substr($reqEnd, 0, 2) * 60) + (int) substr($reqEnd, 3, 2);
+
+                if ($reqStartMin < $slotStartMin || $reqEndMin > $slotEndMin || $reqEndMin <= $reqStartMin) {
+                    return back()->withInput()->with('error', "Jam pemesanan ({$reqStart}-{$reqEnd}) berada di luar jendela slot (" . substr($slot->start_time, 0, 5) . "-" . substr($slot->end_time, 0, 5) . ").");
+                }
+
+                // Cek overlap dengan sub-bookings lain di slot ini
+                $existingSubOverlap = CurriculumConsultationSlot::where('parent_slot_id', $slot->id)
+                    ->where('status', 'Booked')
+                    ->lockForUpdate()
+                    ->where(function ($q) use ($reqStart, $reqEnd) {
+                        $q->where(function ($sub) use ($reqStart, $reqEnd) {
+                            $sub->where('booked_start_time', '<', $reqEnd . ':00')
+                                ->where('booked_end_time', '>', $reqStart . ':00');
+                        });
+                    })
+                    ->exists();
+
+                if ($existingSubOverlap) {
+                    return back()->withInput()->with('error', "Jam {$reqStart}-{$reqEnd} pada slot tanggal {$slot->date->translatedFormat('d M Y')} sudah dipesan guru lain.");
+                }
             }
 
             // Eksekusi booking masing-masing slot
             foreach ($slotIdsToBook as $sId) {
                 $slot = $lockedSlots->get($sId);
-                $slot->update([
-                    'status'                 => 'Booked',
-                    'booked_by_teacher_id'   => $teacher->id,
-                    'class_id'               => $data['class_id'] ?? null,
-                    'topic'                  => trim($data['topic']),
-                    'booking_notes'          => $data['booking_notes'] ?? null,
-                    'booked_at'              => now(),
-                    'teacher_booking_status' => 'Pending',
-                ]);
+                $reqStart = $data['booked_start_time'] ?? substr($slot->start_time, 0, 5);
+                $reqEnd   = $data['booked_end_time'] ?? substr($slot->end_time, 0, 5);
+
+                $slotStartMin = ((int) substr($slot->start_time, 0, 2) * 60) + (int) substr($slot->start_time, 3, 2);
+                $slotEndMin   = ((int) substr($slot->end_time, 0, 2) * 60) + (int) substr($slot->end_time, 3, 2);
+                $reqStartMin  = ((int) substr($reqStart, 0, 2) * 60) + (int) substr($reqStart, 3, 2);
+                $reqEndMin    = ((int) substr($reqEnd, 0, 2) * 60) + (int) substr($reqEnd, 3, 2);
+
+                $isWholeWindow = ($reqStartMin === $slotStartMin && $reqEndMin === $slotEndMin);
+
+                if ($isWholeWindow && $slot->subBookings()->count() === 0) {
+                    // Pesan penuh seluruh jendela slot utama (backward-compatible)
+                    $slot->update([
+                        'status'                 => 'Booked',
+                        'booked_by_teacher_id'   => $teacher->id,
+                        'booked_start_time'      => $reqStart . ':00',
+                        'booked_end_time'        => $reqEnd . ':00',
+                        'class_id'               => $data['class_id'] ?? null,
+                        'topic'                  => trim($data['topic']),
+                        'booking_notes'          => $data['booking_notes'] ?? null,
+                        'booked_at'              => now(),
+                        'teacher_booking_status' => 'Pending',
+                    ]);
+                } else {
+                    // Pesan sebagian jam -> buat sub-slot anak (parent_slot_id = slot->id)
+                    CurriculumConsultationSlot::create([
+                        'parent_slot_id'         => $slot->id,
+                        'curriculum_user_id'     => $slot->curriculum_user_id,
+                        'owner_role'             => $slot->owner_role,
+                        'date'                   => $slot->date,
+                        'start_time'             => $reqStart . ':00',
+                        'end_time'               => $reqEnd . ':00',
+                        'booked_start_time'      => $reqStart . ':00',
+                        'booked_end_time'        => $reqEnd . ':00',
+                        'status'                 => 'Booked',
+                        'booked_by_teacher_id'   => $teacher->id,
+                        'class_id'               => $data['class_id'] ?? null,
+                        'topic'                  => trim($data['topic']),
+                        'booking_notes'          => $data['booking_notes'] ?? null,
+                        'booked_at'              => now(),
+                        'teacher_booking_status' => 'Pending',
+                    ]);
+
+                    // Periksa apakah seluruh sisa waktu slot parent sudah habis
+                    $slot->refresh();
+                    if ($slot->available_minutes <= 0) {
+                        $slot->update(['status' => 'Booked']);
+                    }
+                }
 
                 // Kirim notifikasi ke penanggung jawab slot
                 $targetUser = $slot->curriculumUser;
@@ -209,7 +283,7 @@ class ConsultationScheduleController extends Controller
                     $targetRoleName = $slot->effective_role;
                     $targetUser->notify(new AppNotification(
                         title: "Pengajuan Konsultasi Baru dari {$teacher->name}",
-                        message: "{$teacher->name} mengajukan konsultasi untuk tanggal {$slot->date->translatedFormat('d M Y')} jam " . substr($slot->start_time, 0, 5) . " dengan topik: \"{$data['topic']}\".",
+                        message: "{$teacher->name} mengajukan konsultasi untuk tanggal {$slot->date->translatedFormat('d M Y')} jam {$reqStart}-{$reqEnd} dengan topik: \"{$data['topic']}\".",
                         url: $targetRoleName === 'Owner' ? url('/owner/konsultasi?tab=pengajuan') : url('/kurikulum/jadwal-konsultasi'),
                         type: 'konsultasi',
                         icon: 'fa-calendar-plus'
@@ -353,18 +427,31 @@ class ConsultationScheduleController extends Controller
             return back()->with('error', 'Konsultasi yang sudah lewat tidak bisa dibatalkan.');
         }
 
-        DB::transaction(function () use ($slot, $teacher) {
+        DB::transaction(function () use ($slot) {
             $lockedSlot = CurriculumConsultationSlot::where('id', $slot->id)->lockForUpdate()->firstOrFail();
 
-            $lockedSlot->update([
-                'status'                 => 'Available',
-                'booked_by_teacher_id'   => null,
-                'class_id'               => null,
-                'topic'                  => null,
-                'booking_notes'          => null,
-                'booked_at'              => null,
-                'teacher_booking_status' => null,
-            ]);
+            if ($lockedSlot->parent_slot_id) {
+                $parentId = $lockedSlot->parent_slot_id;
+                $lockedSlot->delete();
+
+                // Kembalikan status parent ke Available bila sisa waktu bertambah
+                $parent = CurriculumConsultationSlot::where('id', $parentId)->lockForUpdate()->first();
+                if ($parent && $parent->available_minutes > 0) {
+                    $parent->update(['status' => 'Available']);
+                }
+            } else {
+                $lockedSlot->update([
+                    'status'                 => 'Available',
+                    'booked_by_teacher_id'   => null,
+                    'booked_start_time'      => null,
+                    'booked_end_time'        => null,
+                    'class_id'               => null,
+                    'topic'                  => null,
+                    'booking_notes'          => null,
+                    'booked_at'              => null,
+                    'teacher_booking_status' => null,
+                ]);
+            }
         });
 
         return back()->with('success', 'Pengajuan konsultasi berhasil dibatalkan. Slot kembali tersedia.');

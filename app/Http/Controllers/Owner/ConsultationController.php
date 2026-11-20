@@ -102,7 +102,8 @@ class ConsultationController extends Controller
         }
         $endOfWeek = $startOfWeek->copy()->endOfWeek(Carbon::SUNDAY);
 
-        $weekSlots = \App\Models\CurriculumConsultationSlot::with(['curriculumUser', 'teacher', 'class'])
+        $weekSlots = \App\Models\CurriculumConsultationSlot::with(['curriculumUser', 'teacher', 'class', 'subBookings.teacher'])
+            ->whereNull('parent_slot_id')
             ->whereBetween('date', [$startOfWeek->toDateString(), $endOfWeek->toDateString()])
             ->where('status', '!=', 'Cancelled')
             ->orderBy('date')

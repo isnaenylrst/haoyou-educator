@@ -31,6 +31,9 @@
     $isUnlocked = $item['is_unlocked'] ?? false;
     $unlockRecord = $item['unlock_record'] ?? null;
     $autoMeetingNumber = $item['auto_meeting_number'] ?? 1;
+    $showDate = $showDate ?? false;
+    $cardDate = $item['session_date'] ?? $date;
+    $dateCanFill = !$cardDate->isFuture();
 @endphp
 
 <div class="card border-0 shadow-sm rounded-4 mb-3" data-status="{{ $item['status'] }}">
@@ -41,9 +44,18 @@
                 <div class="d-flex align-items-center gap-2">
                     <h5 class="fw-bold mb-0">{{ $class->class_name ?? '-' }}</h5>
                     <span class="badge bg-light text-dark border">{{ $type }} {{ $level ? '· ' . $level : '' }}</span>
+                    @if ($showDate)
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                            <i class="fa-regular fa-calendar me-1"></i> {{ $cardDate->translatedFormat('d M Y') }}
+                        </span>
+                    @endif
                 </div>
                 <small class="text-muted d-block mt-1">
-                    <i class="fa-regular fa-clock me-1"></i>
+                    @if (!$showDate)
+                        <i class="fa-regular fa-clock me-1"></i>
+                    @else
+                        <i class="fa-regular fa-calendar me-1"></i> {{ $cardDate->translatedFormat('l, d M Y') }} · <i class="fa-regular fa-clock me-1"></i>
+                    @endif
                     {{ \Illuminate\Support\Carbon::parse($schedule->start_time)->format('H.i') }}
                     - {{ \Illuminate\Support\Carbon::parse($schedule->end_time)->format('H.i') }}
                     @if ($isSubstitute) &middot; kelas {{ $teacherNames[$class->teacher_id] ?? 'guru lain' }} @endif
@@ -52,28 +64,30 @@
 
             <div>
                 @if ($item['status'] === 'terlambat')
-                    <span class="badge bg-danger px-3 py-2"><i class="fa-solid fa-lock me-1"></i> Terlambat / Terkunci</span>
+                    <span class="badge bg-danger px-3 py-2"><i class="fa-solid fa-lock-open me-1"></i> Terlambat (Buka Kunci)</span>
+                @elseif ($item['status'] === 'terkunci')
+                    <span class="badge bg-danger px-3 py-2"><i class="fa-solid fa-lock me-1"></i> Terkunci</span>
                 @elseif ($item['status'] === 'belum_diisi')
-                    <span class="badge bg-warning text-dark px-3 py-2"><i class="fa-regular fa-clock me-1"></i> Perlu Diisi</span>
+                    <span class="badge bg-warning text-dark px-3 py-2"><i class="fa-regular fa-clock me-1"></i> Belum Diisi</span>
                 @elseif ($item['status'] === 'revisi')
                     <span class="badge bg-danger px-3 py-2"><i class="fa-solid fa-triangle-exclamation me-1"></i> Perlu Revisi</span>
                 @elseif ($item['status'] === 'sudah_diisi')
                     <span class="badge bg-info text-dark px-3 py-2"><i class="fa-solid fa-hourglass-half me-1"></i> Menunggu Review</span>
                 @else
-                    <span class="badge bg-success px-3 py-2"><i class="fa-solid fa-check me-1"></i> Dikunci (Selesai)</span>
+                    <span class="badge bg-success px-3 py-2"><i class="fa-solid fa-check me-1"></i> Dikunci Kurikulum</span>
                 @endif
             </div>
         </div>
 
         {{-- INFO BATAS WAKTU & HITUNG MUNDUR 24 JAM --}}
-        @if ($item['status'] === 'belum_diisi')
+        @if ($item['status'] === 'belum_diisi' || $item['status'] === 'terlambat')
             @if ($isUnlocked)
                 <div class="alert alert-info py-2 d-flex align-items-center gap-2 mb-3">
                     <i class="fa-solid fa-lock-open fs-5"></i>
                     <div class="small">
                         <strong>Kunci Pengisian Dibuka oleh Kurikulum</strong> hingga
                         <strong>{{ $item['unlocked_until']?->translatedFormat('d M Y, H:i') }}</strong>.
-                        Jurnal ini akan ditandai terlambat saat disimpan.
+                        Jurnal ini akan ditandai terlambat saat disimpan. Silakan segera lengkapi form di bawah.
                     </div>
                 </div>
             @elseif (!$isPastDeadline && $deadline)
@@ -97,14 +111,19 @@
         @endif
 
         {{-- FORM PENGISIAN JURNAL --}}
-        @if (($item['status'] === 'belum_diisi' && $canFill) || $editing)
+        @php
+            $canFillForm = ($item['status'] === 'belum_diisi' && $dateCanFill)
+                || ($item['status'] === 'terlambat' && $isUnlocked)
+                || $editing;
+        @endphp
+        @if ($canFillForm)
 
             <form action="{{ $editing ? route('teacher.attendance.update', $journal) : route('teacher.attendance.store', $schedule) }}"
                   method="POST" class="journal-form">
                 @csrf
                 @if ($editing) @method('PUT') @endif
                 <input type="hidden" name="_sid" value="{{ $sid }}">
-                <input type="hidden" name="session_date" value="{{ $editing ? $journal->session_date->format('Y-m-d') : $date->format('Y-m-d') }}">
+                <input type="hidden" name="session_date" value="{{ $editing ? $journal->session_date->format('Y-m-d') : $cardDate->format('Y-m-d') }}">
 
                 {{-- Nilai Otomatis: Course Type & Level (Dihapus dari manual radio box) --}}
                 <input type="hidden" name="course_type" value="{{ $type }}">
@@ -301,7 +320,7 @@
                 </button>
             </form>
 
-        @elseif ($item['status'] === 'terlambat')
+        @elseif ($item['status'] === 'terlambat' || $item['status'] === 'terkunci')
 
             <div class="alert alert-danger p-4 rounded-4 mb-0">
                 <div class="d-flex align-items-start gap-3">
@@ -327,26 +346,26 @@
                                 <i class="fa-solid fa-circle-xmark me-1"></i>
                                 <strong>Permohonan buka kunci ditolak Kurikulum:</strong> {{ $unlockRecord->rejection_note ?: 'Tidak memenuhi syarat pembukaan kembali.' }}
                             </div>
-                            <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-3" data-bs-toggle="collapse" data-bs-target="#requestUnlockForm-{{ $sid }}">
+                            <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-3" data-bs-toggle="collapse" data-bs-target="#requestUnlockForm-{{ $sid }}-{{ $cardDate->format('Ymd') }}">
                                 <i class="fa-solid fa-paper-plane me-1"></i> Ajukan Permohonan Ulang
                             </button>
                         @else
-                            <button type="button" class="btn btn-primary btn-sm rounded-pill px-3" data-bs-toggle="collapse" data-bs-target="#requestUnlockForm-{{ $sid }}">
+                            <button type="button" class="btn btn-primary btn-sm rounded-pill px-3" data-bs-toggle="collapse" data-bs-target="#requestUnlockForm-{{ $sid }}-{{ $cardDate->format('Ymd') }}">
                                 <i class="fa-solid fa-lock-open me-1"></i> Minta Buka Kunci ke Kurikulum
                             </button>
                         @endif
 
-                        <div class="collapse mt-3" id="requestUnlockForm-{{ $sid }}">
+                        <div class="collapse mt-3" id="requestUnlockForm-{{ $sid }}-{{ $cardDate->format('Ymd') }}">
                             <form action="{{ route('teacher.attendance.request-unlock') }}" method="POST" class="p-3 bg-white rounded-3 border">
                                 @csrf
                                 <input type="hidden" name="class_schedule_id" value="{{ $sid }}">
-                                <input type="hidden" name="session_date" value="{{ $date->format('Y-m-d') }}">
+                                <input type="hidden" name="session_date" value="{{ $cardDate->format('Y-m-d') }}">
 
                                 <label class="form-label fw-bold small mb-1">Alasan Keterlambatan Pengisian Jurnal <span class="text-danger">*</span></label>
                                 <textarea name="request_reason" class="form-control form-control-sm mb-2" rows="2" required
                                           placeholder="Contoh: Mengalami kendala jaringan internet saat kelas malam selesai, mohon izin untuk mengisi jurnal..."></textarea>
                                 <div class="d-flex justify-content-end gap-2">
-                                    <button type="button" class="btn btn-sm btn-light" data-bs-toggle="collapse" data-bs-target="#requestUnlockForm-{{ $sid }}">Batal</button>
+                                    <button type="button" class="btn btn-sm btn-light" data-bs-toggle="collapse" data-bs-target="#requestUnlockForm-{{ $sid }}-{{ $cardDate->format('Ymd') }}">Batal</button>
                                     <button type="submit" class="btn btn-sm btn-primary">
                                         <i class="fa-solid fa-paper-plane me-1"></i> Kirim Permohonan
                                     </button>
@@ -423,9 +442,19 @@
                 </dd>
             </dl>
 
-            <a href="{{ route('teacher.attendance.pdf', $journal) }}" class="btn btn-sm btn-outline-dark">
-                <i class="fas fa-file-pdf me-1"></i> Unduh PDF Jurnal
-            </a>
+            <div class="d-flex align-items-center gap-2">
+                <a href="{{ route('teacher.attendance.pdf', $journal) }}" class="btn btn-sm btn-outline-dark rounded-pill px-3">
+                    <i class="fas fa-file-pdf me-1"></i> Unduh PDF Jurnal
+                </a>
+                <span class="text-muted small">
+                    <i class="fa-solid fa-check-circle text-success me-1"></i>
+                    @if ($item['status'] === 'dikunci')
+                        Jurnal telah disetujui & dikunci oleh Kurikulum (Read Only).
+                    @else
+                        Jurnal telah diisi dan sedang menunggu review Kurikulum.
+                    @endif
+                </span>
+            </div>
 
         @endif
 
