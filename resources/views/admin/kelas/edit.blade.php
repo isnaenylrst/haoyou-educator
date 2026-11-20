@@ -127,7 +127,7 @@
                         {{-- ZOOM (hanya tampil saat mode Online) --}}
                         <div class="form-row-two" id="edit_zoom_fields" style="display: none;">
                             <div class="form-field">
-                                <label for="edit_zoom_link">Link Zoom <span class="opt">(opsional)</span></label>
+                                <label for="edit_zoom_link">Link Kelas Online <span class="opt">(opsional)</span></label>
                                 <input type="url" name="zoom_link" id="edit_zoom_link" placeholder="https://zoom.us/j/...">
                             </div>
                             <div class="form-field">
@@ -135,7 +135,7 @@
                                 <input type="text" name="zoom_passcode" id="edit_zoom_passcode" maxlength="50">
                             </div>
                             <div class="form-hint zoom-hint">
-                                Link ini yang akan muncul sebagai tombol "Buka Zoom" di dashboard siswa.
+                                Link ini yang akan muncul sebagai tombol "Buka Kelas" di dashboard siswa.
                             </div>
                         </div>
                     </div>

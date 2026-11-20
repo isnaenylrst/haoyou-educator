@@ -85,7 +85,7 @@
 
                                 <div class="form-field">
                                     <label for="add_zoom_link">
-                                        Link Zoom <span class="opt">(opsional)</span>
+                                        Link Kelas Online <span class="opt">(opsional)</span>
                                     </label>
 
                                     <input
@@ -110,7 +110,7 @@
                                 </div>
 
                                 <div class="form-hint zoom-hint">
-                                    Link ini yang akan muncul sebagai tombol "Buka Zoom" di dashboard siswa.
+                                    Link ini yang akan muncul sebagai tombol "Buka Kelas" di dashboard siswa.
                                 </div>
 
                             </div>
