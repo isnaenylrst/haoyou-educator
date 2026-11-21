@@ -27,6 +27,7 @@ use App\Http\Controllers\Kurikulum\DocumentTemplateController;
 use App\Http\Controllers\Kurikulum\MaterialController;
 use App\Http\Controllers\Kurikulum\LetterController;
 use App\Http\Controllers\Kurikulum\MonitoringController;
+use App\Http\Controllers\Kurikulum\SelfStudyMonitoringController;
 use App\Http\Controllers\Kurikulum\JadwalKonsultasiController;
 use App\Http\Controllers\Kurikulum\ReviewPengajuanController;
 use App\Http\Controllers\Kurikulum\TugasKelasController as KurikulumTugasKelasController;
@@ -436,6 +437,14 @@ Route::middleware(['auth', 'role:Curriculum'])
         // Monitoring Guru
         Route::get('/monitoring', [MonitoringController::class, 'index'])
             ->name('monitoring');
+
+        // Monitoring Belajar Mandiri (Vocab + Grammar, hanya baca)
+        Route::get('/belajar-mandiri', [SelfStudyMonitoringController::class, 'index'])
+            ->name('belajar-mandiri.index');
+        Route::get('/belajar-mandiri/analisis', [SelfStudyMonitoringController::class, 'analysis'])
+            ->name('belajar-mandiri.analisis');
+        Route::get('/belajar-mandiri/siswa/{student}', [SelfStudyMonitoringController::class, 'show'])
+            ->name('belajar-mandiri.show');
 
         // JADWAL KONSULTASI
         Route::get('/jadwal-konsultasi', [JadwalKonsultasiController::class, 'index'])
@@ -997,6 +1006,10 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
         // HAPUS POIN SISWA (salah input)
         Route::delete('/{siswa}/poin/{pointLog}', [SiswaController::class, 'destroyPoint'])
             ->name('siswa.point.destroy');
+        
+        // CATATAN ADMIN SISWA
+        Route::patch('/{siswa}/catatan', [SiswaController::class, 'updateNote'])
+        ->name('siswa.note');
 
         // SISWA: LANJUT PROGRAM
         Route::get('/{siswa}/continue', fn (\App\Models\Student $siswa) => redirect()->route('admin.siswa.continue.program', $siswa))

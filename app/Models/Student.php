@@ -17,6 +17,7 @@ class Student extends Model
         'points',
         'join_date',
         'status',
+        'admin_note',
     ];
 
     protected $casts = [

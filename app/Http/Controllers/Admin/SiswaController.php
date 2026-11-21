@@ -265,6 +265,20 @@ class SiswaController extends Controller
             ->with('success', "Data siswa {$siswa->name} berhasil diperbarui.");
     }
 
+    /** Simpan catatan admin (kendala siswa). Dikosongkan = catatan dihapus. */
+    public function updateNote(Request $request, Student $siswa)
+    {
+    $data = $request->validate([
+        'admin_note' => ['nullable', 'string', 'max:1000'],
+    ]);
+
+    $note = trim($data['admin_note'] ?? '');
+
+    $siswa->update(['admin_note' => $note !== '' ? $note : null]);
+
+    return back()->with('success', "Catatan {$siswa->name} berhasil disimpan.");
+}
+
     /**
      * Admin memberi poin pada tanggal tertentu.
      * Ditolak kalau slot tanggal itu sudah diisi (oleh guru atau admin).

@@ -45,6 +45,14 @@ class KelasController extends Controller
 
     private const PAYMENT_METHODS = ['Transfer Bank', 'Cash', 'QRIS'];
 
+    /** Platform kelas online. 'hosts' kosong = domain bebas (untuk "Lainnya"). */
+    private const MEETING_PLATFORMS = [
+        'zoom'        => ['label' => 'Zoom',        'hosts' => ['zoom.us']],
+        'google_meet' => ['label' => 'Google Meet', 'hosts' => ['meet.google.com']],
+        'discord'     => ['label' => 'Discord',     'hosts' => ['discord.gg', 'discord.com', 'discordapp.com']],
+        'other'       => ['label' => 'Lainnya',     'hosts' => []],
+    ];
+
     /** Ruangan bawaan untuk saran di form kelas dan Ubah Jadwal (Online tidak termasuk). */
     private const BASE_ROOMS = ['Beijing', 'Basement', 'Atas', 'Kaca'];
 
@@ -406,6 +414,18 @@ class KelasController extends Controller
         return $this->roomSuggestions()->first(fn ($r) => $this->roomKey($r) === $key) ?? $room;
     }
 
+    /** Apakah host (mis. "us02web.zoom.us") termasuk salah satu domain yang diizinkan. */
+    private function hostMatches(string $host, array $allowed): bool
+    {
+        foreach ($allowed as $domain) {
+            if ($host === $domain || str_ends_with($host, '.' . $domain)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /* ============================================================
        INDEX
     ============================================================ */
@@ -503,6 +523,7 @@ class KelasController extends Controller
                 'status'             => 'Open',
                 'zoom_link'          => $data['zoom_link'],
                 'zoom_passcode'      => $data['zoom_passcode'],
+                'meeting_platform'   => $data['meeting_platform'],
             ])->save();
 
             $this->scheduleSvc->createSchedules($kelas, $data['schedules']);
@@ -556,6 +577,7 @@ class KelasController extends Controller
                 'status'        => $data['status'],
                 'zoom_link'     => $data['zoom_link'],
                 'zoom_passcode' => $data['zoom_passcode'],
+                'meeting_platform' => $data['meeting_platform'],
             ])->save();
 
             if (! $hasSessions) {
@@ -667,8 +689,11 @@ class KelasController extends Controller
             'offer_mode'          => ['nullable', Rule::in(['selected', 'matching', 'all', 'none'])],
             'offer_teacher_ids'   => ['nullable', 'array'],
             'offer_teacher_ids.*' => ['integer', 'exists:teachers,id'],
-            'zoom_link'     => ['nullable', 'url', 'max:255', 'regex:/^https:\/\/([a-z0-9-]+\.)?zoom\.us\//i'],
-            'zoom_passcode' => ['nullable', 'string', 'max:50'],
+
+            // Link kelas online: Zoom / Google Meet / Discord / lainnya. Kecocokan domain dicek di bawah.
+            'meeting_platform' => ['nullable', Rule::in(array_keys(self::MEETING_PLATFORMS))],
+            'zoom_link'        => ['nullable', 'url', 'max:255', 'regex:/^https:\/\//i'],
+            'zoom_passcode'    => ['nullable', 'string', 'max:50'],
 
             'program_package_id' => [Rule::requiredIf(! $isPrivate), 'nullable', 'exists:program_packages,id'],
             'private_package_id' => [Rule::requiredIf($isPrivate), 'nullable', 'exists:private_packages,id'],
@@ -688,6 +713,11 @@ class KelasController extends Controller
             'program_package_id.required'       => 'Paket program wajib dipilih.',
             'private_package_id.required'       => 'Paket private wajib dipilih.',
             'level_id.required'                 => 'Level wajib dipilih.',
+            'zoom_link.url'                     => 'Link kelas online tidak valid.',
+            'zoom_link.regex'                   => 'Link kelas online harus diawali https://',
+            'zoom_link.max'                     => 'Link kelas online maksimal 255 karakter.',
+            'zoom_passcode.max'                 => 'Kode akses Zoom tidak boleh lebih dari 50 karakter.',
+            'meeting_platform.in'               => 'Platform kelas online tidak dikenal.',
         ], [
             'class_name'             => 'nama kelas',
             'delivery_mode'          => 'mode kelas',
@@ -697,8 +727,6 @@ class KelasController extends Controller
             'schedules.*.day'        => 'hari',
             'schedules.*.start_time' => 'jam mulai',
             'schedules.*.end_time'   => 'jam selesai',
-            'zoom_link.regex' => 'Link harus berupa link Zoom (https://...zoom.us/...).',
-            'zoom_passcode.max' => 'Kode akses Zoom tidak boleh lebih dari 50 karakter.',
         ]);
 
         $errors = [];
@@ -817,6 +845,21 @@ class KelasController extends Controller
             }
         }
 
+        // ---- Platform & link kelas online ----
+        $platform = $data['meeting_platform'] ?? 'zoom';
+        $data['meeting_platform'] = $platform;
+
+        if ($data['delivery_mode'] === 'Online' && ! empty($data['zoom_link'])) {
+            $host    = strtolower((string) parse_url($data['zoom_link'], PHP_URL_HOST));
+            $allowed = self::MEETING_PLATFORMS[$platform]['hosts'];
+
+            if ($allowed && ! $this->hostMatches($host, $allowed)) {
+                $errors['zoom_link'] = 'Link tidak sesuai dengan platform ' . self::MEETING_PLATFORMS[$platform]['label']
+                    . ' (domain yang diharapkan: ' . implode(', ', $allowed) . '). '
+                    . 'Ganti pilihan platform kalau link-nya dari layanan lain.';
+            }
+        }
+
         if ($errors) {
             throw ValidationException::withMessages($errors);
         }
@@ -833,7 +876,8 @@ class KelasController extends Controller
             $data['zoom_passcode'] = null;
         } else {
             $data['zoom_link'] = $data['zoom_link'] ?? null;
-            $data['zoom_passcode'] = $data['zoom_passcode'] ?? null;
+            // Passcode hanya dipakai Zoom
+            $data['zoom_passcode'] = $platform === 'zoom' ? ($data['zoom_passcode'] ?? null) : null;
         }
 
         return $data;
