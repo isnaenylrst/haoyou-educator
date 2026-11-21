@@ -153,6 +153,7 @@
             ['Hasil Konsultasi', 'fa-comments', '/kurikulum/hasil-konsultasi', 'kurikulum/hasil-konsultasi*'],
             ['Ketersediaan Guru', 'fa-user-clock', '/kurikulum/ketersediaan-guru', 'kurikulum/ketersediaan-guru*'],
             ['Monitoring Guru & Kelas', 'fa-chart-line', '/kurikulum/monitoring', 'kurikulum/monitoring*'],
+            ['Monitoring Belajar Mandiri', 'fa-chart-simple', '/kurikulum/belajar-mandiri', 'kurikulum/belajar-mandiri*'],
         ]],
         ['label' => 'Komunikasi', 'items' => [
             ['Pemberitahuan Surat', 'fa-envelope', '/kurikulum/surat', 'kurikulum/surat*'],

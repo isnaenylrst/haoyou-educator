@@ -80,12 +80,22 @@
                                 <input type="date" name="end_date" id="add_end_date">
                             </div>
 
-                            {{-- ZOOM (hanya tampil saat mode Online) --}}
+                            {{-- LINK KELAS ONLINE (hanya tampil saat mode Online) --}}
                             <div class="form-row-two" id="add_zoom_fields" style="display: none;">
 
-                                <div class="form-field">
+                                <div class="form-field full">
+                                    <label for="add_meeting_platform">Platform Online</label>
+                                    <select name="meeting_platform" id="add_meeting_platform" onchange="syncMeetingPlatform('add')">
+                                        <option value="zoom">Zoom</option>
+                                        <option value="google_meet">Google Meet</option>
+                                        <option value="discord">Discord</option>
+                                        <option value="other">Lainnya</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-field" id="add_link_field">
                                     <label for="add_zoom_link">
-                                        Link Zoom <span class="opt">(opsional)</span>
+                                        <span id="add_link_label">Link Zoom</span> <span class="opt">(opsional)</span>
                                     </label>
 
                                     <input
@@ -96,7 +106,7 @@
                                     >
                                 </div>
 
-                                <div class="form-field">
+                                <div class="form-field" id="add_passcode_field">
                                     <label for="add_zoom_passcode">
                                         Passcode <span class="opt">(opsional)</span>
                                     </label>
@@ -110,7 +120,7 @@
                                 </div>
 
                                 <div class="form-hint zoom-hint">
-                                    Link ini yang akan muncul sebagai tombol "Buka Zoom" di dashboard siswa.
+                                    Link ini akan muncul sebagai tombol di dashboard siswa. Kalau Zoom bermasalah, ganti platform lalu isi link Google Meet atau Discord.
                                 </div>
 
                             </div>
@@ -323,6 +333,15 @@ function addRoomOption(btn) {
 const TEACHER_AVAIL = @json($teacherAvailabilities);
 const TEACHER_BUSY = @json($teacherBusy);
 const DAY_ORDER = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+
+// Platform kelas online: label field, contoh link, dan apakah memakai passcode
+const MEETING_PLATFORMS = {
+    zoom:        { label: 'Link Zoom',        placeholder: 'https://zoom.us/j/...',                passcode: true  },
+    google_meet: { label: 'Link Google Meet', placeholder: 'https://meet.google.com/abc-defg-hij', passcode: false },
+    discord:     { label: 'Link Discord',     placeholder: 'https://discord.gg/xxxxxxx',           passcode: false },
+    other:       { label: 'Link Meeting',     placeholder: 'https://...',                          passcode: false },
+};
+
     function setValue(id, value) {
         const el = document.getElementById(id);
         if (el) el.value = value ?? '';
@@ -387,7 +406,29 @@ const DAY_ORDER = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu
         }
     }
 
-    // Ruangan hanya untuk Offline, field Zoom hanya untuk Online
+    // Label, contoh link, dan passcode mengikuti platform online yang dipilih
+    function syncMeetingPlatform(prefix) {
+        const modeEl     = document.getElementById(prefix + '_delivery_mode');
+        const platformEl = document.getElementById(prefix + '_meeting_platform');
+        if (! modeEl || ! platformEl) return;
+
+        const online = modeEl.value === 'Online';
+        const cfg    = MEETING_PLATFORMS[platformEl.value] || MEETING_PLATFORMS.zoom;
+
+        document.getElementById(prefix + '_link_label').textContent = cfg.label;
+        document.getElementById(prefix + '_zoom_link').placeholder  = cfg.placeholder;
+
+        const passField = document.getElementById(prefix + '_passcode_field');
+        const linkField = document.getElementById(prefix + '_link_field');
+
+        passField.style.display = cfg.passcode ? '' : 'none';
+        // Tanpa passcode, kolom link melebar penuh
+        linkField.classList.toggle('full', ! cfg.passcode);
+        // Passcode yang disembunyikan tidak ikut terkirim
+        document.getElementById(prefix + '_zoom_passcode').disabled = ! (online && cfg.passcode);
+    }
+
+    // Ruangan hanya untuk Offline, field link online hanya untuk Online
     function syncRooms(prefix) {
         const online = document.getElementById(prefix + '_delivery_mode').value === 'Online';
 
@@ -399,7 +440,9 @@ const DAY_ORDER = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu
         if (zoom) {
             zoom.style.display = online ? 'grid' : 'none';
             // field tersembunyi dinonaktifkan agar tidak ikut tervalidasi/terkirim
-            zoom.querySelectorAll('input').forEach(el => { el.disabled = ! online; });
+            zoom.querySelectorAll('input, select').forEach(el => { el.disabled = ! online; });
+            // passcode & label mengikuti platform (dipanggil setelah disabled di atas)
+            syncMeetingPlatform(prefix);
         }
     }
 
@@ -627,7 +670,7 @@ const DAY_ORDER = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu
             wrap.appendChild(row);
             syncRooms(prefix);
             refreshTeacherAvailability(prefix);
-       
+
     }
 
     // Isi seluruh field form dari satu objek data
@@ -640,6 +683,7 @@ const DAY_ORDER = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu
         setValue(prefix + '_end_date', data.end_date);
         setValue(prefix + '_status', data.status || 'Open');
         setValue(prefix + '_teacher_id', data.teacher_id);
+        setValue(prefix + '_meeting_platform', data.meeting_platform || 'zoom');
         setValue(prefix + '_zoom_link', data.zoom_link);
         setValue(prefix + '_zoom_passcode', data.zoom_passcode);
         setValue(prefix + '_program_package_id', data.program_package_id);

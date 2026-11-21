@@ -70,6 +70,30 @@ class TeacherSeeder extends Seeder
                 'address'   => 'Jl. Kopda Sukoco RT 17 RW 01 Wonokerto Kec Bantur',
                 'join_date' => '2026-07-08',
             ],
+             [
+                'name'      => 'Khalishah Al Hanun Rabbani Najitra',
+                'phone'     => '081382036320',
+                'address'   => 'Jl. Bunga Pinang Merah II No. 28',
+                'join_date' => '2026-08-29',
+            ],
+            [
+                'name'      => 'Revina Ayusita Setiawan',
+                'phone'     => '08571061258',
+                'address'   => 'Kertoraharjo',
+                'join_date' => null,
+            ],
+            [
+                'name'      => 'Haidar Halim Putra Prima',
+                'phone'     => '082117701716',
+                'address'   => 'Perumahan Landungsari Asri E-57',
+                'join_date' => '2026-09-14',
+            ],
+            [
+                'name'      => 'Michael Osmond Hariwijaya',
+                'phone'     => '081229193240',
+                'address'   => null,
+                'join_date' => null,
+            ],
         ];
 
         foreach ($teachers as $data) {

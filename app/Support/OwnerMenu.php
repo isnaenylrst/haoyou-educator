@@ -66,6 +66,7 @@ class OwnerMenu
                     ['Hasil Konsultasi',        'fa-comments',       '/kurikulum/hasil-konsultasi',  'Hasil dan tindak lanjut konsultasi guru'],
                     ['Ketersediaan Guru',       'fa-user-clock',     '/kurikulum/ketersediaan-guru', 'Hari dan jam guru bisa mengajar'],
                     ['Monitoring Guru & Kelas', 'fa-chart-line',     '/kurikulum/monitoring',        'Jadwal mingguan, kehadiran, jurnal'],
+                    ['Monitoring Belajar Mandiri', 'fa-chart-simple', '/kurikulum/belajar-mandiri', 'Progres Vocab dan Grammar semua siswa'],
                     ['Pemberitahuan Surat',     'fa-envelope',       '/kurikulum/surat',             'Surat dan dokumen untuk guru'],
                 ],
             ],
