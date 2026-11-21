@@ -26,7 +26,7 @@ class TeachingJournalSeeder extends Seeder
     public function run(): void
     {
         $today       = Carbon::today();
-        $windowStart = $today->copy()->subMonths(2);
+        $windowStart = $today->copy()->subMonths(6);
 
         $schedules = ClassSchedule::join('classes', 'classes.id', '=', 'class_schedules.class_id')
             ->whereNotNull('classes.teacher_id')

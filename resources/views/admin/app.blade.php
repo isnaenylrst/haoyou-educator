@@ -160,6 +160,11 @@
             <div class="nav-group">
                 <div class="nav-group-label">Lainnya</div>
 
+                <a href="{{ route('admin.retention.index') }}" class="nav-item {{ request()->routeIs('admin.retention*') ? 'active' : '' }}">
+                    <i class="fa-solid fa-chart-pie nav-icon" title="Retention Rate"></i>
+                    <span class="label">Retention Rate</span>
+                </a>  
+
                 <a href="{{ route('admin.program-level') }}" class="nav-item {{ request()->routeIs('admin.program-level*') ? 'active' : '' }}">
                     <i class="fa-solid fa-layer-group nav-icon" title="Program & Level"></i>
                     <span class="label">Program & Level</span>
@@ -168,7 +173,7 @@
                 <a href="{{ route('admin.dokumen') }}" class="nav-item {{ request()->routeIs('admin.dokumen*', 'admin.template-dokumen.*') ? 'active' : '' }}">
                     <i class="fa-solid fa-file-lines nav-icon" title="Dokumen"></i>
                     <span class="label">Dokumen</span>
-                </a>
+                </a>              
 
                 <a href="{{ route('admin.training.index') }}" class="nav-item {{ request()->routeIs('admin.training*') ? 'active' : '' }}">
                     <i class="fa-solid fa-graduation-cap nav-icon" title="Materi Training"></i>

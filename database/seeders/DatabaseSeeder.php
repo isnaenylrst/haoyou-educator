@@ -34,7 +34,7 @@ class DatabaseSeeder extends Seeder
             PaymentSeeder::class,
             MaterialSeeder::class,
             TeacherLeaveSeeder::class,
-            // TeachingJournalSeeder::class,
+            TeachingJournalSeeder::class,
             ClassSessionSeeder::class,
             AttendanceSeeder::class,
             MaterialVocabSeeder::class,

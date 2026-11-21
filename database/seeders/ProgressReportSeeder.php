@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\ClassEnrollment;
+use App\Models\Payment;
 use App\Models\ProgressReport;
 use App\Models\User;
 use Database\Factories\ProgressReportFactory;
@@ -15,13 +16,18 @@ class ProgressReportSeeder extends Seeder
     /**
      * DUMMY DATA untuk halaman admin Progress Report.
      *
-     * Sebagian enrollment (~60%, minimal 12) diberi 1 laporan. Tahap proses dan status
-     * follow up dibagi merata (bukan acak murni), jadi semua tahap pasti ada:
+     * Sebagian enrollment (~60%, minimal 12) diberi 1 laporan. Tahap proses dibagi merata
+     * (bukan acak murni), jadi semua tahap pasti ada:
      *   Draft / Dikembalikan / Menunggu Review / Disetujui
-     *   Belum / Lanjut / Tidak Lanjut
+     *
+     * Status follow up diturunkan dari kenyataan (sama dengan definisi Retention Rate):
+     * "Lanjut" hanya kalau siswa punya enrollment lanjutan DAN sudah ada pembayaran masuk.
+     * Kelas yang masih berjalan selalu "Belum".
      *
      * Enrollment yang tidak kebagian laporan dibiarkan kosong. Enrollment yang sudah punya
      * laporan dilewati, jadi seeder aman dijalankan ulang.
+     *
+     * Jalankan SETELAH PaymentSeeder.
      *
      * Catatan: tab "Belum Diisi" dihitung MissingProgressReportFinder dari jatuh tempo,
      * bukan dari tabel ini.
@@ -49,12 +55,14 @@ class ProgressReportSeeder extends Seeder
 
         $reviewerId = $this->curriculumUserId();
 
-        $tahap     = ['draft', 'returned', 'pending', 'approved'];
-        $followUps = ['Belum', 'Lanjut', 'Tidak Lanjut'];
+        $tahap = ['draft', 'returned', 'pending', 'approved'];
 
         foreach ($enrollments->take($jumlah) as $i => $enrollment) {
-            // tanggal laporan: antara tanggal daftar dan hari ini
-            $date = Carbon::parse(fake()->dateTimeBetween($enrollment->enrollment_date, 'now'));
+            $classEnd = $enrollment->class->end_date ? Carbon::parse($enrollment->class->end_date) : null;
+            $ended    = $classEnd && $classEnd->isPast();
+
+            // tanggal laporan: antara tanggal daftar dan (akhir kelas / hari ini)
+            $date = Carbon::parse(fake()->dateTimeBetween($enrollment->enrollment_date, $ended ? $classEnd : 'now'));
             $type = 'Bulanan';
 
             $factory = ProgressReport::factory();
@@ -65,7 +73,19 @@ class ProgressReportSeeder extends Seeder
                 default    => $factory->approved($date, $reviewerId),
             };
 
-            $followUp = $followUps[$i % 3];
+            // Lanjut = ada enrollment lanjutan DAN sudah ada pembayaran masuk
+            $continued = ClassEnrollment::where('student_id', $enrollment->student_id)
+                ->where('id', '>', $enrollment->id)
+                ->where(fn ($q) => $q->whereNull('class_id')->orWhere('class_id', '!=', $enrollment->class_id))
+                ->where('status', '!=', 'Cancelled')
+                ->whereIn('id', Payment::select('enrollment_id')->where('amount_paid', '>', 0))
+                ->exists();
+
+            $followUp = match (true) {
+                ! $ended   => 'Belum',                                                   // kelas masih jalan
+                $continued => fake()->boolean(90) ? 'Lanjut' : 'Belum',                   // sebagian belum sempat dicatat admin
+                default    => fake()->boolean(75) ? 'Tidak Lanjut' : 'Belum',
+            };
 
             $factory->create([
                 'student_id'       => $enrollment->student_id,

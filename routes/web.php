@@ -57,6 +57,7 @@ use App\Http\Controllers\Admin\Pengaturan\PengaturanController;
 use App\Http\Controllers\Admin\Pengaturan\TemplatePrintController;
 use App\Http\Controllers\Admin\PaymentInvoiceController;
 use App\Http\Controllers\Admin\SubmissionRekapController;
+use App\Http\Controllers\Admin\RetentionController;
 use App\Http\Controllers\Admin\StudentLearningRequestController as AdminStudentLearningRequestController;
 use App\Http\Controllers\Admin\TrainingMaterialController as AdminTrainingMaterialController;
 use App\Http\Controllers\Admin\AdminNotificationController;
@@ -1242,6 +1243,12 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
         ->name('pengajuan.verify');
     Route::get('/pengajuan/{submission}/cetak', [SubmissionRekapController::class, 'printSubmission'])
         ->name('pengajuan.print');
+
+    Route::get('/retention', [RetentionController::class, 'index'])
+        ->name('retention.index');
+     Route::get('/retention/guru/{teacherId}', [RetentionController::class, 'teacher'])
+        ->whereNumber('teacherId')
+        ->name('retention.teacher');
 
     // REQUEST BELAJAR SISWA (Poin 10)
     Route::get('/request-belajar', [AdminStudentLearningRequestController::class, 'index'])
