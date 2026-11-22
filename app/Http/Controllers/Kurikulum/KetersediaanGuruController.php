@@ -24,15 +24,19 @@ class KetersediaanGuruController extends Controller
         'day.required'           => 'Pilih hari.',
         'start_time.required'    => 'Jam mulai wajib diisi.',
         'start_time.date_format' => 'Format jam mulai tidak valid.',
+        'start_time.after_or_equal' => 'Jam mulai minimal pukul 09:00.',
         'end_time.required'      => 'Jam selesai wajib diisi.',
         'end_time.date_format'   => 'Format jam selesai tidak valid.',
         'end_time.after'         => 'Jam selesai harus setelah jam mulai.',
+        'end_time.before_or_equal' => 'Jam selesai maksimal pukul 21:00.',
     ];
 
     // ------------------------------------------------------------------ HALAMAN
 
-    public function index()
+    public function index(Request $request)
     {
+        $urgencyFilter = $request->query('urgency', 'all'); // all | urgent | not_urgent
+
         $teachers = Teacher::with('availabilities')
             ->where('status', 'Active')
             ->orderBy('name')
@@ -52,12 +56,33 @@ class KetersediaanGuruController extends Controller
             ->get();
 
         // Sudah dikirim ke guru, menunggu jawaban
-        $waiting = ClassModel::with(['teacher', 'schedules'])
+        $waitingRaw = ClassModel::with(['teacher', 'schedules'])
             ->whereIn('status', ['Open', 'Running'])
             ->whereNotNull('teacher_id')
             ->where('teacher_response', 'Pending')
-            ->orderBy('class_name')
             ->get();
+
+        // Hitung urgensi tiap kelas menunggu jawaban
+        $waiting = $waitingRaw->map(function ($class) {
+            $class->urgency_info = \App\Services\TeacherAvailabilityUrgencyService::evaluateClass($class);
+            return $class;
+        })
+        ->when($urgencyFilter === 'urgent', function ($c) {
+            return $c->filter(fn ($item) => in_array($item->urgency_info['level'], ['urgent', 'past']));
+        })
+        ->when($urgencyFilter === 'not_urgent', function ($c) {
+            return $c->filter(fn ($item) => in_array($item->urgency_info['level'], ['medium', 'neutral']));
+        })
+        // Urutkan yang urgent di atas (level urgent = 1, past = 2, medium = 3, neutral = 4)
+        ->sortBy(function ($item) {
+            return match ($item->urgency_info['level']) {
+                'urgent'  => 1,
+                'past'    => 2,
+                'medium'  => 3,
+                default   => 4,
+            };
+        })
+        ->values();
 
         // Satu kali query untuk semua jadwal yang sudah diterima guru
         $busy = TeacherAvailabilityService::busyIndex($teachers->pluck('id'));
@@ -132,8 +157,8 @@ class KetersediaanGuruController extends Controller
             'teacher_id' => ['required', 'integer', Rule::exists('teachers', 'id')->where('status', 'Active')],
             'days'       => ['required', 'array', 'min:1'],
             'days.*'     => ['required', Rule::in(TeacherAvailability::DAYS)],
-            'start_time' => ['required', 'date_format:H:i'],
-            'end_time'   => ['required', 'date_format:H:i', 'after:start_time'],
+            'start_time' => ['required', 'date_format:H:i', 'after_or_equal:09:00'],
+            'end_time'   => ['required', 'date_format:H:i', 'after:start_time', 'before_or_equal:21:00'],
             'note'       => ['nullable', 'string', 'max:255'],
         ], self::MESSAGES);
 
@@ -158,8 +183,8 @@ class KetersediaanGuruController extends Controller
     {
         $data = $request->validate([
             'day'        => ['required', Rule::in(TeacherAvailability::DAYS)],
-            'start_time' => ['required', 'date_format:H:i'],
-            'end_time'   => ['required', 'date_format:H:i', 'after:start_time'],
+            'start_time' => ['required', 'date_format:H:i', 'after_or_equal:09:00'],
+            'end_time'   => ['required', 'date_format:H:i', 'after:start_time', 'before_or_equal:21:00'],
             'note'       => ['nullable', 'string', 'max:255'],
         ], self::MESSAGES);
 

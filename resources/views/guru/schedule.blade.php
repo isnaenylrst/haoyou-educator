@@ -178,24 +178,48 @@
         </div>
     @endif
 
-    {{-- KELAS MENUNGGU KONFIRMASI --}}
+    {{-- KELAS MENUNGGU KONFIRMASI (GURU 2: BADGE URGENSI & URUTAN DEKAT) --}}
     @if($pendingClasses->isNotEmpty())
     <div class="card shadow-sm border-0 rounded-4 mb-3 border-warning" style="border:2px solid #f5b942 !important">
         <div class="card-body">
-            <h5 class="fw-bold mb-1">Kelas Menunggu Konfirmasi Anda</h5>
-            <p class="text-muted small">Kurikulum memberikan kelas berikut. Terima atau tolak (alasan wajib jika menolak).</p>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                <div>
+                    <h5 class="fw-bold mb-1">
+                        <i class="fa-solid fa-bell text-warning me-1"></i> Kelas Menunggu Konfirmasi Anda
+                        @if(!empty($urgentPendingCount) && $urgentPendingCount > 0)
+                            <span class="badge bg-danger text-white ms-2 animate__animated animate__pulse animate__infinite">
+                                <i class="fa-solid fa-triangle-exclamation me-1"></i> {{ $urgentPendingCount }} Urgent
+                            </span>
+                        @endif
+                    </h5>
+                    <p class="text-muted small mb-0">Kurikulum memberikan kelas berikut. Terima atau tolak (alasan wajib jika menolak). Diurutkan dari kelas terdekat.</p>
+                </div>
+            </div>
 
             @foreach($pendingClasses as $pc)
-                <div class="border rounded-3 p-3 mb-2">
+                @php
+                    $urg = $pc->urgency_info ?? \App\Services\TeacherAvailabilityUrgencyService::evaluateClass($pc);
+                @endphp
+                <div class="border rounded-3 p-3 mb-2 bg-white shadow-sm {{ in_array($urg['level'], ['urgent', 'past']) ? 'border-danger' : '' }}">
                     <div class="d-flex justify-content-between flex-wrap gap-2">
                         <div>
-                            <div class="fw-semibold">
-                                {{ $pc->class_name }}
+                            <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                                <span class="fw-bold fs-6">{{ $pc->class_name }}</span>
+                                <span class="badge {{ $urg['badge_class'] }} px-2 py-1">
+                                    {{ $urg['label'] }}
+                                </span>
                                 @if($pc->broadcast_to_all)
-                                    <span class="badge bg-info text-dark ms-2"><i class="fa-solid fa-bullhorn me-1"></i> Terbuka Semua Guru</span>
+                                    <span class="badge bg-info text-dark"><i class="fa-solid fa-bullhorn me-1"></i> Terbuka Semua Guru</span>
                                 @endif
                             </div>
+
+                            <div class="small text-dark mb-1">
+                                <i class="fa-regular fa-calendar-check text-primary me-1"></i>
+                                <strong>Sesi Terdekat:</strong> {{ $urg['datetime_str'] ?? '-' }}
+                            </div>
+
                             <div class="small text-muted">
+                                <i class="fa-regular fa-clock me-1"></i>
                                 @forelse($pc->schedules as $sc)
                                     {{ $sc->day }} {{ substr($sc->start_time, 0, 5) }}–{{ substr($sc->end_time, 0, 5) }}{{ !$loop->last ? ' · ' : '' }}
                                 @empty
@@ -203,12 +227,13 @@
                                 @endforelse
                                 · {{ $pc->delivery_mode }}
                             </div>
+
                             @if($pc->conflict)
-                                <div class="small text-danger"><i class="fa-solid fa-triangle-exclamation me-1"></i> Bentrok dengan kelas {{ $pc->conflict }}</div>
+                                <div class="small text-danger mt-1"><i class="fa-solid fa-triangle-exclamation me-1"></i> Bentrok dengan kelas {{ $pc->conflict }}</div>
                             @elseif($pc->fits)
-                                <div class="small text-success"><i class="fa-solid fa-circle-check me-1"></i> Sesuai ketersediaan Anda</div>
+                                <div class="small text-success mt-1"><i class="fa-solid fa-circle-check me-1"></i> Sesuai ketersediaan Anda</div>
                             @else
-                                <div class="small text-warning"><i class="fa-solid fa-circle-exclamation me-1"></i> Di luar ketersediaan yang Anda isi</div>
+                                <div class="small text-warning mt-1"><i class="fa-solid fa-circle-exclamation me-1"></i> Di luar ketersediaan yang Anda isi</div>
                             @endif
                         </div>
 
@@ -351,10 +376,12 @@
                     </div>
                     <div class="col-md-2">
                         <input form="upd{{ $a->id }}" type="time" name="start_time"
+                               min="09:00" max="21:00"
                                value="{{ substr($a->start_time, 0, 5) }}" class="form-control form-control-sm" required>
                     </div>
                     <div class="col-md-2">
                         <input form="upd{{ $a->id }}" type="time" name="end_time"
+                               min="09:00" max="21:00"
                                value="{{ substr($a->end_time, 0, 5) }}" class="form-control form-control-sm" required>
                     </div>
                     <div class="col-md-4">
@@ -401,13 +428,15 @@
 
                 <div class="row g-2 align-items-end">
                     <div class="col-md-3">
-                        <label class="form-label small fw-semibold mb-1">Mulai</label>
+                        <label class="form-label small fw-semibold mb-1">Mulai (min 09:00)</label>
                         <input type="time" name="start_time" class="form-control form-control-sm"
+                               min="09:00" max="21:00"
                                value="{{ $addOld ? old('start_time') : '' }}" required>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label small fw-semibold mb-1">Selesai</label>
+                        <label class="form-label small fw-semibold mb-1">Selesai (max 21:00)</label>
                         <input type="time" name="end_time" class="form-control form-control-sm"
+                               min="09:00" max="21:00"
                                value="{{ $addOld ? old('end_time') : '' }}" required>
                     </div>
                     <div class="col-md-4">
@@ -422,6 +451,45 @@
             </form>
         </div>
     </div>
+
+    {{-- LAPISAN SLOT KONSULTASI KURIKULUM & OWNER (GURU 4f) --}}
+    @if(isset($consultationGrid))
+    <div class="card shadow-sm border-0 rounded-4 mb-3" id="consultationScheduleLayer">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                <div>
+                    <h5 class="fw-bold mb-1">
+                        <i class="fa-solid fa-calendar-check text-warning me-2"></i> Lapisan Slot Konsultasi Kurikulum &amp; Owner
+                    </h5>
+                    <p class="text-muted small mb-0">
+                        Slot ketersediaan Kurikulum dan Owner minggu ini. Klik slot yang tersedia untuk mengajukan konsultasi baru.
+                    </p>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" id="toggleConsultationGridBtn" onclick="toggleConsultationGrid()">
+                        <i class="fa-solid fa-eye-slash me-1"></i> <span id="toggleConsultationGridText">Sembunyikan Lapisan</span>
+                    </button>
+                    <a href="{{ route('teacher.jadwal-konsultasi.index') }}" class="btn btn-sm btn-warning rounded-pill fw-semibold px-3 ms-1">
+                        <i class="fa-solid fa-arrow-up-right-from-square me-1"></i> Buka Halaman Konsultasi
+                    </a>
+                </div>
+            </div>
+
+            <div id="consultationGridContainer">
+                <div class="alert alert-info border-0 rounded-3 py-2 small mb-3">
+                    <i class="fa-solid fa-circle-info me-1"></i> Klik slot yang <strong>Tersedia (Hijau)</strong> untuk langsung membuka formulir pengajuan konsultasi.
+                </div>
+                @include('partials.consultation-grid', [
+                    'grid'                => $consultationGrid,
+                    'userRole'            => 'Teacher',
+                    'canManageCurriculum' => false,
+                    'canManageOwner'      => false,
+                    'weekRoute'           => 'teacher.schedule',
+                ])
+            </div>
+        </div>
+    </div>
+    @endif
 
     {{-- KETERSEDIAAN SEMUA GURU (kalender mingguan) --}}
     <div class="card shadow-sm border-0 rounded-4 mb-3">
@@ -474,4 +542,25 @@
     </div>
 
 </div>
+
+@push('scripts')
+<script>
+function toggleConsultationGrid() {
+    const container = document.getElementById('consultationGridContainer');
+    const textSpan = document.getElementById('toggleConsultationGridText');
+    const btn = document.getElementById('toggleConsultationGridBtn');
+    if (!container) return;
+
+    if (container.style.display === 'none') {
+        container.style.display = 'block';
+        if (textSpan) textSpan.innerText = 'Sembunyikan Lapisan';
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-eye-slash me-1"></i> <span id="toggleConsultationGridText">Sembunyikan Lapisan</span>';
+    } else {
+        container.style.display = 'none';
+        if (textSpan) textSpan.innerText = 'Tampilkan Lapisan';
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-eye me-1"></i> <span id="toggleConsultationGridText">Tampilkan Lapisan</span>';
+    }
+}
+</script>
+@endpush
 @endsection

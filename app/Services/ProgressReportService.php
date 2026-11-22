@@ -77,11 +77,13 @@ class ProgressReportService
             ->exists();
     }
 
-    /**
+        /**
      * Isi sertifikat otomatis:
-     *  - tanggal mulai  = pertemuan pertama yang terlaksana (fallback tanggal daftar)
+     *  - tanggal mulai   = pertemuan pertama yang terlaksana (fallback tanggal daftar)
      *  - tanggal selesai = pertemuan terakhir yang terlaksana (fallback hari ini)
-     *  - nilai          = rata-rata nilai latihan dari semua report yang sudah di-ACC
+     *  - nilai Listening / Reading / Writing = dari progress report terbaru yang sudah di-ACC
+     *    (kolom listening_score, reading_score, writing_score di tabel progress_reports).
+     *    Nilai yang kosong dibiarkan null supaya guru mengisi manual.
      */
     public static function certificateData(object $enrollment): array
     {
@@ -98,17 +100,23 @@ class ProgressReportService
 
         $end = $last ? Carbon::parse($last) : now();
 
-        $scores = ProgressReport::where('enrollment_id', $enrollment->id)
+        $report = ProgressReport::where('enrollment_id', $enrollment->id)
             ->approved()
-            ->get()
-            ->flatMap(fn ($r) => collect($r->content ?? [])->pluck('score'))
-            ->filter(fn ($v) => $v !== null && $v !== '')
-            ->map(fn ($v) => (float) $v);
+            ->latest('id')
+            ->first();
+
+        $pick = function (string $key) use ($report) {
+            $v = $report?->getAttribute($key . '_score');
+
+            return ($v === null || $v === '') ? null : (float) $v;
+        };
 
         return [
-            'start' => $start,
-            'end'   => $end,
-            'score' => $scores->isEmpty() ? null : round($scores->avg(), 1),
+            'start'     => $start,
+            'end'       => $end,
+            'listening' => $pick('listening'),
+            'reading'   => $pick('reading'),
+            'writing'   => $pick('writing'),
         ];
     }
 }

@@ -9,6 +9,7 @@ use App\Http\Controllers\LandingController;
 use App\Http\Controllers\CalonSiswa\PendaftaranController;
 use App\Http\Controllers\Siswa\SiswaDashboardController;
 use App\Http\Controllers\Siswa\SiswaLearningController;
+use App\Http\Controllers\Siswa\SelfLearningVideoStreamController;
 use App\Http\Controllers\Siswa\BookingController;
 use App\Http\Controllers\Siswa\StudentCertificateController;
 use App\Http\Controllers\Siswa\VocabController;
@@ -26,6 +27,7 @@ use App\Http\Controllers\Kurikulum\DocumentTemplateController;
 use App\Http\Controllers\Kurikulum\MaterialController;
 use App\Http\Controllers\Kurikulum\LetterController;
 use App\Http\Controllers\Kurikulum\MonitoringController;
+use App\Http\Controllers\Kurikulum\SelfStudyMonitoringController;
 use App\Http\Controllers\Kurikulum\JadwalKonsultasiController;
 use App\Http\Controllers\Kurikulum\ReviewPengajuanController;
 use App\Http\Controllers\Kurikulum\TugasKelasController as KurikulumTugasKelasController;
@@ -93,6 +95,8 @@ use App\Http\Controllers\Owner\TrainingMaterialController as OwnerTrainingMateri
 use App\Http\Controllers\Owner\ConsultationController as OwnerConsultationController;
 use App\Http\Controllers\Owner\SignatureQueueController as OwnerSignatureQueueController;
 use App\Http\Controllers\Owner\SubmissionRecapController as OwnerSubmissionRecapController;
+use App\Http\Controllers\Owner\SelfLearningVideoController as OwnerSelfLearningVideoController;
+use App\Http\Controllers\Owner\SelfStudySettingController as OwnerSelfStudySettingController;
 
 /*
 |--------------------------------------------------------------------------
@@ -244,24 +248,28 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
     }); // <-- INI YANG HILANG
 
     // SERTIFIKAT BELAJAR MANDIRI
-    Route::prefix('student/belajar-mandiri/sertifikat')->name('student.mandiri-certificates.')->group(function () {
+    Route::prefix('student/belajar-mandiri/sertifikat')->name('student.mandiri-certificates.')
+    ->middleware('selfstudy')->group(function () {
         Route::post('/', [SelfStudyCertificateController::class, 'store'])->name('store');
         Route::get('/{certificate}/download', [SelfStudyCertificateController::class, 'download'])->name('download');
     });
 
-    // VIDEO
-    // Route::get('/video', [SiswaLearningController::class, 'video'])
-    //     ->name('video.index');
-
+    // STREAM VIDEO 
     Route::get('/video/{video}/stream', [SiswaLearningController::class, 'streamVideo'])
         ->name('video.stream');
 
     // BELAJAR MANDIRI (hub)
     Route::get('/belajar-mandiri', [BelajarMandiriController::class, 'index'])
-        ->name('student.mandiri.index');
+       ->middleware('selfstudy') 
+       ->name('student.mandiri.index');
+
+     // Stream video tutorial Self Learning (hanya video aktif)
+    Route::get('/student/self-learning/video/{video}/stream', [SelfLearningVideoStreamController::class, 'stream'])
+        ->name('student.self-video.stream');
 
     // BELAJAR VOCAB
-    Route::prefix('student/belajar-vocab')->name('student.vocab.')->group(function () {
+    Route::prefix('student/belajar-vocab')->name('student.vocab.')
+        ->middleware('selfstudy')->group(function () {
 
         Route::get('panduan', [VocabController::class, 'guide'])->name('guide');
 
@@ -285,7 +293,8 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
     });
 
     //BELAJAR GRAMMAR
-    Route::prefix('student/grammar')->name('student.grammar.')->group(function () {
+    Route::prefix('student/grammar')->name('student.grammar.')
+        ->middleware('selfstudy')->group(function () {
     Route::get('/guide', [GrammarController::class, 'guide'])->name('guide');
     Route::get('/list',  [GrammarController::class, 'list'])->name('list');
     Route::post('/list/{no}/toggle', [GrammarController::class, 'toggle'])->name('toggle');
@@ -414,6 +423,9 @@ Route::middleware(['auth', 'role:Curriculum'])
         Route::get('/materi/{material}/download', [MaterialController::class, 'download'])
             ->name('materi.download');
 
+        Route::get('/materi/{material}/download/{type}', [MaterialController::class, 'downloadAttachment'])
+            ->name('materi.download-attachment');
+
         Route::get('/materi/{material}/preview', [MaterialController::class, 'preview'])
             ->name('materi.preview');
 
@@ -428,6 +440,14 @@ Route::middleware(['auth', 'role:Curriculum'])
         // Monitoring Guru
         Route::get('/monitoring', [MonitoringController::class, 'index'])
             ->name('monitoring');
+
+        // Monitoring Belajar Mandiri (Vocab + Grammar, hanya baca)
+        Route::get('/belajar-mandiri', [SelfStudyMonitoringController::class, 'index'])
+            ->name('belajar-mandiri.index');
+        Route::get('/belajar-mandiri/analisis', [SelfStudyMonitoringController::class, 'analysis'])
+            ->name('belajar-mandiri.analisis');
+        Route::get('/belajar-mandiri/siswa/{student}', [SelfStudyMonitoringController::class, 'show'])
+            ->name('belajar-mandiri.show');
 
         // JADWAL KONSULTASI
         Route::get('/jadwal-konsultasi', [JadwalKonsultasiController::class, 'index'])
@@ -447,6 +467,16 @@ Route::middleware(['auth', 'role:Curriculum'])
 
         Route::delete('/jadwal-konsultasi/{consultation}', [JadwalKonsultasiController::class, 'destroy'])
             ->name('jadwal-konsultasi.destroy');
+
+        // Slot Available Konsultasi Kurikulum
+        Route::post('/jadwal-konsultasi/slots', [JadwalKonsultasiController::class, 'storeSlot'])
+            ->name('jadwal-konsultasi.slots.store');
+        Route::put('/jadwal-konsultasi/slots/{slot}', [JadwalKonsultasiController::class, 'updateSlot'])
+            ->name('jadwal-konsultasi.slots.update');
+        Route::delete('/jadwal-konsultasi/slots/{slot}', [JadwalKonsultasiController::class, 'destroySlot'])
+            ->name('jadwal-konsultasi.slots.destroy');
+        Route::post('/jadwal-konsultasi/slots/{slot}/confirm', [JadwalKonsultasiController::class, 'confirmBooking'])
+            ->name('jadwal-konsultasi.slots.confirm');
 
         /*
         | REVIEW PENGAJUAN
@@ -795,6 +825,12 @@ Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
         Route::get('/hasil-konsultasi/{id}/download', [GuruConsultationResultController::class, 'download'])->name('hasil-konsultasi.download');
         Route::get('/hasil-konsultasi/revisi/{id}/download', [GuruConsultationResultController::class, 'downloadRevisionAttachment'])->name('hasil-konsultasi.revisi.download');
         Route::get('/hasil-konsultasi/revisi/message/{message}/download', [GuruConsultationResultController::class, 'downloadMessageAttachment'])->name('hasil-konsultasi.revisi.message-download');
+
+        // Jadwal Konsultasi Guru (Slot Available Kurikulum & Owner, Booking, Reschedule Ganti Hari/Jam)
+        Route::get('/jadwal-konsultasi', [\App\Http\Controllers\Guru\ConsultationScheduleController::class, 'index'])->name('jadwal-konsultasi.index');
+        Route::post('/jadwal-konsultasi/book', [\App\Http\Controllers\Guru\ConsultationScheduleController::class, 'book'])->name('jadwal-konsultasi.book');
+        Route::post('/jadwal-konsultasi/{slot}/reschedule', [\App\Http\Controllers\Guru\ConsultationScheduleController::class, 'reschedule'])->name('jadwal-konsultasi.reschedule');
+        Route::post('/jadwal-konsultasi/{slot}/cancel', [\App\Http\Controllers\Guru\ConsultationScheduleController::class, 'cancel'])->name('jadwal-konsultasi.cancel');
     });
 
 /*
@@ -827,7 +863,20 @@ Route::middleware(['auth', 'role:Owner'])
         Route::get('/video-panduan', [VocabGuideVideoController::class, 'edit'])->name('video-panduan');
         Route::post('/video-panduan', [VocabGuideVideoController::class, 'save'])->name('video-panduan.save');
 
-        // Konsultasi Owner (Hasil, Jadwal, dan Revisi)
+        // Video Self Learning (tampil di Panduan Belajar Mandiri siswa)
+        Route::get('/self-learning', [OwnerSelfLearningVideoController::class, 'index'])->name('self-learning.index');
+        Route::post('/self-learning', [OwnerSelfLearningVideoController::class, 'store'])->name('self-learning.store');
+        Route::put('/self-learning/{video}', [OwnerSelfLearningVideoController::class, 'update'])->name('self-learning.update');
+        Route::patch('/self-learning/{video}/aktif', [OwnerSelfLearningVideoController::class, 'toggle'])->name('self-learning.toggle');
+        Route::delete('/self-learning/{video}', [OwnerSelfLearningVideoController::class, 'destroy'])->name('self-learning.destroy');
+        Route::get('/self-learning/{video}/stream', [OwnerSelfLearningVideoController::class, 'stream'])->name('self-learning.stream');
+          // Pengaturan nilai Sertifikat Belajar Mandiri (batas lulus & bobot)
+        Route::get('/pengaturan-nilai-mandiri', [OwnerSelfStudySettingController::class, 'edit'])
+            ->name('self-study.settings');
+        Route::put('/pengaturan-nilai-mandiri', [OwnerSelfStudySettingController::class, 'update'])
+            ->name('self-study.settings.update');
+
+        // Konsultasi Owner (Hasil, Jadwal, Revisi, Slot Available & Konfirmasi Pengajuan)
         Route::get('/konsultasi', [OwnerConsultationController::class, 'index'])
             ->name('konsultasi.index');
         Route::post('/konsultasi', [OwnerConsultationController::class, 'store'])
@@ -844,6 +893,14 @@ Route::middleware(['auth', 'role:Owner'])
             ->name('konsultasi.revisi.complete');
         Route::get('/konsultasi/revisi/{revisionConsultation}/download', [OwnerConsultationController::class, 'downloadRevision'])
             ->name('konsultasi.revisi.download');
+        Route::post('/konsultasi/slots', [OwnerConsultationController::class, 'storeSlot'])
+            ->name('konsultasi.slots.store');
+        Route::put('/konsultasi/slots/{slot}', [OwnerConsultationController::class, 'updateSlot'])
+            ->name('konsultasi.slots.update');
+        Route::delete('/konsultasi/slots/{slot}', [OwnerConsultationController::class, 'destroySlot'])
+            ->name('konsultasi.slots.destroy');
+        Route::post('/konsultasi/slots/{slot}/confirm', [OwnerConsultationController::class, 'confirmBooking'])
+            ->name('konsultasi.slots.confirm');
 
         // Antrean TTD Owner (Progress Report, Sertifikat & Pengajuan)
         Route::get('/ttd', [OwnerSignatureQueueController::class, 'index'])
@@ -929,11 +986,9 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
             ->name('convert.store');                // step 2 (submit)
         Route::get('/enrollment/{enrollment}/dokumen', [ConvertController::class, 'step3'])
             ->name('convert.step3');                // step 3
-        
-        
+            
     });
     
-
     // SISWA
     Route::prefix('siswa')->group(function () {
         Route::get('/', [SiswaController::class, 'index'])
@@ -947,14 +1002,33 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
         Route::get('/{siswa}/detail', [SiswaController::class, 'detail'])
         ->name('siswa.detail');
 
+        // DETAIL SISWA
+        Route::get('/{siswa}/detail', [SiswaController::class, 'detail'])
+            ->name('siswa.detail');
+
+        // TAMBAH POIN SISWA
+        Route::post('/{siswa}/poin', [SiswaController::class, 'storePoint'])
+            ->name('siswa.point.store');
+
+        // HAPUS POIN SISWA (salah input)
+        Route::delete('/{siswa}/poin/{pointLog}', [SiswaController::class, 'destroyPoint'])
+            ->name('siswa.point.destroy');
+        
+        // CATATAN ADMIN SISWA
+        Route::patch('/{siswa}/catatan', [SiswaController::class, 'updateNote'])
+        ->name('siswa.note');
+
         // SISWA: LANJUT PROGRAM
         Route::get('/{siswa}/continue', fn (\App\Models\Student $siswa) => redirect()->route('admin.siswa.continue.program', $siswa))
             ->name('siswa.continue.form');
+
         // Jalur 1 (belum lunas): pelunasan
         Route::get('/{siswa}/pelunasan', [SiswaController::class, 'settlementForm'])
             ->name('siswa.settle');
+
         Route::post('/{siswa}/pelunasan', [SiswaController::class, 'settlementStore'])
             ->name('siswa.settle.store');
+            
         // Jalur 2 (sudah lunas): pilih program
         Route::get('/{siswa}/continue/program', [SiswaController::class, 'continueProgramPage'])
             ->name('siswa.continue.program');

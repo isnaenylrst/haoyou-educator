@@ -33,6 +33,7 @@ class GrammarController extends Controller
         return view('Siswa.grammar.guide', [
             'title'    => 'Panduan',
             'parent'   => 'Belajar Grammar',
+            'selfVideo' => \App\Models\SelfLearningVideo::activeFor('grammar'),
             'videoId'  => $videoId,
             'progress' => [
                 'learned'    => $learned,

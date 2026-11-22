@@ -17,6 +17,7 @@ class Student extends Model
         'points',
         'join_date',
         'status',
+        'admin_note',
     ];
 
     protected $casts = [
@@ -99,4 +100,8 @@ class Student extends Model
     {
         return $this->hasMany(StudentLearningRequest::class, 'student_id');
     }
+    public function pointLogs()
+{
+    return $this->hasMany(PointLog::class)->latest('session_date')->latest('id');
+}
 }

@@ -37,6 +37,10 @@ class Submission extends Model
         'amount',
         'date',
         'description',
+        'account_number',
+        'account_name',
+        'shipping_cost',
+        'class_id',
         'receipt_path',
         'photo_path',
         'status',
@@ -62,7 +66,13 @@ class Submission extends Model
         'admin_verified_at'      => 'datetime',
         'owner_approved_at'      => 'datetime',
         'amount'                 => 'decimal:2',
+        'shipping_cost'          => 'decimal:2',
     ];
+
+    public function class()
+    {
+        return $this->belongsTo(ClassModel::class, 'class_id');
+    }
 
     public function teacher()
     {

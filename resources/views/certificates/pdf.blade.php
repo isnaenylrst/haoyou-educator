@@ -1,13 +1,16 @@
 @php
-    $passed   = method_exists($c, 'isPassed') ? $c->isPassed() : true;
-    $cols     = count($c->scores ?? []) + 1;
-    $tableW   = $cols * 120;
-    $label    = $c->level_name ?: ($c->course_name ?: 'Course');
-    $title    = $passed ? 'Sertifikat Kelulusan' : 'Sertifikat Hasil Ujian';
-    $desc     = $passed
-        ? 'atas keberhasilan menyelesaikan program dan mengikuti ujian akhir <b>' . e($label) . '</b>'
-        : 'atas keikutsertaan dalam ujian akhir <b>' . e($label) . '</b>';
+    preg_match('/HSK\s*([1-6])/i', $cert['course'] ?? '', $m);
+    $level   = (int) ($m[1] ?? 0);
+    $isLow   = $level >= 1 && $level <= 2;
+    $skills  = $isLow
+        ? ['listening' => 'Listening', 'reading' => 'Reading']
+        : ['listening' => 'Listening', 'reading' => 'Reading', 'writing' => 'Writing'];
+    $max     = count($skills) * 100;     // 200 atau 300
+    $passing = $isLow ? 120 : 180;
+    $passed  = $cert['score'] !== null && (float) $cert['score'] >= $passing;
+    $fmt = fn ($v) => is_null($v) ? '-' : rtrim(rtrim(number_format((float) $v, 1, '.', ''), '0'), '.');
 @endphp
+
 <!DOCTYPE html>
 <html lang="id">
 <head>

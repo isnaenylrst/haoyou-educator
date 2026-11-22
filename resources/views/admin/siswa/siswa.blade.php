@@ -16,6 +16,12 @@
                 Kelola data siswa aktif, kelas, dan jadwal pembelajaran dengan mudah dan terorganisir.
             </p>
         </div>
+        @if (session('success'))
+        <div class="sd-alert ok">{{ session('success') }}</div>
+        @endif
+        @if (session('error'))
+            <div class="sd-alert err">{{ session('error') }}</div>
+        @endif
 
         <div class="dashboard-header-actions">
             <button type="button" class="btn btn-primary">
@@ -117,6 +123,7 @@
                     <th style="text-align: center;">Tidak Hadir</th>
                     <th style="text-align: center;">Status</th>
                     <th style="text-align: center;">Poin</th>
+                    <th style="text-align: left;">Catatan</th>
                     <th width="120" style="text-align: center;">Aksi</th>
                 </tr>
             </thead>
@@ -240,6 +247,22 @@
 
                         <td style="text-align: center; vertical-align: middle;">{{ $student->points }}</td>
 
+                        {{-- Catatan Admin --}}
+                        @php $adminNote = trim($student->admin_note ?? ''); @endphp
+                        <td class="note-cell {{ $adminNote !== '' ? 'has-note' : '' }}"
+                            style="vertical-align: middle;"
+                            data-url="{{ route('admin.siswa.note', $student) }}"
+                            data-name="{{ $student->name }}"
+                            data-note="{{ $adminNote }}"
+                            onclick="openNoteModal(this)"
+                            title="Klik untuk menulis / mengubah catatan">
+                            @if ($adminNote !== '')
+                                {{ $adminNote }}
+                            @else
+                                <span class="note-empty"><i class="fa-solid fa-plus"></i> Tambah</span>
+                            @endif
+                        </td>
+
                         {{-- Action --}}
                         <td style="text-align: center; vertical-align: middle;">
                             @php
@@ -304,7 +327,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" style="text-align:center;padding:50px;color:#888;">
+                        <td colspan="8" style="text-align:center;padding:50px;color:#888;">
                             Belum ada data siswa.
                         </td>
                     </tr>
@@ -434,7 +457,47 @@
         </div>
     </div>
 
+{{-- ========================= MODAL CATATAN ADMIN ========================= --}}
+<div class="modal-overlay" id="noteModalOverlay">
+    <div class="modal">
+        <form id="noteForm" method="POST">
+            @csrf
+            @method('PATCH')
+
+            <div class="modal-head">
+                <div>
+                    <div class="modal-title">Catatan Admin</div>
+                    <div class="modal-sub" id="note_student_name">-</div>
+                </div>
+                <button type="button" class="modal-close" onclick="closeNoteModal()" aria-label="Tutup">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <div class="form-section" style="margin-bottom: 0;">
+                    <div class="form-field full">
+                        <label for="note_text">Catatan / Kendala</label>
+                        <textarea name="admin_note" id="note_text" rows="5" maxlength="1000"
+                                  placeholder="Tulis kendala siswa di sini. Kosongkan untuk menghapus catatan."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-foot">
+                <div class="modal-foot-right">
+                    <button type="button" class="btn btn-secondary" onclick="closeNoteModal()">Batal</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa-solid fa-check"></i> Simpan
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 @endsection
+
 
 @push('scripts')
     <script>
@@ -540,6 +603,25 @@
             if (e.key !== 'Escape') return;
 
             closeAssignClassModal();
+            closeNoteModal();
         });
+        /* ============================================================
+            MODAL: CATATAN ADMIN
+            ============================================================ */
+            function openNoteModal(cell) {
+                document.getElementById('noteForm').action = cell.dataset.url;
+                document.getElementById('note_student_name').textContent = cell.dataset.name;
+                document.getElementById('note_text').value = cell.dataset.note || '';
+                document.getElementById('noteModalOverlay').classList.add('open');
+                document.getElementById('note_text').focus();
+            }
+
+            function closeNoteModal() {
+                document.getElementById('noteModalOverlay').classList.remove('open');
+            }
+
+            document.getElementById('noteModalOverlay').addEventListener('click', function (e) {
+                if (e.target === this) closeNoteModal();
+            });
     </script>
 @endpush

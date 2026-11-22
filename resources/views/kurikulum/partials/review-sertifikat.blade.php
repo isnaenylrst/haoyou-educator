@@ -15,19 +15,25 @@
 @endonce
 
 @forelse ($certificates as $item)
-    @php
+   @php
         $fileUrl = $item->file_path
             ? route('kurikulum.review-pengajuan.file', ['cert', $item->id])
             : null;
 
+        preg_match('/HSK\s*([1-6])/i', $item->course_name ?: ($item->enrollment->class->class_name ?? ''), $mm);
+        $lvl   = (int) ($mm[1] ?? 0);
+        $isLow = $lvl >= 1 && $lvl <= 2;
+        $max   = $isLow ? 200 : 300;
+        $pass  = $isLow ? 120 : 180;
+
         $skills = [
             'LISTENING' => $item->listening_score,
             'READING'   => $item->reading_score,
-            'SPEAKING'  => $item->speaking_score,
-            'WRITING'   => $item->writing_score,
         ];
+        if (! $isLow) {
+            $skills['WRITING'] = $item->writing_score;
+        }
     @endphp
-
     <div class="list-group-item">
 
         {{-- Baris atas: identitas sertifikat + tombol keputusan --}}
@@ -79,10 +85,16 @@
                     <div class="rc-lbl">{{ $name }}</div>
                     <div class="rc-val">{{ $value ?? '-' }}</div>
                 </div>
+
+                 <div class="small mt-2 {{ ($item->score ?? 0) >= $pass ? 'text-success' : 'text-danger' }}">
+                    Standar lulus minimal {{ $pass }} dari {{ $max }} ·
+                    {{ ($item->score ?? 0) >= $pass ? 'Memenuhi standar' : 'Belum memenuhi standar' }}
+                </div>
+
             @endforeach
             <div class="rc-chip rc-total">
                 <div class="rc-lbl">TOTAL SCORE</div>
-                <div class="rc-val">{{ $item->score ?? '-' }} <small>/ 100</small></div>
+                <div class="rc-val">{{ $item->score ?? '-' }} <small>/ {{ $max }}</small></div>
             </div>
         </div>
 

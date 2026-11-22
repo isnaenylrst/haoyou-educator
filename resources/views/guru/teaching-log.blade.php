@@ -40,22 +40,25 @@
                 </div>
                 <div class="row g-2 text-center">
                     <div class="col-4">
-                        <div class="p-3 rounded-3 bg-success-subtle">
+                        <a href="{{ route('teacher.teaching-log', array_merge(request()->query(), ['jurnal' => 'sudah_diisi', 'page' => 1])) }}"
+                           class="d-block p-3 rounded-3 bg-success-subtle text-decoration-none border {{ request('jurnal') === 'sudah_diisi' ? 'border-success border-2 shadow-sm' : 'border-transparent' }}">
                             <div class="fs-4 fw-bold text-success">{{ $stats['journal_filled'] }}</div>
                             <small class="text-muted fw-semibold">Sudah Diisi</small>
-                        </div>
+                        </a>
                     </div>
                     <div class="col-4">
-                        <div class="p-3 rounded-3 bg-warning-subtle">
+                        <a href="{{ route('teacher.teaching-log', array_merge(request()->query(), ['jurnal' => 'belum_diisi', 'page' => 1])) }}"
+                           class="d-block p-3 rounded-3 bg-warning-subtle text-decoration-none border {{ request('jurnal') === 'belum_diisi' ? 'border-warning border-2 shadow-sm' : 'border-transparent' }}">
                             <div class="fs-4 fw-bold text-warning">{{ $stats['journal_unfilled'] }}</div>
                             <small class="text-muted fw-semibold">Belum Diisi</small>
-                        </div>
+                        </a>
                     </div>
                     <div class="col-4">
-                        <div class="p-3 rounded-3 bg-danger-subtle">
+                        <a href="{{ route('teacher.teaching-log', array_merge(request()->query(), ['jurnal' => 'terlambat', 'page' => 1])) }}"
+                           class="d-block p-3 rounded-3 bg-danger-subtle text-decoration-none border {{ request('jurnal') === 'terlambat' ? 'border-danger border-2 shadow-sm' : 'border-transparent' }}">
                             <div class="fs-4 fw-bold text-danger">{{ $stats['journal_late'] }}</div>
                             <small class="text-muted fw-semibold">Terlambat (>24j)</small>
-                        </div>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -72,28 +75,32 @@
                 </div>
                 <div class="row g-2 text-center">
                     <div class="col-3">
-                        <div class="p-3 rounded-3 bg-success-subtle">
+                        <a href="{{ route('teacher.teaching-log', array_merge(request()->query(), ['report' => 'disetujui', 'page' => 1])) }}"
+                           class="d-block p-3 rounded-3 bg-success-subtle text-decoration-none border {{ request('report') === 'disetujui' ? 'border-success border-2 shadow-sm' : 'border-transparent' }}">
                             <div class="fs-4 fw-bold text-success">{{ $stats['pr_approved'] }}</div>
                             <small class="text-muted fw-semibold" style="font-size: 11px;">Disetujui (ACC)</small>
-                        </div>
+                        </a>
                     </div>
                     <div class="col-3">
-                        <div class="p-3 rounded-3 bg-info-subtle">
+                        <a href="{{ route('teacher.teaching-log', array_merge(request()->query(), ['report' => 'diajukan', 'page' => 1])) }}"
+                           class="d-block p-3 rounded-3 bg-info-subtle text-decoration-none border {{ request('report') === 'diajukan' ? 'border-primary border-2 shadow-sm' : 'border-transparent' }}">
                             <div class="fs-4 fw-bold text-primary">{{ $stats['pr_submitted'] }}</div>
                             <small class="text-muted fw-semibold" style="font-size: 11px;">Diajukan</small>
-                        </div>
+                        </a>
                     </div>
                     <div class="col-3">
-                        <div class="p-3 rounded-3 bg-secondary-subtle">
+                        <a href="{{ route('teacher.teaching-log', array_merge(request()->query(), ['report' => 'draft', 'page' => 1])) }}"
+                           class="d-block p-3 rounded-3 bg-secondary-subtle text-decoration-none border {{ request('report') === 'draft' ? 'border-secondary border-2 shadow-sm' : 'border-transparent' }}">
                             <div class="fs-4 fw-bold text-secondary">{{ $stats['pr_draft'] }}</div>
                             <small class="text-muted fw-semibold" style="font-size: 11px;">Draft Belum Diajukan</small>
-                        </div>
+                        </a>
                     </div>
                     <div class="col-3">
-                        <div class="p-3 rounded-3 bg-danger-subtle">
+                        <a href="{{ route('teacher.teaching-log', array_merge(request()->query(), ['report' => 'belum_diisi', 'page' => 1])) }}"
+                           class="d-block p-3 rounded-3 bg-danger-subtle text-decoration-none border {{ request('report') === 'belum_diisi' ? 'border-danger border-2 shadow-sm' : 'border-transparent' }}">
                             <div class="fs-4 fw-bold text-danger">{{ $stats['pr_unfilled'] }}</div>
                             <small class="text-muted fw-semibold" style="font-size: 11px;">Belum Diisi</small>
-                        </div>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -103,7 +110,37 @@
     {{-- DAFTAR PERTEMUAN DAN STATUS JELAS --}}
     <div class="card border-0 shadow-sm rounded-4">
         <div class="card-body p-4">
-            <h5 class="fw-bold mb-3">Daftar Pertemuan & Status Pelaksanaan</h5>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <h5 class="fw-bold mb-0">Daftar Pertemuan & Status Pelaksanaan</h5>
+                @if (request('jurnal') || request('report'))
+                    @php
+                        $cleanParams = request()->except(['jurnal', 'report', 'page']);
+                    @endphp
+                    <a href="{{ route('teacher.teaching-log', $cleanParams) }}" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
+                        <i class="fa-solid fa-rotate-left me-1"></i> Reset filter
+                    </a>
+                @endif
+            </div>
+
+            @if (request('jurnal') || request('report'))
+                <div class="alert alert-light border py-2 px-3 small d-flex align-items-center justify-content-between mb-3 rounded-3">
+                    <span>
+                        <i class="fa-solid fa-filter me-1 text-primary"></i>
+                        Filter aktif:
+                        @if(request('jurnal'))
+                            <strong>Jurnal: {{ ucfirst(str_replace('_', ' ', request('jurnal'))) }}</strong>
+                        @endif
+                        @if(request('jurnal') && request('report')) · @endif
+                        @if(request('report'))
+                            <strong>Progress Report: {{ ucfirst(str_replace('_', ' ', request('report'))) }}</strong>
+                        @endif
+                        ({{ $paginatedSessions->total() }} hasil)
+                    </span>
+                    <a href="{{ route('teacher.teaching-log', request()->except(['jurnal', 'report', 'page'])) }}" class="text-decoration-none fw-semibold small">
+                        Hapus filter &times;
+                    </a>
+                </div>
+            @endif
 
             <div class="table-responsive">
                 <table class="table align-middle table-hover">
@@ -175,7 +212,16 @@
                             <tr>
                                 <td colspan="7" class="text-center text-muted py-5">
                                     <i class="fa-solid fa-calendar-xmark fs-2 text-secondary d-block mb-2"></i>
-                                    Tidak ada jadwal pertemuan mengajar pada periode ini.
+                                    @if(request('jurnal') || request('report'))
+                                        Tidak ada jadwal pertemuan mengajar yang cocok dengan filter yang dipilih.
+                                        <div class="mt-2">
+                                            <a href="{{ route('teacher.teaching-log', request()->except(['jurnal', 'report', 'page'])) }}" class="btn btn-sm btn-outline-secondary rounded-pill">
+                                                Reset Filter
+                                            </a>
+                                        </div>
+                                    @else
+                                        Tidak ada jadwal pertemuan mengajar pada periode ini.
+                                    @endif
                                 </td>
                             </tr>
                         @endforelse

@@ -1,6 +1,16 @@
 @php
-    $passed = $cert['score'] !== null && (float) $cert['score'] >= $cert['passing'];
+    // Level HSK dibaca dari nama kursus, mis. "HSK Class - HSK 2 - Kelas A"
+    preg_match('/HSK\s*([1-6])/i', $cert['course'] ?? '', $m);
+    $level   = (int) ($m[1] ?? 0);
+    $isLow   = $level >= 1 && $level <= 2;
+    $skills  = $isLow
+        ? ['listening' => 'Listening', 'reading' => 'Reading']
+        : ['listening' => 'Listening', 'reading' => 'Reading', 'writing' => 'Writing'];
+    $max     = count($skills) * 100;     // 200 atau 300
+    $passing = $isLow ? 120 : 180;
+    $passed  = $cert['score'] !== null && (float) $cert['score'] >= $passing;
     $fmt = fn ($v) => is_null($v) ? '-' : rtrim(rtrim(number_format((float) $v, 1, '.', ''), '0'), '.');
+
     // Logo: taruh di public/images/haoyou-logo.png (atau salah satu lokasi di bawah)
     $logoPath = collect([
             'images', 'img', 'assets/images', 'assets/img', 'assets', 'image', '',
@@ -88,8 +98,8 @@
         <div style="height:105px; line-height:105px; font-size:26px; font-weight:bold;">HaoYou</div>
     @endif
 
-    <div class="title serif">Sertifikat Kelulusan</div>
-    <div class="sub">LES MANDARIN &nbsp;·&nbsp; NO. {{ $number }}</div>
+    <div class="title serif">Sertifikat Mock Test</div>
+    <div class="sub">MOCK TEST HSK &nbsp;·&nbsp; NO. {{ $number }}</div>
 
     <div class="intro">Dengan bangga diberikan kepada</div>
     <div class="name serif">{{ $e->student_name }}</div>
@@ -105,18 +115,17 @@
 
     <table class="scores">
         <tr>
-            <td><div class="lbl">Listening</div><div class="val">{{ $fmt($cert['listening']) }}</div></td>
-            <td><div class="lbl">Reading</div><div class="val">{{ $fmt($cert['reading']) }}</div></td>
-            <td><div class="lbl">Speaking</div><div class="val">{{ $fmt($cert['speaking']) }}</div></td>
-            <td><div class="lbl">Writing</div><div class="val">{{ $fmt($cert['writing']) }}</div></td>
+            @foreach ($skills as $key => $label)
+                <td><div class="lbl">{{ $label }}</div><div class="val">{{ $fmt($cert[$key] ?? null) }}</div></td>
+            @endforeach
             <td class="total" style="border-right:0;">
                 <div class="lbl">Total Score</div>
-                <div class="val">{{ $fmt($cert['score']) }} <small>/ 100</small></div>
+                <div class="val">{{ $fmt($cert['score']) }} <small>/ {{ $max }}</small></div>
             </td>
         </tr>
     </table>
 
-    <div class="std">Standar kelulusan: minimal {{ $cert['passing'] }} dari 100</div>
+    <div class="std">Standar kelulusan: minimal {{ $passing }} dari {{ $max }}</div>
     @if ($passed)
         <div class="pill ok">Memenuhi standar kelulusan</div>
     @else

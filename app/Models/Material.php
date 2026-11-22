@@ -45,6 +45,12 @@ class Material extends Model
         'box_code',
         'equipment_list',
         'material_file_path',
+        'cco_file_path',
+        'cco_file_name',
+        'lesson_plan_file_path',
+        'lesson_plan_file_name',
+        'module_file_path',
+        'module_file_name',
         'audience',
         'description',
     ];

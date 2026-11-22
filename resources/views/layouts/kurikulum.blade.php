@@ -137,10 +137,10 @@
             ['Dashboard', 'fa-house', '/kurikulum/dashboard', 'kurikulum/dashboard*'],
         ]],
         ['label' => 'Akademik', 'items' => [
-            ['Materi & Silabus', 'fa-folder-open', '/kurikulum/materi', 'kurikulum/materi*'],
+            ['Materi', 'fa-folder-open', '/kurikulum/materi', 'kurikulum/materi*'],
             ['SOP', 'fa-file-lines', '/kurikulum/sop', 'kurikulum/sop*'],
             ['Jadwal Konsultasi', 'fa-calendar-days', '/kurikulum/jadwal-konsultasi', 'kurikulum/jadwal-konsultasi*'],
-            ['Tugas Kelas', 'fa-clipboard-list', '/kurikulum/tugas-kelas', 'kurikulum/tugas-kelas*'],
+            ['Tugas Perbaikan Materi', 'fa-clipboard-list', '/kurikulum/tugas-kelas', 'kurikulum/tugas-kelas*'],
             ['Video Pembelajaran', 'fa-circle-play', '/kurikulum/video', 'kurikulum/video*'],
             ['Materi Training', 'fa-graduation-cap', '/kurikulum/training', 'kurikulum/training*'],
             ['Request Belajar', 'fa-book-open-reader', '/kurikulum/request-belajar', 'kurikulum/request-belajar*'],
@@ -153,6 +153,7 @@
             ['Hasil Konsultasi', 'fa-comments', '/kurikulum/hasil-konsultasi', 'kurikulum/hasil-konsultasi*'],
             ['Ketersediaan Guru', 'fa-user-clock', '/kurikulum/ketersediaan-guru', 'kurikulum/ketersediaan-guru*'],
             ['Monitoring Guru & Kelas', 'fa-chart-line', '/kurikulum/monitoring', 'kurikulum/monitoring*'],
+            ['Monitoring Belajar Mandiri', 'fa-chart-simple', '/kurikulum/belajar-mandiri', 'kurikulum/belajar-mandiri*'],
         ]],
         ['label' => 'Komunikasi', 'items' => [
             ['Pemberitahuan Surat', 'fa-envelope', '/kurikulum/surat', 'kurikulum/surat*'],

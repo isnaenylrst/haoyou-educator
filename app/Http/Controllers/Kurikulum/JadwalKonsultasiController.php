@@ -96,9 +96,54 @@ class JadwalKonsultasiController extends Controller
 
         $suggestions = $this->suggestions();
 
+        // 1. Catatan Pertemuan (Blok 4 Pertemuan dinamis dari class_sessions)
+        $meetingRuleSvc = app(\App\Services\MeetingConsultationRuleService::class);
+        $meetingRecords = collect();
+        foreach ($classes as $cl) {
+            $blocks = $meetingRuleSvc->getBlocksForClass($cl);
+            $meetingRecords->push([
+                'class'   => $cl,
+                'teacher' => $cl->teacher,
+                'blocks'  => $blocks,
+            ]);
+        }
+
+        // 2. Slot Available Konsultasi (Kurikulum + Owner) untuk Grid Mingguan
+        $weekParam = $request->query('week');
+        try {
+            $startOfWeek = $weekParam ? Carbon::parse($weekParam)->startOfWeek(Carbon::MONDAY) : now()->startOfWeek(Carbon::MONDAY);
+        } catch (\Throwable) {
+            $startOfWeek = now()->startOfWeek(Carbon::MONDAY);
+        }
+        $endOfWeek = $startOfWeek->copy()->endOfWeek(Carbon::SUNDAY);
+
+        // Ambil slot Kurikulum dan Owner pada minggu tersebut (hanya parent window)
+        $weekSlots = \App\Models\CurriculumConsultationSlot::with(['curriculumUser', 'teacher', 'class', 'subBookings.teacher'])
+            ->whereNull('parent_slot_id')
+            ->whereBetween('date', [$startOfWeek->toDateString(), $endOfWeek->toDateString()])
+            ->where('status', '!=', 'Cancelled')
+            ->orderBy('date')
+            ->orderBy('start_time')
+            ->get();
+
+        $consultationGrid = \App\Services\ConsultationSlotGridService::buildWeeklyGrid(
+            startOfWeek: $startOfWeek,
+            slots: $weekSlots,
+            viewerUserId: Auth::id(),
+            viewerRole: 'Curriculum'
+        );
+
+        $curriculumSlots = \App\Models\CurriculumConsultationSlot::with(['curriculumUser', 'teacher', 'class'])
+            ->where(function ($q) {
+                $q->where('owner_role', 'Curriculum')->orWhereNull('owner_role');
+            })
+            ->orderBy('date')
+            ->orderBy('start_time')
+            ->paginate(10, ['*'], 'slots_page');
+
         return view('kurikulum.jadwal-konsultasi', compact(
             'consultations', 'teachers', 'counts', 'tab', 'overdueCount',
-            'classes', 'classInfo', 'suggestions'
+            'classes', 'classInfo', 'suggestions', 'meetingRecords', 'curriculumSlots', 'consultationGrid'
         ));
     }
 
@@ -375,5 +420,197 @@ class JadwalKonsultasiController extends Controller
         $consultation->delete();
 
         return back()->with('success', 'Jadwal konsultasi dihapus.');
+    }
+
+    // ------------------------------------------------------------------ SLOT AVAILABLE KURIKULUM
+
+    /**
+     * Tambah slot available konsultasi kurikulum.
+     */
+    public function storeSlot(Request $request)
+    {
+        $data = $request->validate([
+            'date'       => ['required', 'date', 'after_or_equal:today'],
+            'start_time' => ['required', 'date_format:H:i'],
+            'end_time'   => ['required', 'date_format:H:i', 'after:start_time'],
+            'notes'      => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $userId = Auth::id();
+
+        $startTime = substr($data['start_time'], 0, 5);
+        $endTime   = substr($data['end_time'], 0, 5);
+
+        // Cegah double booking / overlap slot pada user kurikulum yang sama
+        $overlap = \App\Models\CurriculumConsultationSlot::where('curriculum_user_id', $userId)
+            ->whereDate('date', $data['date'])
+            ->where('status', '!=', 'Cancelled')
+            ->where(function ($q) use ($startTime, $endTime) {
+                $q->where(function ($q1) use ($startTime, $endTime) {
+                    $q1->where('start_time', '<', $endTime)
+                       ->where('end_time', '>', $startTime);
+                });
+            })
+            ->exists();
+
+        if ($overlap) {
+            return back()->withInput()->withErrors([
+                'start_time' => 'Anda sudah memiliki slot konsultasi aktif yang bertabrakan pada rentang jam tersebut.',
+            ]);
+        }
+
+        \App\Models\CurriculumConsultationSlot::create([
+            'curriculum_user_id' => $userId,
+            'owner_role'         => 'Curriculum',
+            'date'               => $data['date'],
+            'start_time'         => $data['start_time'],
+            'end_time'           => $data['end_time'],
+            'notes'              => $data['notes'] ?? null,
+            'status'             => 'Available',
+        ]);
+
+        return back()->with('success', 'Slot konsultasi available berhasil ditambahkan.');
+    }
+
+    /**
+     * Edit slot available kurikulum yang belum dipesan.
+     */
+    public function updateSlot(Request $request, \App\Models\CurriculumConsultationSlot $slot)
+    {
+        // Kurikulum tidak boleh mengubah slot milik Owner atau user lain
+        if ($slot->effective_role === 'Owner' || $slot->curriculum_user_id != Auth::id()) {
+            return back()->with('error', 'Anda tidak memiliki hak untuk mengubah slot ini.');
+        }
+
+        if ($slot->status === 'Booked') {
+            return back()->with('error', 'Slot yang sudah dipesan tidak dapat diubah jamnya secara langsung.');
+        }
+
+        $data = $request->validate([
+            'date'       => ['required', 'date', 'after_or_equal:today'],
+            'start_time' => ['required', 'date_format:H:i'],
+            'end_time'   => ['required', 'date_format:H:i', 'after:start_time'],
+            'notes'      => ['nullable', 'string', 'max:500'],
+            'status'     => ['required', 'in:Available,Cancelled'],
+        ]);
+
+        // Cek overlap
+        $overlap = \App\Models\CurriculumConsultationSlot::where('curriculum_user_id', $slot->curriculum_user_id)
+            ->where('id', '!=', $slot->id)
+            ->where('date', $data['date'])
+            ->where('status', '!=', 'Cancelled')
+            ->where(function ($q) use ($data) {
+                $q->whereBetween('start_time', [$data['start_time'], $data['end_time']])
+                  ->orWhereBetween('end_time', [$data['start_time'], $data['end_time']])
+                  ->orWhere(function ($q2) use ($data) {
+                      $q2->where('start_time', '<=', $data['start_time'])
+                         ->where('end_time', '>=', $data['end_time']);
+                  });
+            })
+            ->exists();
+
+        if ($overlap) {
+            return back()->withInput()->withErrors([
+                'start_time' => 'Slot waktu bertabrakan dengan slot konsultasi Anda yang lain.',
+            ]);
+        }
+
+        $slot->update($data);
+
+        return back()->with('success', 'Slot konsultasi berhasil diperbarui.');
+    }
+
+    /**
+     * Hapus / batalkan slot available.
+     */
+    public function destroySlot(\App\Models\CurriculumConsultationSlot $slot)
+    {
+        if ($slot->effective_role === 'Owner' || $slot->curriculum_user_id != Auth::id()) {
+            return back()->with('error', 'Anda tidak memiliki hak untuk menghapus slot ini.');
+        }
+
+        if ($slot->status === 'Booked') {
+            return back()->with('error', 'Slot yang sudah dipesan tidak boleh dihapus. Batalkan konfirmasinya terlebih dahulu.');
+        }
+
+        $slot->delete();
+
+        return back()->with('success', 'Slot konsultasi berhasil dihapus.');
+    }
+
+    /**
+     * Kurikulum konfirmasi atau tolak pengajuan slot dari Guru.
+     */
+    public function confirmBooking(Request $request, \App\Models\CurriculumConsultationSlot $slot)
+    {
+        $validated = $request->validate([
+            'action' => ['required', 'in:confirm,reject'],
+            'notes'  => ['nullable', 'string', 'max:500'],
+        ]);
+
+        return DB::transaction(function () use ($slot, $validated) {
+            $lockedSlot = \App\Models\CurriculumConsultationSlot::where('id', $slot->id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedSlot->is_past) {
+                return back()->with('error', 'Slot konsultasi ini sudah lewat batas waktunya.');
+            }
+
+            $teacher = $lockedSlot->teacher;
+
+            if ($validated['action'] === 'confirm') {
+                $lockedSlot->update([
+                    'status'                 => 'Booked',
+                    'teacher_booking_status' => 'Confirmed',
+                    'booking_notes'          => $validated['notes'] ? ($lockedSlot->booking_notes . "\nCatatan Kurikulum: " . $validated['notes']) : $lockedSlot->booking_notes,
+                ]);
+
+                // Buat entri jadwal di consultations agar tercatat di kalender konsultasi
+                Consultation::create([
+                    'teacher_id'   => $lockedSlot->booked_by_teacher_id,
+                    'class_id'     => $lockedSlot->class_id,
+                    'type'         => 'Materi',
+                    'scheduled_at' => Carbon::parse($lockedSlot->date->toDateString() . ' ' . $lockedSlot->start_time),
+                    'status'       => 'Terjadwal',
+                    'notes'        => 'Dipesan via Slot Konsultasi Kurikulum. ' . ($validated['notes'] ?? ''),
+                    'created_by'   => Auth::id(),
+                ]);
+
+                // Kirim notifikasi ke Guru (GURU 4g)
+                if ($teacher?->user) {
+                    $teacher->user->notify(new \App\Notifications\AppNotification(
+                        title: 'Pengajuan Konsultasi Dikonfirmasi Kurikulum',
+                        message: "Pengajuan konsultasi Anda untuk tanggal {$lockedSlot->date->translatedFormat('d M Y')} jam " . substr($lockedSlot->start_time, 0, 5) . " telah dikonfirmasi oleh Kurikulum.",
+                        url: url('/guru/jadwal-konsultasi'),
+                        type: 'konsultasi',
+                        icon: 'fa-calendar-check'
+                    ));
+                }
+
+                $msg = 'Booking slot konsultasi guru berhasil dikonfirmasi.';
+            } else {
+                $lockedSlot->update([
+                    'status'                 => 'Available',
+                    'teacher_booking_status' => 'Rejected',
+                    'booked_by_teacher_id'   => null,
+                    'class_id'               => null,
+                    'booking_notes'          => $validated['notes'] ? "Ditolak: " . $validated['notes'] : null,
+                ]);
+
+                // Kirim notifikasi penolakan ke Guru (GURU 4g)
+                if ($teacher?->user) {
+                    $teacher->user->notify(new \App\Notifications\AppNotification(
+                        title: 'Pengajuan Konsultasi Ditolak Kurikulum',
+                        message: "Pengajuan konsultasi Anda untuk tanggal {$lockedSlot->date->translatedFormat('d M Y')} ditolak oleh Kurikulum. Catatan: " . ($validated['notes'] ?? '-'),
+                        url: url('/guru/jadwal-konsultasi'),
+                        type: 'konsultasi',
+                        icon: 'fa-circle-xmark'
+                    ));
+                }
+
+                $msg = 'Pengajuan booking slot ditolak. Slot kini kembali tersedia.';
+            }
+
+            return back()->with('success', $msg);
+        });
     }
 }

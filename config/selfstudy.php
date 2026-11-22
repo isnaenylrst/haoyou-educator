@@ -3,13 +3,12 @@
 return [
     'weight_vocab'   => 70,
     'weight_grammar' => 30,
-    'passing_score'  => 60,
+    'passing_score'  => 75,
 
     // batas minimal => predikat
     'predikat' => [
         90 => 'Sangat Baik',
         75 => 'Baik',
-        60 => 'Cukup',
     ],
 
     // path relatif ke folder public/

@@ -16,6 +16,7 @@ use App\Models\Setting;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\Attendance;
+use App\Models\PointLog;
 use App\Models\TeachingJournal;
 use App\Services\ClassCapacityService;
 use App\Services\ClassOfferService;
@@ -24,9 +25,11 @@ use App\Services\ClassSessionService;
 use App\Services\ClassSessionOfferService;
 use App\Services\ExtraFeeService;
 use App\Services\PaymentInstallmentService;
+use App\Services\PointService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -234,16 +237,16 @@ class SiswaController extends Controller
 
     public function update(Request $request, Student $siswa)
     {
+        // Poin tidak lagi diedit langsung di sini: poin hanya bertambah lewat storePoint()
+        // atau jurnal guru, supaya setiap perubahan tercatat di riwayat (point_logs).
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'status' => ['required', 'in:Active,Inactive,Graduated'],
-            'points' => ['required', 'integer', 'min:0'],
         ]);
 
         $siswa->update([
             'name' => $validated['name'],
             'status' => $validated['status'],
-            'points' => $validated['points'],
         ]);
 
         // Dari halaman Detail & Edit: tetap di halaman itu setelah menyimpan
@@ -260,6 +263,88 @@ class SiswaController extends Controller
 
         return $redirect
             ->with('success', "Data siswa {$siswa->name} berhasil diperbarui.");
+    }
+
+    /** Simpan catatan admin (kendala siswa). Dikosongkan = catatan dihapus. */
+    public function updateNote(Request $request, Student $siswa)
+    {
+    $data = $request->validate([
+        'admin_note' => ['nullable', 'string', 'max:1000'],
+    ]);
+
+    $note = trim($data['admin_note'] ?? '');
+
+    $siswa->update(['admin_note' => $note !== '' ? $note : null]);
+
+    return back()->with('success', "Catatan {$siswa->name} berhasil disimpan.");
+}
+
+    /**
+     * Admin memberi poin pada tanggal tertentu.
+     * Ditolak kalau slot tanggal itu sudah diisi (oleh guru atau admin).
+     */
+    public function storePoint(Request $request, Student $siswa, PointService $points)
+    {
+        $data = $request->validate([
+            'session_date' => ['required', 'date', 'before_or_equal:today'],
+            'type'         => ['required', Rule::in(['kuning', 'merah'])],
+        ], [
+            'session_date.before_or_equal' => 'Tanggal tidak boleh di masa depan.',
+        ]);
+
+        // Siswa aktif di kelas yang sama dipakai untuk menghitung batas 1 Kuning + 1 Merah per kelas per tanggal
+        $classId         = $siswa->activeEnrollment?->class_id;
+        $classStudentIds = $classId
+            ? ClassEnrollment::where('class_id', $classId)->where('status', 'Active')->pluck('student_id')
+            : null;
+
+        try {
+            $points->give($siswa, $data['session_date'], $data['type'], auth()->id(), 'admin', $classStudentIds);
+        } catch (\DomainException $e) {
+            return redirect()->route('admin.siswa.detail', $siswa)->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('admin.siswa.detail', $siswa)
+            ->with('success', "Poin {$data['type']} untuk {$siswa->name} berhasil dicatat.");
+    }
+
+    /**
+     * Hapus satu poin yang salah input. Total poin siswa dikurangi sebesar poin yang dihapus,
+     * dan saldo "sebelum → sesudah" pada riwayat setelahnya ikut disesuaikan.
+     */
+    public function destroyPoint(Student $siswa, PointLog $pointLog)
+    {
+        abort_unless((int) $pointLog->student_id === (int) $siswa->id, 404);
+
+        $tanggal = $pointLog->session_date->format('d/m/Y');
+        $jenis   = ucfirst($pointLog->type);
+        $pts     = (int) $pointLog->points;
+
+        DB::transaction(function () use ($siswa, $pointLog, $pts) {
+            $student = Student::whereKey($siswa->id)->lockForUpdate()->firstOrFail();
+
+            $student->update(['points' => max(0, (int) $student->points - $pts)]);
+
+            // riwayat yang lebih baru ikut bergeser supaya urutan sebelum → sesudah tetap nyambung
+            PointLog::where('student_id', $siswa->id)->where('id', '>', $pointLog->id)->decrement('points_before', $pts);
+            PointLog::where('student_id', $siswa->id)->where('id', '>', $pointLog->id)->decrement('points_after', $pts);
+
+            Log::info('Poin siswa dihapus', [
+                'student_id'   => $siswa->id,
+                'point_log_id' => $pointLog->id,
+                'type'         => $pointLog->type,
+                'points'       => $pts,
+                'session_date' => $pointLog->session_date->toDateString(),
+                'input_by'     => $pointLog->input_by,
+                'input_role'   => $pointLog->input_role,
+                'deleted_by'   => auth()->id(),
+            ]);
+
+            $pointLog->delete();
+        });
+
+        return redirect()->route('admin.siswa.detail', $siswa)
+            ->with('success', "Poin {$jenis} tanggal {$tanggal} dihapus. Total poin {$siswa->name} dikurangi {$pts}.");
     }
 
     /** Halaman penuh Detail & Edit siswa (menggantikan modal di daftar siswa). */
@@ -313,6 +398,10 @@ class SiswaController extends Controller
             'programs'     => $programs,
             'schedules'    => $siswa->activeEnrollment?->class?->schedules ?? collect(),
             'payments'     => $this->paymentRows($siswa),
+            // Riwayat poin (siapa yang input, kapan, sebelum -> sesudah)
+            'pointLogs'    => $siswa->pointLogs()
+                ->with('inputBy')
+                ->paginate(10, ['*'], 'poin_page'),
         ]);
     }
 

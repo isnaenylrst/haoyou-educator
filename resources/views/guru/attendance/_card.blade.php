@@ -31,6 +31,9 @@
     $isUnlocked = $item['is_unlocked'] ?? false;
     $unlockRecord = $item['unlock_record'] ?? null;
     $autoMeetingNumber = $item['auto_meeting_number'] ?? 1;
+    $showDate = $showDate ?? false;
+    $cardDate = $item['session_date'] ?? $date;
+    $dateCanFill = !$cardDate->isFuture();
 @endphp
 
 <div class="card border-0 shadow-sm rounded-4 mb-3" data-status="{{ $item['status'] }}">
@@ -41,9 +44,18 @@
                 <div class="d-flex align-items-center gap-2">
                     <h5 class="fw-bold mb-0">{{ $class->class_name ?? '-' }}</h5>
                     <span class="badge bg-light text-dark border">{{ $type }} {{ $level ? '· ' . $level : '' }}</span>
+                    @if ($showDate)
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                            <i class="fa-regular fa-calendar me-1"></i> {{ $cardDate->translatedFormat('d M Y') }}
+                        </span>
+                    @endif
                 </div>
                 <small class="text-muted d-block mt-1">
-                    <i class="fa-regular fa-clock me-1"></i>
+                    @if (!$showDate)
+                        <i class="fa-regular fa-clock me-1"></i>
+                    @else
+                        <i class="fa-regular fa-calendar me-1"></i> {{ $cardDate->translatedFormat('l, d M Y') }} · <i class="fa-regular fa-clock me-1"></i>
+                    @endif
                     {{ \Illuminate\Support\Carbon::parse($schedule->start_time)->format('H.i') }}
                     - {{ \Illuminate\Support\Carbon::parse($schedule->end_time)->format('H.i') }}
                     @if ($isSubstitute) &middot; kelas {{ $teacherNames[$class->teacher_id] ?? 'guru lain' }} @endif
@@ -52,28 +64,30 @@
 
             <div>
                 @if ($item['status'] === 'terlambat')
-                    <span class="badge bg-danger px-3 py-2"><i class="fa-solid fa-lock me-1"></i> Terlambat / Terkunci</span>
+                    <span class="badge bg-danger px-3 py-2"><i class="fa-solid fa-lock-open me-1"></i> Terlambat (Buka Kunci)</span>
+                @elseif ($item['status'] === 'terkunci')
+                    <span class="badge bg-danger px-3 py-2"><i class="fa-solid fa-lock me-1"></i> Terkunci</span>
                 @elseif ($item['status'] === 'belum_diisi')
-                    <span class="badge bg-warning text-dark px-3 py-2"><i class="fa-regular fa-clock me-1"></i> Perlu Diisi</span>
+                    <span class="badge bg-warning text-dark px-3 py-2"><i class="fa-regular fa-clock me-1"></i> Belum Diisi</span>
                 @elseif ($item['status'] === 'revisi')
                     <span class="badge bg-danger px-3 py-2"><i class="fa-solid fa-triangle-exclamation me-1"></i> Perlu Revisi</span>
                 @elseif ($item['status'] === 'sudah_diisi')
                     <span class="badge bg-info text-dark px-3 py-2"><i class="fa-solid fa-hourglass-half me-1"></i> Menunggu Review</span>
                 @else
-                    <span class="badge bg-success px-3 py-2"><i class="fa-solid fa-check me-1"></i> Dikunci (Selesai)</span>
+                    <span class="badge bg-success px-3 py-2"><i class="fa-solid fa-check me-1"></i> Dikunci Kurikulum</span>
                 @endif
             </div>
         </div>
 
         {{-- INFO BATAS WAKTU & HITUNG MUNDUR 24 JAM --}}
-        @if ($item['status'] === 'belum_diisi')
+        @if ($item['status'] === 'belum_diisi' || $item['status'] === 'terlambat')
             @if ($isUnlocked)
                 <div class="alert alert-info py-2 d-flex align-items-center gap-2 mb-3">
                     <i class="fa-solid fa-lock-open fs-5"></i>
                     <div class="small">
                         <strong>Kunci Pengisian Dibuka oleh Kurikulum</strong> hingga
                         <strong>{{ $item['unlocked_until']?->translatedFormat('d M Y, H:i') }}</strong>.
-                        Jurnal ini akan ditandai terlambat saat disimpan.
+                        Jurnal ini akan ditandai terlambat saat disimpan. Silakan segera lengkapi form di bawah.
                     </div>
                 </div>
             @elseif (!$isPastDeadline && $deadline)
@@ -97,14 +111,19 @@
         @endif
 
         {{-- FORM PENGISIAN JURNAL --}}
-        @if (($item['status'] === 'belum_diisi' && $canFill) || $editing)
+        @php
+            $canFillForm = ($item['status'] === 'belum_diisi' && $dateCanFill)
+                || ($item['status'] === 'terlambat' && $isUnlocked)
+                || $editing;
+        @endphp
+        @if ($canFillForm)
 
             <form action="{{ $editing ? route('teacher.attendance.update', $journal) : route('teacher.attendance.store', $schedule) }}"
                   method="POST" class="journal-form">
                 @csrf
                 @if ($editing) @method('PUT') @endif
                 <input type="hidden" name="_sid" value="{{ $sid }}">
-                <input type="hidden" name="session_date" value="{{ $editing ? $journal->session_date->format('Y-m-d') : $date->format('Y-m-d') }}">
+                <input type="hidden" name="session_date" value="{{ $editing ? $journal->session_date->format('Y-m-d') : $cardDate->format('Y-m-d') }}">
 
                 {{-- Nilai Otomatis: Course Type & Level (Dihapus dari manual radio box) --}}
                 <input type="hidden" name="course_type" value="{{ $type }}">
@@ -232,34 +251,25 @@
                               placeholder="Capaian pemahaman siswa hari ini...">{{ $old('results', $j?->results) }}</textarea>
                 </div>
 
-                <div class="mb-3 run-group">
-                    <label class="form-label fw-semibold">Poin Sesi</label>
-                    <div class="d-flex gap-4">
-                        <label class="d-flex align-items-center gap-2">
-                            <input type="radio" name="session_score" value="10" data-run="req"
-                                   @checked((string) $old('session_score', $j?->session_score ?? '10') === '10')> 🟡 Kuning (10)
-                        </label>
-                        <label class="d-flex align-items-center gap-2">
-                            <input type="radio" name="session_score" value="5"
-                                   @checked((string) $old('session_score', $j?->session_score) === '5')> 🔴 Merah (5)
-                        </label>
-                    </div>
-                </div>
-
                 {{-- Absensi Siswa per Nama --}}
                 <h6 class="fw-bold border-top pt-3 mb-2"><i class="fa-solid fa-user-check text-warning me-1"></i> Absensi Siswa (Wajib diisi per nama)</h6>
-                <p class="text-muted small mb-3">Tentukan kehadiran tiap siswa. Bila tidak ada siswa yang hadir, jurnal tetap wajib diisi dengan absensi Alpha/Izin/Sakit (jumlah hadir 0).</p>
+                <p class="text-muted small mb-3">Tentukan kehadiran tiap siswa. Bila tidak ada siswa yang hadir, jurnal tetap wajib diisi dengan absensi Alpha/Izin/Sakit (jumlah hadir 0). Kolom Poin Sesi diisi hanya untuk siswa yang mendapat poin. Maksimal 1 siswa Kuning dan 1 siswa Merah per sesi; siswa yang tidak dipilih tidak mendapat poin.</p>
 
                 <div class="table-responsive mb-3">
                     <table class="table table-bordered align-middle">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 35%;">Nama Siswa</th>
-                                <th style="width: 25%;">Status Kehadiran</th>
+                                <th style="width: 30%;">Nama Siswa</th>
+                                <th style="width: 20%;">Status Kehadiran</th>
+                                <th style="width: 20%;" class="run-group">Poin Sesi</th>
                                 <th>Keterangan (Opsional)</th>
                             </tr>
                         </thead>
                         <tbody>
+                            @php
+                                // jenis poin yang sudah terpakai di kelas ini pada tanggal tersebut
+                                $takenTypes = ($item['point_by_student'] ?? collect())->pluck('type')->unique()->values()->all();
+                            @endphp
                             @forelse ($students as $enrollment)
                                 @php $stId = $enrollment->student_id; @endphp
                                 <tr>
@@ -271,6 +281,25 @@
                                             @endforeach
                                         </select>
                                     </td>
+                                    <td class="run-group">
+                                        @php $pLog = ($item['point_by_student'] ?? collect())->get($stId); @endphp
+                                        @if ($pLog)
+                                            <div class="small">
+                                                {{ $pLog->type === 'kuning' ? '🟡 Kuning' : '🔴 Merah' }} (+{{ $pLog->points }})
+                                            </div>
+                                            <div class="small text-muted">oleh {{ $pLog->inputter_label }}</div>
+                                        @elseif ($editing)
+                                            <span class="text-muted small">-</span>
+                                        @else
+                                            <select name="point[{{ $stId }}]" class="form-select form-select-sm point-select">
+                                                <option value="">Tidak ada</option>
+                                                <option value="kuning" data-taken="{{ in_array('kuning', $takenTypes, true) ? 1 : 0 }}"
+                                                        @selected($old("point.$stId") === 'kuning')>🟡 Kuning (+10){{ in_array('kuning', $takenTypes, true) ? ' - sudah dipakai' : '' }}</option>
+                                                <option value="merah" data-taken="{{ in_array('merah', $takenTypes, true) ? 1 : 0 }}"
+                                                        @selected($old("point.$stId") === 'merah')>🔴 Merah (+5){{ in_array('merah', $takenTypes, true) ? ' - sudah dipakai' : '' }}</option>
+                                            </select>
+                                        @endif
+                                    </td>
                                     <td>
                                         <input type="text" name="attendance_note[{{ $stId }}]" class="form-control form-control-sm"
                                                placeholder="Catatan..." value="{{ $old("attendance_note.$stId", $attNote[$stId] ?? null) }}">
@@ -278,7 +307,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="3" class="text-center text-muted py-3">Belum ada murid aktif yang terdaftar di kelas ini.</td>
+                                    <td colspan="4" class="text-center text-muted py-3">Belum ada murid aktif yang terdaftar di kelas ini.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -291,7 +320,7 @@
                 </button>
             </form>
 
-        @elseif ($item['status'] === 'terlambat')
+        @elseif ($item['status'] === 'terlambat' || $item['status'] === 'terkunci')
 
             <div class="alert alert-danger p-4 rounded-4 mb-0">
                 <div class="d-flex align-items-start gap-3">
@@ -317,26 +346,26 @@
                                 <i class="fa-solid fa-circle-xmark me-1"></i>
                                 <strong>Permohonan buka kunci ditolak Kurikulum:</strong> {{ $unlockRecord->rejection_note ?: 'Tidak memenuhi syarat pembukaan kembali.' }}
                             </div>
-                            <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-3" data-bs-toggle="collapse" data-bs-target="#requestUnlockForm-{{ $sid }}">
+                            <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-3" data-bs-toggle="collapse" data-bs-target="#requestUnlockForm-{{ $sid }}-{{ $cardDate->format('Ymd') }}">
                                 <i class="fa-solid fa-paper-plane me-1"></i> Ajukan Permohonan Ulang
                             </button>
                         @else
-                            <button type="button" class="btn btn-primary btn-sm rounded-pill px-3" data-bs-toggle="collapse" data-bs-target="#requestUnlockForm-{{ $sid }}">
+                            <button type="button" class="btn btn-primary btn-sm rounded-pill px-3" data-bs-toggle="collapse" data-bs-target="#requestUnlockForm-{{ $sid }}-{{ $cardDate->format('Ymd') }}">
                                 <i class="fa-solid fa-lock-open me-1"></i> Minta Buka Kunci ke Kurikulum
                             </button>
                         @endif
 
-                        <div class="collapse mt-3" id="requestUnlockForm-{{ $sid }}">
+                        <div class="collapse mt-3" id="requestUnlockForm-{{ $sid }}-{{ $cardDate->format('Ymd') }}">
                             <form action="{{ route('teacher.attendance.request-unlock') }}" method="POST" class="p-3 bg-white rounded-3 border">
                                 @csrf
                                 <input type="hidden" name="class_schedule_id" value="{{ $sid }}">
-                                <input type="hidden" name="session_date" value="{{ $date->format('Y-m-d') }}">
+                                <input type="hidden" name="session_date" value="{{ $cardDate->format('Y-m-d') }}">
 
                                 <label class="form-label fw-bold small mb-1">Alasan Keterlambatan Pengisian Jurnal <span class="text-danger">*</span></label>
                                 <textarea name="request_reason" class="form-control form-control-sm mb-2" rows="2" required
                                           placeholder="Contoh: Mengalami kendala jaringan internet saat kelas malam selesai, mohon izin untuk mengisi jurnal..."></textarea>
                                 <div class="d-flex justify-content-end gap-2">
-                                    <button type="button" class="btn btn-sm btn-light" data-bs-toggle="collapse" data-bs-target="#requestUnlockForm-{{ $sid }}">Batal</button>
+                                    <button type="button" class="btn btn-sm btn-light" data-bs-toggle="collapse" data-bs-target="#requestUnlockForm-{{ $sid }}-{{ $cardDate->format('Ymd') }}">Batal</button>
                                     <button type="submit" class="btn btn-sm btn-primary">
                                         <i class="fa-solid fa-paper-plane me-1"></i> Kirim Permohonan
                                     </button>
@@ -388,7 +417,20 @@
                 <dt class="col-sm-3">Kendala</dt><dd class="col-sm-9">{{ $journal->problems ?: '-' }}</dd>
                 <dt class="col-sm-3">Solusi</dt><dd class="col-sm-9">{{ $journal->solutions ?: '-' }}</dd>
                 <dt class="col-sm-3">Hasil</dt><dd class="col-sm-9">{{ $journal->results ?: '-' }}</dd>
-                <dt class="col-sm-3">Poin Sesi</dt><dd class="col-sm-9">{{ $journal->session_score ?? '-' }}</dd>
+
+                <dt class="col-sm-3">Poin Sesi</dt>
+                <dd class="col-sm-9">
+                    @php $summaryLogs = ($item['point_by_student'] ?? collect())->values(); @endphp
+                    @forelse ($summaryLogs as $log)
+                        <div>
+                            {{ $log->student->name ?? '-' }}: {{ $log->type === 'kuning' ? '🟡 Kuning' : '🔴 Merah' }}
+                            (+{{ $log->points }}) &middot; {{ $log->inputter_label }}
+                        </div>
+                    @empty
+                        -
+                    @endforelse
+                </dd>
+
                 <dt class="col-sm-3">Kehadiran</dt>
                 <dd class="col-sm-9">
                     <span class="fw-bold text-success me-2">Hadir: {{ $journal->attendances->where('status', 'Present')->count() }} siswa</span>
@@ -400,11 +442,48 @@
                 </dd>
             </dl>
 
-            <a href="{{ route('teacher.attendance.pdf', $journal) }}" class="btn btn-sm btn-outline-dark">
-                <i class="fas fa-file-pdf me-1"></i> Unduh PDF Jurnal
-            </a>
+            <div class="d-flex align-items-center gap-2">
+                <a href="{{ route('teacher.attendance.pdf', $journal) }}" class="btn btn-sm btn-outline-dark rounded-pill px-3">
+                    <i class="fas fa-file-pdf me-1"></i> Unduh PDF Jurnal
+                </a>
+                <span class="text-muted small">
+                    <i class="fa-solid fa-check-circle text-success me-1"></i>
+                    @if ($item['status'] === 'dikunci')
+                        Jurnal telah disetujui & dikunci oleh Kurikulum (Read Only).
+                    @else
+                        Jurnal telah diisi dan sedang menunggu review Kurikulum.
+                    @endif
+                </span>
+            </div>
 
         @endif
 
     </div>
 </div>
+
+@once
+    @push('scripts')
+    <script>
+    // Poin Sesi: maksimal 1 Kuning dan 1 Merah per sesi. Jenis yang sudah dipilih di baris lain dinonaktifkan.
+    function syncPointSelects(form) {
+        const selects = [...form.querySelectorAll('.point-select')];
+        selects.forEach(s => {
+            s.querySelectorAll('option[value]').forEach(o => {
+                if (!o.value) return;
+                const pickedElsewhere = selects.some(x => x !== s && x.value === o.value);
+                o.disabled = pickedElsewhere || o.dataset.taken === '1';
+            });
+        });
+    }
+
+    document.addEventListener('change', e => {
+        if (!e.target.classList.contains('point-select')) return;
+        syncPointSelects(e.target.closest('.journal-form'));
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.journal-form').forEach(syncPointSelects);
+    });
+    </script>
+    @endpush
+@endonce

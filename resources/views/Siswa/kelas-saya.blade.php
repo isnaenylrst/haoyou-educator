@@ -22,6 +22,17 @@
 
             @php
                 $kelas = $enrollment->class;
+
+                $platform = $kelas->meeting_platform ?? 'zoom';
+
+                // Class Tailwind ditulis lengkap supaya terbaca oleh scanner Tailwind
+                $meetingStyles = [
+                    'zoom'        => ['label' => 'Buka Zoom',        'class' => 'bg-[#2D8CFF]'],
+                    'google_meet' => ['label' => 'Buka Google Meet', 'class' => 'bg-[#1A73E8]'],
+                    'discord'     => ['label' => 'Buka Discord',     'class' => 'bg-[#5865F2]'],
+                    'other'       => ['label' => 'Buka Link Kelas',  'class' => 'bg-gray-800'],
+                ];
+                $meeting = $meetingStyles[$platform] ?? $meetingStyles['other'];
             @endphp
 
             @if ($kelas)
@@ -79,18 +90,18 @@
                                 <a href="{{ $kelas->zoom_link }}"
                                    target="_blank"
                                    rel="noopener noreferrer"
-                                   class="text-xs font-semibold px-4 py-2 rounded-lg bg-[#2D8CFF] text-white hover:opacity-90">
-                                    Buka Zoom
+                                   class="text-xs font-semibold px-4 py-2 rounded-lg {{ $meeting['class'] }} text-white hover:opacity-90">
+                                    {{ $meeting['label'] }}
                                 </a>
 
-                                @if ($kelas->zoom_passcode)
+                                @if ($platform === 'zoom' && $kelas->zoom_passcode)
                                     <span class="text-[11px] text-gray-500">
                                         Passcode: <b>{{ $kelas->zoom_passcode }}</b>
                                     </span>
                                 @endif
                             @else
                                 <span class="text-[11px] text-gray-400">
-                                    Link Zoom belum tersedia
+                                    Link kelas online belum tersedia
                                 </span>
                             @endif
 
@@ -145,7 +156,8 @@
     <div class="border border-dashed border-line rounded-xl p-4 text-xs text-gray-500 bg-white">
 
         📍 Untuk kelas <b>Offline</b>, sistem menampilkan ruangan kelas di Haoyou.
-        Untuk kelas <b>Online</b>, sistem menampilkan tombol <b>Buka Zoom</b>.
+        Untuk kelas <b>Online</b>, sistem menampilkan tombol untuk membuka link kelas
+        (Zoom, Google Meet, atau Discord).
 
     </div>
 

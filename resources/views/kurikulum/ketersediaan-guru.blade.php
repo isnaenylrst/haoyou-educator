@@ -310,14 +310,40 @@
     </div>
 
     {{-- ===== MENUNGGU JAWABAN ===== --}}
-    @if ($waiting->isNotEmpty())
-        <div class="card shadow-sm border-0 mb-4">
-            <div class="card-header bg-white fw-bold">Menunggu Jawaban Guru ({{ $waiting->count() }})</div>
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="fw-bold">
+                Menunggu Jawaban Guru ({{ $waiting->count() }})
+            </div>
+            <div class="btn-group btn-group-sm" role="group">
+                <a href="{{ request()->fullUrlWithQuery(['urgency' => 'all']) }}"
+                   class="btn {{ request('urgency', 'all') === 'all' ? 'btn-primary' : 'btn-outline-secondary' }}">
+                    Semua
+                </a>
+                <a href="{{ request()->fullUrlWithQuery(['urgency' => 'urgent']) }}"
+                   class="btn {{ request('urgency') === 'urgent' ? 'btn-danger text-white' : 'btn-outline-danger' }}">
+                    Urgent
+                </a>
+                <a href="{{ request()->fullUrlWithQuery(['urgency' => 'not_urgent']) }}"
+                   class="btn {{ request('urgency') === 'not_urgent' ? 'btn-secondary text-white' : 'btn-outline-secondary' }}">
+                    Tidak Urgent
+                </a>
+            </div>
+        </div>
+        @if ($waiting->isNotEmpty())
             <div class="list-group list-group-flush">
                 @foreach ($waiting as $class)
+                    @php
+                        $u = $class->urgency_info ?? \App\Services\TeacherAvailabilityUrgencyService::evaluateClass($class);
+                    @endphp
                     <div class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <div>
-                            <span class="fw-semibold">{{ $class->class_name }}</span>
+                            <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                                <span class="fw-semibold">{{ $class->class_name }}</span>
+                                <span class="badge {{ $u['badge_class'] ?? 'bg-secondary' }}">
+                                    <i class="fa-solid fa-clock me-1"></i> {{ $u['label'] ?? 'Tidak Urgent' }}
+                                </span>
+                            </div>
                             <small class="text-muted"> — {{ $class->teacher->name ?? '-' }}</small>
                             <small class="text-muted d-block">
                                 @foreach ($class->schedules as $s)
@@ -337,8 +363,12 @@
                     </div>
                 @endforeach
             </div>
-        </div>
-    @endif
+        @else
+            <div class="card-body text-center py-4 text-muted">
+                Tidak ada kelas yang menunggu jawaban guru{{ request('urgency') && request('urgency') !== 'all' ? ' untuk filter ini' : '' }}.
+            </div>
+        @endif
+    </div>
 
     {{-- TAMBAH KETERSEDIAAN --}}
     <div class="card shadow-sm border-0 mb-4" id="formTambah">
@@ -359,13 +389,15 @@
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label fw-semibold">Mulai</label>
+                        <label class="form-label fw-semibold">Mulai (min 09:00)</label>
                         <input type="time" name="start_time" id="fStart" class="form-control"
+                               min="09:00" max="21:00"
                                value="{{ $addOld ? old('start_time') : '' }}" required>
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label fw-semibold">Selesai</label>
+                        <label class="form-label fw-semibold">Selesai (max 21:00)</label>
                         <input type="time" name="end_time" id="fEnd" class="form-control"
+                               min="09:00" max="21:00"
                                value="{{ $addOld ? old('end_time') : '' }}" required>
                     </div>
                     <div class="col-md-4">
@@ -437,10 +469,12 @@
                                 </div>
                                 <div class="col-md-2">
                                     <input form="upd{{ $a->id }}" type="time" name="start_time"
+                                           min="09:00" max="21:00"
                                            value="{{ substr($a->start_time, 0, 5) }}" class="form-control form-control-sm" required>
                                 </div>
                                 <div class="col-md-2">
                                     <input form="upd{{ $a->id }}" type="time" name="end_time"
+                                           min="09:00" max="21:00"
                                            value="{{ substr($a->end_time, 0, 5) }}" class="form-control form-control-sm" required>
                                 </div>
                                 <div class="col-md-4">
@@ -494,8 +528,8 @@ document.addEventListener('avail:cell', function (e) {
 
     if (d.teacher && d.teacher !== 'all' && teacher) teacher.value = d.teacher;
     dayChecks().forEach(c => c.checked = (c.value === d.day));
-    if (start) start.value = pad(d.hour) + ':00';
-    if (end)   end.value   = pad(Math.min(d.hour + 1, 23)) + ':' + (d.hour + 1 > 23 ? '59' : '00');
+    if (start) start.value = pad(Math.max(d.hour, 9)) + ':00';
+    if (end)   end.value   = pad(Math.min(d.hour + 1, 21)) + ':00';
 
     const form = document.getElementById('formTambah');
     if (form) {

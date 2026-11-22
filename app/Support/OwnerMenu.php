@@ -23,6 +23,8 @@ class OwnerMenu
                 'items' => [
                     ['Dashboard Owner', 'fa-house', '/owner/dashboard', 'Keuangan, siswa, kelas, kinerja guru'],
                     ['Materi Training', 'fa-graduation-cap', '/owner/training', 'Upload dan kelola modul materi training pengajar'],
+                    ['Video Belajar Mandiri', 'fa-circle-play', '/owner/self-learning', 'Video tutorial Belajar Mandiri untuk siswa'],
+                    ['Nilai Belajar Mandiri', 'fa-sliders', '/owner/pengaturan-nilai-mandiri', 'Batas lulus dan bobot Vocab/Grammar sertifikat Mandiri'],
                     ['Konsultasi', 'fa-comments', '/owner/konsultasi', 'Hasil evaluasi, jadwal, dan konsultasi revisi'],
                     ['Antrean TTD', 'fa-signature', '/owner/ttd', 'Tanda tangan digital progress report & sertifikat'],
                     ['Rekap Pengajuan', 'fa-receipt', '/owner/pengajuan', 'Rekap dan persetujuan pengajuan reimburse & pembelian'],
@@ -64,6 +66,7 @@ class OwnerMenu
                     ['Hasil Konsultasi',        'fa-comments',       '/kurikulum/hasil-konsultasi',  'Hasil dan tindak lanjut konsultasi guru'],
                     ['Ketersediaan Guru',       'fa-user-clock',     '/kurikulum/ketersediaan-guru', 'Hari dan jam guru bisa mengajar'],
                     ['Monitoring Guru & Kelas', 'fa-chart-line',     '/kurikulum/monitoring',        'Jadwal mingguan, kehadiran, jurnal'],
+                    ['Monitoring Belajar Mandiri', 'fa-chart-simple', '/kurikulum/belajar-mandiri', 'Progres Vocab dan Grammar semua siswa'],
                     ['Pemberitahuan Surat',     'fa-envelope',       '/kurikulum/surat',             'Surat dan dokumen untuk guru'],
                 ],
             ],

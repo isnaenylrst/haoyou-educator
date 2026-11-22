@@ -31,12 +31,19 @@ class ProgressReportDocument
         $present = trim((string) ($h['present'] ?? ''))
             ?: ($report->attendance_total ? ($report->attendance_present . '/' . $report->attendance_total) : '-');
 
-        $rows = collect($report->content ?? [])->values()->map(function ($r, $i) {
+        $meetingDates = self::meetingDatesForClass($report->enrollment?->class_id);
+
+        $rows = collect($report->content ?? [])->values()->map(function ($r, $i) use ($meetingDates) {
+            $meetingNum = ($r['meeting'] ?? '') !== '' && $r['meeting'] !== null ? $r['meeting'] : ($i + 1);
+            $meetingKey = (string) (int) $meetingNum;
+            $dateFormatted = $meetingDates->get($meetingKey) ?? ($r['meeting_date'] ?? '-');
+
             return [
-                'no'          => ($r['meeting'] ?? '') !== '' && $r['meeting'] !== null ? $r['meeting'] : ($i + 1),
-                'material'    => (string) ($r['material'] ?? ($r['competency'] ?? '')),
-                'level'       => (string) ($r['level'] ?? ''),
-                'description' => (string) ($r['description'] ?? ''),
+                'no'           => $meetingNum,
+                'meeting_date' => $dateFormatted,
+                'material'     => (string) ($r['material'] ?? ($r['competency'] ?? '')),
+                'level'        => (string) ($r['level'] ?? ''),
+                'description'  => (string) ($r['description'] ?? ''),
             ];
         })->all();
 
@@ -337,5 +344,56 @@ class ProgressReportDocument
         if ($report->file_path === null) {
             $report->file_path = '';
         }
+    }
+
+    /**
+     * Ambil pemetaan tanggal pertemuan nyata untuk suatu kelas.
+     * Sumber: class_sessions (termasuk hasil reschedule) & teaching_journals.
+     * Mengembalikan Collection: ['1' => 'Jum, 20 Nov 2026', ...]
+     */
+    public static function meetingDatesForClass(?int $classId): \Illuminate\Support\Collection
+    {
+        if (!$classId) {
+            return collect();
+        }
+
+        $dates = collect();
+
+        // 1. Dari teaching_journals (pertemuan yang sudah terlaksana)
+        $journals = \Illuminate\Support\Facades\DB::table('teaching_journals')
+            ->where('class_id', $classId)
+            ->whereNotNull('session_date')
+            ->where('class_status', 'Conducted')
+            ->orderBy('session_date')
+            ->get(['meeting_number', 'session_date']);
+
+        foreach ($journals as $j) {
+            if ($j->meeting_number && $j->session_date) {
+                $key = (string) (int) $j->meeting_number;
+                $dates->put($key, \Illuminate\Support\Carbon::parse($j->session_date)->locale('id')->isoFormat('ddd, D MMM Y'));
+            }
+        }
+
+        // 2. Dari class_sessions (termasuk sesi scheduled, completed, reschedule)
+        $sessions = \Illuminate\Support\Facades\DB::table('class_sessions')
+            ->where('class_id', $classId)
+            ->where('kind', 'Regular')
+            ->where('status', '!=', 'Cancelled')
+            ->whereNotNull('session_date')
+            ->orderBy('session_date')
+            ->get(['session_number', 'session_date']);
+
+        foreach ($sessions as $s) {
+            $num = $s->session_number;
+            if ($num && $s->session_date) {
+                $key = (string) (int) $num;
+                // Jika belum ada atau dari class_session terbaru
+                if (!$dates->has($key)) {
+                    $dates->put($key, \Illuminate\Support\Carbon::parse($s->session_date)->locale('id')->isoFormat('ddd, D MMM Y'));
+                }
+            }
+        }
+
+        return $dates;
     }
 }

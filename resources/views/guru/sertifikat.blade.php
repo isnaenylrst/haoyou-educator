@@ -9,8 +9,8 @@
     <div class="mb-4">
         <h2 class="fw-bold mb-1">Sertifikat</h2>
         <p class="text-muted mb-0">
-            Buat sertifikat les Mandarin siswa. Tanggal dan nilai Listening, Reading, Speaking, Writing terisi otomatis
-            dari progress report, tetapi tetap bisa Anda ubah. Nilai akhir dihitung otomatis (rata-rata).
+            Buat sertifikat Mock Test HSK siswa. Tanggal dan nilai Listening, Reading, Writing terisi otomatis
+            dari progress report, tetapi tetap bisa Anda ubah. Total nilai dihitung otomatis (dijumlahkan).
             Sertifikat tampil ke siswa setelah di-ACC Kurikulum.
         </p>
     </div>
@@ -44,7 +44,7 @@
                     atau belum ada siswa di kelas yang sudah Anda terima.
                 </div>
             @else
-                <form method="POST" action="{{ route('teacher.sertifikat.store') }}" class="row g-3 align-items-end">
+                <form method="POST" action="{{ route('teacher.sertifikat.store') }}" class="row g-3 align-items-end js-cert-form">
                     @csrf
 
                     <div class="col-md-6">
@@ -62,7 +62,7 @@
                     <div class="col-md-6">
                         <label class="form-label small fw-semibold mb-1">Nama Kursus / Level di Sertifikat</label>
                         <input type="text" name="course_name" id="course_name" maxlength="150"
-                               value="{{ old('course_name') }}" class="form-control" required>
+                               value="{{ old('course_name') }}" class="form-control js-course" required>
                     </div>
 
                     <div class="col-md-3">
@@ -79,17 +79,18 @@
 
                     <div class="col-12"></div>
 
-                    @foreach (['listening' => 'Listening', 'reading' => 'Reading', 'speaking' => 'Speaking', 'writing' => 'Writing'] as $key => $label)
-                        <div class="col-6 col-md-2">
-                            <label class="form-label small fw-semibold mb-1">{{ $label }}</label>
-                            <input type="number" name="{{ $key }}_score" id="{{ $key }}_score" step="0.1" min="0" max="100"
-                                   value="{{ old($key . '_score') }}" class="form-control js-skill" placeholder="0 - 100" required>
+                    @foreach (['listening' => 'Listening', 'reading' => 'Reading', 'writing' => 'Writing'] as $key => $label)
+                        <div class="col-6 col-md-2 js-skill-wrap" data-skill="{{ $key }}">
+                            <label class="form-label small fw-semibold mb-1">{{ $label }} <span class="text-muted">(maks 100)</span></label>
+                            <input type="number" name="{{ $key }}_score" id="{{ $key }}_score" data-skill="{{ $key }}"
+                                   step="0.1" min="0" max="100" value="{{ old($key . '_score') }}"
+                                   class="form-control js-skill" placeholder="0 - 100" required>
                         </div>
                     @endforeach
 
-                    <div class="col-6 col-md-2">
-                        <label class="form-label small fw-semibold mb-1">Nilai Akhir</label>
-                        <input type="text" id="avg_score" class="form-control bg-light" readonly placeholder="otomatis">
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small fw-semibold mb-1">Total Nilai</label>
+                        <input type="text" class="form-control bg-light js-total" readonly placeholder="otomatis">
                     </div>
 
                     <div class="col-md-2 d-grid">
@@ -97,9 +98,11 @@
                     </div>
 
                     <div class="col-12">
+                        <div class="small js-hint"></div>
                         <div class="small text-muted">
                             Setelah memilih siswa, kolom terisi otomatis dari progress report. Jika ada nilai yang masih kosong,
-                            silakan isi manual sesuai report siswa. Keempat nilai wajib diisi.
+                            silakan isi manual. HSK 1-2: Listening + Reading (maks 200, lulus min. 120).
+                            HSK 3-6: Listening + Reading + Writing (maks 300, lulus min. 180).
                         </div>
                     </div>
                 </form>
@@ -119,15 +122,21 @@
                             <th>Siswa</th>
                             <th>Kursus</th>
                             <th>Periode Les</th>
-                            <th>L / R / S / W</th>
-                            <th>Akhir</th>
+                            <th>L / R / W</th>
+                            <th>Total</th>
                             <th>Status</th>
                             <th class="text-end">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
                     @forelse ($certificates as $c)
-                        @php $n = fn ($v) => is_null($v) ? '-' : rtrim(rtrim(number_format((float) $v, 1, '.', ''), '0'), '.'); @endphp
+                        @php
+                            $n = fn ($v) => is_null($v) ? '-' : rtrim(rtrim(number_format((float) $v, 1, '.', ''), '0'), '.');
+                            preg_match('/HSK\s*([1-6])/i', $c->course_name ?: ($c->enrollment->class->class_name ?? ''), $mm);
+                            $lvl   = (int) ($mm[1] ?? 0);
+                            $isLow = $lvl >= 1 && $lvl <= 2;
+                            $max   = $isLow ? 200 : 300;
+                        @endphp
                         <tr>
                             <td>
                                 <div class="fw-semibold">{{ $c->student->name ?? '-' }}</div>
@@ -139,9 +148,9 @@
                                 s/d {{ $c->end_date->translatedFormat('d M Y') }}
                             </td>
                             <td class="small text-nowrap">
-                                {{ $n($c->listening_score) }} / {{ $n($c->reading_score) }} / {{ $n($c->speaking_score) }} / {{ $n($c->writing_score) }}
+                                {{ $n($c->listening_score) }} / {{ $n($c->reading_score) }}@unless ($isLow) / {{ $n($c->writing_score) }}@endunless
                             </td>
-                            <td class="fw-semibold">{{ $n($c->score) }}</td>
+                            <td class="fw-semibold text-nowrap">{{ $n($c->score) }} <span class="small text-muted fw-normal">/ {{ $max }}</span></td>
                             <td>
                                 @if ($c->status === 'Approved')
                                     <span class="badge bg-success">Disetujui</span>
@@ -176,12 +185,12 @@
                         {{-- Form edit --}}
                         <tr id="edit{{ $c->id }}" class="d-none">
                             <td colspan="7" class="bg-light">
-                                <form method="POST" action="{{ route('teacher.sertifikat.update', $c) }}" class="row g-2 align-items-end">
+                                <form method="POST" action="{{ route('teacher.sertifikat.update', $c) }}" class="row g-2 align-items-end js-cert-form">
                                     @csrf @method('PUT')
 
                                     <div class="col-md-4">
                                         <label class="form-label small fw-semibold mb-1">Nama Kursus / Level</label>
-                                        <input type="text" name="course_name" maxlength="150" class="form-control form-control-sm"
+                                        <input type="text" name="course_name" maxlength="150" class="form-control form-control-sm js-course"
                                                value="{{ $c->course_name ?: ($c->enrollment->class->class_name ?? '') }}" required>
                                     </div>
                                     <div class="col-md-2">
@@ -196,21 +205,27 @@
                                     </div>
                                     <div class="col-12"></div>
 
-                                    @foreach (['listening' => 'Listening', 'reading' => 'Reading', 'speaking' => 'Speaking', 'writing' => 'Writing'] as $key => $label)
-                                        <div class="col-6 col-md-2">
+                                    @foreach (['listening' => 'Listening', 'reading' => 'Reading', 'writing' => 'Writing'] as $key => $label)
+                                        <div class="col-6 col-md-2 js-skill-wrap" data-skill="{{ $key }}">
                                             <label class="form-label small fw-semibold mb-1">{{ $label }}</label>
-                                            <input type="number" name="{{ $key }}_score" step="0.1" min="0" max="100"
-                                                   class="form-control form-control-sm" value="{{ $c->{$key . '_score'} }}" required>
+                                            <input type="number" name="{{ $key }}_score" data-skill="{{ $key }}" step="0.1" min="0" max="100"
+                                                   class="form-control form-control-sm js-skill" value="{{ $c->{$key . '_score'} }}" required>
                                         </div>
                                     @endforeach
+
+                                    <div class="col-6 col-md-2">
+                                        <label class="form-label small fw-semibold mb-1">Total</label>
+                                        <input type="text" class="form-control form-control-sm bg-light js-total" readonly>
+                                    </div>
 
                                     <div class="col-md-4 d-flex gap-1">
                                         <button class="btn btn-warning btn-sm fw-bold">Simpan &amp; Ajukan Ulang</button>
                                         <button type="button" class="btn btn-outline-secondary btn-sm"
                                                 onclick="document.getElementById('edit{{ $c->id }}').classList.add('d-none')">Batal</button>
                                     </div>
+                                    <div class="col-12 small js-hint"></div>
                                     <div class="col-12 small text-muted">
-                                        Setelah disimpan, PDF dibuat ulang (nilai akhir dihitung otomatis) dan sertifikat dikirim lagi
+                                        Setelah disimpan, PDF dibuat ulang (total dihitung otomatis) dan sertifikat dikirim lagi
                                         ke Kurikulum untuk di-ACC (status kembali menjadi menunggu).
                                     </div>
                                 </form>
@@ -231,34 +246,75 @@
 
 <script>
     const prefill = @json($prefill);
-    const selEl = document.getElementById('enrollment_id');
-    const skills = ['listening', 'reading', 'speaking', 'writing'];
+    const ALL = ['listening', 'reading', 'writing'];
 
-    function updateAvg() {
-        const out = document.getElementById('avg_score');
-        if (!out) return;
-        const vals = skills.map(s => parseFloat(document.getElementById(s + '_score').value));
-        out.value = vals.some(isNaN) ? '' : (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1);
+    function hskLevel(text) {
+        const m = /HSK\s*([1-6])/i.exec(text || '');
+        return m ? parseInt(m[1], 10) : 0;
     }
 
+    function rule(level) {
+        return (level >= 1 && level <= 2)
+            ? { skills: ['listening', 'reading'], max: 200, pass: 120 }
+            : { skills: ['listening', 'reading', 'writing'], max: 300, pass: 180 };
+    }
+
+    function refreshForm(form) {
+        const course = form.querySelector('.js-course');
+        const level  = hskLevel(course ? course.value : '');
+        const r      = rule(level);
+
+        ALL.forEach(s => {
+            const wrap  = form.querySelector('.js-skill-wrap[data-skill="' + s + '"]');
+            if (!wrap) return;
+            const input = wrap.querySelector('.js-skill');
+            const on    = r.skills.includes(s);
+            wrap.classList.toggle('d-none', !on);
+            input.disabled = !on;   // tidak ikut terkirim & tidak wajib kalau disembunyikan
+            input.required = on;
+        });
+
+        const vals  = r.skills.map(s => parseFloat(form.querySelector('.js-skill[data-skill="' + s + '"]').value));
+        const total = form.querySelector('.js-total');
+        const hint  = form.querySelector('.js-hint');
+        let sum = null;
+
+        if (!vals.some(isNaN)) sum = vals.reduce((a, b) => a + b, 0);
+        total.value = sum === null ? '' : sum.toFixed(1) + ' / ' + r.max;
+
+        let text = 'Standar kelulusan: minimal ' + r.pass + ' dari ' + r.max + '.';
+        let cls  = 'text-muted';
+        if (sum !== null) {
+            if (sum >= r.pass) { text += ' Memenuhi standar kelulusan.'; cls = 'text-success'; }
+            else               { text += ' Belum memenuhi standar kelulusan.'; cls = 'text-danger'; }
+        }
+        if (level === 0) text += ' (Level HSK tidak terdeteksi di nama kursus, dihitung seperti HSK 3-6.)';
+        hint.className = 'small js-hint ' + cls;
+        hint.textContent = text;
+    }
+
+    document.querySelectorAll('.js-cert-form').forEach(form => {
+        form.addEventListener('input', () => refreshForm(form));
+        refreshForm(form);
+    });
+
+    const selEl = document.getElementById('enrollment_id');
+
     function fillFromEnrollment() {
-        if (!selEl) return;
         const d = prefill[selEl.value];
         if (!d) return;
+        const form = selEl.closest('form');
         document.getElementById('course_name').value = d.course ?? '';
         document.getElementById('start_date').value  = d.start ?? '';
         document.getElementById('end_date').value    = d.end ?? '';
-        skills.forEach(s => document.getElementById(s + '_score').value = d[s] ?? '');
-        updateAvg();
+        ALL.forEach(s => document.getElementById(s + '_score').value = d[s] ?? '');
+        refreshForm(form);
     }
 
     if (selEl) {
         selEl.addEventListener('change', fillFromEnrollment);
-        document.querySelectorAll('.js-skill').forEach(el => el.addEventListener('input', updateAvg));
         @if (!old('enrollment_id'))
             fillFromEnrollment();
-        @else
-            updateAvg();
         @endif
     }
 </script>

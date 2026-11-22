@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Siswa;
 use App\Http\Controllers\Controller;
 use App\Models\ClassEnrollment;
 use App\Models\Material;
+use App\Models\VocabAnswerLog;
 use App\Models\VocabChapter;
 use App\Models\VocabStudyPlan;
 use App\Models\VocabTestResult;
@@ -60,7 +61,8 @@ class VocabController extends Controller
         $hafal = VocabTestResult::where('user_id', $uid)->where('status', 'hafal');
 
         return view('Siswa.vocab.guide', [
-            'title'   => 'Belajar Vocab › Panduan',
+            'title'     => 'Belajar Vocab › Panduan',
+            'selfVideo' => \App\Models\SelfLearningVideo::activeFor('vocab'),
             'videoId' => VocabSetting::youtubeId(VocabSetting::read('guide_video')),
             'progress' => [
                 'plan'    => VocabStudyPlan::where('user_id', $uid)->exists(),
@@ -197,9 +199,43 @@ class VocabController extends Controller
                 'answer_meaning' => $ans['meaning'] ?? null,
                 'is_ragu' => $status === 'ragu', 'status' => $status,
             ]);
+
+            // catat setiap percobaan untuk analisis kurikulum
+            $this->logAnswer($word, $type, $ans, $status);
         }
 
         return response()->json(['status' => $status ?? 'blank', 'label' => $this->label($status)] + $this->payload($type));
+    }
+
+    /**
+     * Simpan riwayat jawaban (tidak menimpa). Jawaban yang persis sama dengan catatan terakhir
+     * tidak dicatat lagi, supaya penyimpanan ulang otomatis tidak menggandakan baris.
+     * Kegagalan mencatat log tidak boleh mengganggu siswa mengerjakan tes.
+     */
+    private function logAnswer(VocabWord $word, string $type, array $ans, string $status): void
+    {
+        try {
+            $base = ['user_id' => auth()->id(), 'vocab_word_id' => $word->id, 'test_type' => $type];
+            $data = [
+                'answer_pinyin'  => $ans['pinyin']  ?? null,
+                'answer_tone'    => $ans['tone']    ?? null,
+                'answer_hanzi'   => $ans['hanzi']   ?? null,
+                'answer_meaning' => $ans['meaning'] ?? null,
+                'status'         => $status,
+            ];
+
+            $last = VocabAnswerLog::where($base)->latest('id')->first();
+            if ($last && $last->only(array_keys($data)) == $data) {
+                return;
+            }
+
+            VocabAnswerLog::create($base + $data + [
+                'attempt_no'  => VocabAnswerLog::where($base)->count() + 1,
+                'answered_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /** Refresh: ambil ulang kata ragu/salah (opsional diacak) */
