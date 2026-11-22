@@ -393,23 +393,25 @@
             @php
                 $tabMandiri = request('tab') === 'mandiri';
                 $inSertifikatKelas = request()->routeIs('sertifikat.*') && !$tabMandiri;
+                $canSelfStudy = \App\Support\SelfStudyAccess::allowed();
 
                 // Belajar mandiri aktif juga saat membuka halaman vocab / grammar / sertifikat mandiri
                 $inMandiri = request()->routeIs('student.mandiri.*', 'student.vocab.*', 'student.grammar.*')
                     || (request()->routeIs('sertifikat.*') && $tabMandiri);
-            @endphp
+                @endphp
 
             <a href="{{ route('sertifikat.index') }}"
                class="side-link {{ $inSertifikatKelas ? 'is-active' : '' }}">
-                <span class="ico">🏅</span> Sertifikat Kelas
+            <span class="ico">🏅</span> Sertifikat Kelas
             </a>
 
             {{-- ============ BELAJAR MANDIRI ============ --}}
+           @if($canSelfStudy)
             <a href="{{ route('student.mandiri.index') }}"
                class="side-link alumni-restricted {{ $inMandiri ? 'is-active' : '' }}">
                 <span class="ico">🚀</span> Belajar Mandiri
             </a>
-
+            @endif
         </nav>
 
         {{-- Dekorasi garis berwarna di dasar sidebar --}}

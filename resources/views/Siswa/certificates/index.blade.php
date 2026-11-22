@@ -3,7 +3,8 @@
 @section('dashboard-content')
 
 @php
-    $tab = request('tab') === 'mandiri' ? 'mandiri' : 'kelas';
+    $canMandiri = \App\Support\SelfStudyAccess::allowed();
+    $tab = (request('tab') === 'mandiri' && $canMandiri) ? 'mandiri' : 'kelas';
 
     if ($tab === 'mandiri') {
         $ms           = \App\Support\SelfStudyReport::summary(auth()->id());
@@ -19,10 +20,12 @@
      class="px-4 py-2.5 text-sm -mb-px border-b-2 {{ $tab === 'kelas' ? 'border-ink font-semibold text-ink' : 'border-transparent text-gray-500 hover:text-ink' }}">
     🎓 Sertifikat Kelas
   </a>
-  <a href="{{ route('sertifikat.index', ['tab' => 'mandiri']) }}"
-     class="px-4 py-2.5 text-sm -mb-px border-b-2 {{ $tab === 'mandiri' ? 'border-ink font-semibold text-ink' : 'border-transparent text-gray-500 hover:text-ink' }}">
-    📚 Sertifikat Belajar Mandiri
-  </a>
+  @if($canMandiri)
+    <a href="{{ route('sertifikat.index', ['tab' => 'mandiri']) }}"
+       class="px-4 py-2.5 text-sm -mb-px border-b-2 {{ $tab === 'mandiri' ? 'border-ink font-semibold text-ink' : 'border-transparent text-gray-500 hover:text-ink' }}">
+      📚 Sertifikat Belajar Mandiri
+    </a>
+  @endif
 </div>
 
 {{-- ============================================================ --}}

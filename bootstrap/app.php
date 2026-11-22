@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'student' => EnsureStudent::class,
             'role' => \App\Http\Middleware\CheckRole::class,
             'teacher.profile' => \App\Http\Middleware\EnsureTeacherProfile::class,
+            'selfstudy' => \App\Http\Middleware\EnsureSelfStudyAccess::class,
         ]);
 
         // Konteks Owner (memilih guru yang dilihat);

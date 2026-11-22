@@ -246,28 +246,28 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
     }); // <-- INI YANG HILANG
 
     // SERTIFIKAT BELAJAR MANDIRI
-    Route::prefix('student/belajar-mandiri/sertifikat')->name('student.mandiri-certificates.')->group(function () {
+    Route::prefix('student/belajar-mandiri/sertifikat')->name('student.mandiri-certificates.')
+    ->middleware('selfstudy')->group(function () {
         Route::post('/', [SelfStudyCertificateController::class, 'store'])->name('store');
         Route::get('/{certificate}/download', [SelfStudyCertificateController::class, 'download'])->name('download');
     });
 
-    // VIDEO
-    // Route::get('/video', [SiswaLearningController::class, 'video'])
-    //     ->name('video.index');
-
+    // STREAM VIDEO 
     Route::get('/video/{video}/stream', [SiswaLearningController::class, 'streamVideo'])
         ->name('video.stream');
 
     // BELAJAR MANDIRI (hub)
     Route::get('/belajar-mandiri', [BelajarMandiriController::class, 'index'])
-        ->name('student.mandiri.index');
+       ->middleware('selfstudy') 
+       ->name('student.mandiri.index');
 
      // Stream video tutorial Self Learning (hanya video aktif)
     Route::get('/student/self-learning/video/{video}/stream', [SelfLearningVideoStreamController::class, 'stream'])
         ->name('student.self-video.stream');
 
     // BELAJAR VOCAB
-    Route::prefix('student/belajar-vocab')->name('student.vocab.')->group(function () {
+    Route::prefix('student/belajar-vocab')->name('student.vocab.')
+        ->middleware('selfstudy')->group(function () {
 
         Route::get('panduan', [VocabController::class, 'guide'])->name('guide');
 
@@ -291,7 +291,8 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
     });
 
     //BELAJAR GRAMMAR
-    Route::prefix('student/grammar')->name('student.grammar.')->group(function () {
+    Route::prefix('student/grammar')->name('student.grammar.')
+        ->middleware('selfstudy')->group(function () {
     Route::get('/guide', [GrammarController::class, 'guide'])->name('guide');
     Route::get('/list',  [GrammarController::class, 'list'])->name('list');
     Route::post('/list/{no}/toggle', [GrammarController::class, 'toggle'])->name('toggle');
