@@ -149,8 +149,12 @@
                     <span class="label">Pembayaran</span>
                 </a>
 
-                <a href="{{ route('admin.pengajuan.index') }}"
-                class="nav-item {{ request()->routeIs('admin.pengajuan*') ? 'active' : '' }}">
+                <a href="{{ route('admin.kas.index') }}" class="nav-item {{ request()->routeIs('admin.kas*') ? 'active' : '' }}">
+                    <i class="fa-solid fa-cash-register nav-icon" title="Kas Operasional"></i>
+                    <span class="label">Kas Operasional</span>
+                </a>
+
+                <a href="{{ route('admin.pengajuan.index') }}" class="nav-item {{ request()->routeIs('admin.pengajuan*') ? 'active' : '' }}">
                     <i class="fa-solid fa-receipt nav-icon" title="Rekap Pengajuan"></i>
                     <span class="label">Rekap Pengajuan</span>
                 </a>

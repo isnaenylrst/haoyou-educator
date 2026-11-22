@@ -10,22 +10,24 @@
         .badge-paid  { background: rgba(20, 184, 166, .12); color: #0f766e; }
         .badge-done  { background: #e5e7eb; color: #111827; }
 
-        .stat-row-6 {
+        .stat-row-4 {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 16px;
             margin-bottom: 20px;
         }
-        @media (max-width: 900px) {
-            .stat-row-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        @media (max-width: 1100px) {
+            .stat-row-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 560px) {
-            .stat-row-6 { grid-template-columns: 1fr; }
+            .stat-row-4 { grid-template-columns: 1fr; }
         }
         .stat-card.c-blue { border-left-color: #3b82f6; }
         .stat-card.c-green { border-left-color: #22a05a; }
         .stat-card.c-red { border-left-color: #ef4444; }
         .stat-card.c-yellow { border-left-color: #e8a317; }
+        .stat-card.c-gray { border-left-color: #8b8fa8; }
+        .stat-note.down { color: #ef4444; }
         .stat-value.is-negative { color: #ef4444 !important; }
 
         .period-header-line {
@@ -102,78 +104,66 @@
     </div>
 @endif
 
-{{-- RINGKASAN KEUANGAN ADMIN: 6 kartu (1 kolom HP, 2 kolom tablet, 3 kolom laptop) --}}
+{{-- RINGKASAN: 4 kartu --}}
 <div class="period-header-line">
     <span class="period-badge-chip">
         <i class="fa-regular fa-calendar me-1"></i> Periode: <strong>{{ $periodLabel }}</strong>
     </span>
     <span class="period-note">Angka ringkasan mengikuti filter yang aktif</span>
+    @if ($semuaPeriode)
+        <a href="{{ url()->current() }}" class="period-note" style="text-decoration:underline;">Kembali ke bulan ini</a>
+    @else
+        <a href="{{ url()->current() }}?periode=all" class="period-note" style="text-decoration:underline;">Lihat semua periode</a>
+    @endif
 </div>
 
-<div class="stat-row-6">
-    {{-- a. Total Pemasukan --}}
-    <div class="stat-card c-green">
-        <div class="stat-top">
-            <span class="stat-label">Total Pemasukan</span>
-            <i class="fa-solid fa-arrow-trend-up stat-icon"></i>
-        </div>
-        <div class="stat-value money {{ $totalPemasukan < 0 ? 'is-negative' : '' }}">{{ format_rupiah($totalPemasukan ?? 0) }}</div>
-        <div class="stat-note up">Dari total pembayaran les siswa</div>
-    </div>
-
-    {{-- b. Pengeluaran Dibayar --}}
+<div class="stat-row-4">
+    {{-- Total Pengeluaran --}}
     <div class="stat-card c-red">
         <div class="stat-top">
-            <span class="stat-label">Pengeluaran Dibayar</span>
+            <span class="stat-label">Total Pengeluaran</span>
             <i class="fa-solid fa-arrow-trend-down stat-icon"></i>
         </div>
-        <div class="stat-value money {{ $totalPengeluaranDibayar < 0 ? 'is-negative' : '' }}">{{ format_rupiah($totalPengeluaranDibayar ?? 0) }}</div>
-        <div class="stat-note">Pengajuan berstatus Dibayar &amp; Selesai</div>
+        <div class="stat-value money">{{ format_rupiah($totalPengeluaran ?? 0) }}</div>
+        <div class="stat-note down">Reimburse &amp; pengadaan disetujui</div>
     </div>
 
-    {{-- c. Disetujui Belum Dibayar --}}
+    {{-- Total Pengajuan --}}
+    <div class="stat-card c-gray">
+        <div class="stat-top">
+            <span class="stat-label">Total Pengajuan</span>
+            <i class="fa-solid fa-folder-open stat-icon"></i>
+        </div>
+        <div class="stat-value">{{ $totalPengajuan ?? 0 }}</div>
+        <div class="stat-note">Pengajuan sudah ACC Kurikulum</div>
+    </div>
+
+    {{-- Perlu Review Owner --}}
     <div class="stat-card c-yellow">
         <div class="stat-top">
-            <span class="stat-label">Disetujui Belum Dibayar</span>
-            <i class="fa-solid fa-clock-rotate-left stat-icon"></i>
+            <span class="stat-label">Perlu Review Owner</span>
+            <i class="fa-solid fa-hourglass-half stat-icon"></i>
         </div>
-        <div class="stat-value money {{ $disetujuiBelumDibayar < 0 ? 'is-negative' : '' }}">{{ format_rupiah($disetujuiBelumDibayar ?? 0) }}</div>
-        <div class="stat-note warn">Komitmen pengeluaran yang belum cair</div>
+        <div class="stat-value">{{ $perluReviewOwner ?? 0 }}</div>
+        <div class="stat-note">Status Review Owner</div>
     </div>
 
-    {{-- d. Saldo --}}
-    <div class="stat-card c-blue">
+    {{-- Telah Disetujui --}}
+    <div class="stat-card c-green">
         <div class="stat-top">
-            <span class="stat-label">Saldo</span>
-            <i class="fa-solid fa-wallet stat-icon"></i>
+            <span class="stat-label">Telah Disetujui</span>
+            <i class="fa-solid fa-circle-check stat-icon"></i>
         </div>
-        <div class="stat-value money {{ $saldo < 0 ? 'is-negative' : '' }}">{{ format_rupiah($saldo ?? 0) }}</div>
-        <div class="stat-note">Pemasukan dikurangi Pengeluaran Dibayar</div>
-    </div>
-
-    {{-- e. Saldo Setelah Komitmen --}}
-    <div class="stat-card c-blue">
-        <div class="stat-top">
-            <span class="stat-label">Saldo Setelah Komitmen</span>
-            <i class="fa-solid fa-scale-balanced stat-icon"></i>
-        </div>
-        <div class="stat-value money {{ $saldoSetelahKomitmen < 0 ? 'is-negative' : '' }}">{{ format_rupiah($saldoSetelahKomitmen ?? 0) }}</div>
-        <div class="stat-note">Saldo dikurangi komitmen yang disetujui</div>
-    </div>
-
-    {{-- f. Menunggu Verifikasi --}}
-    <div class="stat-card">
-        <div class="stat-top">
-            <span class="stat-label">Menunggu Verifikasi</span>
-            <i class="fa-solid fa-clipboard-check stat-icon"></i>
-        </div>
-        <div class="stat-value">{{ $totalVerifikasi }} <span style="font-size: 14px; font-weight: normal; color: #6b7280;">/ {{ $totalCount }} Total</span></div>
-        <div class="stat-note {{ $totalVerifikasi > 0 ? 'warn' : '' }}">Perlu verifikasi &amp; TTD Admin</div>
+        <div class="stat-value">{{ $telahDisetujui ?? 0 }}</div>
+        <div class="stat-note up">Disetujui, Dibayar &amp; Selesai</div>
     </div>
 </div>
 
 {{-- FILTER (otomatis terfilter saat pilihan diubah) --}}
 <form method="GET" class="toolbar" id="filterForm">
+    @if ($semuaPeriode)
+        <input type="hidden" name="periode" id="filterPeriode" value="all">
+    @endif
     <div style="position: relative; flex: 1; min-width: 200px;">
         <input type="text" name="q" class="select-chip" style="width: 100%; padding-left: 28px;"
                placeholder="Cari item, pengaju, catatan..." value="{{ $search ?? '' }}">
@@ -627,13 +617,14 @@
         var fBulan = document.getElementById('filterBulan');
         var fFrom  = document.getElementById('filterFrom');
         var fTo    = document.getElementById('filterTo');
+        var fPeriode = document.getElementById('filterPeriode');
         if (fBulan && fFrom && fTo) {
             fBulan.addEventListener('change', function () {
-                if (fBulan.value) { fFrom.value = ''; fTo.value = ''; }
+                if (fBulan.value) { fFrom.value = ''; fTo.value = ''; if (fPeriode) fPeriode.disabled = true; }
             });
             [fFrom, fTo].forEach(function (el) {
                 el.addEventListener('change', function () {
-                    if (el.value) { fBulan.value = ''; }
+                    if (el.value) { fBulan.value = ''; if (fPeriode) fPeriode.disabled = true; }
                 });
             });
         }

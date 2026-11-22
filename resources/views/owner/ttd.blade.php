@@ -8,7 +8,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h3 class="fw-bold mb-1">Antrean Tanda Tangan Digital</h3>
-            <p class="text-muted mb-0">Pengesahan tanda tangan Owner untuk Progress Report dan Sertifikat Siswa.</p>
+            <p class="text-muted mb-0">Pengesahan tanda tangan Owner untuk Progress Report, Sertifikat, Pengajuan, dan Kas Operasional.</p>
         </div>
         <div>
             @if($ownerSignature)
@@ -60,6 +60,14 @@
                 <i class="fa-solid fa-receipt me-1"></i> Pengajuan Reimburse & Bahan
                 @if(($pendingSubmissions->total() ?? 0) > 0)
                     <span class="badge bg-danger ms-1">{{ $pendingSubmissions->total() }}</span>
+                @endif
+            </a>
+        </li>
+        <li class="nav-item" role="presentation">
+            <a class="nav-link rounded-3 fw-semibold {{ $tab === 'expenses' ? 'active' : '' }}" href="{{ route('owner.ttd.index', ['tab' => 'expenses']) }}">
+                <i class="fa-solid fa-cash-register me-1"></i> Kas Operasional
+                @if(($pendingExpenses->total() ?? 0) > 0)
+                    <span class="badge bg-danger ms-1">{{ $pendingExpenses->total() }}</span>
                 @endif
             </a>
         </li>
@@ -348,6 +356,95 @@
         </div>
     @endif
 
+    {{-- Tab: Kas Operasional --}}
+    @if($tab === 'expenses')
+        <div class="card shadow-sm border-0 rounded-4">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                    <div class="fw-bold text-dark fs-5">
+                        Kas Operasional Menunggu TTD Owner ({{ $pendingExpenses->total() }})
+                    </div>
+                    <a href="{{ route('owner.pengajuan.index', ['tab' => 'kas']) }}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+                        <i class="fa-solid fa-ban me-1"></i> Perlu menolak? Buka Rekap Kas
+                    </a>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Tanggal</th>
+                                <th>Barang</th>
+                                <th>Nominal</th>
+                                <th>Dicatat Admin</th>
+                                <th>Bukti</th>
+                                <th class="text-end">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($pendingExpenses as $ex)
+                                <tr>
+                                    <td>{{ $ex->date?->format('d/m/Y') ?? '-' }}</td>
+                                    <td>
+                                        <span class="badge bg-secondary mb-1">{{ $ex->category }}</span>
+                                        <div class="fw-semibold text-dark">{{ $ex->item_name }}</div>
+                                        @if($ex->description)
+                                            <small class="text-muted">{{ \Illuminate\Support\Str::limit($ex->description, 60) }}</small>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold text-success">{{ $ex->formatted_amount }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info-subtle text-info border border-info-subtle">
+                                            <i class="fa-solid fa-clipboard-check me-1"></i> TTD Admin
+                                        </span>
+                                        <div class="small fw-semibold">{{ $ex->admin_signer_name ?? ($ex->creator?->display_name ?? '-') }}</div>
+                                        <div class="small text-muted">{{ $ex->admin_signed_at?->format('d/m/Y H:i') }}</div>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex flex-wrap gap-1">
+                                            @if($ex->receipt_path && Storage::disk('public')->exists($ex->receipt_path))
+                                                <a href="{{ asset('storage/' . $ex->receipt_path) }}" target="_blank" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+                                                    <i class="fa-solid fa-receipt text-primary me-1"></i> Nota
+                                                </a>
+                                            @endif
+                                            @if($ex->isOnline() && $ex->purchase_link)
+                                                <a href="{{ $ex->purchase_link }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+                                                    <i class="fa-solid fa-arrow-up-right-from-square text-success me-1"></i> Link Pembelian
+                                                </a>
+                                            @endif
+                                        </div>
+                                    </td>
+                                    <td class="text-end">
+                                        <form action="{{ route('owner.ttd.expense', $ex->id) }}" method="POST" class="d-inline"
+                                              onsubmit="return confirm('Setujui dan tandatangani pengeluaran {{ e($ex->item_name) }} sebesar {{ $ex->formatted_amount }}?')">
+                                            @csrf
+                                            <button type="submit" class="btn btn-success btn-sm rounded-pill px-3">
+                                                <i class="fa-solid fa-pen-nib me-1"></i> Setujui & TTD
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="6" class="text-center py-5 text-muted">
+                                        <i class="fa-solid fa-circle-check fs-1 text-success d-block mb-3"></i>
+                                        Tidak ada pengeluaran kas yang menunggu tanda tangan Owner!
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-4">
+                    {{ $pendingExpenses->links() }}
+                </div>
+            </div>
+        </div>
+    @endif
+
     {{-- Tab 3: Riwayat TTD --}}
     @if($tab === 'history')
         <div class="card shadow-sm border-0 rounded-4">
@@ -379,6 +476,10 @@
                                         @elseif($item->document_type === 'certificate')
                                             <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
                                                 <i class="fa-solid fa-certificate me-1"></i> Sertifikat #{{ $item->document_id }}
+                                            </span>
+                                        @elseif($item->document_type === 'operational_expense')
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                                <i class="fa-solid fa-cash-register me-1"></i> Kas Operasional #{{ $item->document_id }}
                                             </span>
                                         @else
                                             <span class="badge bg-secondary">{{ $item->document_type }}</span>
@@ -429,4 +530,3 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 @endsection
-

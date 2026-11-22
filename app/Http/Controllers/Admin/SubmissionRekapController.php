@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Payment;
 use App\Models\Submission;
 use App\Models\Teacher;
 use App\Models\User;
@@ -32,6 +31,13 @@ class SubmissionRekapController extends Controller
         $dateFrom = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->query('date_from')) ? $request->query('date_from') : null;
         $dateTo   = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->query('date_to')) ? $request->query('date_to') : null;
 
+        // Default periode = bulan ini. Hanya "Semua Periode" (?periode=all) atau
+        // rentang tanggal yang mematikan default ini.
+        $semuaPeriode = $request->query('periode') === 'all';
+        if (! $bulan && ! $dateFrom && ! $dateTo && ! $semuaPeriode) {
+            $bulan = now()->format('Y-m');
+        }
+
         // Base query Admin: Menampilkan SEMUA pengajuan (termasuk Diajukan Kurikulum)
         $query = Submission::with(['teacher', 'curriculum', 'admin', 'owner'])
             ->when($status, fn ($q) => $q->where('status', $status))
@@ -59,40 +65,23 @@ class SubmissionRekapController extends Controller
             );
 
         // ---------------------------------------------------------------
-        // 6 KARTU RINGKASAN KEUANGAN ADMIN
+        // 4 KARTU RINGKASAN (mengikuti filter yang aktif)
         // ---------------------------------------------------------------
-        // a. Total Pemasukan: SUM amount_paid pembayaran siswa status Paid/Partial berdasarkan payment_date
-        $totalPemasukan = (float) Payment::whereIn('status', ['Paid', 'Partial'])
-            ->when(
-                $dateFrom || $dateTo,
-                function ($q) use ($dateFrom, $dateTo) {
-                    $q->when($dateFrom, fn ($qq) => $qq->whereDate('payment_date', '>=', $dateFrom))
-                      ->when($dateTo, fn ($qq) => $qq->whereDate('payment_date', '<=', $dateTo));
-                },
-                function ($q) use ($bulan) {
-                    $q->when($bulan, function ($qq) use ($bulan) {
-                        [$y, $m] = explode('-', $bulan);
-                        $qq->whereYear('payment_date', (int) $y)->whereMonth('payment_date', (int) $m);
-                    });
-                }
-            )
-            ->sum('amount_paid');
+        $statusDisetujui = ['Disetujui', 'Dibayar', 'Selesai'];
 
-        // b. Pengeluaran Dibayar: SUM nominal pengajuan status Dibayar + Selesai
-        $totalPengeluaranDibayar = (float) (clone $query)->whereIn('status', ['Dibayar', 'Selesai'])->sum('amount');
+        // a. Total Pengeluaran: nominal pengajuan yang sudah disetujui (Disetujui, Dibayar, Selesai)
+        $totalPengeluaran = (float) (clone $query)->whereIn('status', $statusDisetujui)->sum('amount');
 
-        // c. Disetujui Belum Dibayar: SUM nominal status Disetujui
-        $disetujuiBelumDibayar = (float) (clone $query)->where('status', 'Disetujui')->sum('amount');
+        // b. Total Pengajuan: pengajuan yang sudah lolos ACC Kurikulum
+        $totalPengajuan = (clone $query)
+            ->whereIn('status', array_merge(['Review Admin', 'Review Owner'], $statusDisetujui))
+            ->count();
 
-        // d. Saldo = a - b
-        $saldo = $totalPemasukan - $totalPengeluaranDibayar;
+        // c. Perlu Review Owner
+        $perluReviewOwner = (clone $query)->where('status', 'Review Owner')->count();
 
-        // e. Saldo Setelah Komitmen = a - b - c
-        $saldoSetelahKomitmen = $saldo - $disetujuiBelumDibayar;
-
-        // f. Menunggu Verifikasi: jumlah pengajuan status Review Admin (perlu verifikasi Admin), tampil X / Y Total
-        $totalVerifikasi = (clone $query)->where('status', 'Review Admin')->count();
-        $totalCount      = (clone $query)->count();
+        // d. Telah Disetujui
+        $telahDisetujui = (clone $query)->whereIn('status', $statusDisetujui)->count();
 
         // Label periode untuk ditampilkan di atas kartu
         if ($dateFrom || $dateTo) {
@@ -118,9 +107,8 @@ class SubmissionRekapController extends Controller
         $teachers    = Teacher::where('status', 'Active')->orderBy('name')->get();
 
         return view('admin.pengajuan.index', compact(
-            'submissions', 'teachers', 'totalCount', 'totalVerifikasi',
-            'totalPemasukan', 'totalPengeluaranDibayar', 'disetujuiBelumDibayar',
-            'saldo', 'saldoSetelahKomitmen', 'periodLabel',
+            'submissions', 'teachers', 'periodLabel', 'semuaPeriode',
+            'totalPengeluaran', 'totalPengajuan', 'perluReviewOwner', 'telahDisetujui',
             'status', 'type', 'teacherId', 'bulan', 'dateFrom', 'dateTo', 'search'
         ));
     }
