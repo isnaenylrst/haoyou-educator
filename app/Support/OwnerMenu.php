@@ -23,7 +23,7 @@ class OwnerMenu
                 'items' => [
                     ['Dashboard Owner', 'fa-house', '/owner/dashboard', 'Keuangan, siswa, kelas, kinerja guru'],
                     ['Materi Training', 'fa-graduation-cap', '/owner/training', 'Upload dan kelola modul materi training pengajar'],
-                    ['Video Self Learning', 'fa-circle-play', '/owner/self-learning', 'Video tutorial Belajar Mandiri untuk siswa'],
+                    ['Video Belajar Mandiri', 'fa-circle-play', '/owner/self-learning', 'Video tutorial Belajar Mandiri untuk siswa'],
                     ['Nilai Belajar Mandiri', 'fa-sliders', '/owner/pengaturan-nilai-mandiri', 'Batas lulus dan bobot Vocab/Grammar sertifikat Mandiri'],
                     ['Konsultasi', 'fa-comments', '/owner/konsultasi', 'Hasil evaluasi, jadwal, dan konsultasi revisi'],
                     ['Antrean TTD', 'fa-signature', '/owner/ttd', 'Tanda tangan digital progress report & sertifikat'],
