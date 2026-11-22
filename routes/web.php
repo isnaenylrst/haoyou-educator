@@ -59,6 +59,8 @@ use App\Http\Controllers\Admin\Pengaturan\PengaturanController;
 use App\Http\Controllers\Admin\Pengaturan\TemplatePrintController;
 use App\Http\Controllers\Admin\PaymentInvoiceController;
 use App\Http\Controllers\Admin\SubmissionRekapController;
+use App\Http\Controllers\Admin\OperationalExpenseController;
+use App\Http\Controllers\Admin\RetentionController;
 use App\Http\Controllers\Admin\StudentLearningRequestController as AdminStudentLearningRequestController;
 use App\Http\Controllers\Admin\TrainingMaterialController as AdminTrainingMaterialController;
 use App\Http\Controllers\Admin\AdminNotificationController;
@@ -913,6 +915,8 @@ Route::middleware(['auth', 'role:Owner'])
             ->name('ttd.certificate.bulk');
         Route::post('/ttd/submission/{submission}', [OwnerSignatureQueueController::class, 'signSubmission'])
             ->name('ttd.submission');
+        Route::post('/ttd/expense/{expense}', [OwnerSignatureQueueController::class, 'signExpense'])
+            ->name('ttd.expense');
 
         // Rekap & Approval Pengajuan Bahan Ajar / Reimburse (Poin 5)
         Route::get('/pengajuan', [OwnerSubmissionRecapController::class, 'index'])
@@ -923,6 +927,8 @@ Route::middleware(['auth', 'role:Owner'])
             ->name('pengajuan.mark-paid');
         Route::get('/pengajuan/{submission}/cetak', [OwnerSubmissionRecapController::class, 'print'])
             ->name('pengajuan.print');
+        Route::post('/pengajuan/kas/{expense}/sign', [OwnerSubmissionRecapController::class, 'signExpense'])
+            ->name('pengajuan.kas.sign');
 
         // Materi Training Pengajar (Poin 12)
         Route::get('/training', [OwnerTrainingMaterialController::class, 'index'])
@@ -1316,6 +1322,23 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
         ->name('pengajuan.verify');
     Route::get('/pengajuan/{submission}/cetak', [SubmissionRekapController::class, 'printSubmission'])
         ->name('pengajuan.print');
+    
+    // KAS OPERASIONAL
+    Route::prefix('kas-operasional')->name('kas.')->group(function () {
+        Route::get('/', [OperationalExpenseController::class, 'index'])->name('index');
+        Route::post('/', [OperationalExpenseController::class, 'store'])->name('store');
+        Route::put('/{expense}', [OperationalExpenseController::class, 'update'])->name('update');
+        Route::delete('/{expense}', [OperationalExpenseController::class, 'destroy'])->name('destroy');
+        Route::post('/kas-masuk', [OperationalExpenseController::class, 'storeCash'])->name('cash.store');
+        Route::delete('/kas-masuk/{cashFund}', [OperationalExpenseController::class, 'destroyCash'])
+            ->whereNumber('cashFund')->name('cash.destroy');
+    });
+
+    Route::get('/retention', [RetentionController::class, 'index'])
+        ->name('retention.index');
+     Route::get('/retention/guru/{teacherId}', [RetentionController::class, 'teacher'])
+        ->whereNumber('teacherId')
+        ->name('retention.teacher');
 
     // REQUEST BELAJAR SISWA (Poin 10)
     Route::get('/request-belajar', [AdminStudentLearningRequestController::class, 'index'])

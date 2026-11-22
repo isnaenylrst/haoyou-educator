@@ -11,16 +11,17 @@ use App\Models\ProgramPackage;
 use App\Models\Teacher;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 
 /**
  * Kelas dummy:
  *  - Daily Activity: beberapa level pertama dari tiap kategori (Anak / Dewasa sesuai kategori)
  *  - HSK Class: level 1-3 (kelas HSK 1 dibuat "Open" dan baru mulai 2 minggu lagi)
  *  - Private Exclusive (paket max_students > 1): satu kelas berjalan per paket
- * Kelas private 1-on-1 tidak di-seed karena dibuat otomatis saat calon siswa dikonversi.
+ *  - RIWAYAT: kelas Completed yang berakhir tersebar di HISTORY_MONTHS bulan terakhir,
+ *    dipakai untuk data Retention Rate (jumlah kelas per bulan berbeda tiap guru).
  *
- * Jadwal mingguan dibuat oleh ClassScheduleSeeder (jalankan setelah seeder ini);
- * pertemuan + jurnalnya dibuat oleh ClassSessionSeeder.
+ * Jadwal mingguan dibuat oleh ClassScheduleSeeder (jalankan setelah seeder ini).
  * Aman dijalankan ulang: kelas dicari berdasarkan class_name.
  */
 class ClassSeeder extends Seeder
@@ -28,18 +29,41 @@ class ClassSeeder extends Seeder
     /** Berapa level pertama per kategori Daily Activity yang dibuatkan kelas. */
     private const LEVELS_PER_CATEGORY = 2;
 
+    /** Berapa bulan ke belakang kelas riwayat dibuat (termasuk bulan ini). */
+    private const HISTORY_MONTHS = 6;
+
+    /** true = guru hanya boleh mengajar kelas yang mulai SETELAH tanggal bergabungnya. */
+    private const RESPECT_JOIN_DATE = true;
+
+    /** Rata-rata kelas riwayat yang berakhir per bulan, per guru (beban mengajar berbeda). */
+    private const CLASSES_PER_MONTH = [
+        'Fitri Maulidah'                  => 3,
+        'Teresa Liaunardo Tju'            => 3,
+        'Natalia Repiuli Dertina Sitorus' => 2,
+        'Kezia Sophi Adventa Ratta'       => 2,
+        'Nathania Jovita'                 => 2,
+        'Vanessa Tan'                     => 2,
+        'Marsya Amelia'                   => 1,
+        'Dwi Ayu Wulandari'               => 1,
+    ];
+
+    private const DEFAULT_PER_MONTH = 1;
+
     public function run(): void
     {
-        $teacherIds = Teacher::where('status', 'Active')->orderBy('id')->pluck('id')->values();
+        $teachers = Teacher::where('status', 'Active')
+            ->orderBy('id')
+            ->get(['id', 'name', 'join_date']);
 
-        if ($teacherIds->isEmpty()) {
+        if ($teachers->isEmpty()) {
             $this->command?->warn('ClassSeeder dilewati: belum ada guru aktif. Jalankan TeacherSeeder dulu.');
 
             return;
         }
 
-        $today = Carbon::today();
-        $n = 0; // penghitung untuk membagi guru (round robin) dan memvariasikan data
+        $today   = Carbon::today();
+        $n       = 0;   // penghitung untuk membagi guru (round robin) dan memvariasikan data
+        $catalog = [];  // daftar "cetakan" kelas reguler, dipakai lagi untuk kelas riwayat
 
         /* ---------------- Daily Activity ---------------- */
         $daily = Program::where('program_name', 'Daily Activity')->first();
@@ -75,12 +99,15 @@ class ClassSeeder extends Seeder
 
                     $label = trim(($categoryName ? $categoryName . ' ' : '') . $level->level_name);
 
-                    $this->createClass([
+                    $identity = [
                         'program_package_id' => $package->id,
                         'private_package_id' => null,
                         'level_id'           => $level->id,
                         'class_name'         => "{$label} - Kelas A",
-                    ], $package, $teacherIds[$n % $teacherIds->count()], $n, $today, false);
+                    ];
+
+                    $this->createClass($identity, $package, $teachers, $n, $today, false);
+                    $catalog[] = ['identity' => $identity, 'package' => $package, 'label' => $label];
 
                     $n++;
                 }
@@ -108,12 +135,17 @@ class ClassSeeder extends Seeder
                     continue;
                 }
 
-                $this->createClass([
+                $label = "HSK Class - {$level->level_name}";
+
+                $identity = [
                     'program_package_id' => $package->id,
                     'private_package_id' => null,
                     'level_id'           => $level->id,
-                    'class_name'         => "HSK Class - {$level->level_name} - Kelas A",
-                ], $package, $teacherIds[$n % $teacherIds->count()], $n, $today, $i === 0);
+                    'class_name'         => "{$label} - Kelas A",
+                ];
+
+                $this->createClass($identity, $package, $teachers, $n, $today, $i === 0);
+                $catalog[] = ['identity' => $identity, 'package' => $package, 'label' => $label];
 
                 $n++;
             }
@@ -131,17 +163,107 @@ class ClassSeeder extends Seeder
                 'private_package_id' => $package->id,
                 'level_id'           => null,
                 'class_name'         => "Exclusive - {$package->package_name}",
-            ], $package, $teacherIds[$n % $teacherIds->count()], $n, $today, false);
+            ], $package, $teachers, $n, $today, false);
 
             $n++;
         }
+
+        /* ---------------- Riwayat kelas (untuk Retention Rate) ---------------- */
+        $this->seedHistory($teachers, $catalog, $today);
+    }
+
+    /**
+     * Kelas Completed yang berakhir di bulan-bulan sebelumnya.
+     * Jumlahnya per guru per bulan berbeda, dengan peluang 20% bulan itu libur satu kelas.
+     */
+    private function seedHistory(Collection $teachers, array $catalog, Carbon $today): void
+    {
+        if (empty($catalog)) {
+            return;
+        }
+
+        $counter = 0;
+        $cutoff  = $today->copy()->subDay(); // kelas riwayat harus sudah berakhir sebelum hari ini
+
+        foreach ($teachers as $teacher) {
+            $perMonth = self::CLASSES_PER_MONTH[$teacher->name] ?? self::DEFAULT_PER_MONTH;
+            $joined   = $teacher->join_date ? Carbon::parse($teacher->join_date)->startOfDay() : null;
+
+            for ($back = self::HISTORY_MONTHS - 1; $back >= 0; $back--) {
+                $monthStart = $today->copy()->startOfMonth()->subMonths($back);
+
+                // hari terakhir yang boleh dipakai di bulan ini
+                $lastDay = $monthStart->daysInMonth;
+
+                if ($monthStart->isSameMonth($cutoff)) {
+                    $lastDay = $cutoff->day;
+                } elseif ($monthStart->gt($cutoff)) {
+                    continue;
+                }
+
+                $count = $perMonth;
+
+                if (mt_rand(1, 100) <= 20) {
+                    $count = max(0, $count - 1);
+                }
+
+                for ($i = 0; $i < $count; $i++) {
+                    $blueprint = $catalog[array_rand($catalog)];
+                    $package   = $blueprint['package'];
+                    $months    = max((int) ($package->duration_months ?: 1), 1);
+
+                    $end   = $monthStart->copy()->day(mt_rand(1, $lastDay));
+                    $start = $end->copy()->subMonths($months);
+
+                    if (self::RESPECT_JOIN_DATE && $joined && $start->lt($joined)) {
+                        continue;
+                    }
+
+                    $counter++;
+                    $name = "{$blueprint['label']} - Kelas {$end->format('m/Y')} #{$counter}";
+
+                    ClassModel::unguarded(fn () => ClassModel::firstOrCreate(
+                        ['class_name' => $name],
+                        [
+                            'program_package_id'   => $blueprint['identity']['program_package_id'],
+                            'private_package_id'   => null,
+                            'level_id'             => $blueprint['identity']['level_id'],
+                            'teacher_id'           => $teacher->id,
+                            'delivery_mode'        => $counter % 4 === 3 ? 'Online' : 'Offline',
+                            'start_date'           => $start->toDateString(),
+                            'end_date'             => $end->toDateString(),
+                            'capacity'             => (int) ($package->max_students ?: 1),
+                            'status'               => 'Completed',
+                            'teacher_response'     => 'Accepted',
+                            'teacher_responded_at' => $start->copy()->subDays(3),
+                        ]
+                    ));
+                }
+            }
+        }
+
+        $this->command?->info("Kelas riwayat dibuat: {$counter}.");
+    }
+
+    /** Pilih guru bergilir, tapi hanya yang sudah bergabung saat kelas mulai. */
+    private function pickTeacher(Collection $teachers, int $n, Carbon $start): int
+    {
+        $eligible = self::RESPECT_JOIN_DATE
+            ? $teachers->filter(fn ($t) => ! $t->join_date || Carbon::parse($t->join_date)->lte($start))
+            : $teachers;
+
+        if ($eligible->isEmpty()) {
+            $eligible = $teachers;
+        }
+
+        return $eligible->values()[$n % $eligible->count()]->id;
     }
 
     /**
      * @param  array  $identity  program_package_id, private_package_id, level_id, class_name
      * @param  mixed  $package   ProgramPackage atau PrivatePackage (sumber kapasitas & durasi)
      */
-    private function createClass(array $identity, $package, int $teacherId, int $n, Carbon $today, bool $open): void
+    private function createClass(array $identity, $package, Collection $teachers, int $n, Carbon $today, bool $open): void
     {
         $months = max((int) ($package->duration_months ?: 1), 1);
 
@@ -155,6 +277,8 @@ class ClassSeeder extends Seeder
         $start = $open
             ? $today->copy()->addWeeks(2)
             : $today->copy()->subWeeks($elapsed);
+
+        $teacherId = $this->pickTeacher($teachers, $n, $start);
 
         // unguarded: teacher_response dkk. tidak bergantung pada $fillable ClassModel
         ClassModel::unguarded(fn () => ClassModel::firstOrCreate(

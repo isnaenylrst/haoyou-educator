@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Owner;
 
 use App\Http\Controllers\Controller;
 use App\Models\Certificate;
+use App\Models\OperationalExpense;
 use App\Models\ProgressReport;
 use App\Models\SignatureHistory;
 use App\Models\Submission;
@@ -48,7 +49,15 @@ class SignatureQueueController extends Controller
             ->latest('date');
         $pendingSubmissions = $submissionsQuery->paginate(12, ['*'], 'submissions_page')->withQueryString();
 
-        // 4. Riwayat TTD
+        // 4. Antrean Kas Operasional (dicatat Admin, menunggu TTD Owner)
+        $pendingExpenses = OperationalExpense::with('creator')
+            ->where('status', 'Menunggu Owner')
+            ->latest('date')
+            ->latest('id')
+            ->paginate(12, ['*'], 'expenses_page')
+            ->withQueryString();
+
+        // 5. Riwayat TTD
         $historyQuery = SignatureHistory::with('signer')->latest('signed_at');
         $signatureHistories = $historyQuery->paginate(15, ['*'], 'history_page')->withQueryString();
 
@@ -59,6 +68,7 @@ class SignatureQueueController extends Controller
             'pendingReports',
             'pendingCertificates',
             'pendingSubmissions',
+            'pendingExpenses',
             'signatureHistories',
             'ownerSignature'
         ));
@@ -376,5 +386,36 @@ class SignatureQueueController extends Controller
 
         return back()->with('success', "Pengajuan {$submission->item_name} berhasil disetujui dan ditandatangani.");
     }
-}
 
+    /**
+     * TTD / Persetujuan Pengeluaran Kas Operasional oleh Owner.
+     * Untuk menolak, Owner memakai tab Kas Operasional di halaman Rekap Pengajuan.
+     */
+    public function signExpense(Request $request, OperationalExpense $expense)
+    {
+        $user = Auth::user();
+
+        if (empty($user->signature_path) || !Storage::disk('public')->exists($user->signature_path)) {
+            return back()->with('error', 'Anda belum mengunggah tanda tangan digital. Silakan buat atau unggah tanda tangan terlebih dahulu di menu Profil & Tanda Tangan.');
+        }
+
+        if ($expense->status !== 'Menunggu Owner') {
+            return back()->with('error', 'Pengeluaran kas ini sudah diproses dan tidak menunggu tanda tangan Owner lagi.');
+        }
+
+        // Menyalin TTD profil sebagai arsip + mencatat riwayat TTD (logika di model)
+        $expense->approveByOwner($user, 'Disetujui dan ditandatangani Owner melalui antrean TTD.');
+
+        if ($expense->creator) {
+            $expense->creator->notify(new AppNotification(
+                title: 'Pengeluaran Kas Disetujui',
+                message: "Owner menyetujui {$expense->item_name} sebesar {$expense->formatted_amount}.",
+                url: url('/admin/kas-operasional'),
+                type: 'kas',
+                icon: 'fa-circle-check'
+            ));
+        }
+
+        return back()->with('success', "Pengeluaran kas {$expense->item_name} berhasil disetujui dan ditandatangani.");
+    }
+}

@@ -178,7 +178,7 @@
 
                                     @if ($isOnline)
                                         <div class="cand-sub" style="color: {{ $kelas->zoom_link ? '#16a34a' : '#dc2626' }};">
-                                            {{ $kelas->zoom_link ? 'Zoom ✓' : 'Belum ada link Zoom' }}
+                                            {{ $kelas->zoom_link ? 'Zoom ✓' : 'Belum ada link kelas' }}
                                         </div>
                                     @endif
                                 </div>

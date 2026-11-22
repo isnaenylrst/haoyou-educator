@@ -1,6 +1,6 @@
 @extends('layouts.owner')
 
-@section('title', 'Rekap Pengajuan Bahan Ajar & Reimburse')
+@section('title', $tab === 'kas' ? 'Kas Operasional' : 'Rekap Pengajuan Bahan Ajar & Reimburse')
 
 @push('styles')
 <style>
@@ -75,6 +75,44 @@
     .stat-note.up   { color: #22a05a; }
     .stat-note.down { color: #ef4444; }
     .stat-note.warn { color: #e8a317; }
+    .stat-value.is-negative { color: #ef4444; }
+
+    /* Tab pill (Pengajuan Guru | Kas Operasional) */
+    .x-tabs {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+    .x-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 20px;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 14px;
+        line-height: 1.2;
+        text-decoration: none;
+        white-space: nowrap;
+        background: var(--surface, #fff);
+        color: var(--text, #1d1d27);
+        box-shadow: 0 1px 6px rgba(0, 0, 0, .08);
+        transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    .x-tab i { font-size: 13px; }
+    .x-tab:hover {
+        color: var(--text, #1d1d27);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, .12);
+    }
+    .x-tab.active {
+        background: #ffd500;
+        color: #1d1d27;
+        box-shadow: 0 4px 14px rgba(255, 213, 0, .35);
+    }
+    .x-tab.active:hover { color: #1d1d27; }
+    .x-sign-img { max-height: 90px; max-width: 100%; border: 1px solid var(--line, #ececf2); border-radius: 8px; background: #fff; padding: 6px; }
 
     /* Badges */
     .badge-pending   { background: rgba(234, 179, 8, .12); color: #ca8a04; }
@@ -233,6 +271,22 @@
         </div>
     @endif
 
+    {{-- TAB: Pengajuan Guru | Kas Operasional --}}
+    @php $periodQuery = array_filter(['date_from' => $dateFrom, 'date_to' => $dateTo, 'bulan' => $bulan]); @endphp
+    <div class="x-tabs">
+        <a class="x-tab {{ $tab === 'pengajuan' ? 'active' : '' }}"
+           href="{{ route('owner.pengajuan.index', $periodQuery) }}">
+            <i class="fa-solid fa-receipt"></i>
+            Pengajuan Guru ({{ $pengajuanPendingCount }})
+        </a>
+        <a class="x-tab {{ $tab === 'kas' ? 'active' : '' }}"
+           href="{{ route('owner.pengajuan.index', ['tab' => 'kas'] + $periodQuery) }}">
+            <i class="fa-solid fa-cash-register"></i>
+            Kas Operasional ({{ $kasPendingCount }})
+        </a>
+    </div>
+
+    @if ($tab === 'pengajuan')
     {{-- 4 KARTU RINGKASAN OWNER (TAMPILAN PERSETUJUAN: HANYA 4 KARTU) --}}
     <div class="stat-row-owner-4">
         {{-- 1. Total Pengeluaran --}}
@@ -479,6 +533,225 @@
         @endif
     </div>
 
+    @else
+    {{-- ==================== TAB KAS OPERASIONAL ==================== --}}
+
+    {{-- 4 KARTU --}}
+    <div class="stat-row-owner-4">
+        <div class="stat-card c-blue">
+            <div class="stat-top">
+                <span class="stat-label">Kas Masuk</span>
+                <i class="fa-solid fa-arrow-trend-up stat-icon"></i>
+            </div>
+            <div class="stat-value">{{ format_rupiah($kasMasukPeriode) }}</div>
+            <div class="stat-note up">{{ $kasMasukCount }} penerimaan kas</div>
+        </div>
+
+        <div class="stat-card c-green">
+            <div class="stat-top">
+                <span class="stat-label">Sisa Saldo Kas</span>
+                <i class="fa-solid fa-wallet stat-icon"></i>
+            </div>
+            <div class="stat-value {{ $saldoSetelahMenunggu < 0 ? 'is-negative' : '' }}">
+                {{ format_rupiah($saldoSetelahMenunggu) }}
+            </div>
+            <div class="stat-note">Saldo kas tersedia</div>
+        </div>
+
+        <div class="stat-card c-red">
+            <div class="stat-top">
+                <span class="stat-label">Pengeluaran Disetujui</span>
+                <i class="fa-solid fa-arrow-trend-down stat-icon"></i>
+            </div>
+            <div class="stat-value">{{ format_rupiah($kasTotalDisetujui) }}</div>
+            <div class="stat-note down">Total pengeluaran disetujui</div>
+        </div>
+
+        <div class="stat-card c-yellow">
+            <div class="stat-top">
+                <span class="stat-label">Menunggu TTD Anda</span>
+                <i class="fa-solid fa-hourglass-half stat-icon"></i>
+            </div>
+            <div class="stat-value">{{ format_rupiah($kasMenungguTotal) }}</div>
+            <div class="stat-note warn">{{ $kasMenungguCount }} pengajuan menunggu TTD</div>
+        </div>
+    </div>
+
+    {{-- FILTER --}}
+    <div class="card border rounded-4 shadow-sm mb-4">
+        <div class="card-body p-3">
+            <form method="GET" action="{{ route('owner.pengajuan.index') }}" class="row g-2 align-items-center" id="kasFilterForm">
+                <input type="hidden" name="tab" value="kas">
+
+                <div class="col-md-3 col-sm-12">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
+                        <input type="text" name="kas_q" class="form-control" placeholder="Cari barang atau keterangan..." value="{{ $kasSearch ?? '' }}">
+                    </div>
+                </div>
+
+                <div class="col-md-2 col-sm-6">
+                    <select name="kas_status" class="form-select form-select-sm">
+                        <option value="">Semua Status</option>
+                        @foreach ($kasStatuses as $st)
+                            <option value="{{ $st }}" @selected($kasStatus === $st)>{{ $st }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="col-md-3 col-sm-6">
+                    <select name="kas_category" class="form-select form-select-sm">
+                        <option value="">Semua Kategori</option>
+                        @foreach ($kasCategories as $cat)
+                            <option value="{{ $cat }}" @selected($kasCategory === $cat)>{{ $cat }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="col-md-4 col-sm-12">
+                    <div class="input-group input-group-sm">
+                        <input type="date" name="date_from" id="kasFilterFrom" class="form-control" value="{{ $dateFrom }}">
+                        <span class="input-group-text">-</span>
+                        <input type="date" name="date_to" id="kasFilterTo" class="form-control" value="{{ $dateTo }}">
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {{-- TABEL PENGELUARAN OPERASIONAL --}}
+    <div class="card border rounded-4 shadow-sm overflow-hidden mb-4">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Barang</th>
+                        <th class="text-center">Kategori</th>
+                        <th class="text-center">Cara Beli</th>
+                        <th class="text-end">Nominal</th>
+                        <th class="text-center">Tanggal</th>
+                        <th class="text-center">Status &amp; TTD</th>
+                        <th class="text-center" style="width: 150px;">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse ($kasExpenses as $ex)
+                        <tr>
+                            <td class="ps-3">
+                                <div class="fw-semibold text-dark">{{ $ex->item_name }}</div>
+                                <small class="text-muted">Dicatat: {{ $ex->creator->display_name ?? $ex->creator->username ?? '-' }}</small>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-light text-dark border px-2 py-1">{{ $ex->category }}</span>
+                            </td>
+                            <td class="text-center">
+                                {{ $ex->purchase_method }}
+                                @if ($ex->isOnline() && $ex->purchase_link)
+                                    <a href="{{ $ex->purchase_link }}" target="_blank" rel="noopener noreferrer" class="ms-1" title="Buka link pembelian">
+                                        <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                    </a>
+                                @endif
+                            </td>
+                            <td class="text-end"><span class="fw-bold text-success">{{ $ex->formatted_amount }}</span></td>
+                            <td class="text-center text-nowrap">{{ $ex->date?->translatedFormat('d M Y') ?? '-' }}</td>
+                            <td class="text-center">
+                                <span class="badge {{ $ex->status_badge_class }} px-2 py-1">{{ $ex->status }}</span>
+                                <div class="d-flex flex-column gap-1 mt-1" style="font-size: 11px;">
+                                    <span class="text-info" title="{{ $ex->admin_signed_at?->format('d/m/Y H:i') }}">
+                                        <i class="fa-solid fa-clipboard-check"></i> TTD Admin ({{ $ex->admin_signer_name ?? 'OK' }})
+                                    </span>
+                                    @if ($ex->owner_signature_path)
+                                        <span class="text-primary" title="{{ $ex->owner_signed_at?->format('d/m/Y H:i') }}">
+                                            <i class="fa-solid fa-signature"></i> TTD Owner
+                                        </span>
+                                    @elseif ($ex->status === 'Ditolak')
+                                        <span class="text-danger fw-semibold">Ditolak Owner</span>
+                                    @endif
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    @if ($ex->receipt_path)
+                                        <a href="{{ asset('storage/' . $ex->receipt_path) }}" target="_blank" rel="noopener"
+                                           class="btn btn-outline-secondary" title="Lihat nota">
+                                            <i class="fa-solid fa-receipt"></i>
+                                        </a>
+                                    @endif
+
+                                    @if ($ex->status === 'Menunggu Owner')
+                                        <button type="button" class="btn btn-warning text-dark"
+                                                onclick="openOwnerModal('modalKas{{ $ex->id }}')" title="Periksa &amp; TTD">
+                                            <i class="fa-solid fa-signature"></i>
+                                        </button>
+                                    @else
+                                        <button type="button" class="btn btn-outline-primary"
+                                                onclick="openOwnerModal('modalKas{{ $ex->id }}')" title="Lihat detail">
+                                            <i class="fa-solid fa-eye"></i>
+                                        </button>
+                                    @endif
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-5">
+                                <i class="fa-solid fa-cash-register fs-2 text-secondary mb-2 d-block"></i>
+                                Belum ada pengeluaran kas operasional yang sesuai dengan filter.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        @if ($kasExpenses->hasPages())
+            <div class="card-footer bg-white d-flex justify-content-between align-items-center py-2 px-3">
+                <small class="text-muted">
+                    Menampilkan {{ $kasExpenses->firstItem() ?? 0 }} - {{ $kasExpenses->lastItem() ?? 0 }} dari {{ $kasExpenses->total() }} data
+                </small>
+                <div>{{ $kasExpenses->links('pagination::bootstrap-5') }}</div>
+            </div>
+        @endif
+    </div>
+
+    {{-- RIWAYAT KAS MASUK (hanya lihat) --}}
+    <div class="card border rounded-4 shadow-sm overflow-hidden mb-4">
+        <div class="card-header bg-white fw-bold py-3 px-3">
+            Riwayat Kas Masuk
+            <span class="text-muted fw-normal small">
+                (periode aktif{{ $kasMasukCount > $kasMasukList->count() ? ', ' . $kasMasukList->count() . ' terbaru dari ' . $kasMasukCount : '' }})
+            </span>
+        </div>
+        @if ($kasMasukList->isEmpty())
+            <div class="text-center text-muted py-4">Belum ada kas masuk pada periode ini.</div>
+        @else
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3 text-center">Tanggal</th>
+                            <th>Keterangan</th>
+                            <th class="text-end">Nominal</th>
+                            <th class="text-center">Dicatat Oleh</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($kasMasukList as $km)
+                            @php $kmUser = $kasMasukUsers->get($km->created_by); @endphp
+                            <tr>
+                                <td class="ps-3 text-center text-nowrap">{{ \Carbon\Carbon::parse($km->date)->translatedFormat('d M Y') }}</td>
+                                <td>{{ $km->note ?: '-' }}</td>
+                                <td class="text-end"><span class="fw-bold text-success">{{ format_rupiah($km->amount) }}</span></td>
+                                <td class="text-center">{{ $kmUser->display_name ?? $kmUser->username ?? '-' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </div>
+    @endif
+
 </div>
 
 {{-- ==================== MODAL PERSETUJUAN OWNER ==================== --}}
@@ -600,6 +873,156 @@
     @endif
 @endforeach
 
+{{-- ==================== MODAL KAS OPERASIONAL (detail + TTD Owner) ==================== --}}
+@if ($tab === 'kas')
+    @foreach ($kasExpenses as $ex)
+        @php $pending = $ex->status === 'Menunggu Owner'; @endphp
+        <div class="x-modal-overlay" id="modalKas{{ $ex->id }}">
+            <div class="x-modal-box">
+                @if ($pending)
+                    <form action="{{ route('owner.pengajuan.kas.sign', $ex->id) }}" method="POST">
+                        @csrf
+                @endif
+
+                <div class="x-modal-head">
+                    <div>
+                        <h5>{{ $pending ? 'Periksa & Tanda Tangan' : 'Detail Pengeluaran Kas' }}</h5>
+                        <p>
+                            <span class="badge {{ $ex->status_badge_class }} px-2 py-1">{{ $ex->status }}</span>
+                            &middot; KO-{{ str_pad($ex->id, 5, '0', STR_PAD_LEFT) }}
+                        </p>
+                    </div>
+                    <button type="button" class="btn-close" onclick="closeOwnerModal('modalKas{{ $ex->id }}')" aria-label="Tutup"></button>
+                </div>
+
+                <div class="x-modal-body">
+                    <div class="x-detail-grid">
+                        <div>
+                            <div class="x-detail-label">Barang</div>
+                            <div class="x-detail-value">{{ $ex->item_name }}</div>
+                        </div>
+                        <div>
+                            <div class="x-detail-label">Kategori</div>
+                            <div class="x-detail-value">{{ $ex->category }}</div>
+                        </div>
+                        <div>
+                            <div class="x-detail-label">Nominal</div>
+                            <div class="x-detail-value text-success">{{ $ex->formatted_amount }}</div>
+                        </div>
+                        <div>
+                            <div class="x-detail-label">Tanggal Pembelian</div>
+                            <div class="x-detail-value">{{ $ex->date?->translatedFormat('d F Y') ?? '-' }}</div>
+                        </div>
+                        <div>
+                            <div class="x-detail-label">Cara Pembelian</div>
+                            <div class="x-detail-value">{{ $ex->purchase_method }}</div>
+                        </div>
+                        <div>
+                            <div class="x-detail-label">Dicatat Oleh</div>
+                            <div class="x-detail-value">{{ $ex->creator->display_name ?? $ex->creator->username ?? '-' }}</div>
+                        </div>
+                        @if ($ex->description)
+                            <div class="x-detail-full">
+                                <div class="x-detail-label">Keterangan</div>
+                                <div class="small text-muted fst-italic">"{{ $ex->description }}"</div>
+                            </div>
+                        @endif
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        @if ($ex->receipt_path)
+                            <a href="{{ asset('storage/' . $ex->receipt_path) }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">
+                                <i class="fa-solid fa-receipt me-1"></i> Cek Nota Pembelian
+                            </a>
+                        @endif
+                        @if ($ex->isOnline() && $ex->purchase_link)
+                            <a href="{{ $ex->purchase_link }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-success">
+                                <i class="fa-solid fa-arrow-up-right-from-square me-1"></i> Buka Link Pembelian
+                            </a>
+                        @endif
+                    </div>
+
+                    {{-- TTD yang sudah ada --}}
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <div class="x-detail-label mb-1">TTD Admin</div>
+                            @if ($ex->admin_signature_path)
+                                <img src="{{ asset('storage/' . $ex->admin_signature_path) }}" alt="TTD Admin" class="x-sign-img">
+                                <div class="small fw-semibold mt-1">{{ $ex->admin_signer_name }}</div>
+                                <div class="small text-muted">{{ $ex->admin_signed_at?->translatedFormat('d M Y H:i') }}</div>
+                            @else
+                                <div class="small text-muted">-</div>
+                            @endif
+                        </div>
+                        <div class="col-6">
+                            <div class="x-detail-label mb-1">TTD Owner</div>
+                            @if ($ex->owner_signature_path)
+                                <img src="{{ asset('storage/' . $ex->owner_signature_path) }}" alt="TTD Owner" class="x-sign-img">
+                                <div class="small fw-semibold mt-1">{{ $ex->owner_signer_name }}</div>
+                                <div class="small text-muted">{{ $ex->owner_signed_at?->translatedFormat('d M Y H:i') }}</div>
+                            @else
+                                <div class="small text-muted">{{ $ex->status === 'Ditolak' ? 'Ditolak' : 'Belum ditandatangani' }}</div>
+                            @endif
+                        </div>
+                        @if ($ex->status === 'Ditolak' && $ex->owner_note)
+                            <div class="col-12">
+                                <div class="x-detail-label">Catatan Owner</div>
+                                <div class="small text-muted fst-italic">"{{ $ex->owner_note }}"</div>
+                            </div>
+                        @endif
+                    </div>
+
+                    @if ($pending)
+                        <div class="x-signature-info">
+                            <i class="fa-solid fa-signature fs-5 text-success"></i>
+                            <div>
+                                <strong>Tanda Tangan Digital Profil:</strong>
+                                <div>Tanda tangan digital Owner yang tersimpan pada menu Profil akan otomatis dibubuhkan pada pengeluaran ini.</div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">Keputusan Owner <span class="text-danger">*</span></label>
+                            <select name="decision" class="form-select form-select-sm" required
+                                    id="kasDecision{{ $ex->id }}" onchange="handleKasDecisionChange({{ $ex->id }})">
+                                <option value="Approved">Setujui &amp; Tanda Tangan</option>
+                                <option value="Rejected">Tolak</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label fw-semibold small" id="kasNoteLabel{{ $ex->id }}">
+                                Catatan Owner <span class="text-muted fw-normal">(opsional)</span>
+                            </label>
+                            <textarea name="note" id="kasNote{{ $ex->id }}" rows="2" maxlength="1000"
+                                      class="form-control form-control-sm" placeholder="Tambahkan catatan jika diperlukan..."></textarea>
+                            <small class="text-danger d-none" id="kasNoteHelp{{ $ex->id }}">Catatan wajib diisi jika menolak.</small>
+                        </div>
+                    @endif
+                </div>
+
+                <div class="x-modal-foot">
+                    <span></span>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="closeOwnerModal('modalKas{{ $ex->id }}')">
+                            {{ $pending ? 'Batal' : 'Tutup' }}
+                        </button>
+                        @if ($pending)
+                            <button type="submit" class="btn btn-sm btn-primary px-3" id="kasSubmit{{ $ex->id }}">
+                                <i class="fa-solid fa-check me-1"></i> Simpan &amp; TTD
+                            </button>
+                        @endif
+                    </div>
+                </div>
+
+                @if ($pending)
+                    </form>
+                @endif
+            </div>
+        </div>
+    @endforeach
+@endif
+
 @push('scripts')
 <script>
     function openOwnerModal(id) {
@@ -638,6 +1061,28 @@
         }
     }
 
+    function handleKasDecisionChange(id) {
+        const sel = document.getElementById('kasDecision' + id);
+        const note = document.getElementById('kasNote' + id);
+        const label = document.getElementById('kasNoteLabel' + id);
+        const help = document.getElementById('kasNoteHelp' + id);
+        const btn = document.getElementById('kasSubmit' + id);
+
+        if (sel.value === 'Rejected') {
+            note.setAttribute('required', 'required');
+            label.innerHTML = 'Alasan Penolakan <span class="text-danger">*</span>';
+            help.classList.remove('d-none');
+            btn.className = 'btn btn-sm btn-danger px-3';
+            btn.innerHTML = '<i class="fa-solid fa-ban me-1"></i> Tolak Pengeluaran';
+        } else {
+            note.removeAttribute('required');
+            label.innerHTML = 'Catatan Owner <span class="text-muted fw-normal">(opsional)</span>';
+            help.classList.add('d-none');
+            btn.className = 'btn btn-sm btn-primary px-3';
+            btn.innerHTML = '<i class="fa-solid fa-check me-1"></i> Simpan &amp; TTD';
+        }
+    }
+
     // Auto submit filter on change
     document.addEventListener('DOMContentLoaded', function () {
         const fFrom  = document.getElementById('filterFrom');
@@ -654,6 +1099,23 @@
             });
             form.querySelectorAll('select').forEach(function (sel) {
                 sel.addEventListener('change', function () { form.submit(); });
+            });
+        }
+
+        // Filter tab Kas Operasional
+        const kasForm = document.getElementById('kasFilterForm');
+        if (kasForm) {
+            const kFrom = document.getElementById('kasFilterFrom');
+            const kTo   = document.getElementById('kasFilterTo');
+            [kFrom, kTo].forEach(function (el) {
+                if (el) {
+                    el.addEventListener('change', function () {
+                        if (kFrom.value && kTo.value) { kasForm.submit(); }
+                    });
+                }
+            });
+            kasForm.querySelectorAll('select').forEach(function (sel) {
+                sel.addEventListener('change', function () { kasForm.submit(); });
             });
         }
 
