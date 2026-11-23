@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Program;
 
 class CandidateStudent extends Model
 {
@@ -23,17 +22,14 @@ class CandidateStudent extends Model
         'school',
         'source',
         'allergy',
-        'interested_program',
         'program_id',
         'private_package_id',
-        'trial_status',
         'trial_date',
-        'trial_notes',
+        'trial_status',
+        'lead_status',
         'consultation_status',
         'consultation_date',
         'consultation_notes',
-        'lead_status',
-        'notes',
         'registration_fee_paid_at',
         'registration_fee_proof_path',
         'registration_fee_status',
@@ -59,8 +55,7 @@ class CandidateStudent extends Model
         return $this->birth_date->age;
     }
 
-    // Nomor WhatsApp format internasional (62xxx) untuk link wa.me.
-    // Memakai nomor calon siswa (kolom phone).
+    // Nomor WhatsApp format internasional (62xxx).
     public function getWhatsappNumberAttribute()
     {
         $number = $this->phone;
@@ -69,7 +64,7 @@ class CandidateStudent extends Model
             return null;
         }
 
-        $number = preg_replace('/\D/', '', $number); // buang spasi, +, -, dll
+        $number = preg_replace('/\D/', '', $number);
 
         if ($number === '') {
             return null;
@@ -84,7 +79,7 @@ class CandidateStudent extends Model
         return $number;
     }
 
-    // Link wa.me dengan pesan follow up yang sudah terisi.
+    // Link WhatsApp dengan pesan follow up.
     public function getWhatsappUrlAttribute()
     {
         if (!$this->whatsapp_number) {
@@ -122,14 +117,12 @@ class CandidateStudent extends Model
         return $this->belongsTo(Program::class, 'program_id');
     }
 
-    // Calon siswa bisa tertarik ke program privat
     public function privatePackage()
     {
         return $this->belongsTo(PrivatePackage::class, 'private_package_id');
     }
 
-    // Calon siswa yang memenuhi syarat untuk pengecekan
-    // masa berlaku registration fee
+    // Pengecekan masa berlaku registration fee.
     public function scopeEligibleForFeeExpiry($query, int $days = 30)
     {
         return $query->where('registration_fee_status', 'Active')

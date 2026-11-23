@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -6,9 +7,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('attendances', function (Blueprint $table) {
@@ -17,15 +15,18 @@ return new class extends Migration
 
             // Jurnal mengajar yang menjadi induk absensi
             $table->foreignId('teaching_journal_id')
-                ->constrained()
+                ->constrained('teaching_journals')
                 ->cascadeOnUpdate()
                 ->cascadeOnDelete();
 
             // Siswa
             $table->foreignId('student_id')
-                ->constrained()
+                ->constrained('students')
                 ->cascadeOnUpdate()
                 ->restrictOnDelete();
+
+            // Tanggal absensi
+            $table->date('attendance_date')->nullable();
 
             $table->date('session_date');
 
@@ -47,13 +48,9 @@ return new class extends Migration
                 'teaching_journal_id',
                 'student_id'
             ]);
-
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('attendances');

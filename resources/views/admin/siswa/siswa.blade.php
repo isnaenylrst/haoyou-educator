@@ -154,8 +154,14 @@
                             'HSK' => 'badge-warning',
                             'Daily Activity' => 'badge-cold',
                             'Private' => 'badge-completed',
-                            default => '',
+                            default => 'badge-program-other',
                         };
+
+                        // Program baru (di luar HSK/Daily Activity/Private, mis. Bisnis) tidak punya kelas warna di CSS,
+                        // jadi diberi gaya netral inline supaya badge tetap terlihat.
+                        $programBadgeStyle = $programBadgeClass === 'badge-program-other'
+                            ? 'background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;'
+                            : '';
                     @endphp
                     <tr>
                         <td>
@@ -178,7 +184,7 @@
 
                         <td style="text-align: center; vertical-align: middle;">
                             @if ($categoryLabel && $categoryLabel !== '-')
-                                <span class="badge {{ $programBadgeClass }}">{{ $categoryLabel }}</span>
+                                <span class="badge {{ $programBadgeClass }}" @if ($programBadgeStyle) style="{{ $programBadgeStyle }}" @endif>{{ $categoryLabel }}</span>
                             @else
                                 -
                             @endif

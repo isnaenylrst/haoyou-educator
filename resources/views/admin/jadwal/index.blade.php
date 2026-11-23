@@ -197,6 +197,7 @@
                 </span>
 
             </div>
+
         </div>
     </form>
 
@@ -232,6 +233,8 @@
             $totalMin = $slotCount * 30;
             $bodyRow = $hasTrials ? 4 : 3;
 
+            // Lebar minimum 1 lane (kartu) dalam px. Kolom ruang = jumlah lane x nilai ini.
+            $laneWidth = 170;
             $colWidths = [];
             $colStart = [];
             $nextCol = 2;
@@ -240,13 +243,13 @@
                 $colStart[$dayName] = $nextCol;
 
                 foreach ($dayRooms[$dayName] as $room) {
-                    $colWidths[] = ($grid[$dayName][$room]['lanes'] ?? 1) * 150;
+                    $colWidths[] = ($grid[$dayName][$room]['lanes'] ?? 1) * $laneWidth;
                     $nextCol++;
                 }
             }
 
             $template = '70px ' . implode(' ', array_map(
-                fn ($width) => 'minmax(' . $width . 'px, ' . ($width / 150) . 'fr)',
+                fn ($width) => 'minmax(' . $width . 'px, ' . ($width / $laneWidth) . 'fr)',
                 $colWidths
             ));
         @endphp
@@ -382,7 +385,7 @@
                              style="grid-column: {{ $colStart[$dayName] }} / span {{ count($dayRooms[$dayName]) }}; grid-row: 3;">
 
                             @foreach ($trials[$dayName] ?? [] as $trial)
-                                <div class="trial-chip {{ $trial['status_key'] === 'Cancelled' ? 'is-cancelled' : '' }}"
+                                <div class="trial-chip {{ in_array($trial['status_key'], ['Cancelled', 'Expired'], true) ? 'is-cancelled' : '' }}"
                                      title="{{ $trial['title'] }} — {{ $trial['status_label'] }}"
                                      data-session="{{ json_encode($trial) }}"
                                      onclick="openSessionDetail(this)">

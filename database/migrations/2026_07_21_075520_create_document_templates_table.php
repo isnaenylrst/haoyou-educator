@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -39,6 +40,12 @@ return new class extends Migration
             ])->default('Active');
 
             $table->timestamps();
+
+            // Mencegah duplikasi jenis dokumen dan nama
+            $table->unique(
+                ['document_type', 'name'],
+                'document_templates_type_name_unique'
+            );
         });
     }
 

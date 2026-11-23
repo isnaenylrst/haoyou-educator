@@ -401,8 +401,8 @@
                         <div class="form-section-title"><i class="fa-solid fa-bullhorn"></i> Sumber Lead</div>
                         <div class="form-grid">
                             <div class="form-field">
-                                <label>Sumber Lead *</label>
-                                <select name="source" required>
+                                <label>Sumber Lead</label>
+                                <select name="source">
                                     <option value="">Pilih Sumber</option>
                                     <option>Instagram</option>
                                     <option>TikTok</option>
@@ -426,21 +426,11 @@
                                 <input type="date" name="consultation_date">
                             </div>
                             <div class="form-field full">
-                                <label>Request Belajar / Catatan Konsultasi</label>
+                                <label>Catatan</label>
                                 <textarea name="consultation_notes" rows="2" placeholder="Contoh: Fokus percakapan bisnis, persiapan interview kerja, atau materi khusus yang diminta..."></textarea>
                             </div>
                         </div>
                     </div>                   
-
-                    <div class="form-section">
-                        <div class="form-section-title"><i class="fa-solid fa-note-sticky"></i> Catatan Khusus</div>
-                        <div class="form-grid">
-                            <div class="form-field full">
-                                <label>Catatan Tambahan</label>
-                                <textarea name="notes" rows="2" placeholder="Contoh: Masuk dipertengahan kelas"></textarea>
-                            </div>
-                        </div>
-                    </div>
 
                     <div class="form-section">
                         <div class="form-section-title"><i class="fa-solid fa-calendar-week"></i> Jadwal Tersedia</div>
@@ -587,8 +577,8 @@
                         <div class="form-section-title"><i class="fa-solid fa-bullhorn"></i> Sumber Lead</div>
                         <div class="form-grid">
                             <div class="form-field">
-                                <label>Sumber Lead *</label>
-                                <select name="source" id="edit_source" required>
+                                <label>Sumber Lead</label>
+                                <select name="source" id="edit_source">
                                     <option value="">Pilih Sumber</option>
                                     <option>Instagram</option>
                                     <option>TikTok</option>
@@ -642,21 +632,11 @@
                                 </select>
                             </div>
                             <div class="form-field full">
-                                <label>Request Belajar / Catatan Konsultasi</label>
+                                <label>Catatan</label>
                                 <textarea name="consultation_notes" id="edit_consultation_notes" rows="2" placeholder="Contoh: Fokus percakapan bisnis, persiapan interview kerja, atau materi khusus yang diminta..."></textarea>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="form-section">
-                        <div class="form-section-title"><i class="fa-solid fa-note-sticky"></i> Catatan Khusus</div>
-                        <div class="form-grid">
-                            <div class="form-field full">
-                                <label>Catatan Tambahan</label>
-                                <textarea name="notes" id="edit_notes" rows="3" placeholder="Contoh: Masuk dipertengahan kelas"></textarea>
-                            </div>
-                        </div>
-                    </div>                    
+                    </div>                 
 
                     <div class="form-section">
                         <div class="form-section-title"><i class="fa-solid fa-calendar-week"></i> Jadwal Tersedia</div>
@@ -862,8 +842,7 @@
             document.getElementById('edit_trial_status').value = data.trial_status ?? 'Pending';
             document.getElementById('edit_consultation_date').value = data.consultation_date ?? '';
             document.getElementById('edit_consultation_status').value = data.consultation_status ?? 'Pending';
-            document.getElementById('edit_consultation_notes').value = data.consultation_notes ?? '';
-            document.getElementById('edit_notes').value = data.notes ?? '';            
+            document.getElementById('edit_consultation_notes').value = data.consultation_notes ?? '';          
             document.getElementById('btnConvertToStudent').href = `/admin/calon-siswa/${id}/convert`;
 
             if (data.schedules && data.schedules.length > 0) {

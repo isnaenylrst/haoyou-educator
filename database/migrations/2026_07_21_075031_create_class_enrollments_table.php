@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -9,7 +10,6 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('class_enrollments', function (Blueprint $table) {
-
             $table->id();
 
             $table->foreignId('student_id')
@@ -33,9 +33,25 @@ return new class extends Migration
                 ->nullOnDelete();
 
             $table->date('enrollment_date');
-            $table->decimal('registration_fee', 12, 2)->default(0);
 
-            $table->enum('status', ['Waiting Class', 'Active', 'Completed', 'Cancelled'])->default('Active');
+            $table->decimal('registration_fee', 12, 2)->default(0);
+            $table->decimal('activity_fee', 12, 2)->default(0);
+            $table->decimal('discount', 12, 2)->default(0);
+
+            $table->text('notes')->nullable();
+            $table->text('requested_material')->nullable();
+
+            $table->enum('payment_scheme', [
+                'Lunas',
+                'Termin'
+            ])->default('Lunas');
+
+            $table->enum('status', [
+                'Waiting Class',
+                'Active',
+                'Completed',
+                'Cancelled'
+            ])->default('Active');
 
             $table->timestamps();
             $table->softDeletes();

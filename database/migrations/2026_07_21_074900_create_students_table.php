@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -12,16 +13,19 @@ return new class extends Migration
 
             $table->id();
 
+            // Relasi calon siswa
             $table->foreignId('candidate_student_id')
                 ->nullable()
                 ->constrained('candidate_students')
                 ->nullOnDelete();
 
+            // Relasi user
             $table->foreignId('user_id')
                 ->unique()
                 ->constrained()
                 ->cascadeOnDelete();
 
+            // Level siswa saat ini
             $table->foreignId('current_level_id')
                 ->nullable()
                 ->constrained('program_levels')
@@ -32,9 +36,16 @@ return new class extends Migration
 
             $table->integer('points')->default(0);
 
+            // Catatan Admin
+            $table->text('admin_note')->nullable();
+
             $table->date('join_date');
 
-            $table->enum('status', ['Active', 'Inactive', 'Graduated'])->default('Active');
+            $table->enum('status', [
+                'Active',
+                'Inactive',
+                'Graduated'
+            ])->default('Active');
 
             $table->timestamps();
         });

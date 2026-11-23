@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -9,7 +10,6 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('class_schedules', function (Blueprint $table) {
-
             $table->id();
 
             $table->foreignId('class_id')
@@ -19,13 +19,16 @@ return new class extends Migration
             $table->string('day');
 
             $table->time('start_time');
-
             $table->time('end_time');
 
             $table->string('room')->nullable();
 
-            $table->timestamps();
+            $table->date('effective_from')->nullable();
+            $table->date('effective_until')->nullable();
 
+            $table->index('effective_until');
+
+            $table->timestamps();
         });
     }
 

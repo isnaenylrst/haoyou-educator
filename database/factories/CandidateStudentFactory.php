@@ -44,7 +44,6 @@ class CandidateStudentFactory extends Factory
             'private_package_id' => $privatePackageId,
             'trial_date' => $trialDate->format('Y-m-d'),
             'trial_status' => $trialStatus,
-            'trial_notes' => $trialStatus === 'Completed' ? fake()->optional(0.6)->sentence() : null,
             'lead_status' => $this->leadStatusFor($trialStatus),
             'registration_fee_status' => $feeStatus,
             'registration_fee_paid_at' => $feePaidAt,

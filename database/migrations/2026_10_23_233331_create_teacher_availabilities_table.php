@@ -30,6 +30,12 @@ return new class extends Migration
                 ->nullOnDelete();
 
             $table->timestamps();
+
+            // Index untuk pencarian berdasarkan guru dan hari
+            $table->index(
+                ['teacher_id', 'day'],
+                'teacher_availabilities_teacher_day_idx'
+            );
         });
     }
 
