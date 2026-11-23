@@ -28,13 +28,24 @@ class RetentionService
      */
     private function finishedEnrollments(Carbon $month, ?int $teacherId = null): Collection
     {
-        $end = $month->copy()->endOfMonth()->min(today());
+        return $this->finishedEnrollmentsBetween(
+            $month->copy()->startOfMonth(),
+            $month->copy()->endOfMonth()->min(today()),
+            $teacherId
+        );
+    }
 
+    /**
+     * Sama seperti finishedEnrollments(), tapi untuk rentang tanggal bebas
+     * (dipakai Monitoring Kurikulum: minggu / bulan / semester).
+     */
+    private function finishedEnrollmentsBetween(Carbon $start, Carbon $end, ?int $teacherId = null): Collection
+    {
         $rows = ClassEnrollment::query()
             ->whereIn('status', ['Active', 'Completed'])
             ->whereHas('class', fn ($q) => $q
-                ->whereBetween('end_date', [$month->copy()->startOfMonth(), $end]))
-            ->with(['class', 'student'])
+                ->whereBetween('end_date', [$start->copy()->startOfDay(), $end]))
+            ->with(['class.teacher', 'student'])
             ->get();
 
         if ($teacherId !== null) {
@@ -82,7 +93,38 @@ class RetentionService
 
     public function monthly(Carbon $month): array
     {
-        $rows = $this->finishedEnrollments($month);
+        return $this->summarize($this->finishedEnrollments($month));
+    }
+
+    public function perTeacher(Carbon $month): Collection
+    {
+        return $this->rankTeachers(
+            $this->finishedEnrollments($month),
+            $month->copy()->startOfMonth(),
+            $month->copy()->endOfMonth()
+        );
+    }
+
+    /**
+     * Laporan retention untuk rentang tanggal bebas. Dipakai Monitoring Kurikulum
+     * supaya angkanya SAMA dengan menu Admin -> Retention (satu sumber hitungan).
+     *
+     * @return array{summary: array, teachers: Collection, classes: Collection}
+     */
+    public function report(Carbon $from, Carbon $to): array
+    {
+        $from = $from->copy()->startOfDay();
+        $rows = $this->finishedEnrollmentsBetween($from, $to->copy()->min(today()));
+
+        return [
+            'summary'  => $this->summarize($rows),
+            'teachers' => $this->rankTeachers($rows, $from, $to->copy()->endOfDay()),
+            'classes'  => $this->perClass($rows),
+        ];
+    }
+
+    private function summarize(Collection $rows): array
+    {
         $done = $rows->count();
         $cont = $rows->where('continued', true)->count();
 
@@ -94,38 +136,59 @@ class RetentionService
         ];
     }
 
-    public function perTeacher(Carbon $month): Collection
+    /** Skor guru = 70% retention rate + 30% beban mengajar pada rentang yang sama. */
+    private function rankTeachers(Collection $rows, Carbon $meetFrom, Carbon $meetTo): Collection
     {
-        $rows = $this->finishedEnrollments($month)
-            ->groupBy(fn ($e) => (int) ($e->class->teacher_id ?? 0));
+        $grouped = $rows->groupBy(fn ($e) => (int) ($e->class->teacher_id ?? 0));
 
         $meetings = TeachingJournal::where(self::TAUGHT_COLUMN, self::TAUGHT_VALUE)
-            ->whereBetween('session_date', [
-                $month->copy()->startOfMonth(), $month->copy()->endOfMonth(),
-            ])
+            ->whereBetween('session_date', [$meetFrom, $meetTo])
             ->selectRaw('teacher_id, COUNT(*) as total')
             ->groupBy('teacher_id')
             ->pluck('total', 'teacher_id');
 
         $maxLoad = max($meetings->max() ?? 0, 1);
 
-        return $rows->map(function ($group, $teacherId) use ($meetings, $maxLoad) {
+        return $grouped->map(function ($group, $teacherId) use ($meetings, $maxLoad) {
             $done = $group->count();
             $cont = $group->where('continued', true)->count();
             $rr   = $done ? $cont / $done * 100 : 0;
             $tl   = ($meetings[$teacherId] ?? 0) / $maxLoad * 100;
 
             return [
-                'teacher_id'     => (int) $teacherId,
+                'teacher_id'         => (int) $teacherId,
+                'teacher_name'       => $group->first()->class?->teacher?->name ?? 'Belum ada guru',
+                'selesai'            => $done,
+                'lanjut'             => $cont,
+                'menunggu_bayar'     => $group->where('awaiting_payment', true)->count(),
+                'rr'                 => round($rr, 1),
+                'pertemuan'          => $meetings[$teacherId] ?? 0,
+                'tl'                 => round($tl, 1),
+                'score'              => round($rr * 0.7 + $tl * 0.3, 1),
+                'continued_students' => $group->where('continued', true)
+                    ->pluck('student')->filter()->unique('id')->values(),
+            ];
+        })->sortByDesc('score')->values();
+    }
+
+    private function perClass(Collection $rows): Collection
+    {
+        return $rows->groupBy('class_id')->map(function ($group) {
+            $class = $group->first()->class;
+            $done  = $group->count();
+            $cont  = $group->where('continued', true)->count();
+
+            return [
+                'class_id'       => (int) $class->id,
+                'class_name'     => $class->class_name ?? ('Kelas #' . $class->id),
+                'teacher_name'   => $class->teacher?->name ?? 'Belum ada guru',
+                'end_date'       => $class->end_date,
                 'selesai'        => $done,
                 'lanjut'         => $cont,
                 'menunggu_bayar' => $group->where('awaiting_payment', true)->count(),
-                'rr'             => round($rr, 1),
-                'pertemuan'      => $meetings[$teacherId] ?? 0,
-                'tl'             => round($tl, 1),
-                'score'          => round($rr * 0.7 + $tl * 0.3, 1),
+                'rate'           => $done ? round($cont / $done * 100, 1) : null,
             ];
-        })->sortByDesc('score')->values();
+        })->sortByDesc('end_date')->values();
     }
 
     /**
