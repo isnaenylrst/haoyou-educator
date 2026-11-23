@@ -692,7 +692,7 @@ class AttendanceController extends Controller
         );
 
         // Kirim notifikasi ke tim Kurikulum
-        $curriculums = \App\Models\User::whereHas('level', fn ($q) => $q->where('nama_level', 'Kurikulum'))->get();
+        $curriculums = \App\Models\User::whereHas('level', fn ($q) => $q->whereIn('nama_level', ['Curriculum', 'Kurikulum']))->get();
         $className = $schedule->class->class_name ?? 'Kelas';
         $sessionFormatted = Carbon::parse($data['session_date'])->translatedFormat('d M Y');
 

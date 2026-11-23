@@ -6,13 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Models\Certificate;
 use App\Models\ClassEnrollment;
 use App\Models\ClassSchedule;
+use App\Models\ClassSession;
 use App\Models\ProgressReport;
+use App\Models\ScheduleJournalUnlock;
 use App\Models\Submission;
 use App\Models\TeacherLeave;
 use App\Models\TeacherMaterial;
 use App\Models\TeachingJournal;
 use App\Models\User;
 use App\Notifications\AppNotification;
+use App\Services\JournalStatusResolver;
+use App\Services\MissingJournalFinder;
 use App\Services\ProgressReportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -507,51 +511,162 @@ class ReviewPengajuanController extends Controller
     /**
      * Sesi mengajar yang terlambat (> 24 jam) dan belum diisi jurnalnya,
      * termasuk permohonan buka kunci yang dikirim oleh guru.
+     *
+     * Sumber data digabung supaya SAMA dengan yang dilihat guru:
+     *  1. slot jadwal mingguan (MissingJournalFinder), kecuali slot yang sesinya sudah dipindah (reschedule);
+     *  2. sesi nyata di tabel class_sessions (tanggal hasil reschedule / kelas private);
+     *  3. permohonan buka kunci berstatus Pending yang tanggalnya belum tercakup di atas.
+     * Kunci unlock = (class_schedule_id, session_date), jadi tanggal di sini HARUS sama dengan tanggal di sisi guru.
      */
     private function lateJournals()
     {
-        $from = now()->subDays(60);
-        $to   = now();
+        $from  = now()->subDays(60)->startOfDay();
+        $today = now()->startOfDay();
+        $fromStr  = $from->toDateString();
+        $todayStr = $today->toDateString();
 
-        $finder = app(\App\Services\MissingJournalFinder::class);
-        $missing = $finder->find($from, $to);
+        // 1. Slot dari jadwal mingguan
+        $generated = app(MissingJournalFinder::class)->find($from, now());
 
-        if ($missing->isEmpty()) {
+        // Slot mingguan yang sesinya sudah dipindah ke tanggal lain -> jangan ditampilkan lagi
+        $movedOut = ClassSession::where('status', '!=', 'Cancelled')
+            ->whereNotNull('original_date')
+            ->whereColumn('session_date', '!=', 'original_date')
+            ->whereDate('original_date', '>=', $fromStr)
+            ->get(['class_id', 'original_date'])
+            ->map(fn ($s) => $s->class_id . '|' . $s->original_date->format('Y-m-d'))
+            ->flip();
+
+        $items = $generated
+            ->reject(fn ($i) => $movedOut->has($i->class->id . '|' . $i->date->format('Y-m-d')))
+            ->map(fn ($i) => (object) [
+                'schedule'      => $i->schedule,
+                'class'         => $i->class,
+                'teacher'       => $i->teacher,
+                'is_substitute' => $i->is_substitute,
+                'session_date'  => $i->date->copy(),
+                'days_late'     => $i->days_late,
+            ])
+            ->values();
+
+        $keyOf = fn ($scheduleId, $date) => $scheduleId . '|' . Carbon::parse($date)->format('Y-m-d');
+        $keys  = $items->mapWithKeys(fn ($i) => [$keyOf($i->schedule->id, $i->session_date) => true]);
+
+        // Jurnal yang sudah terisi (untuk sesi nyata & permohonan)
+        $journals = TeachingJournal::whereBetween('session_date', [$fromStr, $todayStr])
+            ->get(['class_session_id', 'class_schedule_id', 'session_date']);
+        $doneBySession  = $journals->whereNotNull('class_session_id')->pluck('class_session_id')->flip();
+        $doneBySchedule = $journals->mapWithKeys(fn ($j) => [$keyOf($j->class_schedule_id, $j->session_date) => true]);
+
+        // Cuti yang disetujui (guru pengganti yang wajib mengisi)
+        $leaves = TeacherLeave::with('replacementTeacher')
+            ->where('status', 'Approved')
+            ->whereBetween('leave_date', [$fromStr, $todayStr])
+            ->get()
+            ->keyBy(fn ($l) => $keyOf($l->class_schedule_id, $l->leave_date));
+
+        // 2. Sesi nyata dari class_sessions yang belum tercakup slot mingguan
+        $sessions = ClassSession::with(['schedule', 'class.teacher'])
+            ->whereIn('status', ['Scheduled', 'Completed'])
+            ->whereNotNull('class_schedule_id')
+            ->whereDate('session_date', '>=', $fromStr)
+            ->whereDate('session_date', '<=', $todayStr)
+            ->get()
+            ->filter(fn ($s) => $s->schedule && $s->class && $s->class->teacher);
+
+        $sessionByKey = $sessions->keyBy(fn ($s) => $keyOf($s->class_schedule_id, $s->session_date));
+
+        foreach ($sessions as $s) {
+            $key = $keyOf($s->class_schedule_id, $s->session_date);
+            if ($keys->has($key) || $doneBySession->has($s->id) || $doneBySchedule->has($key)) {
+                continue;
+            }
+
+            $teacher = $s->class->teacher;
+            $isSub   = false;
+            if ($leave = $leaves->get($key)) {
+                if (! $leave->replacementTeacher) {
+                    continue; // cuti tanpa pengganti: tidak ada kewajiban jurnal
+                }
+                $teacher = $leave->replacementTeacher;
+                $isSub   = true;
+            }
+
+            $sch = clone $s->schedule;           // pakai jam sesi nyata, bukan jam jadwal mingguan
+            $sch->start_time = $s->start_time;
+            $sch->end_time   = $s->end_time;
+
+            $items->push((object) [
+                'schedule'      => $sch,
+                'class'         => $s->class,
+                'teacher'       => $teacher,
+                'is_substitute' => $isSub,
+                'session_date'  => $s->session_date->copy(),
+                'days_late'     => (int) $s->session_date->copy()->startOfDay()->diffInDays($today, true),
+            ]);
+            $keys->put($key, true);
+        }
+
+        // 3. Permohonan Pending yang tanggalnya belum tercakup
+        $pending = ScheduleJournalUnlock::with('schedule.class.teacher')
+            ->where('status', 'Pending')
+            ->whereDate('session_date', '>=', $fromStr)
+            ->get();
+
+        foreach ($pending as $u) {
+            $key = $keyOf($u->class_schedule_id, $u->session_date);
+            if ($keys->has($key) || $doneBySchedule->has($key) || ! $u->schedule || ! $u->schedule->class) {
+                continue;
+            }
+
+            $sch = clone $u->schedule;
+            if ($cs = $sessionByKey->get($key)) {
+                $sch->start_time = $cs->start_time;
+                $sch->end_time   = $cs->end_time;
+            }
+            $sch->setRelation('class', $u->schedule->class);
+
+            $items->push((object) [
+                'schedule'      => $sch,
+                'class'         => $u->schedule->class,
+                'teacher'       => $u->schedule->class->teacher,
+                'is_substitute' => false,
+                'session_date'  => $u->session_date->copy(),
+                'days_late'     => (int) $u->session_date->copy()->startOfDay()->diffInDays($today, true),
+            ]);
+            $keys->put($key, true);
+        }
+
+        if ($items->isEmpty()) {
             return collect();
         }
 
-        // Ambil unlock records yang terkait
-        $scheduleIds = $missing->pluck('schedule.id')->unique()->values();
-        $unlocks = \App\Models\ScheduleJournalUnlock::with(['requester', 'unlocker'])
-            ->whereIn('class_schedule_id', $scheduleIds)
-            ->whereDate('session_date', '>=', $from->toDateString())
+        // Unlock records (kunci sama persis dengan yang dipakai sisi guru)
+        $unlocks = ScheduleJournalUnlock::with(['requester', 'unlocker'])
+            ->whereIn('class_schedule_id', $items->pluck('schedule.id')->unique()->values())
+            ->whereDate('session_date', '>=', $fromStr)
             ->get()
-            ->keyBy(fn ($u) => $u->class_schedule_id . '|' . $u->session_date->format('Y-m-d'));
+            ->keyBy(fn ($u) => $keyOf($u->class_schedule_id, $u->session_date));
 
-        return $missing->map(function ($item) use ($unlocks) {
-            $key = $item->schedule->id . '|' . $item->date->format('Y-m-d');
-            $unlock = $unlocks->get($key);
-            $sessionEnd = Carbon::parse($item->date->format('Y-m-d') . ' ' . $item->schedule->end_time);
-            $deadline = $sessionEnd->copy()->addHours(24);
-            $isPast = now()->gt($deadline);
+        return $items->map(function ($item) use ($unlocks, $keyOf) {
+                $unlock   = $unlocks->get($keyOf($item->schedule->id, $item->session_date));
+                $deadline = JournalStatusResolver::calculateDeadline(
+                    $item->session_date->format('Y-m-d'),
+                    (string) $item->schedule->end_time
+                );
 
-            return (object) [
-                'schedule'       => $item->schedule,
-                'class'          => $item->class,
-                'teacher'        => $item->teacher,
-                'is_substitute'  => $item->is_substitute,
-                'session_date'   => $item->date,
-                'deadline'       => $deadline,
-                'days_late'      => $item->days_late,
-                'is_past'        => $isPast,
-                'unlock_record'  => $unlock,
-                'is_unlocked'    => $unlock && $unlock->is_open,
-                'has_request'    => $unlock && $unlock->status === 'Pending',
-            ];
-        })->filter(function ($item) {
-            // Hanya tampilkan yang memang sudah lewat batas 24 jam
-            return $item->is_past;
-        })->values();
+                $item->deadline      = $deadline;
+                $item->is_past       = now()->gt($deadline);
+                $item->unlock_record = $unlock;
+                $item->is_unlocked   = (bool) ($unlock && $unlock->is_open);
+                $item->has_request   = (bool) ($unlock && $unlock->status === 'Pending');
+
+                return $item;
+            })
+            ->filter(fn ($item) => $item->is_past && $item->teacher)   // hanya yang lewat batas 24 jam
+            ->sort(fn ($a, $b) => [(int) $b->has_request, $b->session_date->timestamp, $a->schedule->start_time]
+                <=> [(int) $a->has_request, $a->session_date->timestamp, $b->schedule->start_time])
+            ->values();
     }
 
     /** Siswa yang kelasnya selesai > H+3 tapi belum ada report terkirim. */
@@ -691,7 +806,7 @@ class ReviewPengajuanController extends Controller
             'session_date'      => ['required', 'date'],
         ]);
 
-        \App\Models\ScheduleJournalUnlock::updateOrCreate(
+        $unlock = ScheduleJournalUnlock::updateOrCreate(
             [
                 'class_schedule_id' => $request->class_schedule_id,
                 'session_date'      => $request->session_date,
@@ -704,12 +819,15 @@ class ReviewPengajuanController extends Controller
             ]
         );
 
-        $schedule = \App\Models\ClassSchedule::with('class.teacher.user')->find($request->class_schedule_id);
-        if ($schedule?->class?->teacher?->user) {
-            $schedule->class->teacher->user->notify(new \App\Notifications\AppNotification(
+        $schedule = ClassSchedule::with('class.teacher.user')->find($request->class_schedule_id);
+
+        // Utamakan pemohon (bisa guru pengganti); kalau tidak ada, guru kelas
+        $recipient = $unlock->requester ?? $schedule?->class?->teacher?->user;
+        if ($recipient) {
+            $recipient->notify(new AppNotification(
                 title: "Kunci Jurnal Dibuka Kurikulum",
-                message: "Kurikulum telah membuka kunci pengisian jurnal untuk kelas {$schedule->class->class_name} pada tanggal " . \Illuminate\Support\Carbon::parse($request->session_date)->translatedFormat('d M Y') . ". Silakan isi jurnal dalam 24 jam ke depan.",
-                url: url('/guru/attendance?date=' . $request->session_date),
+                message: "Kurikulum telah membuka kunci pengisian jurnal untuk kelas {$schedule->class->class_name} pada tanggal " . Carbon::parse($request->session_date)->translatedFormat('d M Y') . ". Silakan isi jurnal dalam 24 jam ke depan.",
+                url: url('/guru/attendance?date=' . Carbon::parse($request->session_date)->format('Y-m-d')),
                 type: 'jurnal',
                 icon: 'fa-lock-open'
             ));
@@ -729,7 +847,7 @@ class ReviewPengajuanController extends Controller
             'rejection_note.required' => 'Alasan penolakan pembukaan kunci wajib diisi.',
         ]);
 
-        \App\Models\ScheduleJournalUnlock::updateOrCreate(
+        $unlock = ScheduleJournalUnlock::updateOrCreate(
             [
                 'class_schedule_id' => $request->class_schedule_id,
                 'session_date'      => $request->session_date,
@@ -742,12 +860,13 @@ class ReviewPengajuanController extends Controller
             ]
         );
 
-        $schedule = \App\Models\ClassSchedule::with('class.teacher.user')->find($request->class_schedule_id);
-        if ($schedule?->class?->teacher?->user) {
-            $schedule->class->teacher->user->notify(new \App\Notifications\AppNotification(
+        $schedule  = ClassSchedule::with('class.teacher.user')->find($request->class_schedule_id);
+        $recipient = $unlock->requester ?? $schedule?->class?->teacher?->user;
+        if ($recipient) {
+            $recipient->notify(new AppNotification(
                 title: "Permohonan Buka Kunci Jurnal Ditolak",
-                message: "Permohonan buka kunci jurnal untuk kelas {$schedule->class->class_name} pada tanggal " . \Illuminate\Support\Carbon::parse($request->session_date)->translatedFormat('d M Y') . " ditolak Kurikulum. Alasan: {$request->rejection_note}",
-                url: url('/guru/attendance?date=' . $request->session_date),
+                message: "Permohonan buka kunci jurnal untuk kelas {$schedule->class->class_name} pada tanggal " . Carbon::parse($request->session_date)->translatedFormat('d M Y') . " ditolak Kurikulum. Alasan: {$request->rejection_note}",
+                url: url('/guru/attendance?date=' . Carbon::parse($request->session_date)->format('Y-m-d')),
                 type: 'jurnal',
                 icon: 'fa-circle-xmark'
             ));
