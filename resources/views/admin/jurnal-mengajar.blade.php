@@ -266,7 +266,7 @@
                                 <input type="hidden" name="from" value="{{ $from->toDateString() }}">
                                 <input type="hidden" name="to" value="{{ $to->toDateString() }}">
                                 <button type="submit" class="btn btn-primary btn-sm">
-                                    <i class="fa-regular fa-bell"></i> Ingatkan semua
+                                    <i class="fa-regular fa-bell"></i> Ingatkan
                                 </button>
                             </form>
                         </div>

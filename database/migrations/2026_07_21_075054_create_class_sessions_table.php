@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -6,36 +7,38 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Rencana pertemuan (satu baris per pertemuan, bertanggal).
-     */
     public function up(): void
     {
         Schema::create('class_sessions', function (Blueprint $table) {
-
             $table->id();
 
-            // Kelas induk. Nullable karena kelas pengganti (kind = Replacement) tidak punya kelas induk.
+            // Kelas induk
             $table->foreignId('class_id')
                 ->nullable()
                 ->constrained('classes')
                 ->cascadeOnUpdate()
                 ->cascadeOnDelete();
 
-            // Pola mingguan yang menjadi sumber pertemuan ini (null untuk pertemuan manual / pengganti)
+            // Enrollment untuk kelas pengganti
+            $table->foreignId('class_enrollment_id')
+                ->nullable()
+                ->constrained('class_enrollments')
+                ->cascadeOnUpdate()
+                ->nullOnDelete();
+
+            // Pola jadwal mingguan
             $table->foreignId('class_schedule_id')
                 ->nullable()
                 ->constrained('class_schedules')
                 ->cascadeOnUpdate()
                 ->nullOnDelete();
 
-            // Pertemuan rutin atau kelas pengganti
-            $table->enum('kind', ['Regular', 'Replacement'])
-                ->default('Regular');
+            $table->enum('kind', [
+                'Regular',
+                'Replacement'
+            ])->default('Regular');
 
-            // Pertemuan ke-N dalam paket (tetap melekat walau tanggalnya dipindah)
-            $table->unsignedSmallInteger('session_number')
-                ->nullable();
+            $table->unsignedSmallInteger('session_number')->nullable();
 
             $table->date('session_date');
             $table->time('start_time');
@@ -43,30 +46,34 @@ return new class extends Migration
 
             $table->string('room')->nullable();
 
-            // Guru terjadwal (guru yang sebenarnya mengajar tetap dicatat di teaching_journals)
+            // Guru terjadwal
             $table->foreignId('teacher_id')
                 ->nullable()
                 ->constrained('teachers')
                 ->cascadeOnUpdate()
                 ->nullOnDelete();
 
-            // Lokasi pertemuan. Home Visit = guru datang ke rumah murid (kena biaya tambahan)
-            $table->enum('location_type', ['Studio', 'Online', 'Home Visit'])
-                ->default('Studio');
+            $table->enum('location_type', [
+                'Studio',
+                'Online',
+                'Home Visit'
+            ])->default('Studio');
 
-            $table->enum('status', ['Scheduled', 'Completed', 'Cancelled'])
-                ->default('Scheduled');
+            $table->enum('status', [
+                'Scheduled',
+                'Completed',
+                'Cancelled'
+            ])->default('Scheduled');
 
-            // Tanggal asal kalau pertemuan ini pernah dipindah
             $table->date('original_date')->nullable();
             $table->string('change_reason')->nullable();
 
             $table->timestamps();
 
-            // Nomor pertemuan unik per kelas (NULL pada kelas pengganti tidak bentrok)
+            // Nomor pertemuan unik per kelas
             $table->unique(['class_id', 'session_number']);
 
-            // Pengecekan bentrok guru dan tampilan jadwal
+            // Index pengecekan jadwal
             $table->index(['teacher_id', 'session_date']);
             $table->index(['class_id', 'session_date']);
         });

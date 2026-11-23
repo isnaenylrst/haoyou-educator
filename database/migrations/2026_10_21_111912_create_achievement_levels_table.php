@@ -9,24 +9,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Kompetensi yang dibuat Kurikulum. program_level_id NULL = berlaku untuk semua level.
-        Schema::create('report_competencies', function (Blueprint $table) {
-            $table->id();
-
-            $table->foreignId('program_level_id')
-                ->nullable()
-                ->constrained('program_levels')
-                ->cascadeOnUpdate()
-                ->cascadeOnDelete();
-
-            $table->string('name');
-            $table->unsignedSmallInteger('sort_order')->default(0);
-            $table->boolean('is_active')->default(true);
-
-            $table->timestamps();
-        });
-
-        // Deskripsi baku per Achievement Level (guru tidak mengetik deskripsi).
         Schema::create('achievement_levels', function (Blueprint $table) {
             $table->id();
             $table->string('level', 50)->unique();
@@ -72,6 +54,5 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('achievement_levels');
-        Schema::dropIfExists('report_competencies');
     }
 };

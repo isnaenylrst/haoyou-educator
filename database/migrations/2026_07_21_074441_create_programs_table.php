@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -13,6 +14,11 @@ return new class extends Migration
 
             $table->string('program_name');
             $table->text('description')->nullable();
+
+            $table->enum('audience', [
+                'hsk',
+                'kids'
+            ])->default('hsk');
 
             $table->timestamps();
         });

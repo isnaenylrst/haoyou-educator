@@ -20,6 +20,10 @@ return new class extends Migration
             $t->id();
             $t->foreignId('program_level_id')->nullable()
               ->constrained('program_levels')->cascadeOnUpdate()->nullOnDelete(); // mis. HSK 5
+            $t->foreignId('material_id')
+                ->nullable()
+                ->constrained('materials')
+                ->nullOnDelete();
             $t->unsignedSmallInteger('order_number')->index();
             $t->string('hanzi');
             $t->string('pinyin');

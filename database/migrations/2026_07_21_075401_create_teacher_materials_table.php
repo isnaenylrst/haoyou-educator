@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -16,6 +17,8 @@ return new class extends Migration
                 ->constrained('materials')
                 ->cascadeOnDelete();
 
+            $table->string('lp_file_path')->nullable();
+
             $table->foreignId('teacher_id')
                 ->constrained('teachers')
                 ->cascadeOnDelete();
@@ -24,11 +27,7 @@ return new class extends Migration
 
             $table->string('ppt_file_path');
 
-            $table->enum('status',[
-                'Pending',
-                'Approved',
-                'Rejected'
-            ])->default('Pending');
+            $table->string('status', 50)->default('Diajukan');
 
             $table->text('review_note')->nullable();
 
@@ -40,7 +39,6 @@ return new class extends Migration
             $table->timestamp('approved_at')->nullable();
 
             $table->timestamps();
-
         });
     }
 

@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -16,17 +17,22 @@ return new class extends Migration
                 ->constrained('class_enrollments')
                 ->cascadeOnDelete();
 
-            $table->string('invoice_number')->unique();
+            $table->foreignId('class_session_id')
+                ->nullable()
+                ->constrained('class_sessions')
+                ->nullOnDelete();
+
+            $table->string('invoice_number');
 
             $table->string('invoice_file_path')->nullable();
 
             $table->string('payment_stage');
 
-            $table->decimal('total_bill',12,2);
+            $table->decimal('total_bill', 12, 2);
 
-            $table->decimal('amount_paid',12,2);
+            $table->decimal('amount_paid', 12, 2);
 
-            $table->decimal('remaining_bill',12,2);
+            $table->decimal('remaining_bill', 12, 2);
 
             $table->string('payment_method');
 
@@ -34,7 +40,13 @@ return new class extends Migration
 
             $table->string('payment_proof_path')->nullable();
 
-            $table->enum('status',[
+            $table->enum('payment_type', [
+                'Package',
+                'Replacement',
+                'Home Visit'
+            ])->default('Package');
+
+            $table->enum('status', [
                 'Pending',
                 'Paid',
                 'Partial'
@@ -43,6 +55,11 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
+            // Invoice boleh digunakan oleh lebih dari satu baris pembayaran
+            $table->index('invoice_number');
+
+            // Indeks biaya tambahan
+            $table->index(['payment_type', 'class_session_id']);
         });
     }
 

@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -12,25 +13,23 @@ return new class extends Migration
 
             $table->id();
 
+            // Identitas calon siswa
             $table->string('name');
-            $table->enum('gender',['Male','Female']);
+            $table->enum('gender', ['Male', 'Female']);
             $table->date('birth_date');
 
+            // Kontak
             $table->string('phone');
             $table->string('parent_name')->nullable();
             $table->string('parent_phone')->nullable();
 
+            // Informasi tambahan
             $table->text('address')->nullable();
-
             $table->string('school')->nullable();
-
             $table->string('source')->nullable();
-
             $table->text('allergy')->nullable();
 
-            // Nullable: calon siswa tertarik ke program reguler (isi program_id)
-            // ATAU program privat (isi private_package_id) — salah satu wajib
-            // terisi, divalidasi di controller/service, bukan di database.
+            // Program yang diminati
             $table->foreignId('program_id')
                 ->nullable()
                 ->constrained('programs')
@@ -43,24 +42,36 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->nullOnDelete();
 
+            // Jadwal dan status trial
             $table->date('trial_date')->nullable();
 
-            $table->enum('trial_status',[
+            $table->enum('trial_status', [
                 'Pending',
                 'Completed',
                 'Cancelled'
             ])->default('Pending');
 
-            $table->text('trial_notes')->nullable();
-
-            $table->enum('lead_status',[
+            // Status CRM
+            $table->enum('lead_status', [
                 'Cold',
                 'Warm',
                 'Hot'
             ])->default('Cold');
 
+            // Konsultasi
+            $table->enum('consultation_status', [
+                'Pending',
+                'Completed',
+                'Cancelled'
+            ])->nullable();
+
+            $table->date('consultation_date')->nullable();
+            $table->text('consultation_notes')->nullable();
+
+            // Biaya pendaftaran
             $table->timestamp('registration_fee_paid_at')->nullable();
             $table->string('registration_fee_proof_path')->nullable();
+
             $table->enum('registration_fee_status', [
                 'Pending',
                 'Active',

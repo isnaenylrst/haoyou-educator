@@ -19,18 +19,21 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->nullOnDelete();
 
+            // Template dokumen
             $table->foreignId('document_template_id')
                 ->nullable()
                 ->constrained('document_templates')
-                ->nullOnDelete(); 
+                ->nullOnDelete();
 
+            // Level program
             $table->foreignId('program_level_id')
                 ->nullable()
                 ->constrained('program_levels')
                 ->nullOnDelete();
-            
+
             $table->string('title');
 
+            // Jenis dokumen
             $table->enum('document_type', [
                 'CV',
                 'Photo',
@@ -39,18 +42,22 @@ return new class extends Migration
                 'Agreement',
                 'SOP',
                 'Teacher Leave Letter',
-                'Other'
+                'Other',
+                'SURAT_LIBUR',
+                'SURAT_DINAS',
+                'LOA',
             ]);
 
             $table->text('description')->nullable();
 
             $table->string('file_path');
 
+            // Hak akses dokumen
             $table->enum('visibility', [
                 'Private',
                 'Teacher',
                 'Student',
-                'Public'
+                'Public',
             ])->default('Private');
 
             // User yang mengupload
@@ -60,6 +67,7 @@ return new class extends Migration
                 ->restrictOnDelete();
 
             $table->timestamp('uploaded_at')->nullable();
+
             $table->timestamps();
         });
     }

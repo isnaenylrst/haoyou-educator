@@ -841,7 +841,13 @@ class JadwalController extends Controller
                         'Pending' => 'Menunggu',
                         'Completed' => 'Selesai',
                         'Cancelled' => 'Dibatalkan',
+                        'Expired' => 'Hangus',
                     ];
+
+                    // Trial hanya berlaku sekali: masih Pending tapi tanggalnya sudah lewat = hangus
+                    $trialStatusKey = ($c->trial_status === 'Pending' && $date->lt(Carbon::today()))
+                        ? 'Expired'
+                        : $c->trial_status;
 
                     $trialsByDay[$dayIndex][] = [
                         'id' => 'trial-' . $c->id,
@@ -857,9 +863,9 @@ class JadwalController extends Controller
                             . $date->format('d M Y'),
                         'room' => '-',
                         'students_count' => null,
-                        'status_key' => $c->trial_status,
-                        'status_label' => $trialStatus[$c->trial_status]
-                            ?? $c->trial_status,
+                        'status_key' => $trialStatusKey,
+                        'status_label' => $trialStatus[$trialStatusKey]
+                            ?? $trialStatusKey,
                         'has_conflict' => false,
                     ];
                 });

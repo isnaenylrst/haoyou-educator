@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -17,17 +18,21 @@ return new class extends Migration
                 ->cascadeOnDelete();
 
             $table->foreignId('class_schedule_id')
-                ->constrained()
+                ->constrained('class_schedules')
                 ->cascadeOnDelete();
 
             $table->date('leave_date');
 
-            $table->enum('leave_type',[
+            $table->enum('leave_type', [
                 'Sick',
                 'Permission'
             ]);
 
+            $table->string('request_type', 20)->default('Cuti');
+
             $table->text('reason');
+
+            $table->text('review_note')->nullable();
 
             $table->string('supporting_document')->nullable();
 
@@ -36,7 +41,13 @@ return new class extends Migration
                 ->constrained('teachers')
                 ->nullOnDelete();
 
-            $table->enum('status',[
+            $table->string('replacement_response', 20)->nullable();
+
+            $table->text('replacement_response_note')->nullable();
+
+            $table->timestamp('replacement_responded_at')->nullable();
+
+            $table->enum('status', [
                 'Pending',
                 'Approved',
                 'Rejected'
@@ -51,9 +62,8 @@ return new class extends Migration
 
             $table->timestamps();
 
-            // Cegah guru mengajukan cuti dobel untuk slot & tanggal yang sama
+            // Cegah pengajuan cuti dobel untuk jadwal dan tanggal yang sama
             $table->unique(['class_schedule_id', 'leave_date']);
-
         });
     }
 

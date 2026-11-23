@@ -1,23 +1,31 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-/**
- * Tabel notifikasi standar Laravel (database channel).
- * Dipakai oleh menu "Notifikasi" siswa.
- */
 return new class extends Migration
 {
     public function up(): void
     {
+        // Cek apakah tabel sudah tersedia
+        if (Schema::hasTable('notifications')) {
+            return;
+        }
+
         Schema::create('notifications', function (Blueprint $table) {
+
             $table->uuid('id')->primary();
+
             $table->string('type');
+
             $table->morphs('notifiable');
+
             $table->text('data');
+
             $table->timestamp('read_at')->nullable();
+
             $table->timestamps();
         });
     }

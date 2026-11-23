@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -11,12 +12,16 @@ return new class extends Migration
         Schema::create('private_packages', function (Blueprint $table) {
             $table->id();
 
-            $table->string('package_name')->unique(); // VIP, Exclusive
+            $table->string('package_name')->unique();
+
             $table->integer('duration_minutes');
+            $table->unsignedTinyInteger('duration_months')->default(1);
             $table->integer('total_meetings');
             $table->integer('min_students');
             $table->integer('max_students');
+
             $table->decimal('price', 12, 2);
+
             $table->boolean('is_active')->default(true);
 
             $table->timestamps();

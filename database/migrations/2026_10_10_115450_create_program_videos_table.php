@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -6,30 +7,45 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
- public function up(): void
-{
-    Schema::create('program_videos', function (Blueprint $table) {
-        $table->id();
-        $table->enum('type', ['culture', 'replay']);
-        $table->enum('audience', ['hsk', 'kids'])->nullable();   // untuk video budaya
-        $table->foreignId('level_id')->nullable()
-              ->constrained('program_levels')->cascadeOnDelete(); // untuk video replay
-        $table->string('title');
-        $table->string('video_path');
-        $table->unsignedSmallInteger('duration_minutes')->nullable();
-        $table->boolean('is_published')->default(true);
-        $table->timestamps();
+    public function up(): void
+    {
+        Schema::create('program_videos', function (Blueprint $table) {
 
-        $table->unique(['type', 'audience']);   // 1 video budaya per audience
-        $table->unique(['type', 'level_id']);   // 1 replay per level
-    });
-}
+            $table->id();
 
-public function down(): void
-{
-    Schema::dropIfExists('program_videos');
-}
+            $table->enum('type', [
+                'culture',
+                'replay'
+            ]);
+
+            $table->foreignId('level_id')
+                ->constrained('program_levels')
+                ->cascadeOnDelete();
+
+            // Diisi untuk culture, kosong untuk replay
+            $table->unsignedSmallInteger('chapter_number')->nullable();
+
+            $table->string('title');
+
+            $table->string('youtube_id', 20);
+
+            $table->unsignedSmallInteger('duration_minutes')->nullable();
+
+            $table->boolean('is_published')->default(true);
+
+            $table->timestamps();
+
+            // Index pencarian video berdasarkan level, tipe, dan chapter
+            $table->index([
+                'level_id',
+                'type',
+                'chapter_number'
+            ]);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('program_videos');
+    }
 };

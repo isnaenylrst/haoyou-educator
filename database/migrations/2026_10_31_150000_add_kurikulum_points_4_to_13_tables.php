@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -29,32 +30,7 @@ return new class extends Migration
             }
         });
 
-        // 3. Submissions table (Point 5: Reimburse & Pembelian)
-        if (!Schema::hasTable('submissions')) {
-            Schema::create('submissions', function (Blueprint $table) {
-                $table->id();
-                $table->foreignId('teacher_id')->nullable()->constrained('teachers')->cascadeOnDelete();
-                $table->foreignId('created_by')->constrained('users')->cascadeOnDelete();
-                $table->enum('type', ['Reimburse Bahan Ajar', 'Pembelian Bahan Ajar', 'Pembelian Sertifikat']);
-                $table->string('item_name');
-                $table->decimal('amount', 14, 2);
-                $table->date('date');
-                $table->text('description')->nullable();
-                $table->string('receipt_path')->nullable();
-                $table->enum('status', ['Diajukan', 'Review Kurikulum', 'Review Owner', 'Disetujui', 'Ditolak', 'Selesai'])->default('Diajukan');
-                $table->foreignId('curriculum_id')->nullable()->constrained('users')->nullOnDelete();
-                $table->text('curriculum_note')->nullable();
-                $table->timestamp('curriculum_approved_at')->nullable();
-                $table->string('curriculum_signature_path')->nullable();
-                $table->foreignId('owner_id')->nullable()->constrained('users')->nullOnDelete();
-                $table->text('owner_note')->nullable();
-                $table->timestamp('owner_approved_at')->nullable();
-                $table->string('owner_signature_path')->nullable();
-                $table->timestamps();
-            });
-        }
-
-        // 4. Class Learning Materials template per class (Point 6)
+        // 3. Class Learning Materials template per class (Point 6)
         if (!Schema::hasTable('class_learning_materials')) {
             Schema::create('class_learning_materials', function (Blueprint $table) {
                 $table->id();
@@ -65,7 +41,7 @@ return new class extends Migration
             });
         }
 
-        // 5. Progress Reports additions (Point 6: Suggestion Box, TTD, etc.)
+        // 4. Progress Reports additions (Point 6: Suggestion Box, TTD, etc.)
         Schema::table('progress_reports', function (Blueprint $table) {
             if (!Schema::hasColumn('progress_reports', 'suggestion_box')) {
                 $table->text('suggestion_box')->nullable()->after('content');
@@ -84,7 +60,7 @@ return new class extends Migration
             }
         });
 
-        // 6. Letter types (Point 8)
+        // 5. Letter types (Point 8)
         if (!Schema::hasTable('letter_types')) {
             Schema::create('letter_types', function (Blueprint $table) {
                 $table->id();
@@ -101,7 +77,7 @@ return new class extends Migration
             $table->string('document_type', 50)->change();
         });
 
-        // 7. Teacher Observations (Point 9)
+        // 6. Teacher Observations (Point 9)
         if (!Schema::hasTable('teacher_observations')) {
             Schema::create('teacher_observations', function (Blueprint $table) {
                 $table->id();
@@ -116,7 +92,7 @@ return new class extends Migration
             });
         }
 
-        // 8. Student Learning Requests (Point 10)
+        // 7. Student Learning Requests (Point 10)
         if (!Schema::hasTable('student_learning_requests')) {
             Schema::create('student_learning_requests', function (Blueprint $table) {
                 $table->id();
@@ -129,14 +105,14 @@ return new class extends Migration
             });
         }
 
-        // 9. Classes broadcast for schedule acceptance (Point 11)
+        // 8. Classes broadcast for schedule acceptance (Point 11)
         Schema::table('classes', function (Blueprint $table) {
             if (!Schema::hasColumn('classes', 'broadcast_to_all')) {
                 $table->boolean('broadcast_to_all')->default(false)->after('teacher_id');
             }
         });
 
-        // 10. Training Materials (Point 12)
+        // 9. Training Materials (Point 12)
         if (!Schema::hasTable('training_materials')) {
             Schema::create('training_materials', function (Blueprint $table) {
                 $table->id();
@@ -151,7 +127,7 @@ return new class extends Migration
             });
         }
 
-        // 11. Consultation Results (Point 13)
+        // 10. Consultation Results (Point 13)
         if (!Schema::hasTable('consultation_results')) {
             Schema::create('consultation_results', function (Blueprint $table) {
                 $table->id();
@@ -184,7 +160,6 @@ return new class extends Migration
             $table->dropColumn(['suggestion_box', 'assessment_data', 'curriculum_signature_path', 'owner_signature_path', 'replacement_class_count']);
         });
         Schema::dropIfExists('class_learning_materials');
-        Schema::dropIfExists('submissions');
         Schema::table('learning_videos', function (Blueprint $table) {
             $table->dropConstrainedForeignId('category_id');
             $table->dropColumn(['thumbnail_path', 'is_active']);
@@ -194,4 +169,3 @@ return new class extends Migration
         });
     }
 };
-

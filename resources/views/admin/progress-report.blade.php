@@ -250,7 +250,7 @@
                                 @csrf
                                 <input type="hidden" name="teacher_id" value="{{ $row['teacher']->id }}">
                                 <button type="submit" class="btn btn-primary btn-sm">
-                                    <i class="fa-regular fa-bell"></i> Ingatkan semua
+                                    <i class="fa-regular fa-bell"></i> Ingatkan
                                 </button>
                             </form>
                         </div>

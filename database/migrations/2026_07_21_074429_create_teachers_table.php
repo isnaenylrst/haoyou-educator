@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -9,7 +10,6 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('teachers', function (Blueprint $table) {
-
             $table->id();
 
             $table->foreignId('user_id')
@@ -23,16 +23,18 @@ return new class extends Migration
             $table->text('address')->nullable();
             $table->date('join_date')->nullable();
 
-            $table->enum('training_status',[
+            $table->enum('training_status', [
                 'Training',
                 'Passed',
                 'Failed'
             ])->nullable();
 
-            $table->enum('status',[
+            $table->enum('status', [
                 'Active',
                 'Inactive'
             ])->default('Active');
+
+            $table->timestamp('notifications_seen_at')->nullable();
 
             $table->timestamps();
         });

@@ -1,7 +1,9 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -11,9 +13,6 @@ return new class extends Migration
         Schema::create('classes', function (Blueprint $table) {
             $table->id();
 
-            // Nullable: kelas reguler mengisi ini, kelas/kontrak privat mengisi
-            // private_package_id di bawah (salah satu wajib terisi — divalidasi
-            // di controller/service, bukan di database).
             $table->foreignId('program_package_id')
                 ->nullable()
                 ->constrained()
@@ -42,15 +41,35 @@ return new class extends Migration
 
             $table->enum('delivery_mode', ['Offline', 'Online']);
 
+            $table->string('zoom_link')->nullable();
+            $table->string('zoom_passcode', 50)->nullable();
+            $table->string('meeting_platform', 20)->default('zoom');
+
             $table->date('start_date');
             $table->date('end_date')->nullable();
 
             $table->unsignedTinyInteger('capacity');
 
-            $table->enum('status', ['Open', 'Running', 'Completed', 'Closed'])->default('Open');
+            $table->enum('status', [
+                'Open',
+                'Running',
+                'Completed',
+                'Closed'
+            ])->default('Open');
+
+            $table->string('teacher_response', 20)->default('Pending');
+            $table->text('teacher_response_note')->nullable();
+            $table->timestamp('teacher_responded_at')->nullable();
 
             $table->timestamps();
         });
+
+        // Kelas yang sudah memiliki guru dianggap sudah diterima.
+        DB::table('classes')
+            ->whereNotNull('teacher_id')
+            ->update([
+                'teacher_response' => 'Accepted'
+            ]);
     }
 
     public function down(): void
