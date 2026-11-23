@@ -185,7 +185,7 @@
                     <div class="col-md-2">
                         <label class="form-label fw-semibold">Tanggal</label>
                         <input type="text" class="form-control bg-light"
-                               value="{{ $editing ? $journal->session_date->format('d/m/Y') : $date->format('d/m/Y') }}" readonly>
+                               value="{{ $editing ? $journal->session_date->format('d/m/Y') : $cardDate->format('d/m/Y') }}" readonly>
                     </div>
                     <div class="col-md-2">
                         <label class="form-label fw-semibold">Jam Mulai</label>
