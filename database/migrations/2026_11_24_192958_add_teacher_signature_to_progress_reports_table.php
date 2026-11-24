@@ -24,20 +24,28 @@ return new class extends Migration
             }
         });
 
-        // Backfill: report yang sudah pernah dikirim memakai TTD profil guru saat ini
-        try {
-            DB::table('progress_reports')
-                ->join('teachers', 'teachers.id', '=', 'progress_reports.teacher_id')
-                ->join('users', 'users.id', '=', 'teachers.user_id')
-                ->whereNotNull('progress_reports.submitted_at')
-                ->whereNull('progress_reports.teacher_signed_at')
-                ->whereNotNull('users.signature_path')
-                ->update([
-                    'progress_reports.teacher_signature_path' => DB::raw('users.signature_path'),
-                    'progress_reports.teacher_signed_at'      => DB::raw('progress_reports.submitted_at'),
-                ]);
-        } catch (\Throwable $e) {
-            report($e); // backfill bersifat opsional, jangan menggagalkan migrasi
+        // Backfill (opsional): report yang sudah pernah dikirim memakai TTD profil guru saat ini.
+        // Hanya dijalankan bila memang ada data & kolom sumbernya ada, jadi aman di database
+        // kosong (mis. SQLite untuk tes) dan tidak pernah menggagalkan migrasi.
+        if (
+            Schema::hasColumn('users', 'signature_path')
+            && Schema::hasColumn('teachers', 'user_id')
+            && DB::table('progress_reports')->whereNotNull('submitted_at')->exists()
+        ) {
+            try {
+                DB::table('progress_reports')
+                    ->join('teachers', 'teachers.id', '=', 'progress_reports.teacher_id')
+                    ->join('users', 'users.id', '=', 'teachers.user_id')
+                    ->whereNotNull('progress_reports.submitted_at')
+                    ->whereNull('progress_reports.teacher_signed_at')
+                    ->whereNotNull('users.signature_path')
+                    ->update([
+                        'progress_reports.teacher_signature_path' => DB::raw('users.signature_path'),
+                        'progress_reports.teacher_signed_at'      => DB::raw('progress_reports.submitted_at'),
+                    ]);
+            } catch (\Throwable $e) {
+                report($e);
+            }
         }
     }
 

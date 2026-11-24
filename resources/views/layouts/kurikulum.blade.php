@@ -147,6 +147,7 @@
         ]],
         ['label' => 'Pengajar', 'items' => [
             ['Review Pengajuan', 'fa-circle-check', '/kurikulum/review-pengajuan', 'kurikulum/review-pengajuan*'],
+            ['Riwayat Pengajuan', 'fa-clock-rotate-left', '/kurikulum/riwayat-pengajuan', 'kurikulum/riwayat-pengajuan*'],
             //['Kompetensi Report', 'fa-list-check', '/kurikulum/kompetensi', 'kurikulum/kompetensi*'],
             ['Template Progress Report', 'fa-table-list', '/kurikulum/template-progress-report', 'kurikulum/template-progress-report*'],
             ['Observasi Guru', 'fa-magnifying-glass-chart', '/kurikulum/observasi', 'kurikulum/observasi*'],
