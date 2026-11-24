@@ -43,6 +43,10 @@ class JurnalMengajarController extends Controller
         $classId = $request->integer('class_id') ?: null;
         $search = trim((string) $request->query('search', ''));
         $status = $request->query('class_status');
+        // Filter ketepatan pengisian: terlambat (diisi setelah dibuka kuncinya) / tepat waktu
+        $ketepatan = in_array($request->query('ketepatan'), ['terlambat', 'tepat'], true)
+            ? $request->query('ketepatan')
+            : null;
 
         $journalBase = TeachingJournal::query()
             ->whereBetween('session_date', [
@@ -98,6 +102,24 @@ class JurnalMengajarController extends Controller
                 ->where('is_substitute', true)
                 ->count(),
         ];
+
+        $stats['late_filled'] = (clone $journalBase)->where('is_late', true)->count();
+
+        // Laoshi yang mengisi jurnal TERLAMBAT pada rentang tanggal ini
+        // (tidak ikut filter laoshi/kelas/pencarian supaya semua laoshi terlihat).
+        $lateFillers = TeachingJournal::query()
+            ->where('is_late', true)
+            ->whereBetween('session_date', [$from->toDateString(), $to->toDateString()])
+            ->with('teacher:id,name')
+            ->get(['id', 'teacher_id'])
+            ->groupBy('teacher_id')
+            ->map(fn ($group) => [
+                'teacher' => $group->first()->teacher,
+                'count'   => $group->count(),
+            ])
+            ->filter(fn ($row) => $row['teacher'])
+            ->sortByDesc('count')
+            ->values();
 
         // Cari sesi yang sudah lewat tetapi jurnalnya belum ada.
         $missing = $this->finder
@@ -170,6 +192,7 @@ class JurnalMengajarController extends Controller
                     ),
                     fn ($q) => $q->where('class_status', $status)
                 )
+                ->when($ketepatan, fn ($q) => $q->where('is_late', $ketepatan === 'terlambat'))
                 ->orderByDesc('session_date')
                 ->orderByDesc('id')
                 ->paginate(15)
@@ -197,6 +220,7 @@ class JurnalMengajarController extends Controller
             'journals',
             'missingPage',
             'byTeacher',
+            'lateFillers',
             'teachers',
             'classes'
         ));

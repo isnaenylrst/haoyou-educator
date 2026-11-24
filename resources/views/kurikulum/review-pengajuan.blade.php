@@ -294,12 +294,46 @@
 
             {{-- ===== TAB JURNAL ONLINE ===== --}}
             <div class="doc-tab {{ $tab === 'jurnal' ? '' : 'd-none' }}" data-tab="jurnal">
+                {{-- Filter laoshi & ketepatan pengisian --}}
+                <div class="list-group-item bg-light">
+                    <form method="GET" action="{{ url()->current() }}" class="d-flex flex-wrap gap-2 align-items-center">
+                        <input type="hidden" name="tab" value="jurnal">
+                        <select name="jurnal_teacher" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+                            <option value="">Semua Laoshi</option>
+                            @foreach ($journalTeachers as $t)
+                                <option value="{{ $t->id }}" {{ (int) $journalTeacherId === $t->id ? 'selected' : '' }}>{{ $t->name }}</option>
+                            @endforeach
+                        </select>
+                        <select name="jurnal_late" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+                            <option value="">Semua Ketepatan</option>
+                            <option value="1" {{ $journalLateFilter === '1' ? 'selected' : '' }}>Terlambat Mengisi</option>
+                            <option value="0" {{ $journalLateFilter === '0' ? 'selected' : '' }}>Tepat Waktu</option>
+                        </select>
+                        @if ($journalTeacherId || $journalLateFilter !== null)
+                            <a href="{{ url()->current() }}?tab=jurnal" class="btn btn-sm btn-outline-secondary">Reset</a>
+                        @endif
+                    </form>
+
+                    @if ($lateFillers->isNotEmpty())
+                        <div class="small mt-2 d-flex flex-wrap gap-1 align-items-center">
+                            <strong class="me-1"><i class="fa-solid fa-user-clock"></i> Laoshi yang terlambat mengisi (60 hari):</strong>
+                            @foreach ($lateFillers as $lf)
+                                <a href="{{ url()->current() }}?tab=jurnal&jurnal_teacher={{ $lf->teacher_id }}&jurnal_late=1"
+                                   class="badge bg-danger-subtle text-danger text-decoration-none">{{ $lf->name }} · {{ $lf->total }}</a>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+
                 @forelse ($journals as $item)
                     <div class="list-group-item">
                         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                             <div>
                                 <div class="fw-semibold">
                                     {{ $item->teacher->name ?? '-' }} — Jurnal kelas {{ $item->class->class_name ?? '-' }}
+                                    @if ($item->is_late)
+                                        <span class="badge bg-danger-subtle text-danger ms-1">Terlambat Mengisi</span>
+                                    @endif
                                 </div>
                                 <small class="text-muted">
                                     Sesi {{ $item->session_date?->translatedFormat('d M Y') }}

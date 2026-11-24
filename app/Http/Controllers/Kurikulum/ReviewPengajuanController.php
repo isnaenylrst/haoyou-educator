@@ -10,6 +10,7 @@ use App\Models\ClassSession;
 use App\Models\ProgressReport;
 use App\Models\ScheduleJournalUnlock;
 use App\Models\Submission;
+use App\Models\Teacher;
 use App\Models\TeacherLeave;
 use App\Models\TeacherMaterial;
 use App\Models\TeachingJournal;
@@ -80,11 +81,41 @@ class ReviewPengajuanController extends Controller
             'material_page', 'material'
         );
 
+        // Filter jurnal: laoshi tertentu dan/atau ketepatan pengisian (terlambat mengisi / tepat waktu)
+        $journalTeacherId  = $request->integer('jurnal_teacher') ?: null;
+        $journalLateFilter = in_array($request->query('jurnal_late'), ['1', '0'], true)
+            ? $request->query('jurnal_late')
+            : null;
+
         $journals = $page(
             TeachingJournal::with(['teacher', 'class', 'classSchedule', 'material', 'attendances.student'])
-                ->where('status', 'Pending')->oldest(),
+                ->where('status', 'Pending')
+                ->when($journalTeacherId, fn ($q) => $q->where(
+                    fn ($w) => $w->where('teacher_id', $journalTeacherId)->orWhere('filled_by', $journalTeacherId)
+                ))
+                ->when($journalLateFilter !== null, fn ($q) => $q->where('is_late', $journalLateFilter === '1'))
+                ->oldest(),
             'jurnal_page', 'jurnal'
         );
+
+        // Hitungan tab jurnal selalu total antrian (tidak ikut terfilter)
+        $pendingJournalCount = TeachingJournal::where('status', 'Pending')->count();
+
+        // Daftar laoshi yang pernah terlambat mengisi (60 hari terakhir) + jumlahnya
+        $lateFillers = TeachingJournal::query()
+            ->where('is_late', true)
+            ->whereDate('session_date', '>=', now()->subDays(60)->toDateString())
+            ->selectRaw('teacher_id, COUNT(*) as total')
+            ->groupBy('teacher_id')
+            ->orderByDesc('total')
+            ->get();
+        $lateFillerNames = Teacher::whereIn('id', $lateFillers->pluck('teacher_id'))->pluck('name', 'id');
+        $lateFillers = $lateFillers->map(fn ($r) => (object) [
+            'teacher_id' => $r->teacher_id,
+            'name'       => $lateFillerNames[$r->teacher_id] ?? '-',
+            'total'      => $r->total,
+        ]);
+        $journalTeachers = Teacher::where('status', 'Active')->orderBy('name')->get(['id', 'name']);
 
         $reports = $page(
             ProgressReport::with(['student', 'teacher', 'enrollment.class'])
@@ -113,14 +144,14 @@ class ReviewPengajuanController extends Controller
 
         $totals = [
             'material'   => $materials->total(),
-            'jurnal'     => $journals->total() + $lateJournals->count(),
+            'jurnal'     => $pendingJournalCount + $lateJournals->count(),
             'report'     => $reports->total() + $lateEnrollments->count(),
             'cuti'       => $leaves->total(),
             'sertifikat' => $certificates->total(),
             'pengajuan'  => $submissions->total(),
         ];
 
-        $totalPending = $materials->total() + $journals->total() + $lateJournals->count() + $reports->total()
+        $totalPending = $materials->total() + $pendingJournalCount + $lateJournals->count() + $reports->total()
             + $leaves->total() + $certificates->total() + $submissions->total();
 
         // Tab aktif: yang diminta (?tab=), atau tab pertama yang punya antrian
@@ -132,7 +163,8 @@ class ReviewPengajuanController extends Controller
         return view('kurikulum.review-pengajuan', compact(
             'todaySchedules', 'totalSessionToday', 'filledToday', 'unfilledToday', 'teacherNamesToday',
             'materials', 'journals', 'reports', 'leaves', 'certificates', 'submissions', 'lateEnrollments', 'lateJournals',
-            'totals', 'totalPending', 'tab'
+            'totals', 'totalPending', 'tab',
+            'lateFillers', 'journalTeachers', 'journalTeacherId', 'journalLateFilter'
         ));
     }
 
