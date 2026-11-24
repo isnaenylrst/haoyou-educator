@@ -38,6 +38,69 @@ class ReviewPengajuanController extends Controller
         'Saturday' => 'Sabtu',
     ];
 
+    // ------------------------------------------------------------------ FILTER
+
+    /**
+     * Filter bersama untuk semua tab Review Pengajuan.
+     *  - guru   : id guru
+     *  - bulan  : YYYY-MM (jika diisi, dipakai lebih dulu daripada dari/sampai)
+     *  - dari / sampai : rentang tanggal (Y-m-d), boleh salah satu saja
+     * Khusus tab Jurnal masih ada jurnal_late (1 = terlambat mengisi, 0 = tepat waktu).
+     */
+    private function reviewFilters(Request $request): array
+    {
+        $teacher = $request->integer('guru') ?: ($request->integer('jurnal_teacher') ?: null);
+
+        $from = $to = null;
+        $month = (string) $request->query('bulan', '');
+
+        if (preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month)) {
+            $from = Carbon::createFromFormat('Y-m-d', $month . '-01')->startOfDay();
+            $to   = $from->copy()->endOfMonth()->startOfDay();
+        } else {
+            $month = '';
+            $parse = function (?string $value): ?Carbon {
+                if (! $value || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+                    return null;
+                }
+                try {
+                    return Carbon::createFromFormat('Y-m-d', $value)->startOfDay();
+                } catch (\Throwable $e) {
+                    return null;
+                }
+            };
+            $from = $parse($request->query('dari'));
+            $to   = $parse($request->query('sampai'));
+
+            // dari > sampai: tukar saja supaya tidak kosong
+            if ($from && $to && $from->gt($to)) {
+                [$from, $to] = [$to, $from];
+            }
+        }
+
+        $late = in_array($request->query('jurnal_late'), ['1', '0'], true)
+            ? (string) $request->query('jurnal_late')
+            : null;
+
+        return [
+            'teacher' => $teacher,
+            'month'   => $month,
+            'from'    => $from,
+            'to'      => $to,
+            'late'    => $late,
+            'active'  => (bool) ($teacher || $from || $to),
+        ];
+    }
+
+    /** Terapkan filter guru + tanggal ke satu query (kolom tanggal berbeda per tab). */
+    private function applyReviewFilters($query, array $f, string $dateColumn, string $teacherColumn = 'teacher_id')
+    {
+        return $query
+            ->when($f['teacher'], fn ($q) => $q->where($teacherColumn, $f['teacher']))
+            ->when($f['from'], fn ($q) => $q->whereDate($dateColumn, '>=', $f['from']->toDateString()))
+            ->when($f['to'], fn ($q) => $q->whereDate($dateColumn, '<=', $f['to']->toDateString()));
+    }
+
     // ------------------------------------------------------------------ HALAMAN
 
     public function index(Request $request)
@@ -75,36 +138,49 @@ class ReviewPengajuanController extends Controller
             ->withQueryString()
             ->appends('tab', $tab);
 
+        // Filter bersama semua tab: guru + bulan / rentang tanggal (jurnal masih ada tepat waktu / terlambat)
+        $filters           = $this->reviewFilters($request);
+        $filterActive      = $filters['active'];
+        $journalTeacherId  = $filters['teacher'];
+        $journalLateFilter = $filters['late'];
+
         $materials = $page(
-            TeacherMaterial::with(['teacher', 'material.level', 'consultations'])
-                ->where('status', 'Pending')->oldest(),
+            $this->applyReviewFilters(
+                TeacherMaterial::with(['teacher', 'material.level', 'consultations'])->where('status', 'Pending'),
+                $filters, 'created_at'
+            )->oldest(),
             'material_page', 'material'
         );
 
-        // Filter jurnal: laoshi tertentu dan/atau ketepatan pengisian (terlambat mengisi / tepat waktu)
-        $journalTeacherId  = $request->integer('jurnal_teacher') ?: null;
-        $journalLateFilter = in_array($request->query('jurnal_late'), ['1', '0'], true)
-            ? $request->query('jurnal_late')
-            : null;
+        // Jurnal: guru bisa pengisi utama ATAU pengganti (filled_by); tanggal = tanggal sesi
+        $journalBase = TeachingJournal::where('status', 'Pending')
+            ->when($journalTeacherId, fn ($q) => $q->where(
+                fn ($w) => $w->where('teacher_id', $journalTeacherId)->orWhere('filled_by', $journalTeacherId)
+            ))
+            ->when($filters['from'], fn ($q) => $q->whereDate('session_date', '>=', $filters['from']->toDateString()))
+            ->when($filters['to'], fn ($q) => $q->whereDate('session_date', '<=', $filters['to']->toDateString()));
 
         $journals = $page(
-            TeachingJournal::with(['teacher', 'class', 'classSchedule', 'material', 'attendances.student'])
-                ->where('status', 'Pending')
-                ->when($journalTeacherId, fn ($q) => $q->where(
-                    fn ($w) => $w->where('teacher_id', $journalTeacherId)->orWhere('filled_by', $journalTeacherId)
-                ))
+            (clone $journalBase)
+                ->with(['teacher', 'class', 'classSchedule', 'material', 'attendances.student'])
                 ->when($journalLateFilter !== null, fn ($q) => $q->where('is_late', $journalLateFilter === '1'))
                 ->oldest(),
             'jurnal_page', 'jurnal'
         );
 
-        // Hitungan tab jurnal selalu total antrian (tidak ikut terfilter)
-        $pendingJournalCount = TeachingJournal::where('status', 'Pending')->count();
+        // Hitungan tab jurnal mengikuti guru/tanggal, tetapi tidak ikut filter tepat waktu/terlambat
+        $pendingJournalCount = (clone $journalBase)->count();
 
-        // Daftar laoshi yang pernah terlambat mengisi (60 hari terakhir) + jumlahnya
+        // Daftar laoshi yang terlambat mengisi + jumlahnya (60 hari terakhir, atau sesuai filter tanggal)
         $lateFillers = TeachingJournal::query()
             ->where('is_late', true)
-            ->whereDate('session_date', '>=', now()->subDays(60)->toDateString())
+            ->when($filters['from'] || $filters['to'],
+                function ($q) use ($filters) {
+                    $q->when($filters['from'], fn ($w) => $w->whereDate('session_date', '>=', $filters['from']->toDateString()))
+                      ->when($filters['to'], fn ($w) => $w->whereDate('session_date', '<=', $filters['to']->toDateString()));
+                },
+                fn ($q) => $q->whereDate('session_date', '>=', now()->subDays(60)->toDateString())
+            )
             ->selectRaw('teacher_id, COUNT(*) as total')
             ->groupBy('teacher_id')
             ->orderByDesc('total')
@@ -117,30 +193,64 @@ class ReviewPengajuanController extends Controller
         ]);
         $journalTeachers = Teacher::where('status', 'Active')->orderBy('name')->get(['id', 'name']);
 
+        // Progress report: tanggal = tanggal dikirim guru
         $reports = $page(
-            ProgressReport::with(['student', 'teacher', 'enrollment.class'])
-                ->where('status', 'Submitted')->whereNull('reviewed_at')->oldest(),
+            $this->applyReviewFilters(
+                ProgressReport::with(['student', 'teacher', 'enrollment.class'])
+                    ->where('status', 'Submitted')->whereNull('reviewed_at'),
+                $filters, 'submitted_at'
+            )->oldest(),
             'report_page', 'report'
         );
 
+        // Cuti: tanggal = tanggal kelas yang diminta cuti (leave_date)
         $leaves = $page(
-            TeacherLeave::with(['teacher', 'classSchedule.class', 'replacementTeacher'])
-                ->where('status', 'Pending')->oldest(),
+            $this->applyReviewFilters(
+                TeacherLeave::with(['teacher', 'classSchedule.class', 'replacementTeacher'])->where('status', 'Pending'),
+                $filters, 'leave_date'
+            )->oldest(),
             'cuti_page', 'cuti'
         );
 
+        // Sertifikat: tanggal = tanggal dibuat/diajukan
         $certificates = $page(
-            Certificate::with(['student', 'teacher', 'enrollment.class'])->pendingReview()->oldest(),
+            $this->applyReviewFilters(
+                Certificate::with(['student', 'teacher', 'enrollment.class'])->pendingReview(),
+                $filters, 'created_at'
+            )->oldest(),
             'sertifikat_page', 'sertifikat'
         );
 
+        // Reimburse & bahan: tanggal = tanggal pengajuan (kolom date)
         $submissions = $page(
-            Submission::with(['teacher', 'creator'])->whereIn('status', ['Diajukan', 'Review Kurikulum'])->oldest(),
+            $this->applyReviewFilters(
+                Submission::with(['teacher', 'creator'])->whereIn('status', ['Diajukan', 'Review Kurikulum']),
+                $filters, 'date'
+            )->oldest(),
             'submission_page', 'pengajuan'
         );
 
-        $lateEnrollments = $this->lateEnrollments();
-        $lateJournals    = $this->lateJournals();
+        // Daftar terlambat (report belum dikirim / jurnal terkunci) ikut filter guru + tanggal
+        $lateEnrollments = $this->lateEnrollments()
+            ->filter(function ($row) use ($filters) {
+                $teacherId = $row['enrollment']->class?->teacher_id;
+                $deadline  = $row['deadline']->copy()->startOfDay();
+
+                return (! $filters['teacher'] || (int) $teacherId === (int) $filters['teacher'])
+                    && (! $filters['from'] || $deadline->gte($filters['from']))
+                    && (! $filters['to'] || $deadline->lte($filters['to']));
+            })
+            ->values();
+
+        $lateJournals = $this->lateJournals()
+            ->filter(function ($item) use ($filters) {
+                $date = $item->session_date->copy()->startOfDay();
+
+                return (! $filters['teacher'] || (int) $item->teacher?->id === (int) $filters['teacher'])
+                    && (! $filters['from'] || $date->gte($filters['from']))
+                    && (! $filters['to'] || $date->lte($filters['to']));
+            })
+            ->values();
 
         $totals = [
             'material'   => $materials->total(),
@@ -164,7 +274,7 @@ class ReviewPengajuanController extends Controller
             'todaySchedules', 'totalSessionToday', 'filledToday', 'unfilledToday', 'teacherNamesToday',
             'materials', 'journals', 'reports', 'leaves', 'certificates', 'submissions', 'lateEnrollments', 'lateJournals',
             'totals', 'totalPending', 'tab',
-            'lateFillers', 'journalTeachers', 'journalTeacherId', 'journalLateFilter'
+            'lateFillers', 'journalTeachers', 'journalTeacherId', 'journalLateFilter', 'filters', 'filterActive'
         ));
     }
 

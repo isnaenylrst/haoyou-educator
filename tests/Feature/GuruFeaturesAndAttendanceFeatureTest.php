@@ -587,4 +587,28 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
         $this->assertNull($report->teacher_signed_at);
         $this->assertNull($report->teacher_signature_path);
     }
+
+    // ------------------------------------------------------------------
+    // Review Pengajuan Kurikulum: filter guru + bulan / tanggal di semua tab
+    // ------------------------------------------------------------------
+
+    public function test_review_pengajuan_filters_by_teacher_and_period_without_error(): void
+    {
+        $this->actingAs($this->kurikulumUser);
+
+        $queries = [
+            ['tab' => 'material', 'guru' => $this->teacher->id, 'bulan' => '2026-11'],
+            ['tab' => 'jurnal', 'guru' => $this->teacher->id, 'dari' => '2026-11-01', 'sampai' => '2026-11-30', 'jurnal_late' => '1'],
+            ['tab' => 'report', 'dari' => '2026-11-30', 'sampai' => '2026-11-01'],   // terbalik -> ditukar otomatis
+            ['tab' => 'cuti', 'bulan' => 'bukan-bulan'],                               // tidak valid -> diabaikan
+            ['tab' => 'sertifikat', 'guru' => 999999],
+            ['tab' => 'pengajuan', 'bulan' => '2026-12', 'jurnal_late' => '0'],
+        ];
+
+        foreach ($queries as $query) {
+            $this->get(route('kurikulum.review-pengajuan', $query))
+                ->assertOk()
+                ->assertSee('Semua Guru');
+        }
+    }
 }
