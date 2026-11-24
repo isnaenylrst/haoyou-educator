@@ -22,6 +22,16 @@ class ProgressReportController extends Controller
 {
     private function teacher() { return Auth::user()->teacher; }
 
+    /** Path TTD digital guru (profil) bila filenya ada; null bila belum membuat TTD. */
+    private function teacherSignaturePath(): ?string
+    {
+        $path = Auth::user()->signature_path;
+
+        return ($path && Storage::disk('public')->exists($path)) ? $path : null;
+    }
+
+    private const NEED_SIGNATURE_MSG = 'Anda belum memiliki tanda tangan digital. Buka menu Profil Saya, gambar atau unggah tanda tangan, lalu kirim ulang. Tanda tangan guru otomatis dibubuhkan saat report dikirim ke Kurikulum.';
+
     /** Ambil enrollment milik kelas guru ini, atau 404 */
     private function myEnrollment(int $id)
     {
@@ -312,12 +322,21 @@ class ProgressReportController extends Controller
         }
 
         $action = $request->input('action', 'draft') === 'submit' ? 'submit' : 'draft';
+
+        // Guru wajib punya TTD digital: dibubuhkan otomatis saat report dikirim ke Kurikulum
+        $signaturePath = null;
+        if ($action === 'submit') {
+            $signaturePath = $this->teacherSignaturePath();
+            if (! $signaturePath) {
+                return back()->withInput()->with('error', self::NEED_SIGNATURE_MSG);
+            }
+        }
         $data = $request->validate(ProgressReportDocument::rules($action === 'submit'), ProgressReportDocument::messages());
 
         [$present, $total] = $this->attendanceStats($e->class_id, $e->student_id);
         $replacementCount = $this->replacementClassCount($e->class_id, $e->student_id);
 
-        DB::transaction(function () use (&$report, $e, $teacher, $data, $present, $total, $replacementCount, $action) {
+        DB::transaction(function () use (&$report, $e, $teacher, $data, $present, $total, $replacementCount, $action, $signaturePath) {
             ProgressReportDocument::fillFrom($report, $data);
             $report->fill([
                 'student_id'              => $e->student_id,
@@ -334,6 +353,8 @@ class ProgressReportController extends Controller
             if ($action === 'submit') {
                 $report->update([
                     'status' => 'Submitted', 'submitted_at' => now(), 'returned_at' => null, 'review_note' => null,
+                    'teacher_signature_path' => $signaturePath,
+                    'teacher_signed_at'      => now(),
                 ]);
 
                 $curriculums = User::whereHas('level', fn ($q) => $q->whereIn('nama_level', ['Curriculum', 'Kurikulum']))->get();
@@ -374,13 +395,23 @@ class ProgressReportController extends Controller
             return back()->with('error', 'Tidak ada draft progress report yang siap diajukan untuk kelas ini.');
         }
 
+        $signaturePath = $this->teacherSignaturePath();
+        if (! $signaturePath) {
+            return back()->with('error', self::NEED_SIGNATURE_MSG);
+        }
+
         foreach ($drafts as $report) {
             $report->update([
-                'status'       => 'Submitted',
-                'submitted_at' => now(),
-                'returned_at'  => null,
-                'review_note'  => null,
+                'status'                 => 'Submitted',
+                'submitted_at'           => now(),
+                'returned_at'            => null,
+                'review_note'            => null,
+                'teacher_signature_path' => $signaturePath,
+                'teacher_signed_at'      => now(),
             ]);
+
+            // PDF dibuat ulang supaya TTD guru ikut tercetak
+            ProgressReportDocument::store($report->refresh());
         }
 
         $curriculums = User::whereHas('level', fn ($q) => $q->whereIn('nama_level', ['Curriculum', 'Kurikulum']))->get();
