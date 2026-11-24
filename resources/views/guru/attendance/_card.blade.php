@@ -391,7 +391,7 @@
                         &middot; menggantikan {{ $journal->substituteTeacher->name ?? '-' }}
                     @endif
                     @if ($journal->is_late)
-                        <span class="badge bg-danger-subtle text-danger ms-2">Terlambat</span>
+                        <span class="badge bg-danger-subtle text-danger ms-2">Terlambat Mengisi</span>
                     @endif
                 </dd>
 
