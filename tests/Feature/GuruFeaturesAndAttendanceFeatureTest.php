@@ -409,6 +409,7 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
         $otherTeacher = Teacher::create([
             'user_id' => $otherGuruUser->id,
             'name'    => 'Guru Other',
+            'phone'   => '081200000000',
             'status'  => 'Active',
         ]);
 
@@ -457,6 +458,12 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
 
         // Simpan Jurnal & Absensi (store)
         $storeData = [
+            'teaching_teacher_id' => $this->teacher->id,
+            'student_names'       => 'Siswa Test',
+            'is_last_meeting'     => 'Tidak',
+            'start_time'          => '10:00',
+            'end_time'            => '11:30',
+            'focus_materials'     => ['Listening', 'Speaking'],
             'session_date'        => '2026-11-20',
             'class_running'       => 'Berjalan',
             'is_substitute'       => 'Tidak',
@@ -492,6 +499,7 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
             'enrollment_id' => $this->enrollment->id,
             'status'        => 'Draft',
             'report_type'   => 'Trimester Academic Progress Report',
+            'report_period' => 'Nov 2026',
             'content'       => [['meeting' => 1, 'material' => 'Salam Mandarin', 'level' => 'Proficient', 'description' => 'Bagus']],
         ]);
     }
@@ -610,5 +618,45 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
                 ->assertOk()
                 ->assertSee('Semua Guru');
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Riwayat pengajuan: tetap ada walaupun sudah selesai / TTD lengkap
+    // ------------------------------------------------------------------
+
+    public function test_riwayat_pengajuan_keeps_completed_submissions_for_kurikulum_and_guru(): void
+    {
+        $report = ProgressReport::create([
+            'student_id'      => $this->student->id,
+            'teacher_id'      => $this->teacher->id,
+            'enrollment_id'   => $this->enrollment->id,
+            'status'          => 'Published',
+            'report_type'     => 'Trimester Academic Progress Report',
+            'report_period'   => 'Nov 2026',
+            'content'         => [],
+            'submitted_at'    => now()->subDays(3),
+            'teacher_signed_at' => now()->subDays(3),
+            'reviewed_at'     => now()->subDays(2),
+            'owner_signed_at' => now()->subDay(),
+        ]);
+
+        // Kurikulum melihat laporan yang sudah TTD lengkap di riwayat (bukan di antrean review)
+        $this->actingAs($this->kurikulumUser)
+            ->get(route('kurikulum.riwayat-pengajuan'))
+            ->assertOk()
+            ->assertSee('Progress Report')
+            ->assertSee('Selesai')
+            ->assertSee('3 TTD lengkap');
+
+        // Filter status & jenis & bulan tidak error
+        $this->get(route('kurikulum.riwayat-pengajuan', ['jenis' => 'report', 'status' => 'selesai', 'bulan' => now()->format('Y-m'), 'guru' => $this->teacher->id]))
+            ->assertOk()
+            ->assertSee('3 TTD lengkap');
+
+        // Guru yang bersangkutan juga melihat riwayatnya sendiri
+        $this->actingAs($this->guruUser)
+            ->get(route('teacher.riwayat-pengajuan'))
+            ->assertOk()
+            ->assertSee('3 TTD lengkap');
     }
 }

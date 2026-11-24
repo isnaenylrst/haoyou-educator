@@ -38,6 +38,7 @@ use App\Http\Controllers\Kurikulum\TeacherObservationController;
 use App\Http\Controllers\Kurikulum\StudentLearningRequestController as KurikulumStudentLearningRequestController;
 use App\Http\Controllers\Kurikulum\TrainingMaterialController as KurikulumTrainingMaterialController;
 use App\Http\Controllers\Kurikulum\ConsultationResultController as KurikulumConsultationResultController;
+use App\Http\Controllers\Kurikulum\RiwayatPengajuanController;
 
 // ===== ADMIN =====
 // Dashboard pakai alias supaya tidak bentrok dengan Kurikulum\DashboardController
@@ -87,6 +88,7 @@ use App\Http\Controllers\Guru\TrainingMaterialController as GuruTrainingMaterial
 use App\Http\Controllers\Guru\ConsultationResultController as GuruConsultationResultController;
 use App\Http\Controllers\Guru\RequestBelajarController as GuruRequestBelajarController;
 use App\Http\Controllers\Guru\ReplacementOfferController;
+use App\Http\Controllers\Guru\RiwayatPengajuanController as GuruRiwayatPengajuanController;
 
 // ===== OWNER =====
 use App\Http\Controllers\Owner\DashboardController as OwnerDashboardController;
@@ -528,6 +530,9 @@ Route::middleware(['auth', 'role:Curriculum'])
         Route::patch('/review-pengajuan/submission/{submission}', [ReviewPengajuanController::class, 'reviewSubmission'])
             ->name('review-pengajuan.submission');
 
+        Route::get('/riwayat-pengajuan', [RiwayatPengajuanController::class, 'index'])
+            ->name('riwayat-pengajuan');
+
         /*
         |--------------------------------------------------------------------------
         | TUGAS PERBAIKAN KELAS (masuk ke notifikasi guru)
@@ -696,6 +701,9 @@ Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
 
         //Route::get('/notifikasi/{document}/download', [GuruNotifikasiController::class, 'download'])
         //    ->name('notifikasi.download');
+
+        Route::get('/riwayat-pengajuan', [GuruRiwayatPengajuanController::class, 'index'])
+            ->name('riwayat-pengajuan');
 
         // SOP
         Route::get('/sop', [GuruSopController::class, 'index'])

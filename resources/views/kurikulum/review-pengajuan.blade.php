@@ -215,6 +215,9 @@
         @if ($totalPending > 0)
             <span class="badge bg-warning text-dark ms-1">{{ $totalPending }} menunggu{{ $filterActive ? ' (terfilter)' : '' }}</span>
         @endif
+        <a href="{{ url('/kurikulum/riwayat-pengajuan') }}" class="btn btn-sm btn-outline-dark ms-2 align-middle">
+            <i class="fa-solid fa-clock-rotate-left me-1"></i> Lihat Riwayat
+        </a>
     </h5>
 
     {{-- ===== FILTER BERSAMA (berlaku untuk semua tab): Guru + Bulan / Rentang Tanggal ===== --}}
