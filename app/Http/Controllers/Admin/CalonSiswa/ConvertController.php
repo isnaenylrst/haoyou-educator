@@ -279,11 +279,7 @@ class ConvertController extends Controller
         [$isPrivate, $package, $level] = $this->resolveSelection($draft, $candidateStudent);
 
         // Aturan cicilan mengikuti PaymentInstallmentService (private = wajib lunas)
-        $canInstallment = $this->payments->allowsInstallment(
-            $isPrivate,
-            $candidateStudent->program?->program_name,
-            $level?->level_name,
-        );
+        $canInstallment = $this->payments->allowsInstallment($isPrivate, $package);
 
         // tagihan sebelum diskon = harga paket + biaya pendaftaran + biaya aktivitas
         $registrationFee = (float) Setting::get('registration_fee', 0);
@@ -358,11 +354,7 @@ class ConvertController extends Controller
 
         [$isPrivate, $package, $level, $levelId] = $this->resolveSelection($draft, $candidateStudent);
 
-        $canInstallment = $this->payments->allowsInstallment(
-            $isPrivate,
-            $candidateStudent->program?->program_name,
-            $level?->level_name,
-        );
+        $canInstallment = $this->payments->allowsInstallment($isPrivate, $package);
 
         // Termin hanya berlaku kalau paket boleh dicicil DAN punya harga termin.
         // Selain itu otomatis Lunas (private, HSK, dll).
