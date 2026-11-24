@@ -213,9 +213,52 @@
     <h5 class="fw-bold mt-5 mb-3">
         Review Dokumen per Kategori
         @if ($totalPending > 0)
-            <span class="badge bg-warning text-dark ms-1">{{ $totalPending }} menunggu</span>
+            <span class="badge bg-warning text-dark ms-1">{{ $totalPending }} menunggu{{ $filterActive ? ' (terfilter)' : '' }}</span>
         @endif
     </h5>
+
+    {{-- ===== FILTER BERSAMA (berlaku untuk semua tab): Guru + Bulan / Rentang Tanggal ===== --}}
+    <form method="GET" action="{{ url()->current() }}" id="reviewFilterForm" class="card border-0 shadow-sm mb-3">
+        <div class="card-body py-2">
+            <input type="hidden" name="tab" id="filterTab" value="{{ $tab }}">
+            @if ($filters['late'] !== null)
+                <input type="hidden" name="jurnal_late" value="{{ $filters['late'] }}">
+            @endif
+
+            <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-3">
+                    <label class="form-label small fw-semibold mb-1">Guru (Laoshi)</label>
+                    <select name="guru" class="form-select form-select-sm">
+                        <option value="">Semua Guru</option>
+                        @foreach ($journalTeachers as $t)
+                            <option value="{{ $t->id }}" {{ (int) $filters['teacher'] === $t->id ? 'selected' : '' }}>{{ $t->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label small fw-semibold mb-1">Bulan</label>
+                    <input type="month" name="bulan" id="filterBulan" value="{{ $filters['month'] }}" class="form-control form-control-sm">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label small fw-semibold mb-1">Dari Tanggal</label>
+                    <input type="date" name="dari" id="filterDari" value="{{ $filters['month'] ? '' : optional($filters['from'])->toDateString() }}" class="form-control form-control-sm">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label small fw-semibold mb-1">Sampai Tanggal</label>
+                    <input type="date" name="sampai" id="filterSampai" value="{{ $filters['month'] ? '' : optional($filters['to'])->toDateString() }}" class="form-control form-control-sm">
+                </div>
+                <div class="col-6 col-md-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-sm btn-dark flex-fill"><i class="fa-solid fa-filter me-1"></i> Terapkan</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="filterReset">Reset</button>
+                </div>
+            </div>
+            <div class="small text-muted mt-2">
+                Isi <b>Bulan</b> <u>atau</u> rentang tanggal (jika keduanya terisi, Bulan yang dipakai).
+                Tanggal yang difilter: LP &amp; PPT, Sertifikat = tanggal diajukan; Jurnal = tanggal sesi;
+                Progress Report = tanggal dikirim; Cuti = tanggal kelas yang dicutikan; Reimburse &amp; Bahan = tanggal pengajuan.
+            </div>
+        </div>
+    </form>
 
     <div class="mb-3 d-flex flex-wrap gap-2" id="docTabs">
         @foreach ($docTabs as $key => [$label, $count])
@@ -294,31 +337,31 @@
 
             {{-- ===== TAB JURNAL ONLINE ===== --}}
             <div class="doc-tab {{ $tab === 'jurnal' ? '' : 'd-none' }}" data-tab="jurnal">
-                {{-- Filter laoshi & ketepatan pengisian --}}
+                {{-- Filter ketepatan pengisian (guru & tanggal ada di filter bersama di atas) --}}
                 <div class="list-group-item bg-light">
                     <form method="GET" action="{{ url()->current() }}" class="d-flex flex-wrap gap-2 align-items-center">
                         <input type="hidden" name="tab" value="jurnal">
-                        <select name="jurnal_teacher" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
-                            <option value="">Semua Laoshi</option>
-                            @foreach ($journalTeachers as $t)
-                                <option value="{{ $t->id }}" {{ (int) $journalTeacherId === $t->id ? 'selected' : '' }}>{{ $t->name }}</option>
-                            @endforeach
-                        </select>
+                        @foreach (['guru' => $filters['teacher'], 'bulan' => $filters['month'], 'dari' => $filters['month'] ? '' : optional($filters['from'])->toDateString(), 'sampai' => $filters['month'] ? '' : optional($filters['to'])->toDateString()] as $name => $value)
+                            @if ($value)
+                                <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                            @endif
+                        @endforeach
                         <select name="jurnal_late" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
                             <option value="">Semua Ketepatan</option>
                             <option value="1" {{ $journalLateFilter === '1' ? 'selected' : '' }}>Terlambat Mengisi</option>
                             <option value="0" {{ $journalLateFilter === '0' ? 'selected' : '' }}>Tepat Waktu</option>
                         </select>
-                        @if ($journalTeacherId || $journalLateFilter !== null)
-                            <a href="{{ url()->current() }}?tab=jurnal" class="btn btn-sm btn-outline-secondary">Reset</a>
+                        @if ($journalLateFilter !== null)
+                            <a href="{{ url()->current() }}?{{ http_build_query(array_merge(request()->except(['jurnal_late', 'jurnal_page', 'tab']), ['tab' => 'jurnal'])) }}"
+                               class="btn btn-sm btn-outline-secondary">Reset ketepatan</a>
                         @endif
                     </form>
 
                     @if ($lateFillers->isNotEmpty())
                         <div class="small mt-2 d-flex flex-wrap gap-1 align-items-center">
-                            <strong class="me-1"><i class="fa-solid fa-user-clock"></i> Laoshi yang terlambat mengisi (60 hari):</strong>
+                            <strong class="me-1"><i class="fa-solid fa-user-clock"></i> Laoshi yang terlambat mengisi{{ ($filters['from'] || $filters['to']) ? '' : ' (60 hari)' }}:</strong>
                             @foreach ($lateFillers as $lf)
-                                <a href="{{ url()->current() }}?tab=jurnal&jurnal_teacher={{ $lf->teacher_id }}&jurnal_late=1"
+                                <a href="{{ url()->current() }}?{{ http_build_query(array_merge(request()->except(['guru', 'jurnal_teacher', 'jurnal_late', 'jurnal_page', 'tab']), ['tab' => 'jurnal', 'guru' => $lf->teacher_id, 'jurnal_late' => 1])) }}"
                                    class="badge bg-danger-subtle text-danger text-decoration-none">{{ $lf->name }} · {{ $lf->total }}</a>
                             @endforeach
                         </div>
@@ -688,7 +731,25 @@ function showDocTab(tab) {
     const url = new URL(window.location.href);
     url.searchParams.set('tab', tab);
     window.history.replaceState({}, '', url);
+
+    const filterTab = document.getElementById('filterTab');
+    if (filterTab) { filterTab.value = tab; }
 }
+
+// Filter bersama: Bulan dan rentang tanggal saling menggantikan
+(function () {
+    const bulan = document.getElementById('filterBulan');
+    const dari = document.getElementById('filterDari');
+    const sampai = document.getElementById('filterSampai');
+    if (!bulan) { return; }
+    bulan.addEventListener('change', function () { if (bulan.value) { dari.value = ''; sampai.value = ''; } });
+    [dari, sampai].forEach(function (el) {
+        el.addEventListener('change', function () { if (el.value) { bulan.value = ''; } });
+    });
+    document.getElementById('filterReset').addEventListener('click', function () {
+        window.location = '{{ url()->current() }}?tab=' + document.getElementById('filterTab').value;
+    });
+})();
 
 document.querySelectorAll('#docTabs .doc-pill').forEach(function (btn) {
     btn.addEventListener('click', function () { showDocTab(btn.dataset.tab); });
