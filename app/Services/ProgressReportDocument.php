@@ -21,7 +21,7 @@ class ProgressReportDocument
     /** Data terstruktur yang dipakai view dokumen. */
     public static function data(ProgressReport $report): array
     {
-        $report->loadMissing(['student', 'teacher.user', 'enrollment.class', 'ownerSigner']);
+        $report->loadMissing(['student', 'teacher.user', 'enrollment.class', 'ownerSigner', 'reviewer']);
 
         $h = (array) ($report->header_data ?? []);
 
@@ -55,6 +55,9 @@ class ProgressReportDocument
         ])->filter(fn ($a) => $a['assessment'] !== '' || $a['score'] !== '' || $a['note'] !== '')->values()->all();
 
         $ownerSigned = $report->owner_signed_at !== null && $report->owner_signature_path;
+        // 3 tanda tangan berurutan: Guru (saat dikirim) -> Kurikulum (saat ACC) -> Owner (antrean TTD)
+        $teacherSigned    = $report->teacher_signed_at !== null && $report->teacher_signature_path;
+        $curriculumSigned = $report->reviewed_at !== null && $report->curriculum_signature_path;
 
         return [
             'title'    => mb_strtoupper($title),
@@ -72,7 +75,13 @@ class ProgressReportDocument
             // Halaman Achievement Level: diketik guru per report. Bila belum pernah diisi, teks standar jadi titik awal.
             'achievement_html' => array_key_exists('achievement_page', $h) ? (string) $h['achievement_page'] : self::defaultAchievementHtml(),
             'teacher_sign_name' => trim((string) ($h['teacher_sign'] ?? '')) ?: $teacherNames,
-            'teacher_signature' => self::signatureFile($report->teacher?->user?->signature_path),
+            'teacher_signature'  => $teacherSigned ? self::signatureFile($report->teacher_signature_path) : null,
+            'teacher_signed_at'  => $teacherSigned ? $report->teacher_signed_at : null,
+            'curriculum_title'     => config('progress_report.curriculum_title', 'Kurikulum'),
+            'curriculum_name'      => config('progress_report.curriculum_name') ?: ($report->reviewer?->name ?? '-'),
+            'curriculum_signature' => $curriculumSigned ? self::signatureFile($report->curriculum_signature_path) : null,
+            'curriculum_signed_at' => $curriculumSigned ? $report->reviewed_at : null,
+            'owner_signed_at'      => $ownerSigned ? $report->owner_signed_at : null,
             'city'     => config('progress_report.city'),
             'date'     => ($report->owner_signed_at ?? $report->published_at ?? $report->reviewed_at ?? now()),
             'director_title' => config('progress_report.director_title'),

@@ -369,6 +369,10 @@ class ReviewPengajuanController extends Controller
                 'returned_at'    => now(),
                 'review_note'    => $data['note'],
                 'extended_until' => now()->addDays(ProgressReportService::GRACE_DAYS)->toDateString(),
+                // TTD guru dibubuhkan ulang saat guru mengirim kembali setelah perbaikan
+                'teacher_signature_path'    => null,
+                'teacher_signed_at'         => null,
+                'curriculum_signature_path' => null,
             ]);
         }
 

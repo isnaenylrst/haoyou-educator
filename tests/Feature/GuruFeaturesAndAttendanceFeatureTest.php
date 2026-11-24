@@ -24,6 +24,7 @@ use App\Services\TeacherAvailabilityUrgencyService;
 use App\Services\TerbilangService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class GuruFeaturesAndAttendanceFeatureTest extends TestCase
@@ -477,5 +478,113 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
         $journal = TeachingJournal::where('class_id', $this->class->id)->first();
         $this->assertNotNull($journal);
         $this->assertEquals('Bab 1 Perkenalan', $journal->material_taught);
+    }
+
+    // ------------------------------------------------------------------
+    // Progress Report: 3 tanda tangan berurutan (Guru -> Kurikulum -> Owner)
+    // ------------------------------------------------------------------
+
+    private function draftReportForSigning(): ProgressReport
+    {
+        return ProgressReport::create([
+            'student_id'    => $this->student->id,
+            'teacher_id'    => $this->teacher->id,
+            'enrollment_id' => $this->enrollment->id,
+            'status'        => 'Draft',
+            'report_type'   => 'Trimester Academic Progress Report',
+            'content'       => [['meeting' => 1, 'material' => 'Salam Mandarin', 'level' => 'Proficient', 'description' => 'Bagus']],
+        ]);
+    }
+
+    private function giveSignature(User $user, string $name): void
+    {
+        Storage::disk('public')->put("signatures/{$name}.png", base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+        ));
+        $user->update(['signature_path' => "signatures/{$name}.png"]);
+    }
+
+    public function test_progress_report_submit_requires_teacher_signature(): void
+    {
+        Storage::fake('public');
+        Storage::fake('local');
+        $report = $this->draftReportForSigning();
+
+        $this->actingAs($this->guruUser)
+            ->post(route('teacher.progress-report.submit-all'), ['class_id' => $this->class->id])
+            ->assertSessionHas('error');
+
+        $report->refresh();
+        $this->assertEquals('Draft', $report->status);
+        $this->assertNull($report->teacher_signed_at);
+    }
+
+    public function test_progress_report_three_signatures_flow(): void
+    {
+        Storage::fake('public');
+        Storage::fake('local');
+        $this->giveSignature($this->guruUser, 'guru');
+        $this->giveSignature($this->kurikulumUser, 'kurikulum');
+        $this->giveSignature($this->ownerUser, 'owner');
+        $report = $this->draftReportForSigning();
+
+        // 1. Guru mengirim -> TTD guru otomatis terbubuhkan
+        $this->actingAs($this->guruUser)
+            ->post(route('teacher.progress-report.submit-all'), ['class_id' => $this->class->id]);
+        $report->refresh();
+        $this->assertEquals('Submitted', $report->status);
+        $this->assertNotNull($report->teacher_signed_at);
+        $this->assertEquals('signatures/guru.png', $report->teacher_signature_path);
+
+        $doc = ProgressReportDocument::data($report);
+        $this->assertNotNull($doc['teacher_signature']);
+        $this->assertNull($doc['curriculum_signature']);
+        $this->assertNull($doc['owner_signature']);
+
+        // 2. Kurikulum ACC -> TTD kurikulum terbubuhkan
+        $this->actingAs($this->kurikulumUser)
+            ->patch(route('kurikulum.review-pengajuan.report', $report), ['decision' => 'Approved']);
+        $report->refresh();
+        $this->assertNotNull($report->reviewed_at);
+        $this->assertEquals('signatures/kurikulum.png', $report->curriculum_signature_path);
+
+        $doc = ProgressReportDocument::data($report);
+        $this->assertNotNull($doc['teacher_signature']);
+        $this->assertNotNull($doc['curriculum_signature']);
+        $this->assertNull($doc['owner_signature']);
+
+        // 3. Owner TTD -> lengkap 3 tanda tangan
+        $this->actingAs($this->ownerUser)
+            ->post(route('owner.ttd.report', $report));
+        $report->refresh();
+        $this->assertNotNull($report->owner_signed_at);
+
+        $doc = ProgressReportDocument::data($report);
+        $this->assertNotNull($doc['teacher_signature']);
+        $this->assertNotNull($doc['curriculum_signature']);
+        $this->assertNotNull($doc['owner_signature']);
+        $this->assertTrue($doc['is_signed']);
+    }
+
+    public function test_progress_report_returned_by_kurikulum_clears_teacher_signature(): void
+    {
+        Storage::fake('public');
+        Storage::fake('local');
+        $this->giveSignature($this->guruUser, 'guru');
+        $report = $this->draftReportForSigning();
+
+        $this->actingAs($this->guruUser)
+            ->post(route('teacher.progress-report.submit-all'), ['class_id' => $this->class->id]);
+
+        $this->actingAs($this->kurikulumUser)
+            ->patch(route('kurikulum.review-pengajuan.report', $report->refresh()), [
+                'decision' => 'Rejected',
+                'note'     => 'Perbaiki deskripsi',
+            ]);
+
+        $report->refresh();
+        $this->assertEquals('Draft', $report->status);
+        $this->assertNull($report->teacher_signed_at);
+        $this->assertNull($report->teacher_signature_path);
     }
 }
