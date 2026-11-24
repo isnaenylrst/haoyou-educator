@@ -22,18 +22,6 @@
         @if (session('error'))
             <div class="sd-alert err">{{ session('error') }}</div>
         @endif
-
-        <div class="dashboard-header-actions">
-            <button type="button" class="btn btn-primary">
-                <i class="fa-solid fa-file-export"></i>
-                Export
-            </button>
-
-            {{-- <button type="button" class="btn btn-primary" onclick="openLeadModal()">
-                <i class="fa-solid fa-plus"></i>
-                Tambah Siswa
-            </button> --}}
-        </div>
     </div>
 
     {{-- ========================= STATISTIK ========================= --}}

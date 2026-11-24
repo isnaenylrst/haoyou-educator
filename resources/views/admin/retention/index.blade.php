@@ -23,8 +23,7 @@
             <div class="eyebrow">Lainnya</div>
             <h1>Retention Rate</h1>
             <p>
-                Pantau persentase siswa yang benar-benar lanjut ke program berikutnya dan sudah melakukan
-                pembayaran setiap bulan, serta performa guru berdasarkan siswa yang lanjut dan beban mengajar.
+                Pantau persentase kelanjutan dan pembayaran siswa setiap bulan serta performa guru berdasarkan retensi siswa dan beban mengajar.
             </p>
         </div>
     </div>

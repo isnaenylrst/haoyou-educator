@@ -1102,11 +1102,7 @@ class SiswaController extends Controller
             return false;
         }
 
-        return $payments->allowsInstallment(
-            false,
-            $package->program?->program_name,
-            ProgramLevel::find($package->level_id)?->level_name,
-        );
+        return $payments->allowsInstallment(false, $package);
     }
 
     /* =====================================================================

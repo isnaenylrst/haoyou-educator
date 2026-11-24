@@ -316,6 +316,7 @@ class ProgramLevelController extends Controller
             'min_students'     => $package->min_students,
             'max_students'     => $package->max_students,
             'price'            => (float) $package->price,
+            'installment_price' => $package->installment_price !== null ? (float) $package->installment_price : null,
             'is_active'        => (bool) $package->is_active,
         ]);
     }
@@ -357,6 +358,7 @@ class ProgramLevelController extends Controller
             'min_students'     => ['required', 'integer', 'min:1'],
             'max_students'     => ['required', 'integer', 'min:1', 'gte:min_students'],
             'price'            => ['required', 'numeric', 'min:0'],
+            'installment_price' => ['nullable', 'numeric', 'min:0'],
             'is_active'        => ['nullable', 'boolean'],
         ]);
 

@@ -456,35 +456,25 @@ class PaymentInstallmentService
         return (float) $package->price;
     }
 
-    public function allowsInstallment(
-        bool $isPrivate,
-        ?string $programName,
-        ?string $levelName
-    ): bool {
-        if ($isPrivate) {
+    /**
+     * Termin diizinkan kalau paket reguler (bukan private) punya Harga Termin.
+     * Admin mengatur lewat halaman Program & Level: kosongkan Harga Termin
+     * untuk paket yang wajib Lunas.
+     */
+    public function allowsInstallment(bool $isPrivate, mixed $package = null): bool
+    {
+        if ($isPrivate || ! is_object($package)) {
             return false;
         }
 
-        if ($programName === 'Daily Activity') {
-            return true;
-        }
-
-        if (! str_starts_with((string) $levelName, 'HSK ')) {
-            return false;
-        }
-
-        $level = (int) trim(substr($levelName, 4));
-
-        // Termin hanya untuk HSK 3 ke atas (HSK 1 dan 2 dibayar lunas / DP lalu pelunasan)
-        return $level >= 3;
+        return (float) ($package->installment_price ?? 0) > 0;
     }
 
     public function enrollmentAllowsInstallment(ClassEnrollment $e): bool
     {
         return $this->allowsInstallment(
             (bool) $e->private_package_id,
-            $e->programPackage?->program?->program_name,
-            $this->levelNameFor($e),
+            $e->programPackage,
         );
     }
 

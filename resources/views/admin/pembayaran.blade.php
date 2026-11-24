@@ -23,8 +23,6 @@
             <h1>Pembayaran</h1>
             <p>
                 Pantau tagihan tiap siswa dan catat pembayaran lanjutan (Termin 1–3 atau Pelunasan).
-                Pembayaran pertama (DP/Lunas) tercatat otomatis saat calon siswa dikonversi.
-                Pilih tampilan <strong>Transaksi</strong> untuk melihat semua pembayaran, termasuk Kelas Pengganti dan Home Visit.
             </p>
         </div>
     </div>

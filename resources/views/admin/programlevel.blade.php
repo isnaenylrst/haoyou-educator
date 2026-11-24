@@ -108,7 +108,8 @@
                         <th style="text-align: center; vertical-align: middle;">Kategori / Level</th>
                         <th style="text-align: center; vertical-align: middle;">Durasi / Pertemuan</th>
                         <th style="text-align: center; vertical-align: middle;">Kapasitas</th>
-                        <th style="text-align: center; vertical-align: middle;">Harga</th>
+                        <th style="text-align: center; vertical-align: middle;">Harga Lunas</th>
+                        <th style="text-align: center; vertical-align: middle;">Harga Termin</th>
                         <th style="text-align: center; vertical-align: middle;">Status</th>
                         <th width="110" style="text-align:center;">Aksi</th>
                     </tr>
@@ -132,6 +133,13 @@
                             </td>
                             <td style="text-align: center; vertical-align: middle;">{{ $package->min_students }}–{{ $package->max_students }} siswa</td>
                             <td>Rp{{ number_format($package->price, 0, ',', '.') }}</td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                @if ($package->installment_price)
+                                    Rp{{ number_format($package->installment_price, 0, ',', '.') }}
+                                @else
+                                    -
+                                @endif
+                            </td>
                             <td style="text-align: center; vertical-align: middle;">
                                 <span class="badge {{ $package->is_active ? 'badge-active' : 'badge-inactive' }}">
                                     <span class="badge-dot"></span>
@@ -158,14 +166,14 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" style="text-align:center;padding:50px;color:#888;">
+                            <td colspan="9" style="text-align:center;padding:50px;color:#888;">
                                 Belum ada paket reguler.
                             </td>
                         </tr>
                     @endforelse
 
                     <tr id="regulerFilterEmpty" style="display:none;">
-                        <td colspan="8" style="text-align:center;padding:50px;color:#888;">
+                        <td colspan="9" style="text-align:center;padding:50px;color:#888;">
                             Belum ada paket untuk program ini.
                         </td>
                     </tr>
@@ -316,8 +324,12 @@
                                 <input type="number" name="max_students" min="1" required>
                             </div>
                             <div class="form-field">
-                                <label>Harga (Rp) *</label>
+                                <label>Harga Lunas (Rp) *</label>
                                 <input type="number" name="price" min="0" step="1000" required>
+                            </div>
+                            <div class="form-field">
+                                <label>Harga Termin/bulan (Rp)</label>
+                                <input type="number" name="installment_price" min="0" step="1000">
                             </div>
                             <div class="form-field">
                                 <label class="form-checkbox">
@@ -404,8 +416,12 @@
                                 <input type="number" name="max_students" id="edit_max_students" min="1" required>
                             </div>
                             <div class="form-field">
-                                <label>Harga (Rp) *</label>
+                                <label>Harga Lunas (Rp) *</label>
                                 <input type="number" name="price" id="edit_price" min="0" step="1000" required>
+                            </div>
+                            <div class="form-field">
+                                <label>Harga Termin/bulan (Rp)</label>
+                                <input type="number" name="installment_price" id="edit_installment_price" min="0" step="1000">
                             </div>
                             <div class="form-field">
                                 <label class="form-checkbox">
@@ -672,6 +688,7 @@
                 document.getElementById('edit_min_students').value = data.min_students ?? '';
                 document.getElementById('edit_max_students').value = data.max_students ?? '';
                 document.getElementById('edit_price').value = data.price ?? '';
+                document.getElementById('edit_installment_price').value = data.installment_price ?? '';
                 document.getElementById('edit_is_active').checked = !!data.is_active;
                 document.getElementById('edit_program_id').value = data.program_id ?? '';
 
