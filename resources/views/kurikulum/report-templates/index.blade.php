@@ -50,6 +50,45 @@
                             </td>
                         </tr>
                     @endforeach
+
+                    {{-- PROGRAM PRIVATE: satu template per Paket Private (sesuai Admin -> Program & Level -> Paket Private) --}}
+                    <tr class="table-light"><td colspan="4" class="fw-bold small text-uppercase text-muted">
+                        <i class="fa-solid fa-user-graduate me-1"></i> Program Private (per paket)
+                    </td></tr>
+                    @forelse($privatePackages as $pp)
+                        @php($t = $byPackage->get($pp->id))
+                        <tr>
+                            <td class="fw-semibold">
+                                Private {{ $pp->package_name }}
+                                @unless($pp->is_active) <span class="badge bg-secondary ms-1">Nonaktif</span> @endunless
+                                <div class="small text-muted fw-normal">{{ $pp->total_meetings }} pertemuan · {{ $pp->duration_minutes }} menit</div>
+                            </td>
+                            <td>
+                                @if($t && $t->meetings_count > 0)
+                                    <span class="badge bg-success">Siap dipakai guru</span>
+                                @elseif($t)
+                                    <span class="badge bg-warning text-dark">Template kosong</span>
+                                @else
+                                    <span class="badge bg-danger">Belum ada template</span>
+                                @endif
+                            </td>
+                            <td class="text-center">{{ $t?->meetings_count ?? 0 }}</td>
+                            <td class="text-end">
+                                @if($t)
+                                    <a href="{{ route('kurikulum.report-template.edit', $t) }}" class="btn btn-outline-primary btn-sm">Isi / Edit</a>
+                                @else
+                                    <form method="POST" action="{{ route('kurikulum.report-template.store') }}" class="d-inline">
+                                        @csrf
+                                        <input type="hidden" name="name" value="Private {{ $pp->package_name }}">
+                                        <input type="hidden" name="private_package_id" value="{{ $pp->id }}">
+                                        <button class="btn btn-warning btn-sm fw-bold">Buat template Private {{ $pp->package_name }}</button>
+                                    </form>
+                                @endif
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="4" class="text-muted small">Belum ada Paket Private. Tambahkan di Admin &rarr; Program &amp; Level &rarr; Paket Private.</td></tr>
+                    @endforelse
                     </tbody>
                 </table>
             </div>
@@ -61,11 +100,11 @@
             <h6 class="fw-bold mb-3">Buat template baru</h6>
             <form method="POST" action="{{ route('kurikulum.report-template.store') }}" class="row g-2 align-items-end">
                 @csrf
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label small fw-semibold">Nama template <span class="text-danger">*</span></label>
                     <input type="text" name="name" class="form-control" value="{{ old('name') }}" placeholder="mis. Feixiang 读写 - Trimester 1" required maxlength="255">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small fw-semibold">Program (kategori)</label>
                     <select name="program_category_id" class="form-select">
                         <option value="">-- pilih program --</option>
@@ -74,7 +113,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small fw-semibold">Atau khusus satu level</label>
                     <select name="program_level_id" class="form-select">
                         <option value="">-- semua level program --</option>
@@ -83,9 +122,18 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-md-2"><button class="btn btn-warning fw-bold w-100">Buat &amp; isi pertemuan</button></div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">Atau paket private</label>
+                    <select name="private_package_id" class="form-select">
+                        <option value="">-- bukan private --</option>
+                        @foreach($privatePackages as $pp)
+                            <option value="{{ $pp->id }}" @selected(old('private_package_id') == $pp->id)>Private {{ $pp->package_name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-2"><button class="btn btn-warning fw-bold w-100">Buat &amp; isi</button></div>
             </form>
-            <div class="small text-muted mt-2">Template level khusus diutamakan; bila tidak ada, dipakai template program.</div>
+            <div class="small text-muted mt-2">Template level khusus diutamakan; bila tidak ada, dipakai template program. Kelas private memakai template paket private-nya.</div>
         </div>
     </div>
 
@@ -97,8 +145,8 @@
                 @forelse($templates as $t)
                     <tr>
                         <td class="fw-semibold">{{ $t->name }}</td>
-                        <td>{{ $t->category?->category_name ?? '-' }}</td>
-                        <td>{{ $t->level?->level_name ?? 'Semua level' }}</td>
+                        <td>{{ $t->privatePackage ? 'Private' : ($t->category?->category_name ?? '-') }}</td>
+                        <td>{{ $t->privatePackage ? $t->privatePackage->package_name : ($t->level?->level_name ?? 'Semua level') }}</td>
                         <td class="text-center"><span class="badge bg-dark">{{ $t->meetings_count }}</span></td>
                         <td class="text-end">
                             <a href="{{ route('kurikulum.report-template.edit', $t) }}" class="btn btn-outline-primary btn-sm">Isi / Edit</a>
