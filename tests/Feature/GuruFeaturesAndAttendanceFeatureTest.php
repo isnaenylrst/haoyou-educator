@@ -108,6 +108,7 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
 
         $this->class = ClassModel::create([
             'program_package_id' => $package->id,
+            'level_id'           => $pl->id,
             'teacher_id'         => $this->teacher->id,
             'class_name'         => 'Mandarin Kids A',
             'delivery_mode'      => 'Online',
@@ -172,8 +173,7 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
 
         // Buat Template Kurikulum agar form tidak me-redirect
         $tpl = ProgressReportTemplate::create([
-            'program_id'       => $this->class->programPackage->program_id,
-            'program_level_id' => $this->class->programPackage->level_id,
+            'program_level_id' => $this->class->level_id,
             'name'             => 'Template Mandarin Kids',
         ]);
         ProgressReportTemplateMeeting::create([
@@ -202,9 +202,12 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
 
         // Buka view dokumen progress report (komponen bersama)
         $report = ProgressReport::create([
-            'class_enrollment_id' => $this->enrollment->id,
+            'student_id'          => $this->student->id,
+            'enrollment_id'       => $this->enrollment->id,
             'teacher_id'          => $this->teacher->id,
             'status'              => 'Draft',
+            'report_type'         => 'Trimester Academic Progress Report',
+            'report_period'       => 'Nov 2026',
             'content'             => [
                 ['meeting' => 1, 'material' => 'Salam Mandarin', 'level' => 'Proficient', 'description' => 'Bagus'],
                 ['meeting' => 2, 'material' => 'Angka Mandarin', 'level' => '', 'description' => ''],
@@ -308,7 +311,7 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
             ],
         ];
 
-        $postRes = $this->post(route('teacher.pengajuan.store'), $submitData);
+        $postRes = $this->from(route('teacher.pengajuan'))->post(route('teacher.pengajuan.store'), $submitData);
         $postRes->assertRedirect(route('teacher.pengajuan'));
 
         // Cek data tersimpan di DB
@@ -446,6 +449,10 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
      */
     public function test_attendance_and_teaching_log_accessible_and_work(): void
     {
+        // Jurnal terkunci 24 jam setelah sesi selesai. Waktu dikunci di hari sesi (Jumat 20 Nov 2026,
+        // sesi 14:00-15:00) supaya tes tidak tergantung tanggal hari ini.
+        $this->travelTo(Carbon::parse('2026-11-20 16:00:00'));
+
         $this->actingAs($this->guruUser);
 
         // Buka Attendance
@@ -481,6 +488,7 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
 
         $saveRes = $this->post(route('teacher.attendance.store', $this->schedule), $storeData);
         $saveRes->assertSessionHasNoErrors();
+        $saveRes->assertSessionMissing('error');   // bila ditolak (mis. form terkunci), pesannya tampil di sini
 
         $journal = TeachingJournal::where('class_id', $this->class->id)->first();
         $this->assertNotNull($journal);
