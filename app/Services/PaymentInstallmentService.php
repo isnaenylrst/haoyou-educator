@@ -11,8 +11,26 @@ use Illuminate\Validation\ValidationException;
 
 class PaymentInstallmentService
 {
-    /** Jumlah termin untuk skema Termin. */
-    public const TERMIN_STAGES = ['Termin 1', 'Termin 2', 'Termin 3'];
+    /** Batas jumlah termin yang bisa dipilih admin untuk skema Termin. */
+    public const TERMIN_MIN = 2;
+    public const TERMIN_MAX = 10;
+
+    /** Semua tahap termin yang mungkin (Termin 1..TERMIN_MAX). */
+    public const TERMIN_STAGES = [
+        'Termin 1', 'Termin 2', 'Termin 3', 'Termin 4', 'Termin 5',
+        'Termin 6', 'Termin 7', 'Termin 8', 'Termin 9', 'Termin 10',
+    ];
+
+    /**
+     * Jumlah termin yang dipilih admin untuk enrollment ini (TERMIN_MIN..TERMIN_MAX, default 3).
+     * Disimpan di kolom class_enrollments.termin_count.
+     */
+    public function terminCountFor(ClassEnrollment $enrollment): int
+    {
+        $count = (int) ($enrollment->termin_count ?? 3);
+
+        return ($count >= self::TERMIN_MIN && $count <= self::TERMIN_MAX) ? $count : 3;
+    }
 
     /**
      * Catat SATU transaksi pembayaran paket.
@@ -250,8 +268,8 @@ class PaymentInstallmentService
     /**
      * Jadwal termin setelah DP.
      * Uang masuk disebar berurutan: pendaftaran, aktivitas, lalu biaya les.
-     * Sisa biaya les dibagi 3 (Termin 1..3, selisih pembulatan di termin terakhir);
-     * biaya aktivitas yang belum tertutup DP ditambahkan ke Termin 1.
+     * Sisa biaya les dibagi sesuai jumlah termin pilihan admin (2 sampai 10; selisih pembulatan
+     * di termin terakhir); biaya aktivitas yang belum tertutup DP ditambahkan ke Termin 1.
      *
      * @return array<int, array{stage:string, amount:float}>  hanya termin yang nominalnya > 0
      */
@@ -263,9 +281,9 @@ class PaymentInstallmentService
 
         $plan = [];
 
-        foreach (self::TERMIN_STAGES as $i => $stage) {
-            if ($amounts[$i] > 0) {
-                $plan[] = ['stage' => $stage, 'amount' => (float) $amounts[$i]];
+        foreach ($amounts as $i => $amount) {
+            if ($amount > 0) {
+                $plan[] = ['stage' => 'Termin ' . ($i + 1), 'amount' => (float) $amount];
             }
         }
 
@@ -273,9 +291,10 @@ class PaymentInstallmentService
     }
 
     /**
-     * Pembagian biaya les ke 3 termin setelah DP, TANPA biaya aktivitas (dipakai formulir yang
+     * Pembagian biaya les ke termin setelah DP, TANPA biaya aktivitas (dipakai formulir yang
      * menampilkan pendaftaran, aktivitas, dan termin sebagai kolom terpisah).
-     * Sisa biaya les dibagi 3, selisih pembulatan di termin terakhir.
+     * Sisa biaya les dibagi sesuai jumlah termin (2 sampai 10), selisih pembulatan di termin terakhir.
+     * Hasil `shares` berisi satu nilai per termin (sebanyak jumlah termin).
      *
      * @return array{shares: array<int,float>, activity_unpaid: float, les_remaining: float}
      */
@@ -288,11 +307,17 @@ class PaymentInstallmentService
             (float) ($this->totalBillFor($enrollment) ?? 0),
         );
 
-        $les  = $alloc['les_remaining'];
-        $base = floor($les / 3);
+        $les   = $alloc['les_remaining'];
+        $count = $this->terminCountFor($enrollment);
+        $base  = floor($les / $count);
+
+        $shares = array_fill(0, $count, (float) $base);
+
+        // Termin terakhir menyerap selisih pembulatan
+        $shares[$count - 1] = round($les - ($count - 1) * $base, 2);
 
         return [
-            'shares'          => [(float) $base, (float) $base, round($les - 2 * $base, 2)],
+            'shares'          => $shares,
             'activity_unpaid' => $alloc['activity_unpaid'],
             'les_remaining'   => $les,
         ];

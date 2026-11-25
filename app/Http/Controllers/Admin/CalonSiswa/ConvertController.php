@@ -21,6 +21,7 @@ use App\Services\ClassOfferService;
 use App\Services\ClassScheduleService;
 use App\Services\ClassSessionService;
 use App\Services\PaymentInstallmentService;
+use App\Services\RegistrationFormService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -342,12 +343,13 @@ class ConvertController extends Controller
         $validated = $request->validate([
             'payment_scheme' => 'nullable|in:Lunas,Termin',
             'discount'       => 'nullable|numeric|min:0',
+            'termin_count'   => 'nullable|integer|min:' . PaymentInstallmentService::TERMIN_MIN . '|max:' . PaymentInstallmentService::TERMIN_MAX,
             'notes'          => 'nullable|string|max:1000',
             'amount_paid'    => 'required|numeric|min:1',
             'payment_method' => 'required|string|max:100',
             'payment_date'   => 'required|date|before_or_equal:today',
             'proof'          => 'required|file|mimes:jpg,jpeg,png,pdf|max:4096',
-        ], [
+        ] + RegistrationFormService::manualRules('form_manual'), [
             'proof.required'               => 'Bukti pembayaran wajib diupload.',
             'payment_date.before_or_equal' => 'Tanggal pembayaran tidak boleh di masa depan.',
         ]);
@@ -398,10 +400,20 @@ class ConvertController extends Controller
             ]);
         }
 
+        // Jumlah termin (2 sampai 10) hanya berlaku untuk skema Termin; selain itu tetap 3
+        $terminCount = $scheme === 'Termin' ? (int) ($validated['termin_count'] ?? 3) : 3;
+
+        // Tanggal manual untuk formulir; kosong = otomatis. Tanggal termin di atas jumlah termin dibuang
+        // (skema Lunas hanya menyisakan kolom pertama).
+        $formManual = RegistrationFormService::cleanManual(
+            $validated['form_manual'] ?? [],
+            $scheme === 'Termin' ? $terminCount : 1,
+        );
+
         $proofPath = $request->file('proof')->store('bukti-pembayaran', 'public');
 
         try {
-            $enrollment = DB::transaction(function () use ($validated, $draft, $candidateStudent, $isPrivate, $levelId, $proofPath, $registrationFee, $activityFee, $discount, $totalBill, $scheme) {
+            $enrollment = DB::transaction(function () use ($validated, $draft, $candidateStudent, $isPrivate, $levelId, $proofPath, $registrationFee, $activityFee, $discount, $totalBill, $scheme, $terminCount, $formManual) {
 
                 $studentLevel = Level::where('nama_level', 'Student')->firstOrFail();
 
@@ -464,6 +476,9 @@ class ConvertController extends Controller
                         : null,
                     // Skema bayar menentukan total tagihan (Lunas = price, Termin = installment_price x lama paket)
                     'payment_scheme'   => $scheme,
+                    // Jumlah termin (dipakai PaymentInstallmentService) dan tanggal manual untuk formulir
+                    'termin_count'     => $terminCount,
+                    'form_manual'      => $formManual ?: null,
                 ]);
 
                 // Sinkronkan ke student_learning_requests jika siswa private mengisi requested_material

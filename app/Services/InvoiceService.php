@@ -370,7 +370,11 @@ class InvoiceService
                 ? e(implode('.', array_filter([
                     Str::lower(Str::slug((string) $student?->name, '')),
                     str_replace(' ', '', (string) $levelName),
-                    $this->nextStage($payment->payment_stage, $enrollment->payment_scheme),
+                    $this->nextStage(
+                        $payment->payment_stage,
+                        $enrollment->payment_scheme,
+                        $this->installments->terminCountFor($enrollment),
+                    ),
                 ], fn ($part) => $part !== '')))
                 : '',
         ];
@@ -521,7 +525,7 @@ class InvoiceService
             $labels[] = match ($payment->payment_stage) {
                 'DP'     => 'Biaya Les (DP)',
                 'Lunas'  => 'Biaya Les (Lunas)',
-                default  => $payment->payment_stage,   // Termin 1..3 / Pelunasan
+                default  => $payment->payment_stage,   // Termin 1..N / Pelunasan
             };
         }
 
@@ -632,16 +636,24 @@ class InvoiceService
      * HELPER
      * ========================================================== */
 
-    /** Contoh keterangan transfer untuk tahap berikutnya (skema Termin: DP lalu Termin 1; skema Lunas: DP lalu Pelunasan). */
-    private function nextStage(?string $stage, ?string $scheme = null): string
+    /**
+     * Contoh keterangan transfer untuk tahap berikutnya.
+     * Skema Termin: DP lalu Termin 1, Termin 2, ... sampai jumlah termin enrollment, lalu Pelunasan.
+     * Skema Lunas: DP lalu Pelunasan.
+     */
+    private function nextStage(?string $stage, ?string $scheme = null, int $terminCount = 3): string
     {
-        return match (true) {
-            $stage === 'DP' && $scheme === 'Termin' => 'Termin1',
-            $stage === 'DP'                         => 'Pelunasan',
-            $stage === 'Termin 1'                   => 'Termin2',
-            $stage === 'Termin 2'                   => 'Termin3',
-            default                                 => 'Termin',
-        };
+        if ($stage === 'DP') {
+            return $scheme === 'Termin' ? 'Termin1' : 'Pelunasan';
+        }
+
+        if (preg_match('/^Termin (\d+)$/', (string) $stage, $m) === 1) {
+            $n = (int) $m[1];
+
+            return $n < $terminCount ? 'Termin' . ($n + 1) : 'Pelunasan';
+        }
+
+        return 'Termin';
     }
 
     /** Satu baris tabel Rincian Biaya invoice biaya tambahan. */

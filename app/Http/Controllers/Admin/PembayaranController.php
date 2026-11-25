@@ -16,7 +16,7 @@ use Illuminate\Validation\ValidationException;
 
 class PembayaranController extends Controller
 {
-    private const STAGES = ['Termin 1', 'Termin 2', 'Termin 3', 'Pelunasan'];
+    private const STAGES = [...PaymentInstallmentService::TERMIN_STAGES, 'Pelunasan'];
 
     private const METHODS = ['Transfer Bank', 'Cash', 'QRIS'];
 
@@ -221,7 +221,7 @@ class PembayaranController extends Controller
             ]);
         }
 
-        // Tahap dan nominal ditentukan PaymentInstallmentService::nextPayment (Pelunasan atau Termin 1..3,
+        // Tahap dan nominal ditentukan PaymentInstallmentService::nextPayment (Pelunasan atau Termin 1..N sesuai jumlah termin enrollment,
         // nominal harus sesuai jadwal). Input payment_stage dari form lama diabaikan.
         $next = $this->payments->nextPayment($enrollment);
 

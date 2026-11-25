@@ -129,7 +129,7 @@
                             </td>
                             <td style="text-align: center; vertical-align: middle;">
                                 <div class="cell-stack-main">{{ $package->duration_minutes }} menit</div>
-                                <div class="cell-stack-sub">{{ $package->total_meetings }}x pertemuan</div>
+                                <div class="cell-stack-sub">{{ $package->total_meetings }}x pertemuan @if ($package->duration_months) &middot; {{ $package->duration_months }} bulan @endif</div>
                             </td>
                             <td style="text-align: center; vertical-align: middle;">{{ $package->min_students }}–{{ $package->max_students }} siswa</td>
                             <td>Rp{{ number_format($package->price, 0, ',', '.') }}</td>
@@ -211,7 +211,10 @@
                                 {{ $pkg->package_name }}
                             </td>
                             <td style="text-align: center; vertical-align: middle;">
-                                {{ $pkg->duration_minutes }} menit
+                                <div class="cell-stack-main">{{ $pkg->duration_minutes }} menit</div>
+                                @if ($pkg->duration_months)
+                                    <div class="cell-stack-sub">{{ $pkg->duration_months }} bulan</div>
+                                @endif
                             </td>
                             <td style="text-align: center; vertical-align: middle;">
                                 {{ $pkg->total_meetings }}x
@@ -332,6 +335,10 @@
                                 <input type="number" name="installment_price" min="0" step="1000">
                             </div>
                             <div class="form-field">
+                                <label>Durasi (bulan) *</label>
+                                <input type="number" name="duration_months" min="1" max="60" required>
+                            </div>
+                            <div class="form-field">
                                 <label class="form-checkbox">
                                     <input type="checkbox" name="is_active" value="1" checked>
                                     Paket aktif (bisa dipilih calon siswa)
@@ -424,6 +431,10 @@
                                 <input type="number" name="installment_price" id="edit_installment_price" min="0" step="1000">
                             </div>
                             <div class="form-field">
+                                <label>Durasi (bulan) *</label>
+                                <input type="number" name="duration_months" id="edit_duration_months" min="1" max="60" required>
+                            </div>
+                            <div class="form-field">
                                 <label class="form-checkbox">
                                     <input type="checkbox" name="is_active" id="edit_is_active" value="1">
                                     Paket aktif (bisa dipilih calon siswa)
@@ -484,6 +495,10 @@
                                 <input type="number" name="price" min="0" step="1000" required>
                             </div>
                             <div class="form-field">
+                                <label>Durasi (bulan) *</label>
+                                <input type="number" name="duration_months" min="1" max="60" required>
+                            </div>
+                            <div class="form-field">
                                 <label class="form-checkbox">
                                     <input type="checkbox" name="is_active" value="1" checked>
                                     Paket aktif
@@ -542,6 +557,10 @@
                             <div class="form-field">
                                 <label>Harga (Rp) *</label>
                                 <input type="number" name="price" id="edit_priv_price" min="0" step="1000" required>
+                            </div>
+                            <div class="form-field">
+                                <label>Durasi (bulan) *</label>
+                                <input type="number" name="duration_months" id="edit_priv_duration_months" min="1" max="60" required>
                             </div>
                             <div class="form-field">
                                 <label class="form-checkbox">
@@ -684,6 +703,7 @@
             .then(data => {
                 document.getElementById('edit_package_name').value = data.package_name ?? '';
                 document.getElementById('edit_duration_minutes').value = data.duration_minutes ?? '';
+                document.getElementById('edit_duration_months').value = data.duration_months ?? '';
                 document.getElementById('edit_total_meetings').value = data.total_meetings ?? '';
                 document.getElementById('edit_min_students').value = data.min_students ?? '';
                 document.getElementById('edit_max_students').value = data.max_students ?? '';
@@ -723,6 +743,7 @@
             .then(data => {
                 document.getElementById('edit_priv_package_name').value = data.package_name ?? '';
                 document.getElementById('edit_priv_duration_minutes').value = data.duration_minutes ?? '';
+                document.getElementById('edit_priv_duration_months').value = data.duration_months ?? '';
                 document.getElementById('edit_priv_total_meetings').value = data.total_meetings ?? '';
                 document.getElementById('edit_priv_min_students').value = data.min_students ?? '';
                 document.getElementById('edit_priv_max_students').value = data.max_students ?? '';

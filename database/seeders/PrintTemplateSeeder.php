@@ -57,7 +57,7 @@ class PrintTemplateSeeder extends Seeder
                 // Tabel mengikuti skema yang dipilih siswa: bagian JIKA_TERMIN tampil untuk skema Termin,
                 // JIKA_LUNAS untuk skema Lunas (pemilihan dilakukan RegistrationFormService)
                 '<!--JIKA_TERMIN-->'
-                    . '<p style="font-size:12pt;font-style:italic;margin:0 0 2px;">*Khusus Pembayaran Cicilan Termin 1-3 wajib di isi tanggalnya dan di tandatangani.</p>'
+                    . '<p style="font-size:12pt;font-style:italic;margin:0 0 2px;">*Khusus Pembayaran Cicilan Termin wajib di isi tanggalnya dan di tandatangani.</p>'
                     . $this->regularPaymentTable()
                 . '<!--/JIKA_TERMIN-->'
                 . '<!--JIKA_LUNAS-->'
@@ -329,38 +329,11 @@ class PrintTemplateSeeder extends Seeder
      */
     private function regularPaymentTable(): string
     {
-        $head = 'text-align:center;vertical-align:middle;font-size:12pt;';
-        $cell = self::CELL . 'height:40px;vertical-align:middle;text-align:center;';
-
-        return '<table style="' . self::TABLE . '">'
-            . '<tr>'
-                . '<th rowspan="2" style="' . self::HEAD . 'width:15%;text-align:left;vertical-align:middle;font-size:12pt;">Keterangan</th>'
-                . '<th colspan="2" style="' . self::HEAD . $head . '">DP</th>'
-                . '<th rowspan="2" style="' . self::HEAD . 'width:17%;' . $head . '">Termin 1</th>'
-                . '<th rowspan="2" style="' . self::HEAD . 'width:17%;' . $head . '">Termin 2</th>'
-                . '<th rowspan="2" style="' . self::HEAD . 'width:17%;' . $head . '">Termin 3</th>'
-            . '</tr>'
-            . '<tr>'
-                . '<th style="' . self::HEAD . 'width:17%;' . $head . '">Pendaftaran</th>'
-                . '<th style="' . self::HEAD . 'width:17%;' . $head . '">Aktivitas</th>'
-            . '</tr>'
-            . '<tr>'
-                . '<td style="' . self::LABEL . 'font-weight:bold;height:40px;vertical-align:middle;">Nominal :</td>'
-                . '<td style="' . $cell . '">{dp_pendaftaran_nominal}</td>'
-                . '<td style="' . $cell . '">{dp_aktivitas_nominal}</td>'
-                . '<td style="' . $cell . '">{termin1_lunas_nominal}</td>'
-                . '<td style="' . $cell . '">{termin2_nominal}</td>'
-                . '<td style="' . $cell . '">{termin3_nominal}</td>'
-            . '</tr>'
-            . '<tr>'
-                . '<td style="' . self::LABEL . 'font-weight:bold;height:40px;vertical-align:middle;">Tanggal :</td>'
-                . '<td style="' . $cell . '">{dp_pendaftaran_tanggal}</td>'
-                . '<td style="' . $cell . '">{dp_aktivitas_tanggal}</td>'
-                . '<td style="' . $cell . '">{termin1_lunas_tanggal}</td>'
-                . '<td style="' . $cell . '">{termin2_tanggal}</td>'
-                . '<td style="' . $cell . '">{termin3_tanggal}</td>'
-            . '</tr>'
-            . '</table>';
+        return $this->paymentTable([
+                'Pendaftaran' => 'dp_pendaftaran',
+                'Aktivitas'   => 'dp_aktivitas',
+            ])
+            . '{tabel_termin}';
     }
 
     /** Tabel pembayaran: kolom pertama 20%, sisanya dibagi rata. */

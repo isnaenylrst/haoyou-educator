@@ -25,11 +25,15 @@ class ClassEnrollment extends Model
         'notes',
         'requested_material',
         'payment_scheme',
+        'termin_count',
+        'form_manual',
         'status',
     ];
 
     protected $casts = [
         'enrollment_date' => 'date',
+        'termin_count' => 'integer',
+        'form_manual'  => 'array',
     ];
 
     protected static function booted()

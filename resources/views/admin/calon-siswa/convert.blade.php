@@ -525,6 +525,9 @@
 
         <div class="convert-layout">
 
+            {{-- ===================== KOLOM KIRI: PEMBAYARAN + EDIT FORMULIR ===================== --}}
+            <div class="payment-column">
+
             {{-- ===================== FORM PEMBAYARAN ===================== --}}
             <div class="card">
                 <form action="{{ $formAction ?? route('admin.calon-siswa.convert.store', $candidateStudent->id) }}"
@@ -667,15 +670,84 @@
                         @endif
                     </p>
 
-                    <div class="form-footer">
-                        <a href="{{ $cancelUrl ?? route('admin.calon-siswa.index') }}" class="btn btn-secondary">Batal</a>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fa-solid fa-check"></i>
-                            {{ isset($formAction) ? 'Simpan Pembayaran' : 'Simpan & Konversi Jadi Siswa' }}
-                        </button>
-                    </div>
                 </form>
             </div>
+
+            {{-- ===================== EDIT FORMULIR (khusus konversi calon siswa reguler) =====================
+                 Input memakai atribut form="payment-form" supaya ikut terkirim bersama form pembayaran di atas.
+                 Jumlah termin (2/3) menentukan pembagian nominal termin secara otomatis (sistem & formulir).
+                 Nominal pendaftaran & aktivitas tetap (dari Pengaturan). Tanggal diisi manual; kosong = otomatis. --}}
+            @if (! $isContinueFlow && ! $isPrivate)
+                <div class="card" style="margin-top: 16px;">
+                    <div class="form-section-title"><i class="fa-solid fa-pen-to-square"></i> Edit Formulir Pendaftaran</div>
+
+                    <p class="form-section-note" style="margin-top:0;">
+                        <i class="fa-solid fa-circle-info"></i>
+                        Opsional. Nominal pendaftaran &amp; aktivitas tetap sesuai Pengaturan. Isi tanggal pembayarannya;
+                        tanggal yang dikosongkan diisi tangan di formulir.
+                    </p>
+
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label>Biaya pendaftaran: nominal</label>
+                            <input type="text" value="Rp {{ number_format((float) $registrationFee, 0, ',', '.') }}" readonly>
+                        </div>
+                        <div class="form-field">
+                            <label>Biaya pendaftaran: tanggal dibayar</label>
+                            <input type="date" form="payment-form" name="form_manual[dp_pendaftaran_tanggal]"
+                                   value="{{ old('form_manual.dp_pendaftaran_tanggal') }}">
+                        </div>
+
+                        <div class="form-field">
+                            <label>Biaya aktivitas: nominal</label>
+                            <input type="text" value="Rp {{ number_format((float) $activityFee, 0, ',', '.') }}" readonly>
+                        </div>
+                        <div class="form-field">
+                            <label>Biaya aktivitas: tanggal dibayar</label>
+                            <input type="date" form="payment-form" name="form_manual[dp_aktivitas_tanggal]"
+                                   value="{{ old('form_manual.dp_aktivitas_tanggal') }}">
+                        </div>
+                    </div>
+
+                    {{-- Jumlah termin: hanya tampil kalau skema Termin dipilih (diatur JS di bawah) --}}
+                    <div class="form-grid">
+                        <div class="form-field" id="manual-termin-count">
+                            <label>Jumlah Termin ({{ \App\Services\PaymentInstallmentService::TERMIN_MIN }} sampai {{ \App\Services\PaymentInstallmentService::TERMIN_MAX }})</label>
+                            <input type="number" id="termin-count-input" form="payment-form" name="termin_count" step="1"
+                                   min="{{ \App\Services\PaymentInstallmentService::TERMIN_MIN }}"
+                                   max="{{ \App\Services\PaymentInstallmentService::TERMIN_MAX }}"
+                                   value="{{ old('termin_count', 3) }}">
+                            <span class="form-section-note" style="margin-top:6px;">
+                                <i class="fa-solid fa-circle-info"></i>
+                                Sisa biaya les dibagi rata sesuai jumlah termin, di sistem pembayaran dan di formulir.
+                            </span>
+                        </div>
+                    </div>
+
+                    {{-- Tanggal per termin. Termin 1 juga dipakai sebagai kolom Lunas; Termin 2 dst. tampil sesuai jumlah termin (JS) --}}
+                    <div class="form-grid">
+                        @for ($n = 1; $n <= \App\Services\PaymentInstallmentService::TERMIN_MAX; $n++)
+                            @php $dateField = $n === 1 ? 'termin1_lunas_tanggal' : "termin{$n}_tanggal"; @endphp
+                            <div class="form-field" id="manual-termin{{ $n }}">
+                                <label>{{ $n === 1 ? 'Termin 1 / Lunas' : 'Termin ' . $n }}: tanggal</label>
+                                <input type="date" form="payment-form" name="form_manual[{{ $dateField }}]"
+                                       value="{{ old('form_manual.' . $dateField) }}">
+                            </div>
+                        @endfor
+                    </div>
+                </div>
+            @endif
+
+            {{-- Tombol simpan di bawah kedua card; form="payment-form" mengaitkannya ke form pembayaran --}}
+            <div class="form-footer">
+                <a href="{{ $cancelUrl ?? route('admin.calon-siswa.index') }}" class="btn btn-secondary">Batal</a>
+                <button type="submit" form="payment-form" class="btn btn-primary">
+                    <i class="fa-solid fa-check"></i>
+                    {{ isset($formAction) ? 'Simpan Pembayaran' : 'Simpan & Konversi Jadi Siswa' }}
+                </button>
+            </div>
+
+            </div>{{-- /payment-column --}}
 
             {{-- ===================== RINGKASAN TAGIHAN ===================== --}}
             <div class="card">
@@ -1589,6 +1661,13 @@
             return hasTermin && checked && checked.value === 'Termin';
         }
 
+        // Jumlah termin pilihan admin di card "Edit Formulir" (default 3; card tidak ada di alur lain)
+        function terminCount() {
+            const el = document.getElementById('termin-count-input');
+            const n = el ? parseInt(el.value, 10) : 3;
+            return Number.isFinite(n) ? Math.min(Math.max(n, {{ \App\Services\PaymentInstallmentService::TERMIN_MIN }}), {{ \App\Services\PaymentInstallmentService::TERMIN_MAX }}) : 3;
+        }
+
         // Sama dengan PaymentInstallmentService: minimal DP = biaya pendaftaran (kalau tidak ada: biaya aktivitas)
         function minimumDown(totalBill) {
             const min = regFee > 0 ? regFee : actFee;
@@ -1639,8 +1718,13 @@
             }
 
             if (isTermin()) {
-                const base = Math.floor(a.lesRemaining / 3);
-                const parts = [base + a.actUnpaid, base, a.lesRemaining - 2 * base];
+                const n = terminCount();
+                const base = Math.floor(a.lesRemaining / n);
+                const parts = [];
+                for (let i = 0; i < n; i++) {
+                    parts.push(i === n - 1 ? a.lesRemaining - (n - 1) * base : base);
+                }
+                parts[0] += a.actUnpaid;
                 const rows = [];
                 parts.forEach((v, i) => { if (v > 0) rows.push('Termin ' + (i + 1) + ': ' + rupiah(v)); });
                 html += rows.join(' &middot; ')
@@ -1676,6 +1760,17 @@
 
             if (! amountInput.readOnly) amountInput.min = minDp;
 
+            // Card "Edit Formulir": jumlah termin & tanggal Termin 2 dst. hanya untuk skema Termin, sebanyak jumlah termin
+            const showTermin = isTermin();
+            const showBox = (id, visible) => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = visible ? '' : 'none';
+            };
+            showBox('manual-termin-count', showTermin);
+            for (let t = 2; t <= {{ \App\Services\PaymentInstallmentService::TERMIN_MAX }}; t++) {
+                showBox('manual-termin' + t, showTermin && t <= terminCount());
+            }
+
             renderPlan();
         }
 
@@ -1684,6 +1779,11 @@
         amountInput.addEventListener('input', renderPlan);
 
         document.querySelectorAll('input[name="payment_scheme"]').forEach(r => r.addEventListener('change', recalc));
+        const terminCountInput = document.getElementById('termin-count-input');
+        if (terminCountInput) {
+            terminCountInput.addEventListener('input', recalc);
+            terminCountInput.addEventListener('change', recalc);
+        }
         discountInput.addEventListener('input', recalc);
         recalc();
     });

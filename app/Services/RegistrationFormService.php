@@ -69,8 +69,66 @@ class RegistrationFormService
             'termin2_tanggal'  => 'Termin 2: tanggal',
             'termin3_nominal'  => 'Termin 3: nominal (rencana jadwal, atau yang sudah dibayar)',
             'termin3_tanggal'  => 'Termin 3: tanggal',
+            'tabel_termin'     => 'Tabel semua termin (otomatis sebanyak jumlah termin: nomor, nominal, tanggal)',
         ],
     ];
+
+    /** Kolom tanggal yang boleh diisi manual oleh admin (disimpan di class_enrollments.form_manual). */
+    public static function manualDateKeys(): array
+    {
+        $keys = ['dp_pendaftaran_tanggal', 'dp_aktivitas_tanggal', 'termin1_lunas_tanggal'];
+
+        for ($n = 1; $n <= PaymentInstallmentService::TERMIN_MAX; $n++) {
+            $keys[] = "termin{$n}_tanggal";
+        }
+
+        return $keys;
+    }
+
+    /** Aturan validasi untuk isian tanggal manual (dipakai ConvertController). */
+    public static function manualRules(string $field = 'form_manual'): array
+    {
+        $rules = [$field => ['nullable', 'array']];
+
+        foreach (self::manualDateKeys() as $key) {
+            $rules["$field.$key"] = ['nullable', 'date'];
+        }
+
+        return $rules;
+    }
+
+    /**
+     * Buang kolom kosong / tidak dikenal dan rapikan tanggal ke Y-m-d sebelum disimpan.
+     * Kalau $terminCount diisi, tanggal termin di atas jumlah itu ikut dibuang.
+     */
+    public static function cleanManual(array $manual, ?int $terminCount = null): array
+    {
+        $clean = [];
+
+        foreach (self::manualDateKeys() as $key) {
+            $raw = $manual[$key] ?? null;
+
+            if ($raw === null || trim((string) $raw) === '') {
+                continue;
+            }
+
+            if (
+                $terminCount !== null
+                && preg_match('/^termin(\d+)_tanggal$/', $key, $m)
+                && (int) $m[1] > $terminCount
+            ) {
+                continue;
+            }
+
+            try {
+                $clean[$key] = Carbon::parse($raw)->toDateString();
+            } catch (\Throwable) {
+                // tanggal tidak valid: dibuang
+            }
+        }
+
+        return $clean;
+    }
 
     /**
      * PaymentInstallmentService opsional supaya tempat yang masih memakai
@@ -100,10 +158,19 @@ class RegistrationFormService
         $key = $enrollment->private_package_id ? 'form_private' : 'form_regular';
         $template = PrintTemplate::where('key', $key)->firstOrFail();
 
+        // Tanggal manual admin (disimpan saat konversi) menimpa tanggal otomatis
+        $manual = is_array($enrollment->form_manual) ? $enrollment->form_manual : [];
+        $values = $this->applyManual($this->valuesFor($student, $enrollment), $manual);
+
+        // Tabel semua termin (sebanyak jumlah termin pilihan admin), dibuat setelah tanggal manual diterapkan
+        $values['tabel_termin'] = $enrollment->payment_scheme === 'Termin'
+            ? $this->terminTable($values, $this->installments()->terminCountFor($enrollment))
+            : '';
+
         // Tabel pembayaran formulir reguler mengikuti skema siswa (Termin atau Lunas)
         return $this->toPdf($this->render(
             $template->content,
-            $this->valuesFor($student, $enrollment),
+            $values,
             $enrollment->payment_scheme === 'Termin',
         ));
     }
@@ -224,13 +291,13 @@ class RegistrationFormService
         $slots = [];
 
         foreach ($enrollment->packagePayments->sortBy('id') as $payment) {
-            $slot = match ($payment->payment_stage) {
-                'DP'                  => 'dp',
-                'Lunas', 'Pelunasan'  => 'lunas',
-                'Termin 1'            => 'termin1',
-                'Termin 2'            => 'termin2',
-                'Termin 3'            => 'termin3',
-                default               => null,
+            $stage = (string) $payment->payment_stage;
+
+            $slot = match (true) {
+                $stage === 'DP'                                   => 'dp',
+                in_array($stage, ['Lunas', 'Pelunasan'], true)    => 'lunas',
+                (bool) preg_match('/^Termin (\d+)$/', $stage, $m) => 'termin' . $m[1],
+                default                                           => null,
             };
 
             if ($slot && ! isset($slots[$slot])) {
@@ -242,7 +309,9 @@ class RegistrationFormService
             }
         }
 
-        foreach (['dp', 'lunas', 'dp_lunas', 'termin1', 'termin2', 'termin3'] as $slot) {
+        $terminSlots = array_map(fn (int $n) => 'termin' . $n, range(1, PaymentInstallmentService::TERMIN_MAX));
+
+        foreach (array_merge(['dp', 'lunas', 'dp_lunas'], $terminSlots) as $slot) {
             $payment = $slots[$slot] ?? null;
 
             $values[$slot . '_nominal'] = $payment ? $this->rupiah((float) $payment->amount_paid) : '';
@@ -306,13 +375,13 @@ class RegistrationFormService
                     $values['termin1_lunas_tanggal'] = $fmt($les['date']);
                 }
             } elseif ($enrollment->payment_scheme === 'Termin') {
-                // Termin 1-3: nominal sesuai kesepakatan (sisa biaya les dibagi 3); yang sudah dibayar memakai
-                // nominal sebenarnya. Aktivitas yang belum lunas ada di kolom Aktivitas, bukan di Termin 1.
+                // Termin 1..N: nominal sesuai kesepakatan (sisa biaya les dibagi sesuai jumlah termin); yang sudah
+                // dibayar memakai nominal sebenarnya. Aktivitas yang belum lunas ada di kolom Aktivitas, bukan di Termin 1.
                 $shares = $this->installments()->terminLesShares($enrollment, $dp)['shares'];
 
-                foreach ([1, 2, 3] as $n) {
+                foreach (range(1, count($shares)) as $n) {
                     $paid   = $lesByStage['Termin ' . $n] ?? null;
-                    $amount = $paid ? $paid['amount'] : $shares[$n - 1];
+                    $amount = $paid ? $paid['amount'] : ($shares[$n - 1] ?? 0);
                     $text   = $amount > 0 ? $this->rupiah($amount) : '';
                     $date   = $paid ? $fmt($paid['date']) : '';
 
@@ -387,6 +456,16 @@ class RegistrationFormService
 
         $values['logo'] = $this->logoTag();
 
+        // Contoh tabel termin (3 baris) supaya tata letaknya terlihat di pratinjau editor
+        $sample = [];
+
+        foreach (range(1, 3) as $n) {
+            $sample["termin{$n}_tanggal"] = '[Tanggal]';
+            $sample["termin{$n}_nominal"] = '[Nominal]';
+        }
+
+        $values['tabel_termin'] = $this->terminTable($sample, 3);
+
         return $values;
     }
 
@@ -404,6 +483,70 @@ class RegistrationFormService
     private function rupiah(float $amount): string
     {
         return 'Rp' . number_format($amount, 0, ',', '.');
+    }
+
+    /**
+     * Tabel termin untuk formulir: satu baris per termin (Termin | Tanggal | Nominal).
+     * Gaya & lebar kolom (20% / 40% / 40%) disamakan dengan tabel DP (Pendaftaran | Aktivitas)
+     * di PrintTemplateSeeder, jadi garis kolom kedua tabel lurus. Tinggi baris mengecil kalau
+     * terminnya banyak supaya formulir tidak meluber ke halaman berikutnya.
+     * Nilai di $values sudah berformat (rupiah / d/m/Y), jadi aman dimasukkan ke HTML.
+     */
+    private function terminTable(array $values, int $count): string
+    {
+        $height = $count <= 4 ? 40 : 30;
+
+        $base  = 'border:1px solid #000;padding:4px 6px;vertical-align:middle;text-align:center;';
+        $head  = $base . 'background:#e6e6e6;font-weight:bold;font-size:12pt;';
+        $cell  = $base . 'height:' . $height . 'px;';
+        $label = $cell . 'text-align:left;font-weight:bold;';
+
+        $rows = '';
+
+        for ($n = 1; $n <= $count; $n++) {
+            $nominal = $values["termin{$n}_nominal"] ?? '';
+            $tanggal = $values["termin{$n}_tanggal"] ?? '';
+
+            $rows .= '<tr>'
+                . '<td style="' . $label . '">Termin ' . $n . '</td>'
+                . '<td style="' . $cell . '">' . ($tanggal === '' ? '&nbsp;' : $tanggal) . '</td>'
+                . '<td style="' . $cell . '">' . ($nominal === '' ? '&nbsp;' : $nominal) . '</td>'
+                . '</tr>';
+        }
+
+        return '<table style="width:100%;border-collapse:collapse;margin-bottom:8px;">'
+            . '<tr>'
+            . '<th style="' . $head . 'width:20%;text-align:left;">Termin</th>'
+            . '<th style="' . $head . 'width:40%;">Tanggal</th>'
+            . '<th style="' . $head . 'width:40%;">Nominal</th>'
+            . '</tr>' . $rows . '</table>';
+    }
+
+    /** Timpa tanggal otomatis dengan tanggal manual; yang tidak diisi tetap otomatis. */
+    private function applyManual(array $values, array $manual): array
+    {
+        foreach (self::manualDateKeys() as $key) {
+            $raw = $manual[$key] ?? null;
+
+            if ($raw === null || trim((string) $raw) === '') {
+                continue;
+            }
+
+            try {
+                $values[$key] = Carbon::parse($raw)->format('d/m/Y');
+            } catch (\Throwable) {
+                // tanggal tidak valid: abaikan
+            }
+        }
+
+        // Kolom "Termin 1 / Lunas" dan "Termin 1" adalah satu isian yang sama
+        if (filled($manual['termin1_lunas_tanggal'] ?? null)) {
+            $values['termin1_tanggal'] = $values['termin1_lunas_tanggal'];
+        } elseif (filled($manual['termin1_tanggal'] ?? null)) {
+            $values['termin1_lunas_tanggal'] = $values['termin1_tanggal'];
+        }
+
+        return $values;
     }
 
     private function levelLabel(Student $student): ?string

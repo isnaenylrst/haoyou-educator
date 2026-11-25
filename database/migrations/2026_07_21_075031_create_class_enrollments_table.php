@@ -1,4 +1,3 @@
-
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -45,6 +44,9 @@ return new class extends Migration
                 'Lunas',
                 'Termin'
             ])->default('Lunas');
+
+            $table->unsignedTinyInteger('termin_count')->default(3);
+            $table->json('form_manual')->nullable();
 
             $table->enum('status', [
                 'Waiting Class',

@@ -1,4 +1,3 @@
-
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -32,7 +31,8 @@ return new class extends Migration
             $table->string('package_name');
 
             $table->integer('duration_minutes');
-            $table->unsignedTinyInteger('duration_months')->default(3);
+            $table->unsignedSmallInteger('duration_months')->default(3);
+
             $table->integer('total_meetings');
             $table->integer('min_students');
             $table->integer('max_students');

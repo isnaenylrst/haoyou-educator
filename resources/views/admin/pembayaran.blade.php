@@ -22,7 +22,7 @@
             <div class="eyebrow">KEUANGAN</div>
             <h1>Pembayaran</h1>
             <p>
-                Pantau tagihan tiap siswa dan catat pembayaran lanjutan (Termin 1–3 atau Pelunasan).
+                Pantau tagihan tiap siswa dan catat pembayaran lanjutan (Termin atau Pelunasan).
             </p>
         </div>
     </div>
