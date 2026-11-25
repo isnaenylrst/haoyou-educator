@@ -227,7 +227,7 @@ class TeachingLogTest extends TestCase
             'class_session_id'    => $session->id,
             'session_date'        => '2026-11-20',
             'meeting_number'      => 1,
-            'status'              => 'Submitted',
+            'status'              => 'Pending',
             'class_status'        => 'Conducted',
             'learning_activities' => 'Kegiatan belajar teks mandarin lengkap',
             'problems'            => 'Tidak ada kendala',
