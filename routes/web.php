@@ -39,6 +39,8 @@ use App\Http\Controllers\Kurikulum\StudentLearningRequestController as Kurikulum
 use App\Http\Controllers\Kurikulum\TrainingMaterialController as KurikulumTrainingMaterialController;
 use App\Http\Controllers\Kurikulum\ConsultationResultController as KurikulumConsultationResultController;
 use App\Http\Controllers\Kurikulum\RiwayatPengajuanController;
+use App\Http\Controllers\Owner\SelfLearningVideoController as KurikulumSelfLearningVideoController;
+use App\Http\Controllers\Owner\SelfStudySettingController as KurikulumSelfStudySettingController;
 
 // ===== ADMIN =====
 // Dashboard pakai alias supaya tidak bentrok dengan Kurikulum\DashboardController
@@ -450,6 +452,20 @@ Route::middleware(['auth', 'role:Curriculum'])
             ->name('belajar-mandiri.analisis');
         Route::get('/belajar-mandiri/siswa/{student}', [SelfStudyMonitoringController::class, 'show'])
             ->name('belajar-mandiri.show');
+        
+         // Video Self Learning (tampil di Panduan Belajar Mandiri siswa)
+        Route::get('/self-learning', [KurikulumSelfLearningVideoController::class, 'index'])->name('self-learning.index');
+        Route::post('/self-learning', [KurikulumSelfLearningVideoController::class, 'store'])->name('self-learning.store');
+        Route::put('/self-learning/{video}', [KurikulumSelfLearningVideoController::class, 'update'])->name('self-learning.update');
+        Route::patch('/self-learning/{video}/aktif', [KurikulumSelfLearningVideoController::class, 'toggle'])->name('self-learning.toggle');
+        Route::delete('/self-learning/{video}', [KurikulumSelfLearningVideoController::class, 'destroy'])->name('self-learning.destroy');
+        Route::get('/self-learning/{video}/stream', [KurikulumSelfLearningVideoController::class, 'stream'])->name('self-learning.stream');
+
+        // Pengaturan nilai Sertifikat Belajar Mandiri (batas lulus & bobot)
+        Route::get('/pengaturan-nilai-mandiri', [KurikulumSelfStudySettingController::class, 'edit'])
+            ->name('self-study.settings');
+        Route::put('/pengaturan-nilai-mandiri', [KurikulumSelfStudySettingController::class, 'update'])
+            ->name('self-study.settings.update');
 
         // JADWAL KONSULTASI
         Route::get('/jadwal-konsultasi', [JadwalKonsultasiController::class, 'index'])
