@@ -144,9 +144,13 @@
             ['Video Pembelajaran', 'fa-circle-play', '/kurikulum/video', 'kurikulum/video*'],
             ['Materi Training', 'fa-graduation-cap', '/kurikulum/training', 'kurikulum/training*'],
             ['Request Belajar', 'fa-book-open-reader', '/kurikulum/request-belajar', 'kurikulum/request-belajar*'],
-        ]],
-        ['label' => 'Pengajar', 'items' => [
+            ['Video Belajar Mandiri', 'fa-circle-play', '/kurikulum/self-learning', 'kurikulum/self-learning*'],
+            ['Nilai Belajar Mandiri', 'fa-sliders', '/kurikulum/pengaturan-nilai-mandiri', 'kurikulum/pengaturan-nilai-mandiri*'],
+            ]],
+            
+            ['label' => 'Pengajar', 'items' => [
             ['Review Pengajuan', 'fa-circle-check', '/kurikulum/review-pengajuan', 'kurikulum/review-pengajuan*'],
+            ['Riwayat Pengajuan', 'fa-clock-rotate-left', '/kurikulum/riwayat-pengajuan', 'kurikulum/riwayat-pengajuan*'],
             //['Kompetensi Report', 'fa-list-check', '/kurikulum/kompetensi', 'kurikulum/kompetensi*'],
             ['Template Progress Report', 'fa-table-list', '/kurikulum/template-progress-report', 'kurikulum/template-progress-report*'],
             ['Observasi Guru', 'fa-magnifying-glass-chart', '/kurikulum/observasi', 'kurikulum/observasi*'],

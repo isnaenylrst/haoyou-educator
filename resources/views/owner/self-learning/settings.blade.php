@@ -1,4 +1,8 @@
-@extends('layouts.owner')
+@php
+    $rp     = request()->routeIs('kurikulum.*') ? 'kurikulum' : 'owner';
+    $layout = $rp === 'kurikulum' ? 'layouts.kurikulum' : 'layouts.owner';
+@endphp
+@extends($layout)
 
 @section('title', 'Pengaturan Nilai Belajar Mandiri')
 
@@ -24,7 +28,7 @@
     @endif
 
     <div class="card border-0 shadow-sm rounded-4" style="max-width:640px">
-        <form method="POST"action= "{{ route('owner.self-study.settings.update') }}" class="card-body p-4">
+      <form method="POST" action="{{ route($rp . '.self-study.settings.update') }}" class="card-body p-4">
             @csrf @method('PUT')
 
             <div class="mb-4">

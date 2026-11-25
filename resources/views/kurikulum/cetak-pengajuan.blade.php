@@ -51,9 +51,7 @@
         <div class="d-flex align-items-center gap-3">
             <img src="{{ asset('image/Logo-Haoyou.jpeg') }}" alt="Haoyou Educator" onerror="this.src='{{ asset('assets/img/logo.png') }}'">
             <div>
-                <h4 class="fw-bold mb-0" style="letter-spacing: 1px;">HAOYOU MANDARIN EDUCATOR</h4>
-                <div class="small text-muted">Lembaga Pendidikan Bahasa Mandarin & Pengembangan Kurikulum</div>
-                <div class="small text-muted" style="font-size: 11px;">Jl. Pendidikan Utama No. 88 | Email: info@haoyoueducator.com | Telp: (021) 8899-7711</div>
+                <h4 class="fw-bold mb-0" style="letter-spacing: 1px;">HAOYOU EDUCATOR</h4>
             </div>
         </div>
     </div>

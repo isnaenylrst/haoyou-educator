@@ -24,6 +24,7 @@ use App\Services\TeacherAvailabilityUrgencyService;
 use App\Services\TerbilangService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class GuruFeaturesAndAttendanceFeatureTest extends TestCase
@@ -107,6 +108,7 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
 
         $this->class = ClassModel::create([
             'program_package_id' => $package->id,
+            'level_id'           => $pl->id,
             'teacher_id'         => $this->teacher->id,
             'class_name'         => 'Mandarin Kids A',
             'delivery_mode'      => 'Online',
@@ -171,8 +173,7 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
 
         // Buat Template Kurikulum agar form tidak me-redirect
         $tpl = ProgressReportTemplate::create([
-            'program_id'       => $this->class->programPackage->program_id,
-            'program_level_id' => $this->class->programPackage->level_id,
+            'program_level_id' => $this->class->level_id,
             'name'             => 'Template Mandarin Kids',
         ]);
         ProgressReportTemplateMeeting::create([
@@ -201,9 +202,12 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
 
         // Buka view dokumen progress report (komponen bersama)
         $report = ProgressReport::create([
-            'class_enrollment_id' => $this->enrollment->id,
+            'student_id'          => $this->student->id,
+            'enrollment_id'       => $this->enrollment->id,
             'teacher_id'          => $this->teacher->id,
             'status'              => 'Draft',
+            'report_type'         => 'Trimester Academic Progress Report',
+            'report_period'       => 'Nov 2026',
             'content'             => [
                 ['meeting' => 1, 'material' => 'Salam Mandarin', 'level' => 'Proficient', 'description' => 'Bagus'],
                 ['meeting' => 2, 'material' => 'Angka Mandarin', 'level' => '', 'description' => ''],
@@ -307,7 +311,7 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
             ],
         ];
 
-        $postRes = $this->post(route('teacher.pengajuan.store'), $submitData);
+        $postRes = $this->from(route('teacher.pengajuan'))->post(route('teacher.pengajuan.store'), $submitData);
         $postRes->assertRedirect(route('teacher.pengajuan'));
 
         // Cek data tersimpan di DB
@@ -408,6 +412,7 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
         $otherTeacher = Teacher::create([
             'user_id' => $otherGuruUser->id,
             'name'    => 'Guru Other',
+            'phone'   => '081200000000',
             'status'  => 'Active',
         ]);
 
@@ -444,6 +449,10 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
      */
     public function test_attendance_and_teaching_log_accessible_and_work(): void
     {
+        // Jurnal terkunci 24 jam setelah sesi selesai. Waktu dikunci di hari sesi (Jumat 20 Nov 2026,
+        // sesi 14:00-15:00) supaya tes tidak tergantung tanggal hari ini.
+        $this->travelTo(Carbon::parse('2026-11-20 16:00:00'));
+
         $this->actingAs($this->guruUser);
 
         // Buka Attendance
@@ -456,6 +465,12 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
 
         // Simpan Jurnal & Absensi (store)
         $storeData = [
+            'teaching_teacher_id' => $this->teacher->id,
+            'student_names'       => 'Siswa Test',
+            'is_last_meeting'     => 'Tidak',
+            'start_time'          => '10:00',
+            'end_time'            => '11:30',
+            'focus_materials'     => ['Listening', 'Speaking'],
             'session_date'        => '2026-11-20',
             'class_running'       => 'Berjalan',
             'is_substitute'       => 'Tidak',
@@ -473,9 +488,183 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
 
         $saveRes = $this->post(route('teacher.attendance.store', $this->schedule), $storeData);
         $saveRes->assertSessionHasNoErrors();
+        $saveRes->assertSessionMissing('error');   // bila ditolak (mis. form terkunci), pesannya tampil di sini
 
         $journal = TeachingJournal::where('class_id', $this->class->id)->first();
         $this->assertNotNull($journal);
         $this->assertEquals('Bab 1 Perkenalan', $journal->material_taught);
+    }
+
+    // ------------------------------------------------------------------
+    // Progress Report: 3 tanda tangan berurutan (Guru -> Kurikulum -> Owner)
+    // ------------------------------------------------------------------
+
+    private function draftReportForSigning(): ProgressReport
+    {
+        return ProgressReport::create([
+            'student_id'    => $this->student->id,
+            'teacher_id'    => $this->teacher->id,
+            'enrollment_id' => $this->enrollment->id,
+            'status'        => 'Draft',
+            'report_type'   => 'Trimester Academic Progress Report',
+            'report_period' => 'Nov 2026',
+            'content'       => [['meeting' => 1, 'material' => 'Salam Mandarin', 'level' => 'Proficient', 'description' => 'Bagus']],
+        ]);
+    }
+
+    private function giveSignature(User $user, string $name): void
+    {
+        Storage::disk('public')->put("signatures/{$name}.png", base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+        ));
+        $user->update(['signature_path' => "signatures/{$name}.png"]);
+    }
+
+    public function test_progress_report_submit_requires_teacher_signature(): void
+    {
+        Storage::fake('public');
+        Storage::fake('local');
+        $report = $this->draftReportForSigning();
+
+        $this->actingAs($this->guruUser)
+            ->post(route('teacher.progress-report.submit-all'), ['class_id' => $this->class->id])
+            ->assertSessionHas('error');
+
+        $report->refresh();
+        $this->assertEquals('Draft', $report->status);
+        $this->assertNull($report->teacher_signed_at);
+    }
+
+    public function test_progress_report_three_signatures_flow(): void
+    {
+        Storage::fake('public');
+        Storage::fake('local');
+        $this->giveSignature($this->guruUser, 'guru');
+        $this->giveSignature($this->kurikulumUser, 'kurikulum');
+        $this->giveSignature($this->ownerUser, 'owner');
+        $report = $this->draftReportForSigning();
+
+        // 1. Guru mengirim -> TTD guru otomatis terbubuhkan
+        $this->actingAs($this->guruUser)
+            ->post(route('teacher.progress-report.submit-all'), ['class_id' => $this->class->id]);
+        $report->refresh();
+        $this->assertEquals('Submitted', $report->status);
+        $this->assertNotNull($report->teacher_signed_at);
+        $this->assertEquals('signatures/guru.png', $report->teacher_signature_path);
+
+        $doc = ProgressReportDocument::data($report);
+        $this->assertNotNull($doc['teacher_signature']);
+        $this->assertNull($doc['curriculum_signature']);
+        $this->assertNull($doc['owner_signature']);
+
+        // 2. Kurikulum ACC -> TTD kurikulum terbubuhkan
+        $this->actingAs($this->kurikulumUser)
+            ->patch(route('kurikulum.review-pengajuan.report', $report), ['decision' => 'Approved']);
+        $report->refresh();
+        $this->assertNotNull($report->reviewed_at);
+        $this->assertEquals('signatures/kurikulum.png', $report->curriculum_signature_path);
+
+        $doc = ProgressReportDocument::data($report);
+        $this->assertNotNull($doc['teacher_signature']);
+        $this->assertNotNull($doc['curriculum_signature']);
+        $this->assertNull($doc['owner_signature']);
+
+        // 3. Owner TTD -> lengkap 3 tanda tangan
+        $this->actingAs($this->ownerUser)
+            ->post(route('owner.ttd.report', $report));
+        $report->refresh();
+        $this->assertNotNull($report->owner_signed_at);
+
+        $doc = ProgressReportDocument::data($report);
+        $this->assertNotNull($doc['teacher_signature']);
+        $this->assertNotNull($doc['curriculum_signature']);
+        $this->assertNotNull($doc['owner_signature']);
+        $this->assertTrue($doc['is_signed']);
+    }
+
+    public function test_progress_report_returned_by_kurikulum_clears_teacher_signature(): void
+    {
+        Storage::fake('public');
+        Storage::fake('local');
+        $this->giveSignature($this->guruUser, 'guru');
+        $report = $this->draftReportForSigning();
+
+        $this->actingAs($this->guruUser)
+            ->post(route('teacher.progress-report.submit-all'), ['class_id' => $this->class->id]);
+
+        $this->actingAs($this->kurikulumUser)
+            ->patch(route('kurikulum.review-pengajuan.report', $report->refresh()), [
+                'decision' => 'Rejected',
+                'note'     => 'Perbaiki deskripsi',
+            ]);
+
+        $report->refresh();
+        $this->assertEquals('Draft', $report->status);
+        $this->assertNull($report->teacher_signed_at);
+        $this->assertNull($report->teacher_signature_path);
+    }
+
+    // ------------------------------------------------------------------
+    // Review Pengajuan Kurikulum: filter guru + bulan / tanggal di semua tab
+    // ------------------------------------------------------------------
+
+    public function test_review_pengajuan_filters_by_teacher_and_period_without_error(): void
+    {
+        $this->actingAs($this->kurikulumUser);
+
+        $queries = [
+            ['tab' => 'material', 'guru' => $this->teacher->id, 'bulan' => '2026-11'],
+            ['tab' => 'jurnal', 'guru' => $this->teacher->id, 'dari' => '2026-11-01', 'sampai' => '2026-11-30', 'jurnal_late' => '1'],
+            ['tab' => 'report', 'dari' => '2026-11-30', 'sampai' => '2026-11-01'],   // terbalik -> ditukar otomatis
+            ['tab' => 'cuti', 'bulan' => 'bukan-bulan'],                               // tidak valid -> diabaikan
+            ['tab' => 'sertifikat', 'guru' => 999999],
+            ['tab' => 'pengajuan', 'bulan' => '2026-12', 'jurnal_late' => '0'],
+        ];
+
+        foreach ($queries as $query) {
+            $this->get(route('kurikulum.review-pengajuan', $query))
+                ->assertOk()
+                ->assertSee('Semua Guru');
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Riwayat pengajuan: tetap ada walaupun sudah selesai / TTD lengkap
+    // ------------------------------------------------------------------
+
+    public function test_riwayat_pengajuan_keeps_completed_submissions_for_kurikulum_and_guru(): void
+    {
+        $report = ProgressReport::create([
+            'student_id'      => $this->student->id,
+            'teacher_id'      => $this->teacher->id,
+            'enrollment_id'   => $this->enrollment->id,
+            'status'          => 'Published',
+            'report_type'     => 'Trimester Academic Progress Report',
+            'report_period'   => 'Nov 2026',
+            'content'         => [],
+            'submitted_at'    => now()->subDays(3),
+            'teacher_signed_at' => now()->subDays(3),
+            'reviewed_at'     => now()->subDays(2),
+            'owner_signed_at' => now()->subDay(),
+        ]);
+
+        // Kurikulum melihat laporan yang sudah TTD lengkap di riwayat (bukan di antrean review)
+        $this->actingAs($this->kurikulumUser)
+            ->get(route('kurikulum.riwayat-pengajuan'))
+            ->assertOk()
+            ->assertSee('Progress Report')
+            ->assertSee('Selesai')
+            ->assertSee('3 TTD lengkap');
+
+        // Filter status & jenis & bulan tidak error
+        $this->get(route('kurikulum.riwayat-pengajuan', ['jenis' => 'report', 'status' => 'selesai', 'bulan' => now()->format('Y-m'), 'guru' => $this->teacher->id]))
+            ->assertOk()
+            ->assertSee('3 TTD lengkap');
+
+        // Guru yang bersangkutan juga melihat riwayatnya sendiri
+        $this->actingAs($this->guruUser)
+            ->get(route('teacher.riwayat-pengajuan'))
+            ->assertOk()
+            ->assertSee('3 TTD lengkap');
     }
 }

@@ -38,6 +38,9 @@ use App\Http\Controllers\Kurikulum\TeacherObservationController;
 use App\Http\Controllers\Kurikulum\StudentLearningRequestController as KurikulumStudentLearningRequestController;
 use App\Http\Controllers\Kurikulum\TrainingMaterialController as KurikulumTrainingMaterialController;
 use App\Http\Controllers\Kurikulum\ConsultationResultController as KurikulumConsultationResultController;
+use App\Http\Controllers\Kurikulum\RiwayatPengajuanController;
+use App\Http\Controllers\Owner\SelfLearningVideoController as KurikulumSelfLearningVideoController;
+use App\Http\Controllers\Owner\SelfStudySettingController as KurikulumSelfStudySettingController;
 
 // ===== ADMIN =====
 // Dashboard pakai alias supaya tidak bentrok dengan Kurikulum\DashboardController
@@ -87,6 +90,7 @@ use App\Http\Controllers\Guru\TrainingMaterialController as GuruTrainingMaterial
 use App\Http\Controllers\Guru\ConsultationResultController as GuruConsultationResultController;
 use App\Http\Controllers\Guru\RequestBelajarController as GuruRequestBelajarController;
 use App\Http\Controllers\Guru\ReplacementOfferController;
+use App\Http\Controllers\Guru\RiwayatPengajuanController as GuruRiwayatPengajuanController;
 
 // ===== OWNER =====
 use App\Http\Controllers\Owner\DashboardController as OwnerDashboardController;
@@ -448,6 +452,20 @@ Route::middleware(['auth', 'role:Curriculum'])
             ->name('belajar-mandiri.analisis');
         Route::get('/belajar-mandiri/siswa/{student}', [SelfStudyMonitoringController::class, 'show'])
             ->name('belajar-mandiri.show');
+        
+         // Video Self Learning (tampil di Panduan Belajar Mandiri siswa)
+        Route::get('/self-learning', [KurikulumSelfLearningVideoController::class, 'index'])->name('self-learning.index');
+        Route::post('/self-learning', [KurikulumSelfLearningVideoController::class, 'store'])->name('self-learning.store');
+        Route::put('/self-learning/{video}', [KurikulumSelfLearningVideoController::class, 'update'])->name('self-learning.update');
+        Route::patch('/self-learning/{video}/aktif', [KurikulumSelfLearningVideoController::class, 'toggle'])->name('self-learning.toggle');
+        Route::delete('/self-learning/{video}', [KurikulumSelfLearningVideoController::class, 'destroy'])->name('self-learning.destroy');
+        Route::get('/self-learning/{video}/stream', [KurikulumSelfLearningVideoController::class, 'stream'])->name('self-learning.stream');
+
+        // Pengaturan nilai Sertifikat Belajar Mandiri (batas lulus & bobot)
+        Route::get('/pengaturan-nilai-mandiri', [KurikulumSelfStudySettingController::class, 'edit'])
+            ->name('self-study.settings');
+        Route::put('/pengaturan-nilai-mandiri', [KurikulumSelfStudySettingController::class, 'update'])
+            ->name('self-study.settings.update');
 
         // JADWAL KONSULTASI
         Route::get('/jadwal-konsultasi', [JadwalKonsultasiController::class, 'index'])
@@ -527,6 +545,9 @@ Route::middleware(['auth', 'role:Curriculum'])
         // Review Reimburse & Pembelian Bahan Ajar (Poin 5)
         Route::patch('/review-pengajuan/submission/{submission}', [ReviewPengajuanController::class, 'reviewSubmission'])
             ->name('review-pengajuan.submission');
+
+        Route::get('/riwayat-pengajuan', [RiwayatPengajuanController::class, 'index'])
+            ->name('riwayat-pengajuan');
 
         /*
         |--------------------------------------------------------------------------
@@ -696,6 +717,9 @@ Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
 
         //Route::get('/notifikasi/{document}/download', [GuruNotifikasiController::class, 'download'])
         //    ->name('notifikasi.download');
+
+        Route::get('/riwayat-pengajuan', [GuruRiwayatPengajuanController::class, 'index'])
+            ->name('riwayat-pengajuan');
 
         // SOP
         Route::get('/sop', [GuruSopController::class, 'index'])
