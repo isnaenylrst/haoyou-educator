@@ -8,6 +8,7 @@ use App\Models\ClassSchedule;
 use App\Models\ClassSession;
 use App\Models\CurriculumConsultationSlot;
 use App\Models\Level;
+use App\Models\PrivatePackage;
 use App\Models\Program;
 use App\Models\ProgramLevel;
 use App\Models\ProgramPackage;
@@ -24,6 +25,7 @@ use App\Services\TeacherAvailabilityUrgencyService;
 use App\Services\TerbilangService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -666,5 +668,62 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
             ->get(route('teacher.riwayat-pengajuan'))
             ->assertOk()
             ->assertSee('3 TTD lengkap');
+    }
+
+    // ------------------------------------------------------------------
+    // Template Progress Report untuk program PRIVATE (per Paket Private)
+    // ------------------------------------------------------------------
+
+    public function test_progress_report_template_supports_private_packages(): void
+    {
+        $pkg = PrivatePackage::create([
+            'package_name'     => 'VIP Test',
+            'duration_minutes' => 60,
+            'duration_months'  => 3,
+            'total_meetings'   => 8,
+            'min_students'     => 1,
+            'max_students'     => 1,
+            'price'            => 1000000,
+            'is_active'        => true,
+        ]);
+
+        // Jadikan kelas fixture sebagai kelas private (kelas private tidak punya level_id)
+        DB::table('classes')->where('id', $this->class->id)->update(['private_package_id' => $pkg->id, 'level_id' => null]);
+
+        // Belum ada template private: tidak ditemukan, pesan guru menyebut paketnya
+        $this->assertNull(ProgressReportTemplate::forClass($this->class->id));
+        $this->assertStringContainsString('VIP Test', ProgressReportTemplate::programLabelForClass($this->class->id));
+
+        // Kurikulum melihat paket private di halaman template dan membuat templatenya
+        $this->actingAs($this->kurikulumUser)
+            ->get(route('kurikulum.report-template.index'))
+            ->assertOk()
+            ->assertSee('Program Private')
+            ->assertSee('Private VIP Test');
+
+        $this->post(route('kurikulum.report-template.store'), [
+            'name'               => 'Private VIP Test',
+            'private_package_id' => $pkg->id,
+        ])->assertSessionHasNoErrors();
+
+        $tpl = ProgressReportTemplate::where('private_package_id', $pkg->id)->first();
+        $this->assertNotNull($tpl);
+        $this->assertNull($tpl->program_category_id);
+        $this->assertNull($tpl->program_level_id);
+
+        // Template masih kosong -> belum dipakai guru
+        $this->assertNull(ProgressReportTemplate::forClass($this->class->id));
+
+        ProgressReportTemplateMeeting::create(['template_id' => $tpl->id, 'meeting_number' => 1, 'materials' => 'Perkenalan diri']);
+
+        $found = ProgressReportTemplate::forClass($this->class->id);
+        $this->assertNotNull($found);
+        $this->assertEquals($tpl->id, $found->id);
+
+        // Template untuk paket yang sama tidak boleh ganda
+        $this->post(route('kurikulum.report-template.store'), [
+            'name'               => 'Private VIP Test (lagi)',
+            'private_package_id' => $pkg->id,
+        ])->assertSessionHasErrors('name');
     }
 }

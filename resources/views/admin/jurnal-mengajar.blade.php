@@ -204,6 +204,9 @@
                             <td>
                                 <div class="cand-name">{{ $j->class?->class_name ?? '-' }}</div>
                                 <div class="cand-sub">{{ $programOf($j->class) }}@if ($j->class?->level) · {{ $j->class->level->level_name }}@endif</div>
+                                @if ($j->location)
+                                    <div class="cand-sub"><i class="fa-solid fa-location-dot"></i> {{ config('journal.locations')[$j->location] ?? $j->location }}</div>
+                                @endif
                             </td>
                             <td>
                                 {{ $j->teacher?->name ?? '-' }}

@@ -349,6 +349,7 @@ class SubmissionHistoryService
                 'title'        => 'Jurnal ' . ($j->class?->class_name ?? '-'),
                 'subtitle'     => 'Sesi ' . ($j->session_date?->translatedFormat('d M Y') ?? '-')
                                   . ($j->meeting_number ? ' · Pertemuan ke-' . $j->meeting_number : '')
+                                  . ($j->location ? ' · ' . (config('journal.locations')[$j->location] ?? $j->location) : '')
                                   . ($j->is_substitute ? ' · oleh guru pengganti' : ''),
                 'teacher'      => $j->teacher?->name ?? '-',
                 'date'         => $j->created_at,
