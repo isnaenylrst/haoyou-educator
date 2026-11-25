@@ -376,6 +376,10 @@ class SiswaController extends Controller
                 ? $e->privatePackage
                 : ($e->programPackage ?? $e->class?->programPackage);
 
+            // Pertemuan terakhir: tanggal akhir kelas, atau (data historis tanpa kelas) kolom last_class_date
+            $lastClassDate = $e->class?->end_date ?? $e->last_class_date;
+            $lastClassDate = $lastClassDate ? Carbon::parse($lastClassDate) : null;
+
             return [
                 'enrollment_id'   => $e->id,
                 'class_name'      => $e->class->class_name ?? '-',
@@ -385,6 +389,10 @@ class SiswaController extends Controller
                 'course_type'     => $isPrivate ? 'Private' : 'Reguler',
                 'status'          => $e->status,
                 'enrollment_date' => optional($e->enrollment_date)->format('d M Y'),
+                'last_class_date' => $lastClassDate?->format('d M Y'),
+                'last_class_raw'  => $lastClassDate?->toDateString(),
+                // riwayat impor: tanpa kelas dan tanpa formulir pendaftaran
+                'is_history'      => ! $e->class_id && $e->last_class_date !== null,
                 'attended'        => $e->class_id ? (int) ($attendedByClass[$e->class_id] ?? 0) : null,
                 'absent'          => $e->class_id ? (int) ($absentByClass[$e->class_id] ?? 0) : null,
                 'total_meetings'  => $package->total_meetings ?? null,
@@ -392,10 +400,22 @@ class SiswaController extends Controller
             ];
         })->values();
 
+        // Ringkasan: program terakhir, pertemuan terakhir, dan batas H+30 biaya pendaftaran
+        [$registrationFeeApplies, $lastClassEnd] = $this->registrationFeeInfo($siswa);
+
+        $lastProgram = $programs
+            ->filter(fn ($p) => $p['last_class_raw'])
+            ->sortByDesc('last_class_raw')
+            ->first();
+
         return view('admin.siswa.detail', [
             'siswa'        => $siswa,
             'phone'        => $siswa->user->phone ?? $siswa->candidateStudent->phone ?? '-',
             'programs'     => $programs,
+            'lastProgram'            => $lastProgram,
+            'lastClassEnd'           => $lastClassEnd,
+            'graceUntil'             => $lastClassEnd?->copy()->addDays(30),
+            'registrationFeeApplies' => $registrationFeeApplies,
             'schedules'    => $siswa->activeEnrollment?->class?->schedules ?? collect(),
             'payments'     => $this->paymentRows($siswa),
             // Riwayat poin (siapa yang input, kapan, sebelum -> sesudah)
@@ -1066,14 +1086,16 @@ class SiswaController extends Controller
     }
 
     // Biaya pendaftaran dikenakan lagi kalau sudah lewat 30 hari sejak kelas terakhir berakhir.
-    // Kalau tidak ada kelas dengan end_date, dianggap tidak dikenakan.
+    // Tanggal akhir diambil dari kelas (classes.end_date) atau, untuk data historis tanpa kelas,
+    // dari class_enrollments.last_class_date. Kalau keduanya kosong, dianggap tidak dikenakan.
     private function registrationFeeInfo(Student $siswa): array
     {
         $lastEnd = $siswa->enrollments()
             ->with('class:id,end_date')
             ->get()
-            ->map(fn ($e) => $e->class?->end_date)
+            ->map(fn ($e) => $e->class?->end_date ?? $e->last_class_date)
             ->filter()
+            ->map(fn ($d) => Carbon::parse($d))
             ->max();
 
         if (! $lastEnd) {

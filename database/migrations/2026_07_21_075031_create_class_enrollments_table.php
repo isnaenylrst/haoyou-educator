@@ -33,6 +33,7 @@ return new class extends Migration
                 ->nullOnDelete();
 
             $table->date('enrollment_date');
+            $table->date('last_class_date')->nullable();
 
             $table->decimal('registration_fee', 12, 2)->default(0);
             $table->decimal('activity_fee', 12, 2)->default(0);

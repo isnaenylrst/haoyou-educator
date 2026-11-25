@@ -19,6 +19,7 @@ class ClassEnrollment extends Model
         'program_package_id',
         'private_package_id',
         'enrollment_date',
+        'last_class_date',
         'registration_fee',
         'activity_fee',
         'discount',
@@ -30,6 +31,7 @@ class ClassEnrollment extends Model
 
     protected $casts = [
         'enrollment_date' => 'date',
+        'last_class_date' => 'date',
     ];
 
     protected static function booted()

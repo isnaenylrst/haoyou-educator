@@ -108,6 +108,31 @@
                         Bertambah otomatis dari form "Beri Poin" di bawah atau dari jurnal guru.
                     </small>
                 </div>
+
+                <div class="form-field">
+                    <label>Program Terakhir</label>
+                    <div class="sd-info">{{ $lastProgram['program_name'] ?? '-' }}</div>
+                </div>
+
+                <div class="form-field">
+                    <label>Pertemuan Terakhir</label>
+                    <div class="sd-info">{{ $lastClassEnd?->format('d M Y') ?? '-' }}</div>
+                </div>
+
+                <div class="form-field">
+                    <label>Batas Lanjut (H+30)</label>
+                    <div class="sd-info">{{ $graceUntil?->format('d M Y') ?? '-' }}</div>
+                    @if ($graceUntil)
+                        <small>
+                            <i class="fa-solid fa-circle-info"></i>
+                            @if ($registrationFeeApplies)
+                                Sudah lewat: jika lanjut program, biaya pendaftaran dikenakan lagi.
+                            @else
+                                Belum lewat: jika lanjut program, tidak ada biaya pendaftaran.
+                            @endif
+                        </small>
+                    @endif
+                </div>
             </div>
         </div>
 
@@ -238,6 +263,7 @@
                             <th style="text-align: center; vertical-align: middle;">Tipe</th>
                             <th style="text-align: center; vertical-align: middle;">Status</th>
                             <th style="text-align: center; vertical-align: middle;">Tanggal Daftar</th>
+                            <th style="text-align: center; vertical-align: middle;">Pertemuan Terakhir</th>
                             <th style="text-align: center; vertical-align: middle;">Hadir</th>
                             <th style="text-align: center; vertical-align: middle;">Tidak Hadir</th>
                             <th style="text-align: center; vertical-align: middle;">Aksi</th>
@@ -266,6 +292,9 @@
                                     {{ $p['enrollment_date'] ?? '-' }}
                                 </td>
                                 <td style="text-align: center; vertical-align: middle;">
+                                    {{ $p['last_class_date'] ?? '-' }}
+                                </td>
+                                <td style="text-align: center; vertical-align: middle;">
                                     @if ($p['attended'] !== null)
                                         <div class="meet-label"><strong>{{ $p['attended'] }}{{ $total }}</strong> (hadir)</div>
                                     @else
@@ -281,10 +310,12 @@
                                 </td>
                                 <td style="text-align: center; vertical-align: middle;">
                                     <div class="sd-icon-row" style="display: flex; justify-content: center; align-items: center;">
-                                        <a href="{{ route('admin.siswa.formulir', [$siswa, $p['enrollment_id']]) }}" target="_blank" rel="noopener"
-                                        class="sd-icon-btn" title="Formulir pendaftaran (PDF)" aria-label="Formulir pendaftaran">
-                                            <i class="fa-regular fa-file-pdf"></i>
-                                        </a>
+                                        @unless ($p['is_history'])
+                                            <a href="{{ route('admin.siswa.formulir', [$siswa, $p['enrollment_id']]) }}" target="_blank" rel="noopener"
+                                            class="sd-icon-btn" title="Formulir pendaftaran (PDF)" aria-label="Formulir pendaftaran">
+                                                <i class="fa-regular fa-file-pdf"></i>
+                                            </a>
+                                        @endunless
 
                                         @if (count($reps))
                                             <button type="button" class="sd-icon-btn"
@@ -299,7 +330,7 @@
                             </tr>
 
                         @empty
-                            <tr><td colspan="8">Belum ada program yang diikuti.</td></tr>
+                            <tr><td colspan="9">Belum ada program yang diikuti.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
