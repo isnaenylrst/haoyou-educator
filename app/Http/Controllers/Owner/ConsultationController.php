@@ -265,12 +265,15 @@ class ConsultationController extends Controller
      */
     public function download($id)
     {
-        $consultation = ConsultationResult::findOrFail($id);
-        Gate::authorize('view', $consultation);
+    $consultation = ConsultationResult::findOrFail($id);
+    Gate::authorize('view', $consultation);
 
-        abort_unless($consultation->file_path && Storage::disk('public')->exists($consultation->file_path), 404, 'File lampiran tidak ditemukan.');
+    /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+    $disk = Storage::disk('public');
 
-        return Storage::disk('public')->download($consultation->file_path, $consultation->file_name);
+    abort_unless($consultation->file_path && $disk->exists($consultation->file_path), 404, 'File lampiran tidak ditemukan.');
+
+    return $disk->download($consultation->file_path, $consultation->file_name);
     }
 
     /**
@@ -333,9 +336,12 @@ class ConsultationController extends Controller
      */
     public function downloadRevision(RevisionConsultation $revisionConsultation)
     {
-        abort_unless($revisionConsultation->attachment_path && Storage::disk('public')->exists($revisionConsultation->attachment_path), 404, 'File lampiran revisi tidak ditemukan.');
+    /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+    $disk = Storage::disk('public');
 
-        return Storage::disk('public')->download($revisionConsultation->attachment_path, $revisionConsultation->attachment_name);
+    abort_unless($revisionConsultation->attachment_path && $disk->exists($revisionConsultation->attachment_path), 404, 'File lampiran revisi tidak ditemukan.');
+
+    return $disk->download($revisionConsultation->attachment_path, $revisionConsultation->attachment_name);
     }
 
     // ------------------------------------------------------------------ SLOT AVAILABLE OWNER
@@ -465,7 +471,7 @@ class ConsultationController extends Controller
                 Consultation::create([
                     'teacher_id'   => $lockedSlot->booked_by_teacher_id,
                     'class_id'     => $lockedSlot->class_id,
-                    'type'         => 'Evaluasi',
+                    'type'         => 'Direktur',   // enum consultations.type: LP_PPT, Direktur, Trial_Teaching, Materi, Materi_Baru
                     'scheduled_at' => Carbon::parse($lockedSlot->date->toDateString() . ' ' . $lockedSlot->start_time),
                     'status'       => 'Terjadwal',
                     'notes'        => 'Dipesan via Slot Konsultasi Owner. Topik: ' . ($lockedSlot->topic ?? '-') . '. ' . ($validated['notes'] ?? ''),
@@ -512,4 +518,3 @@ class ConsultationController extends Controller
         });
     }
 }
-
