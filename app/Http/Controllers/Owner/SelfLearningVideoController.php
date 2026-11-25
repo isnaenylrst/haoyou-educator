@@ -17,6 +17,22 @@ class SelfLearningVideoController extends Controller
         'grammar' => 'Belajar Grammar',
     ];
 
+    /** Prefix route & layout sesuai area (owner / kurikulum). */
+    private function ctx(): array
+    {
+        $kur = request()->routeIs('kurikulum.*');
+
+        return [
+            'rp'     => $kur ? 'kurikulum' : 'owner',
+            'layout' => $kur ? 'layouts.kurikulum' : 'layouts.owner',
+        ];
+    }
+
+    private function rp(): string
+    {
+        return $this->ctx()['rp'];
+    }
+
     public function index(Request $request)
     {
         $module = $request->query('module');
@@ -34,12 +50,12 @@ class SelfLearningVideoController extends Controller
             'upload'  => SelfLearningVideo::where('source_type', 'upload')->count(),
         ];
 
-        return view('owner.self-learning.index', [
+        return view('owner.self-learning.index', array_merge($this->ctx(), [
             'videos'  => $videos,
             'modules' => self::MODULES,
             'module'  => $module,
             'stats'   => $stats,
-        ]);
+        ]));
     }
 
     public function store(Request $request)
@@ -90,7 +106,7 @@ class SelfLearningVideoController extends Controller
             return $video;
         });
 
-        return redirect()->route('owner.self-learning.index')
+        return redirect()->route($this->rp() . '.self-learning.index')
             ->with('success', 'Video berhasil ditambahkan' . ($video->is_active ? ' dan langsung tampil di panduan ' . $video->module_label . '.' : '.'));
     }
 
@@ -114,7 +130,6 @@ class SelfLearningVideoController extends Controller
         ];
 
         if ($request->hasFile('video_file')) {
-            // ganti dengan file baru
             $this->deleteFile($video);
             $file = $request->file('video_file');
             $payload += [
@@ -126,7 +141,6 @@ class SelfLearningVideoController extends Controller
                 'youtube_id'  => null,
             ];
         } elseif (filled($data['youtube_url'] ?? null)) {
-            // ganti dengan link YouTube
             $id = LearningVideo::extractYoutubeId($data['youtube_url']);
             if (!$id) {
                 return back()->withInput()->withErrors(['youtube_url' => 'Link YouTube tidak valid.']);
@@ -149,7 +163,7 @@ class SelfLearningVideoController extends Controller
             }
         });
 
-        return redirect()->route('owner.self-learning.index')->with('success', 'Video berhasil diperbarui.');
+        return redirect()->route($this->rp() . '.self-learning.index')->with('success', 'Video berhasil diperbarui.');
     }
 
     /** Aktifkan / nonaktifkan video. Mengaktifkan akan menonaktifkan video lain di modul yang sama. */
@@ -172,10 +186,10 @@ class SelfLearningVideoController extends Controller
         $this->deleteFile($video);
         $video->delete();
 
-        return redirect()->route('owner.self-learning.index')->with('success', 'Video berhasil dihapus.');
+        return redirect()->route($this->rp() . '.self-learning.index')->with('success', 'Video berhasil dihapus.');
     }
 
-    /** Pratinjau file video untuk Owner (mendukung seek). */
+    /** Pratinjau file video (mendukung seek). */
     public function stream(SelfLearningVideo $video)
     {
         abort_unless($video->is_upload, 404);

@@ -1,4 +1,8 @@
-@extends('layouts.owner')
+@php
+    $rp     = request()->routeIs('kurikulum.*') ? 'kurikulum' : 'owner';
+    $layout = $rp === 'kurikulum' ? 'layouts.kurikulum' : 'layouts.owner';
+@endphp
+@extends($layout)
 
 @section('title', 'Video Self Learning')
 
@@ -82,9 +86,9 @@
     <div class="card shadow-sm border-0 mb-3 rounded-4">
         <div class="card-body p-3 d-flex flex-wrap gap-1 align-items-center">
             <span class="text-muted small me-2 fw-semibold"><i class="fa-solid fa-filter me-1"></i> Modul:</span>
-            <a href="{{ route('owner.self-learning.index') }}" class="btn btn-sm rounded-pill px-3 {{ !$module ? 'btn-dark' : 'btn-outline-secondary' }}">Semua</a>
+            <a href="{{ route($rp . '.self-learning.index') }}" class="btn btn-sm rounded-pill px-3 {{ !$module ? 'btn-dark' : 'btn-outline-secondary' }}">Semua</a>
             @foreach ($modules as $key => $label)
-                <a href="{{ route('owner.self-learning.index', ['module' => $key]) }}"
+                <a href="{{ route($rp . '.self-learning.index', ['module' => $key]) }}"
                    class="btn btn-sm rounded-pill px-3 {{ $module === $key ? 'btn-warning' : 'btn-outline-warning text-dark' }}">{{ $label }}</a>
             @endforeach
         </div>
@@ -161,12 +165,12 @@
                                         <button type="button" class="btn btn-sm btn-light text-danger rounded-circle" title="Putar"
                                                 data-title="{{ $v->title }}"
                                                 data-embed="{{ $v->embed_url }}"
-                                                data-src="{{ $v->is_upload ? route('owner.self-learning.stream', $v) : '' }}"
+                                                data-src="{{ $v->is_upload ? route($rp . '.self-learning.stream', $v) : '' }}"
                                                 onclick="playVideo(this)">
                                             <i class="fa-solid fa-play"></i>
                                         </button>
 
-                                        <form method="POST" action="{{ route('owner.self-learning.toggle', $v) }}">
+                                        <form method="POST" action="{{ route($rp . '.self-learning.toggle', $v) }}">
                                             @csrf @method('PATCH')
                                             <button type="submit" class="btn btn-sm {{ $v->is_active ? 'btn-outline-secondary' : 'btn-success' }} rounded-pill fw-semibold">
                                                 {{ $v->is_active ? 'Nonaktifkan' : 'Aktifkan' }}
@@ -178,7 +182,7 @@
                                             <i class="fa-solid fa-pen-to-square"></i>
                                         </button>
 
-                                        <form method="POST" action="{{ route('owner.self-learning.destroy', $v) }}"
+                                        <form method="POST" action="{{ route($rp . '.self-learning.destroy', $v) }}"
                                               onsubmit="return confirm('Hapus video ini? File yang diunggah juga ikut terhapus.')">
                                             @csrf @method('DELETE')
                                             <button type="submit" class="btn btn-sm btn-light text-danger rounded-circle" title="Hapus">
@@ -204,7 +208,7 @@
                         <h5 class="fw-bold"><i class="fa-solid fa-pen-to-square text-warning me-2"></i> Edit Video</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
-                    <form method="POST" action="{{ route('owner.self-learning.update', $v) }}" enctype="multipart/form-data">
+                    <form method="POST" action="{{route($rp . '.self-learning.update', $v) }}" enctype="multipart/form-data">
                         @csrf @method('PUT')
                         <div class="modal-body">
                             <div class="row g-3 mb-3">
@@ -265,7 +269,7 @@
                 <h5 class="fw-bold"><i class="fa-solid fa-cloud-arrow-up text-warning me-2"></i> Tambah Video Self Learning</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ route('owner.self-learning.store') }}" enctype="multipart/form-data">
+            <form method="POST" action="{{ route($rp . '.self-learning.store')}}" enctype="multipart/form-data">
                 @csrf
                 <div class="modal-body">
                     @php $srcType = old('source_type', 'youtube'); @endphp

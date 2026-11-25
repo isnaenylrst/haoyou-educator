@@ -60,6 +60,8 @@ class OwnerMenu
                     ['Video Pembelajaran',      'fa-circle-play',    '/kurikulum/video',             'Upload video untuk siswa'],
                     ['Materi Training',         'fa-graduation-cap', '/kurikulum/training',          'Akses modul materi training'],
                     ['Request Belajar',         'fa-book-open-reader','/kurikulum/request-belajar',  'Request belajar dari siswa'],
+                    ['Video Belajar Mandiri', 'fa-circle-play', '/kurikulum/self-learning', 'Upload video tutorial Belajar Mandiri untuk siswa'],
+                    ['Nilai Belajar Mandiri', 'fa-sliders',     '/kurikulum/pengaturan-nilai-mandiri', 'Batas lulus dan bobot Vocab/Grammar sertifikat Mandiri'],
                     ['Review Pengajuan',        'fa-circle-check',   '/kurikulum/review-pengajuan',  'ACC materi, jurnal, report, cuti, sertifikat, reimburse'],
                     ['Template Progress Report','fa-table-list',     '/kurikulum/template-progress-report', 'Learning Materials per program (Feixiang, Maochong, HSK)'],
                     ['Observasi Guru',          'fa-magnifying-glass-chart', '/kurikulum/observasi', 'Observasi kelas mingguan guru'],
