@@ -88,7 +88,7 @@ class OwnerSubmissionRecapTest extends TestCase
      * Test Admin membuka /admin/pengajuan: 200, layout Admin, ada 6 kartu keuangan,
      * menampilkan nominal uji dan saldo, tidak ada tombol approve Owner.
      */
-    public function test_admin_opens_pengajuan_recap_with_6_financial_cards(): void
+    public function test_admin_opens_pengajuan_recap_with_4_expense_cards(): void
     {
         $this->actingAs($this->adminUser);
 
@@ -175,15 +175,19 @@ class OwnerSubmissionRecapTest extends TestCase
         $response->assertSee('Rekap Pengajuan Bahan Ajar &amp; Reimburse', false);
         $response->assertSee('Keuangan');
         $response->assertSee('Periode:');
-        $response->assertSee('Semua Periode');
+        $response->assertSee('Lihat semua periode');
         $response->assertSee('Angka ringkasan mengikuti filter yang aktif');
 
-        // Nilai kartu
-        $response->assertSee('Rp 100.000'); // Pemasukan
-        $response->assertSee('Rp 25.000');  // Pengeluaran Dibayar
-        $response->assertSee('Rp 10.000');  // Disetujui Belum Dibayar
-        $response->assertSee('Rp 75.000');  // Saldo
-        $response->assertSee('Rp 65.000');  // Saldo Setelah Komitmen
+        // 4 kartu: Total Pengeluaran, Total Pengajuan, Perlu Review Owner, Telah Disetujui
+        $response->assertSee('Total Pengeluaran');
+        $response->assertSee('Total Pengajuan');
+        $response->assertSee('Perlu Review Owner');
+        $response->assertSee('Telah Disetujui');
+        $response->assertSee('Rp 35.000');  // Pengeluaran disetujui: Dibayar 25.000 + Disetujui 10.000
+
+        // Pemasukan siswa & saldo tidak lagi ditampilkan di rekap pengajuan
+        $response->assertDontSee('Rp 100.000');
+        $response->assertDontSee('Saldo');
 
         // Pengajuan Diajukan Kurikulum tetap muncul
         $response->assertSee('Spidol Papan');

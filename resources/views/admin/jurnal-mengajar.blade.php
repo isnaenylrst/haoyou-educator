@@ -104,6 +104,12 @@
                         <option value="{{ $value }}" {{ request('class_status') == $value ? 'selected' : '' }}>{{ $meta[0] }}</option>
                     @endforeach
                 </select>
+
+                <select name="ketepatan" class="select-chip" onchange="this.form.submit()">
+                    <option value="">Semua Ketepatan</option>
+                    <option value="terlambat" {{ request('ketepatan') === 'terlambat' ? 'selected' : '' }}>Terlambat Mengisi</option>
+                    <option value="tepat" {{ request('ketepatan') === 'tepat' ? 'selected' : '' }}>Tepat Waktu</option>
+                </select>
             @endif
 
             <a href="{{ route('admin.jurnal-mengajar', ['tab' => $tab]) }}" class="btn">
@@ -112,6 +118,22 @@
             </a>
         </div>
     </form>
+
+    {{-- ========================= LAOSHI TERLAMBAT MENGISI ========================= --}}
+    @if ($lateFillers->isNotEmpty())
+        <div class="x-muted" style="margin: 4px 0 12px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+            <strong style="margin-right:4px;">
+                <i class="fa-solid fa-user-clock"></i>
+                Laoshi yang terlambat mengisi ({{ $stats['late_filled'] }} jurnal):
+            </strong>
+            @foreach ($lateFillers as $row)
+                <a href="{{ route('admin.jurnal-mengajar', array_merge($keepQuery, ['tab' => 'masuk', 'teacher_id' => $row['teacher']->id, 'ketepatan' => 'terlambat'])) }}"
+                   class="badge badge-cancelled" style="text-decoration:none;">
+                    {{ $row['teacher']->name }} · {{ $row['count'] }}
+                </a>
+            @endforeach
+        </div>
+    @endif
 
     {{-- ========================= TAB ========================= --}}
     <div class="pkg-tabs">
@@ -182,6 +204,9 @@
                             <td>
                                 <div class="cand-name">{{ $j->class?->class_name ?? '-' }}</div>
                                 <div class="cand-sub">{{ $programOf($j->class) }}@if ($j->class?->level) · {{ $j->class->level->level_name }}@endif</div>
+                                @if ($j->location)
+                                    <div class="cand-sub"><i class="fa-solid fa-location-dot"></i> {{ config('journal.locations')[$j->location] ?? $j->location }}</div>
+                                @endif
                             </td>
                             <td>
                                 {{ $j->teacher?->name ?? '-' }}
@@ -205,6 +230,9 @@
                             </td>
                             <td style="text-align: center; vertical-align: middle;">
                                 <span class="badge {{ $statusClass }}"><span class="badge-dot"></span>{{ $statusLabel }}</span>
+                                @if ($j->is_late)
+                                    <div style="margin-top:4px;"><span class="badge badge-cancelled">Terlambat Mengisi</span></div>
+                                @endif
                             </td>
                             <td style="text-align: center; vertical-align: middle;">
                                 @if ($j->attendances->count())
@@ -266,7 +294,7 @@
                                 <input type="hidden" name="from" value="{{ $from->toDateString() }}">
                                 <input type="hidden" name="to" value="{{ $to->toDateString() }}">
                                 <button type="submit" class="btn btn-primary btn-sm">
-                                    <i class="fa-regular fa-bell"></i> Ingatkan
+                                    <i class="fa-regular fa-bell"></i> Ingatkan semua
                                 </button>
                             </form>
                         </div>

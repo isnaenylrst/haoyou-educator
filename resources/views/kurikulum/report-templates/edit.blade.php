@@ -11,7 +11,13 @@
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
             <h4 class="fw-bold mb-1">{{ $template->name }}</h4>
-            <div class="text-muted small">Program: {{ $template->category?->category_name ?? '-' }} · Level: {{ $template->level?->level_name ?? 'semua level' }}</div>
+            <div class="text-muted small">
+                @if($template->privatePackage)
+                    Program: Private · Paket: {{ $template->privatePackage->package_name }}
+                @else
+                    Program: {{ $template->category?->category_name ?? '-' }} · Level: {{ $template->level?->level_name ?? 'semua level' }}
+                @endif
+            </div>
         </div>
         <a href="{{ route('kurikulum.report-template.index') }}" class="btn btn-outline-secondary rounded-pill"><i class="fa-solid fa-arrow-left me-1"></i> Kembali</a>
     </div>

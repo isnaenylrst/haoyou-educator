@@ -166,6 +166,7 @@
             ['Sertifikat',           'fa-certificate',   '/guru/sertifikat',      'guru/sertifikat*'],
             ['Schedule',             'fa-calendar-days', '/guru/schedule',        'guru/schedule*'],
             ['Teaching Log',         'fa-clipboard-list','/guru/teaching-log',    'guru/teaching-log*'],
+            ['Riwayat Pengajuan',    'fa-clock-rotate-left', '/guru/riwayat-pengajuan', 'guru/riwayat-pengajuan*'],
             ['Request Belajar',      'fa-book-open-reader', '/guru/request-belajar', 'guru/request-belajar*'],
         ]],
         ['label' => 'Pengajuan & Evaluasi', 'items' => [

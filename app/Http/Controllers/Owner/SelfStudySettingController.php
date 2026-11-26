@@ -8,12 +8,22 @@ use Illuminate\Http\Request;
 
 class SelfStudySettingController extends Controller
 {
+    private function ctx(): array
+    {
+        $kur = request()->routeIs('kurikulum.*');
+
+        return [
+            'rp'     => $kur ? 'kurikulum' : 'owner',
+            'layout' => $kur ? 'layouts.kurikulum' : 'layouts.owner',
+        ];
+    }
+
     public function edit()
     {
-        return view('owner.self-learning.settings', [
+        return view('owner.self-learning.settings', array_merge($this->ctx(), [
             'setting'  => SelfStudySetting::current(),
             'predikat' => config('selfstudy.predikat', []),
-        ]);
+        ]));
     }
 
     public function update(Request $request)
@@ -28,7 +38,6 @@ class SelfStudySettingController extends Controller
             'passing_score.max'      => 'Batas lulus maksimal 100.',
         ]);
 
-        // total bobot selalu 100
         SelfStudySetting::updateOrCreate(['id' => 1], [
             'weight_vocab'   => $data['weight_vocab'],
             'weight_grammar' => 100 - $data['weight_vocab'],

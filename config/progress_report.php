@@ -9,6 +9,9 @@ return [
     'default_title' => 'TRIMESTER ACADEMIC PROGRESS REPORT',
     'city'          => 'Malang',
     'director_title' => 'Direktur Haoyou Educator',
+    'curriculum_title' => 'Kurikulum',
+    // Nama penandatangan Kurikulum di dokumen. Kosong = pakai nama akun Kurikulum yang meng-ACC.
+    'curriculum_name'  => env('REPORT_CURRICULUM_NAME'),
 
     // Penandatangan tetap (sama dengan sertifikat). Ubah ejaan: .env REPORT_SIGNER_NAME="..."
     'signer_name'   => env('REPORT_SIGNER_NAME', config('certificate.signer_name', 'Joy Limmunandar')),

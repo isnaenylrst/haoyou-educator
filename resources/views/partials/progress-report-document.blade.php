@@ -54,8 +54,8 @@
     .hy-legend .lv { font-weight: bold; margin-top: 12px; }
     .hy-legend .crit { margin-left: 18px; margin-top: 5px; }
     .hy-legend .crit b { display: block; }
-    .hy-sign { width: 78%; margin: 22px auto 0; border-collapse: collapse; page-break-inside: avoid; }
-    .hy-sign td { border: 1px solid #000; width: 50%; height: 120px; vertical-align: top; padding: 6px 8px; font-size: 10.5px; }
+    .hy-sign { width: 100%; margin: 6px auto 0; border-collapse: collapse; page-break-inside: avoid; }
+    .hy-sign td { border: 1px solid #000; width: 33.33%; height: 130px; vertical-align: top; padding: 6px 8px; font-size: 10.5px; text-align: center; }
 </style>
 @if($isPdf)
 </head>
@@ -139,26 +139,57 @@
     </div>
     @endif
 
+    @php
+        $sigSrc  = fn ($f) => $isPdf ? $f : 'data:image/png;base64,' . base64_encode(file_get_contents($f));
+        $sigDate = fn ($d) => $d ? \Illuminate\Support\Carbon::parse($d)->locale('id')->translatedFormat('j F Y') : null;
+    @endphp
+
+    <div style="text-align: right; font-size: 10px; margin-top: 22px;">
+        {{ $doc['city'] }}, {{ \Illuminate\Support\Carbon::parse($doc['date'])->locale('id')->translatedFormat('j F Y') }}
+    </div>
+
     <table class="hy-sign">
         <tr>
+            {{-- 1. Laoshi: otomatis saat report dikirim ke Kurikulum --}}
             <td>
                 <b>Laoshi</b>
                 <div style="height: 70px; text-align: center; padding-top: 6px;">
                     @if($doc['teacher_signature'])
-                        <img src="{{ $isPdf ? $doc['teacher_signature'] : 'data:image/png;base64,'.base64_encode(file_get_contents($doc['teacher_signature'])) }}" style="max-height: 60px; max-width: 150px;" alt="TTD Guru">
+                        <img src="{{ $sigSrc($doc['teacher_signature']) }}" style="max-height: 60px; max-width: 130px;" alt="TTD Guru">
                     @endif
                 </div>
                 <div style="margin-top: 6px;"><b>{{ $doc['teacher_sign_name'] }}</b></div>
+                @if($sigDate($doc['teacher_signed_at']))
+                    <div style="font-size: 8.5px; color: #555;">Dikirim: {{ $sigDate($doc['teacher_signed_at']) }}</div>
+                @endif
             </td>
+
+            {{-- 2. Kurikulum: saat report di-ACC --}}
             <td>
-                <div style="text-align: right; font-size: 10px;">{{ $doc['city'] }}, {{ \Illuminate\Support\Carbon::parse($doc['date'])->locale('id')->translatedFormat('j F Y') }}</div>
-                <div><b>{{ $doc['director_title'] }}</b></div>
-                <div style="height: 62px; text-align: center; padding-top: 4px;">
+                <b>{{ $doc['curriculum_title'] }}</b>
+                <div style="height: 70px; text-align: center; padding-top: 6px;">
+                    @if($doc['curriculum_signature'])
+                        <img src="{{ $sigSrc($doc['curriculum_signature']) }}" style="max-height: 60px; max-width: 130px;" alt="TTD Kurikulum">
+                    @endif
+                </div>
+                <div style="margin-top: 6px;"><b>( {{ $doc['curriculum_signature'] ? $doc['curriculum_name'] : '.....................' }} )</b></div>
+                @if($sigDate($doc['curriculum_signed_at']))
+                    <div style="font-size: 8.5px; color: #555;">Di-ACC: {{ $sigDate($doc['curriculum_signed_at']) }}</div>
+                @endif
+            </td>
+
+            {{-- 3. Owner: saat TTD di antrean Owner --}}
+            <td>
+                <b>{{ $doc['director_title'] }}</b>
+                <div style="height: 70px; text-align: center; padding-top: 6px;">
                     @if($doc['owner_signature'])
-                        <img src="{{ $isPdf ? $doc['owner_signature'] : 'data:image/png;base64,'.base64_encode(file_get_contents($doc['owner_signature'])) }}" style="max-height: 58px; max-width: 150px;" alt="TTD Owner">
+                        <img src="{{ $sigSrc($doc['owner_signature']) }}" style="max-height: 60px; max-width: 130px;" alt="TTD Owner">
                     @endif
                 </div>
                 <div style="margin-top: 6px;"><b>( {{ $doc['owner_name'] }} )</b></div>
+                @if($sigDate($doc['owner_signed_at']))
+                    <div style="font-size: 8.5px; color: #555;">Disahkan: {{ $sigDate($doc['owner_signed_at']) }}</div>
+                @endif
             </td>
         </tr>
     </table>

@@ -178,7 +178,7 @@
                         <i class="fa-solid fa-user-check text-primary me-2"></i> Ranking Guru Berdasarkan Siswa Lanjut
                     </h5>
                     <small class="text-muted">
-                        Dihitung dari siswa yang mendaftar ke kelas/paket baru setelah kelasnya berakhir.
+                        Siswa dihitung lanjut bila sudah mendaftar &amp; membayar kelas/paket baru setelah kelasnya berakhir. Urutan: 70% retention rate + 30% beban mengajar.
                     </small>
                 </div>
                 <div class="table-responsive">
@@ -207,6 +207,9 @@
                                         <span class="badge bg-success-subtle text-success border border-success fw-bold">
                                             {{ $tr->continued_count }}
                                         </span>
+                                        @if(($tr->waiting_payment_count ?? 0) > 0)
+                                            <small class="text-warning d-block">+{{ $tr->waiting_payment_count }} menunggu bayar</small>
+                                        @endif
                                     </td>
                                     <td class="text-center">
                                         <span class="fw-bold {{ $tr->retention_percent !== null ? 'text-primary' : 'text-muted' }}">
@@ -277,6 +280,9 @@
                                         <span class="badge bg-success-subtle text-success border border-success fw-bold">
                                             {{ $cr->continued_count }}
                                         </span>
+                                        @if(($cr->waiting_payment_count ?? 0) > 0)
+                                            <small class="text-warning d-block">+{{ $cr->waiting_payment_count }} menunggu bayar</small>
+                                        @endif
                                     </td>
                                     <td class="text-center">
                                         <span class="fw-bold {{ $cr->rate_percent !== null ? 'text-primary' : 'text-muted' }}">

@@ -19,6 +19,7 @@ class ClassEnrollment extends Model
         'program_package_id',
         'private_package_id',
         'enrollment_date',
+        'last_class_date',
         'registration_fee',
         'activity_fee',
         'discount',
@@ -34,6 +35,7 @@ class ClassEnrollment extends Model
         'enrollment_date' => 'date',
         'termin_count' => 'integer',
         'form_manual'  => 'array',
+        'last_class_date' => 'date',
     ];
 
     protected static function booted()

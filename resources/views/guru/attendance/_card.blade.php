@@ -185,7 +185,7 @@
                     <div class="col-md-2">
                         <label class="form-label fw-semibold">Tanggal</label>
                         <input type="text" class="form-control bg-light"
-                               value="{{ $editing ? $journal->session_date->format('d/m/Y') : $date->format('d/m/Y') }}" readonly>
+                               value="{{ $editing ? $journal->session_date->format('d/m/Y') : $cardDate->format('d/m/Y') }}" readonly>
                     </div>
                     <div class="col-md-2">
                         <label class="form-label fw-semibold">Jam Mulai</label>
@@ -391,7 +391,7 @@
                         &middot; menggantikan {{ $journal->substituteTeacher->name ?? '-' }}
                     @endif
                     @if ($journal->is_late)
-                        <span class="badge bg-danger-subtle text-danger ms-2">Terlambat</span>
+                        <span class="badge bg-danger-subtle text-danger ms-2">Terlambat Mengisi</span>
                     @endif
                 </dd>
 
