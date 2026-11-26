@@ -66,7 +66,8 @@ class SiswaDashboardController extends Controller
             );
 
             $tiers = config('hadiah.tiers');
-            
+            $waAdmin = config('hadiah.whatsapp');
+
         $enrollments = ClassEnrollment::with([
             'class.teacher',
             'class.schedules',
@@ -128,7 +129,8 @@ class SiswaDashboardController extends Controller
             'enrollments',
             'progressReports',
             'documents',
-            'tiers'
+            'tiers',
+            'waAdmin'
         ));
     }
 

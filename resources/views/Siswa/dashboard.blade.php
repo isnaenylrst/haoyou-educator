@@ -207,39 +207,70 @@
         </summary>
 
         <div class="bg-[#eceee4] p-4 md:p-5 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+     
           @foreach ($tier['items'] as $hadiah)
-            @php $cukup = $poinSaya >= $hadiah['poin']; @endphp
-            <div class="bg-[#D5DFCC] border border-[#1d1a0f]/70 rounded-[28px] px-3 pt-4 pb-3 flex flex-col items-center text-center">
+            @php
+              $cukup = $poinSaya >= $hadiah['poin'];
 
-              {{-- FOTO / ICON --}}
-              <div class="h-24 w-full flex items-center justify-center">
-                @if (!empty($hadiah['image']))
-                 <img src="{{ asset(str_contains($hadiah['image'], '/') ? $hadiah['image'] : 'images/hadiah/' . $hadiah['image']) }}"
-                       alt="{{ $hadiah['nama'] }}" loading="lazy"
-                       class="max-h-24 max-w-full object-contain">
-                @else
-                  <span class="text-5xl" aria-hidden="true">{{ $hadiah['icon'] }}</span>
-                @endif
-              </div>
+              $pesan = rawurlencode(
+                  "Halo Admin Haoyou, saya {$student->name} ingin menukarkan poin saya dengan reward ini:\n\n"
+                  . "Hadiah: {$hadiah['nama']}\n"
+                  . "Poin hadiah: " . number_format($hadiah['poin'], 0, ',', '.') . "\n"
+                  . "Poin saya: " . number_format($poinSaya, 0, ',', '.')
+              );
+              $linkWa = "https://wa.me/{$waAdmin}?text={$pesan}";
 
-              {{-- POIN --}}
-              <div class="mt-2 text-[15px] font-extrabold italic text-[#1d1a0f]">
-                {{ number_format($hadiah['poin'], 0, ',', '.') }} Points
-              </div>
+              $tag   = $cukup ? 'a' : 'div';
+              $kelas = 'bg-[#D5DFCC] border border-[#1d1a0f]/70 rounded-[28px] px-3 pt-4 pb-3 flex flex-col items-center text-center '
+              . ($cukup
+                ? 'cursor-pointer transition hover:-translate-y-1 hover:shadow-lg hover:bg-[#e2ecd7] focus:outline-none focus:ring-2 focus:ring-[#ffe135]'
+                : '');
+             @endphp
 
-              {{-- NAMA --}}
-              <div class="mt-1.5 w-full flex-1 flex items-center justify-center rounded-lg bg-[#1d1a0f] text-[#D5DFCC] text-[11px] md:text-xs font-semibold leading-snug px-2 py-1.5 min-h-[38px]">
-                {{ $hadiah['nama'] }}
-              </div>
+           <{{ $tag }}
+            class="{{ $kelas }}"
+            @if ($cukup)
+              href="{{ $linkWa }}" target="_blank" rel="noopener noreferrer"
+              aria-label="Tukar {{ $hadiah['nama'] }} via WhatsApp"
+            @endif
+          >
 
-              {{-- USIA --}}
-              <div class="mt-1.5 text-[10px] font-bold italic text-[#1d1a0f]">{{ $hadiah['usia'] }}</div>
+          {{-- FOTO / ICON --}}
+          <div class="h-24 w-full flex items-center justify-center">
+            @if (!empty($hadiah['image']))
+              <img src="{{ asset(str_contains($hadiah['image'], '/') ? $hadiah['image'] : 'images/hadiah/' . $hadiah['image']) }}"
+                  alt="{{ $hadiah['nama'] }}" loading="lazy"
+                  class="max-h-24 max-w-full object-contain">
+            @else
+              <span class="text-5xl" aria-hidden="true">{{ $hadiah['icon'] }}</span>
+            @endif
+          </div>
 
-              @if ($cukup)
-                <div class="mt-1.5 text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[#e2ecd7] text-[#1d1a0f]">Poinmu cukup</div>
-              @endif
+          {{-- POIN --}}
+          <div class="mt-2 text-[15px] font-extrabold italic text-[#1d1a0f]">
+            {{ number_format($hadiah['poin'], 0, ',', '.') }} Points
+          </div>
+
+          {{-- NAMA --}}
+          <div class="mt-1.5 w-full flex-1 flex items-center justify-center rounded-lg bg-[#1d1a0f] text-[#D5DFCC] text-[11px] md:text-xs font-semibold leading-snug px-2 py-1.5 min-h-[38px]">
+            {{ $hadiah['nama'] }}
+          </div>
+
+          {{-- USIA --}}
+          <div class="mt-1.5 text-[10px] font-bold italic text-[#1d1a0f]">{{ $hadiah['usia'] }}</div>
+
+          {{-- STATUS --}}
+          @if ($cukup)
+            <div class="mt-1.5 text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[#ffe135] text-[#1d1a0f]">
+              Poinmu cukup · Tukar via WA →
             </div>
-          @endforeach
+          @else
+            <div class="mt-1.5 text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[#f1eedf] text-[#6b6652]">
+              Kurang {{ number_format($hadiah['poin'] - $poinSaya, 0, ',', '.') }} poin
+            </div>
+          @endif
+        </{{ $tag }}>
+        @endforeach
         </div>
       </details>
     @endforeach
