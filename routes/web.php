@@ -1154,6 +1154,8 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
                 ->name('program-level.program.update');
             Route::delete('/{program}', [ProgramLevelController::class, 'destroyProgram'])
                 ->name('program-level.program.destroy');
+            Route::put('/program-level/biaya', [ProgramLevelController::class, 'updateFees'])
+                ->name('program-level.biaya.update');
         });
 
         // CATEGORY
@@ -1336,9 +1338,11 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
 
     Route::get('/retention', [RetentionController::class, 'index'])
         ->name('retention.index');
-     Route::get('/retention/guru/{teacherId}', [RetentionController::class, 'teacher'])
+    Route::get('/retention/guru/{teacherId}', [RetentionController::class, 'teacher'])
         ->whereNumber('teacherId')
         ->name('retention.teacher');
+    Route::get('/retention/siswa', [RetentionController::class, 'students'])
+        ->name('retention.students');
 
     // REQUEST BELAJAR SISWA (Poin 10)
     Route::get('/request-belajar', [AdminStudentLearningRequestController::class, 'index'])

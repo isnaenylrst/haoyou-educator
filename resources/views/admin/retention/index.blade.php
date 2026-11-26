@@ -13,6 +13,13 @@
         .card-title { font-size:16px; font-weight:700; padding:18px 20px 4px; }
         .card-desc { font-size:13px; color:#6b7280; padding:0 20px 12px; }
         .pay-wait { font-size:12px; color:#b45309; }
+        .expired-note { font-size:12px; color:#6b7280; }
+        tfoot td { padding: 14px 20px; }
+        .range-toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+        .range-toolbar label { font-size:13px; color:#6b7280; }
+        .range-toolbar .btn-apply { cursor:pointer; }
+        .range-toolbar .reset-link { font-size:13px; color:#6b7280; text-decoration:none; }
+        .range-toolbar .reset-link:hover { color:#111827; }
     </style>
 @endpush
 
@@ -23,7 +30,7 @@
             <div class="eyebrow">Lainnya</div>
             <h1>Retention Rate</h1>
             <p>
-                Pantau persentase kelanjutan dan pembayaran siswa setiap bulan serta performa guru berdasarkan retensi siswa dan beban mengajar.
+                Pantau persentase kelanjutan dan pembayaran siswa pada rentang tanggal tertentu serta performa guru berdasarkan retensi siswa dan beban mengajar.
             </p>
         </div>
     </div>
@@ -36,7 +43,7 @@
                 <i class="fa-solid fa-flag-checkered stat-icon"></i>
             </div>
             <div class="stat-value">{{ $summary['selesai'] }}</div>
-            <div class="stat-note">Kelas berakhir {{ $month->translatedFormat('F Y') }}</div>
+            <div class="stat-note">Kelas berakhir {{ $periodLabel }}</div>
         </div>
 
         <div class="stat-card c-yellow">
@@ -50,6 +57,9 @@
                 @if (($summary['menunggu_bayar'] ?? 0) > 0)
                     · {{ $summary['menunggu_bayar'] }} menunggu pembayaran
                 @endif
+                @if (($summary['expired'] ?? 0) > 0)
+                    · {{ $summary['expired'] }} expired
+                @endif
             </div>
         </div>
 
@@ -61,12 +71,12 @@
             <div class="stat-value">
                 {{ is_null($summary['rate']) ? '-' : number_format($summary['rate'], 1, ',', '.') . '%' }}
             </div>
-            <div class="stat-note">Siswa lanjut (sudah bayar) / siswa selesai</div>
+            <div class="stat-note">Siswa lanjut (sudah bayar, maks. 1 bulan setelah kelas berakhir) / siswa selesai</div>
         </div>
 
         <div class="stat-card c-red">
             <div class="stat-top">
-                <span class="stat-label">Ranking 1 Bulan Ini</span>
+                <span class="stat-label">Ranking 1 Periode Ini</span>
                 <i class="fa-solid fa-trophy stat-icon"></i>
             </div>
             @php $top = $teachers->first(); @endphp
@@ -81,23 +91,37 @@
 
     {{-- ========================= FILTER ========================= --}}
     <form method="GET" action="{{ route('admin.retention.index') }}" id="filterForm">
-        <div class="toolbar">
+        <div class="toolbar range-toolbar">
+            <label for="dari">Dari</label>
             <input
-                type="month"
-                name="bulan"
+                type="date"
+                id="dari"
+                name="dari"
                 class="select-chip"
-                value="{{ $month->format('Y-m') }}"
-                max="{{ now()->format('Y-m') }}"
-                onchange="this.form.submit()">
+                value="{{ $start->toDateString() }}"
+                max="{{ now()->toDateString() }}">
+
+            <label for="sampai">Sampai</label>
+            <input
+                type="date"
+                id="sampai"
+                name="sampai"
+                class="select-chip"
+                value="{{ $end->toDateString() }}"
+                max="{{ now()->toDateString() }}">
+
+            <button type="submit" class="select-chip btn-apply">Terapkan</button>
+            <a href="{{ route('admin.retention.index') }}" class="reset-link">Reset</a>
         </div>
     </form>
 
-    {{-- ========================= TREN 6 BULAN ========================= --}}
+    {{-- ========================= TREN PER BULAN ========================= --}}
     <div class="card">
-        <div class="card-title">Tren 6 Bulan Terakhir</div>
+        <div class="card-title">Tren Retention - {{ $periodLabel }}</div>
         <div class="card-desc">
-            Retention rate bulanan dari kelas yang berakhir di tiap bulan.
-            Hanya siswa yang sudah membayar program lanjutannya yang dihitung lanjut.
+            Retention rate per bulan dari kelas yang berakhir pada rentang tanggal yang dipilih
+            (bulan di luar rentang ditampilkan redup sebagai pembanding).
+            Hanya siswa yang sudah membayar program lanjutannya dalam 1 bulan setelah kelas berakhir yang dihitung lanjut.
         </div>
 
         <table>
@@ -107,18 +131,35 @@
                     <th style="text-align: center; vertical-align: middle;">Siswa Selesai</th>
                     <th style="text-align: center; vertical-align: middle;">Siswa Lanjut</th>
                     <th style="text-align: center; vertical-align: middle;">Menunggu Bayar</th>
-                    <th style="width:36%;">Retention Rate</th>
+                    <th style="text-align: center; vertical-align: middle;">Belum Lanjut</th>
+                    <th style="text-align: center; vertical-align: middle;">Expired</th>
+                    <th style="width:28%;">Retention Rate</th>
+                    <th style="text-align: center; vertical-align: middle;">Aksi</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach ($trend as $row)
-                    <tr>
+                    <tr style="{{ $row['in_range'] ? '' : 'opacity:.5;' }}">
                         <td>{{ $row['label'] }}</td>
                         <td style="text-align: center; vertical-align: middle;">{{ $row['selesai'] }}</td>
                         <td style="text-align: center; vertical-align: middle;">{{ $row['lanjut'] }}</td>
                         <td style="text-align: center; vertical-align: middle;">
                             @if (($row['menunggu_bayar'] ?? 0) > 0)
                                 <span class="pay-wait">{{ $row['menunggu_bayar'] }}</span>
+                            @else
+                                <span style="color:#bbb;">-</span>
+                            @endif
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;">
+                            @if (($row['belum_lanjut'] ?? 0) > 0)
+                                {{ $row['belum_lanjut'] }}
+                            @else
+                                <span style="color:#bbb;">-</span>
+                            @endif
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;">
+                            @if (($row['expired'] ?? 0) > 0)
+                                <span class="expired-note">{{ $row['expired'] }}</span>
                             @else
                                 <span style="color:#bbb;">-</span>
                             @endif
@@ -135,18 +176,53 @@
                                 </div>
                             @endif
                         </td>
+                        <td style="text-align: center; vertical-align: middle;">
+                            @if ($row['selesai'] > 0)
+                                <div class="row-actions" style="justify-content:center;">
+                                    <a href="{{ route('admin.retention.students', ['dari' => $row['from'], 'sampai' => $row['to']]) }}"
+                                       class="icon-btn" title="Lihat siswa">
+                                        <i class="fa-solid fa-eye"></i>
+                                    </a>
+                                </div>
+                            @else
+                                <span style="color:#bbb;">-</span>
+                            @endif
+                        </td>
                     </tr>
                 @endforeach
             </tbody>
+            <tfoot>
+                <tr style="font-weight:700; border-top:2px solid #e5e7eb;">
+                    <td>Total periode</td>
+                    <td style="text-align: center; vertical-align: middle;">{{ $summary['selesai'] }}</td>
+                    <td style="text-align: center; vertical-align: middle;">{{ $summary['lanjut'] }}</td>
+                    <td style="text-align: center; vertical-align: middle;">{{ $summary['menunggu_bayar'] ?? 0 }}</td>
+                    <td style="text-align: center; vertical-align: middle;">{{ $summary['belum_lanjut'] ?? 0 }}</td>
+                    <td style="text-align: center; vertical-align: middle;">{{ $summary['expired'] ?? 0 }}</td>
+                    <td>
+                        {{ is_null($summary['rate']) ? '-' : number_format($summary['rate'], 1, ',', '.') . '%' }}
+                    </td>
+                    <td style="text-align: center; vertical-align: middle;">
+                        @if ($summary['selesai'] > 0)
+                            <div class="row-actions" style="justify-content:center;">
+                                <a href="{{ route('admin.retention.students', ['dari' => $start->toDateString(), 'sampai' => $end->toDateString()]) }}"
+                                   class="icon-btn" title="Lihat semua siswa periode ini">
+                                    <i class="fa-solid fa-eye"></i>
+                                </a>
+                            </div>
+                        @endif
+                    </td>
+                </tr>
+            </tfoot>
         </table>
     </div>
 
     {{-- ========================= RANKING GURU ========================= --}}
     <div class="card" style="margin-top:24px;">
-        <div class="card-title">Ranking Guru - {{ $month->translatedFormat('F Y') }}</div>
+        <div class="card-title">Ranking Guru - {{ $periodLabel }}</div>
         <div class="card-desc">
             Score = (Retention Rate × 70%) + (Teaching Load × 30%).
-            Teaching Load dibandingkan dengan guru yang paling banyak mengajar bulan ini.
+            Teaching Load dibandingkan dengan guru yang paling banyak mengajar pada periode ini.
         </div>
 
         <table>
@@ -196,6 +272,9 @@
                             @if (($t['menunggu_bayar'] ?? 0) > 0)
                                 <div class="pay-wait">+{{ $t['menunggu_bayar'] }} menunggu bayar</div>
                             @endif
+                            @if (($t['expired'] ?? 0) > 0)
+                                <div class="expired-note">{{ $t['expired'] }} expired</div>
+                            @endif
                         </td>
 
                         <td style="text-align: center; vertical-align: middle;">
@@ -214,18 +293,22 @@
                         </td>
                         <td style="text-align: center; vertical-align: middle;">
                             <div class="row-actions" style="justify-content:center;">
-                                <a href="{{ route('admin.retention.teacher', ['teacherId' => $t['teacher_id'], 'bulan' => $month->format('Y-m')]) }}"
-                                class="icon-btn"
-                                title="Lihat detail siswa">
+                                <a href="{{ route('admin.retention.teacher', [
+                                        'teacherId' => $t['teacher_id'],
+                                        'dari'      => $start->toDateString(),
+                                        'sampai'    => $end->toDateString(),
+                                    ]) }}"
+                                   class="icon-btn"
+                                   title="Lihat detail siswa">
                                     <i class="fa-solid fa-eye"></i>
                                 </a>
                             </div>
-                        </td>                        
+                        </td>
                     </tr>
                 @empty
                     <tr>
                         <td colspan="9" style="text-align:center;padding:50px;color:#888;">
-                            Belum ada kelas yang berakhir di bulan ini.
+                            Belum ada kelas yang berakhir pada periode ini.
                         </td>
                     </tr>
                 @endforelse
@@ -235,7 +318,7 @@
         <div class="table-footer">
             <span class="table-footer-info">
                 Menampilkan <strong>{{ $teachers->count() }}</strong> guru
-                dengan kelas berakhir di <strong>{{ $month->translatedFormat('F Y') }}</strong>
+                dengan kelas berakhir pada <strong>{{ $periodLabel }}</strong>
             </span>
         </div>
     </div>

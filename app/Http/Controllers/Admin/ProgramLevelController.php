@@ -8,6 +8,7 @@ use App\Models\ProgramCategory;
 use App\Models\ProgramLevel;
 use App\Models\ProgramPackage;
 use App\Models\PrivatePackage;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -46,12 +47,35 @@ class ProgramLevelController extends Controller
                                     + PrivatePackage::where('is_active', true)->count(),
         ];
 
+        // biaya umum (dipakai saat konversi/lanjut program)
+        $fees = [
+            'registration_fee' => (int) Setting::get('registration_fee', 0),
+            'activity_fee'     => (int) Setting::get('activity_fee', 0),
+        ];
+
         return view('admin.programlevel', compact(
             'programs',
             'packages',
             'privatePackages',
-            'stats'
+            'stats',
+            'fees'
         ));
+    }
+
+    /** Biaya pendaftaran & biaya aktivitas (disimpan di tabel settings). */
+    public function updateFees(Request $request)
+    {
+        $data = $request->validate([
+            'registration_fee' => ['required', 'numeric', 'min:0'],
+            'activity_fee'     => ['required', 'numeric', 'min:0'],
+        ]);
+
+        Setting::put('registration_fee', (int) $data['registration_fee']);
+        Setting::put('activity_fee', (int) $data['activity_fee']);
+
+        return redirect()
+            ->route('admin.program-level')
+            ->with('success', 'Biaya pendaftaran dan biaya aktivitas berhasil diperbarui.');
     }
 
     public function struktur()

@@ -15,6 +15,7 @@
         .chip.green { background:#dcfce7; color:#166534; }
         .chip.amber { background:#fef3c7; color:#92400e; }
         .chip.gray  { background:#f3f4f6; color:#4b5563; }
+        .chip.red   { background:#fee2e2; color:#991b1b; }
         .muted { color:#9ca3af; }
         .legend { font-size:13px; color:#6b7280; padding:0 20px 14px; line-height:1.6; }
     </style>
@@ -29,12 +30,12 @@
 
     <div class="dashboard-header">
         <div>
-            <a href="{{ route('admin.retention.index', ['bulan' => $month->format('Y-m')]) }}" class="back-link">
+            <a href="{{ route('admin.retention.index', ['dari' => $start->toDateString(), 'sampai' => $end->toDateString()]) }}" class="back-link">
                 <i class="fa-solid fa-arrow-left"></i> Kembali ke Retention Rate
             </a>
-            <div class="eyebrow">Retention Rate - {{ $month->translatedFormat('F Y') }}</div>
+            <div class="eyebrow">Retention Rate - {{ $periodLabel }}</div>
             <h1>{{ $teacherName }}</h1>
-            <p>Kelas yang berakhir di {{ $month->translatedFormat('F Y') }} dan nasib tiap siswanya setelah kelas selesai.</p>
+            <p>Kelas yang berakhir pada {{ $periodLabel }} dan nasib tiap siswanya setelah kelas selesai.</p>
         </div>
     </div>
 
@@ -75,7 +76,9 @@
             <div class="stat-value">
                 {{ is_null($s['rate']) ? '-' : number_format($s['rate'], 1, ',', '.') . '%' }}
             </div>
-            <div class="stat-note">{{ $s['tidak_lanjut'] }} siswa tidak lanjut</div>
+            <div class="stat-note">
+                {{ $s['tidak_lanjut'] }} belum lanjut · {{ $s['expired'] ?? 0 }} expired
+            </div>
         </div>
     </div>
 
@@ -97,7 +100,10 @@
                         <span class="chip amber">{{ $class['menunggu_bayar'] }} belum bayar</span>
                     @endif
                     @if ($class['tidak_lanjut'] > 0)
-                        <span class="chip gray">{{ $class['tidak_lanjut'] }} tidak lanjut</span>
+                        <span class="chip gray">{{ $class['tidak_lanjut'] }} belum lanjut</span>
+                    @endif
+                    @if (($class['expired'] ?? 0) > 0)
+                        <span class="chip red">{{ $class['expired'] }} expired</span>
                     @endif
                     <span class="chip">
                         RR {{ is_null($class['rate']) ? '-' : number_format($class['rate'], 1, ',', '.') . '%' }}
@@ -119,9 +125,10 @@
                     @foreach ($class['students'] as $st)
                         @php
                             [$badge, $label] = match ($st['state']) {
-                                'paid'   => ['badge-completed', 'Lanjut & sudah bayar'],
-                                'unpaid' => ['badge-pending',   'Minat lanjut, belum bayar'],
-                                default  => ['badge-cancelled', 'Tidak lanjut'],
+                                'paid'    => ['badge-completed', 'Lanjut & sudah bayar'],
+                                'unpaid'  => ['badge-pending',   'Minat lanjut, belum bayar'],
+                                'expired' => ['badge-cancelled', 'Expired (> 1 bulan)'],
+                                default   => ['badge-cancelled', 'Belum lanjut (< 1 bulan)'],
                             };
                         @endphp
                         <tr>
@@ -144,6 +151,9 @@
                                     {{ $st['next_label'] }}
                                     @if ($st['next_status'] === 'Waiting Class')
                                         <div class="cand-sub">Menunggu kelas</div>
+                                    @endif
+                                    @if ($st['state'] === 'expired')
+                                        <div class="cand-sub">Daftar lewat 1 bulan, tidak dihitung</div>
                                     @endif
                                 @else
                                     <span class="muted">-</span>
@@ -169,16 +179,17 @@
     @empty
         <div class="card">
             <div style="text-align:center;padding:50px;color:#888;">
-                Tidak ada kelas yang berakhir di {{ $month->translatedFormat('F Y') }} untuk guru ini.
+                Tidak ada kelas yang berakhir pada {{ $periodLabel }} untuk guru ini.
             </div>
         </div>
     @endforelse
 
     <div class="legend">
         <strong>Cara membaca:</strong>
-        <em>Lanjut &amp; sudah bayar</em> = siswa punya enrollment baru dan sudah ada pembayaran masuk (dihitung retention).
+        <em>Lanjut &amp; sudah bayar</em> = siswa punya enrollment baru dalam 1 bulan setelah kelas berakhir dan sudah ada pembayaran masuk (dihitung retention).
         <em>Minat lanjut, belum bayar</em> = sudah didaftarkan lanjut tapi belum ada pembayaran (tidak dihitung).
-        <em>Tidak lanjut</em> = tidak ada enrollment baru.
+        <em>Belum lanjut</em> = belum ada enrollment baru, batas 1 bulan setelah kelas berakhir belum lewat.
+        <em>Expired</em> = lewat 1 bulan setelah kelas berakhir tanpa lanjut &amp; bayar tepat waktu (termasuk yang daftar lagi setelah lewat batas); tidak dihitung lanjut dan harus daftar ulang.
         Kolom Follow Up Admin hanya info dari Progress Report, tidak mempengaruhi angka.
     </div>
 

@@ -8,8 +8,16 @@ use App\Services\PaymentInstallmentService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 
+/**
+ * Di aplikasi, enrollment selalu lahir bersama DP (ConvertController -> PaymentInstallmentService),
+ * dengan DP minimal Rp300.000 (= biaya pendaftaran). Jadi TIDAK ada enrollment tanpa pembayaran.
+ * Seeder ini mengikuti aturan itu: tiap enrollment minimal punya satu pembayaran DP/Pelunasan.
+ */
 class PaymentSeeder extends Seeder
 {
+    /** DP minimum = biaya pendaftaran */
+    private const MIN_DP = 300000;
+
     public function run(): void
     {
         $service = app(PaymentInstallmentService::class);
@@ -22,7 +30,10 @@ class PaymentSeeder extends Seeder
         ])->get();
 
         foreach ($enrollments as $enrollment) {
-            $scenario = fake()->randomElement(['lunas', 'lunas', 'termin', 'termin', 'belum']);
+            // Kelas yang sudah selesai hampir pasti sudah lunas / dicicil; yang lain boleh baru DP saja
+            $scenario = $enrollment->status === 'Completed'
+                ? fake()->randomElement(['lunas', 'lunas', 'termin', 'termin'])
+                : fake()->randomElement(['lunas', 'termin', 'termin', 'dp']);
 
             // Paket yang wajib lunas (private, HSK 4 ke atas) tidak boleh dicicil
             if ($scenario === 'termin' && ! $service->enrollmentAllowsInstallment($enrollment)) {
@@ -48,9 +59,15 @@ class PaymentSeeder extends Seeder
             match ($scenario) {
                 'lunas'  => $this->seedLunas($enrollment->id, $totalBill, $startDate),
                 'termin' => $this->seedTermin($enrollment->id, $totalBill, $startDate),
-                'belum'  => $this->seedBelumBayar($enrollment->id, $totalBill, $startDate),
+                'dp'     => $this->seedHanyaDp($enrollment->id, $totalBill, $startDate),
             };
         }
+    }
+
+    /** DP: minimal biaya pendaftaran, atau 30% tagihan kalau lebih besar (tidak lebih dari total). */
+    private function dpAmount(float $totalBill): float
+    {
+        return min($totalBill, max(self::MIN_DP, round($totalBill * 0.3, 2)));
     }
 
     /** Bayar lunas sekali di muka. */
@@ -61,15 +78,29 @@ class PaymentSeeder extends Seeder
             ->create(['enrollment_id' => $enrollmentId]);
     }
 
+    /** Baru DP, sisanya belum dibayar (sudah daftar, belum lunas). */
+    private function seedHanyaDp(int $enrollmentId, float $totalBill, Carbon $startDate): void
+    {
+        $dpAmount = $this->dpAmount($totalBill);
+
+        Payment::factory()
+            ->installment('DP', $totalBill, $dpAmount, round($totalBill - $dpAmount, 2), $startDate->toDateString())
+            ->create(['enrollment_id' => $enrollmentId]);
+    }
+
     /** DP lalu dicicil beberapa termin. */
     private function seedTermin(int $enrollmentId, float $totalBill, Carbon $startDate): void
     {
-        $dpAmount = round($totalBill * 0.3, 2);
-        $remaining = $totalBill - $dpAmount;
+        $dpAmount = $this->dpAmount($totalBill);
+        $remaining = round($totalBill - $dpAmount, 2);
 
         Payment::factory()
             ->installment('DP', $totalBill, $dpAmount, $remaining, $startDate->toDateString())
             ->create(['enrollment_id' => $enrollmentId]);
+
+        if ($remaining <= 0) {
+            return;
+        }
 
         $terminCount = fake()->numberBetween(1, 3);
         $perTermin = round($remaining / ($terminCount + 1), 2);
@@ -102,13 +133,5 @@ class PaymentSeeder extends Seeder
                 ->installment('Pelunasan', $totalBill, $remaining, 0, $paymentDate->toDateString())
                 ->create(['enrollment_id' => $enrollmentId]);
         }
-    }
-
-    /** Sudah ditagih tapi belum bayar sama sekali. */
-    private function seedBelumBayar(int $enrollmentId, float $totalBill, Carbon $startDate): void
-    {
-        Payment::factory()
-            ->pending($totalBill, $startDate->toDateString())
-            ->create(['enrollment_id' => $enrollmentId]);
     }
 }

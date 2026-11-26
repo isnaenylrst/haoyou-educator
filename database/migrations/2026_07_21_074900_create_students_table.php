@@ -1,8 +1,8 @@
-
 <?php
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -40,6 +40,9 @@ return new class extends Migration
             $table->text('admin_note')->nullable();
 
             $table->date('join_date');
+
+            // Biaya aktivitas hanya dibayar sekali seumur hidup siswa
+            $table->date('activity_fee_paid_at')->nullable();
 
             $table->enum('status', [
                 'Active',

@@ -712,7 +712,7 @@
                     {{-- Jumlah termin: hanya tampil kalau skema Termin dipilih (diatur JS di bawah) --}}
                     <div class="form-grid">
                         <div class="form-field" id="manual-termin-count">
-                            <label>Jumlah Termin ({{ \App\Services\PaymentInstallmentService::TERMIN_MIN }} sampai {{ \App\Services\PaymentInstallmentService::TERMIN_MAX }})</label>
+                            <label>Jumlah Termin</label>
                             <input type="number" id="termin-count-input" form="payment-form" name="termin_count" step="1"
                                    min="{{ \App\Services\PaymentInstallmentService::TERMIN_MIN }}"
                                    max="{{ \App\Services\PaymentInstallmentService::TERMIN_MAX }}"

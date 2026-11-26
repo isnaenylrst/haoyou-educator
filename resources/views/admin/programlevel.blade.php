@@ -70,6 +70,50 @@
         </div>
     </div>
 
+    {{-- ========================= BIAYA PENDAFTARAN & AKTIVITAS ========================= --}}
+    <div class="card" style="margin-bottom:24px;">
+        <form action="{{ route('admin.program-level.biaya.update') }}" method="POST" style="padding:18px 20px;">
+            @csrf
+            @method('PUT')
+
+            <div class="form-section-title" style="margin-bottom:6px;">
+                <i class="fa-solid fa-coins"></i> Biaya Pendaftaran &amp; Aktivitas
+            </div>
+            <p style="font-size:13px;color:#6b7280;margin:0 0 14px;">
+                Nominal ini otomatis dipakai saat calon siswa dikonversi atau siswa lanjut program.
+                Perubahan hanya berlaku untuk pendaftaran berikutnya; enrollment yang sudah ada tidak berubah.
+            </p>
+
+            <div class="form-grid">
+                <div class="form-field">
+                    <label for="registration_fee">Biaya Pendaftaran (Rp) *</label>
+                    <input type="number" id="registration_fee" name="registration_fee"
+                           min="0" step="1000" required
+                           value="{{ old('registration_fee', $fees['registration_fee']) }}">
+                    @error('registration_fee')
+                        <div style="color:#b91c1c;font-size:12px;margin-top:4px;">{{ $message }}</div>
+                    @enderror
+                </div>
+
+                <div class="form-field">
+                    <label for="activity_fee">Biaya Aktivitas (Rp) *</label>
+                    <input type="number" id="activity_fee" name="activity_fee"
+                           min="0" step="1000" required
+                           value="{{ old('activity_fee', $fees['activity_fee']) }}">
+                    @error('activity_fee')
+                        <div style="color:#b91c1c;font-size:12px;margin-top:4px;">{{ $message }}</div>
+                    @enderror
+                </div>
+            </div>
+
+            <div style="margin-top:14px;">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fa-solid fa-floppy-disk"></i> Simpan Biaya
+                </button>
+            </div>
+        </form>
+    </div>
+
     {{-- ========================= TAB: REGULER / PRIVATE ========================= --}}
     <div class="pkg-tabs" role="tablist">
         <button type="button" class="pkg-tab active" data-tab="reguler" onclick="switchPackageTab('reguler')">
