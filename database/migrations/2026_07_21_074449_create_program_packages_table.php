@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -39,6 +40,7 @@ return new class extends Migration
 
             $table->decimal('price', 12, 2);
             $table->decimal('installment_price', 12, 2)->nullable();
+            $table->unsignedTinyInteger('installment_count')->nullable();
 
             $table->boolean('is_active')->default(true);
 
@@ -46,6 +48,15 @@ return new class extends Migration
 
             $table->unique(['program_id', 'package_name']);
         });
+
+        // Data lama: 1 termin per bulan.
+        // Jumlah termin mengikuti durasi paket.
+        DB::table('program_packages')
+            ->whereNotNull('installment_price')
+            ->where('installment_price', '>', 0)
+            ->update([
+                'installment_count' => DB::raw('duration_months'),
+            ]);
     }
 
     public function down(): void

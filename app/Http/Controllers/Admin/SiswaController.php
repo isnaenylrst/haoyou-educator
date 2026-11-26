@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\CandidateStudent;
+use App\Models\EnrollmentFollowUp;
 use App\Models\ClassEnrollment;
 use App\Models\ClassModel;
 use App\Models\ClassSchedule;
@@ -24,6 +25,7 @@ use App\Services\ClassScheduleService;
 use App\Services\ClassSessionService;
 use App\Services\ClassSessionOfferService;
 use App\Services\ExtraFeeService;
+use App\Services\EnrollmentExpiryService;
 use App\Services\PaymentInstallmentService;
 use App\Services\PointService;
 use Illuminate\Http\Request;
@@ -70,6 +72,14 @@ class SiswaController extends Controller
             $query->where('status', $request->status);
         }
 
+        // Filter tanggal bergabung. Kartu "Siswa Baru" memakai rentang ini (default: bulan ini).
+        [$start, $end, $hasRange] = $this->joinRange($request);
+
+        if ($hasRange || $request->boolean('baru')) {
+            $query->whereDate('join_date', '>=', $start->toDateString())
+                  ->whereDate('join_date', '<=', $end->toDateString());
+        }
+
         // Filter program mengikuti kolom Program di tabel:
         // angka = id kategori program (mis. Maochong, dari level siswa), 'private' = siswa paket private
         if ($request->filled('program')) {
@@ -101,44 +111,93 @@ class SiswaController extends Controller
         // Opsi dropdown filter: kategori program, sama seperti yang tampil di kolom Program
         $categories = DB::table('program_categories')->orderBy('category_name')->get(['id', 'category_name']);
 
-        $stats = $this->getStats();
+        $stats = $this->getStats($start, $end);
 
-        return view('admin.siswa.siswa', compact('students', 'categories', 'stats', 'attendedMap', 'absentMap', 'heldMap'));
+        // Follow up lanjut program: yang dicatat di enrollment terakhir tiap siswa
+        $latestEnrollmentIds = $students->getCollection()
+            ->mapWithKeys(fn ($s) => [$s->id => $s->enrollments->sortByDesc('id')->first()?->id])
+            ->filter();
+
+        $followUps = EnrollmentFollowUp::whereIn('enrollment_id', $latestEnrollmentIds->values())
+            ->orderByDesc('id')
+            ->get()
+            ->groupBy('enrollment_id')
+            ->map(fn ($rows) => $rows->first());
+
+        $followUpStatuses = EnrollmentFollowUp::STATUSES;
+
+        $rangeLabel = ($start->isSameMonth($end) && $start->isSameDay($start->copy()->startOfMonth()) && $end->isSameDay($end->copy()->endOfMonth()))
+            ? $start->translatedFormat('F Y')
+            : $start->translatedFormat('d M Y') . ' – ' . $end->translatedFormat('d M Y');
+
+        return view('admin.siswa.siswa', compact(
+            'students', 'categories', 'stats', 'attendedMap', 'absentMap', 'heldMap',
+            'latestEnrollmentIds', 'followUps', 'followUpStatuses', 'rangeLabel'
+        ));
     }
 
-    private function getStats(): array
+    /** Rentang tanggal bergabung: ?dari=Y-m-d&sampai=Y-m-d. Tanpa input = bulan ini ($hasRange false). */
+    private function joinRange(Request $request): array
     {
-        $totalActive = Student::where('status', 'Active')->count();
+        $request->validate([
+            'dari'   => ['nullable', 'date_format:Y-m-d'],
+            'sampai' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:dari'],
+        ]);
 
-        $totalHsk = Student::where('status', 'Active')
-            ->whereHas('enrollments', function ($q) {
-                $q->whereIn('status', ['Active', 'Waiting Class'])
-                  ->where(function ($q2) {
-                      $q2->whereHas('programPackage.program', fn ($p) => $p->where('program_name', 'HSK'))
-                         ->orWhereHas('class.programPackage.program', fn ($p) => $p->where('program_name', 'HSK'));
-                  });
-            })->count();
+        $hasRange = $request->filled('dari') || $request->filled('sampai');
 
-        $totalDailyActivity = Student::where('status', 'Active')
-            ->whereHas('enrollments', function ($q) {
-                $q->whereIn('status', ['Active', 'Waiting Class'])
-                  ->where(function ($q2) {
-                      $q2->whereHas('programPackage.program', fn ($p) => $p->where('program_name', 'Daily Activity'))
-                         ->orWhereHas('class.programPackage.program', fn ($p) => $p->where('program_name', 'Daily Activity'));
-                  });
-            })->count();
+        $start = $request->filled('dari')
+            ? Carbon::createFromFormat('Y-m-d', $request->dari)->startOfDay()
+            : ($request->filled('sampai')
+                ? Carbon::createFromFormat('Y-m-d', $request->sampai)->startOfMonth()
+                : now()->startOfMonth());
 
-        $totalPrivate = Student::where('status', 'Active')
-            ->whereHas('enrollments', function ($q) {
-                $q->where('status', 'Active')
-                  ->whereNotNull('private_package_id');
-            })->count();
+        $end = $request->filled('sampai')
+            ? Carbon::createFromFormat('Y-m-d', $request->sampai)->endOfDay()
+            : ($request->filled('dari') ? $start->copy()->endOfMonth() : now()->endOfMonth());
+
+        return [$start, $end, $hasRange];
+    }
+
+    /** Catat follow up lanjut program untuk enrollment terakhir siswa. */
+    public function storeFollowUp(Request $request, Student $siswa)
+    {
+        $data = $request->validate([
+            'status'         => ['required', Rule::in(EnrollmentFollowUp::STATUSES)],
+            'followed_up_at' => ['nullable', 'date', 'before_or_equal:today'],
+            'note'           => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $enrollment = $siswa->enrollments()->latest('id')->first();
+
+        if (! $enrollment) {
+            return back()->with('error', 'Siswa belum punya program untuk di-follow up.');
+        }
+
+        EnrollmentFollowUp::create([
+            'enrollment_id'  => $enrollment->id,
+            'status'         => $data['status'],
+            'note'           => $data['note'] ?? null,
+            'followed_up_at' => $data['followed_up_at'] ?? today()->toDateString(),
+            'created_by'     => auth()->id(),
+        ]);
+
+        return back()->with('success', "Follow up {$siswa->name} berhasil dicatat.");
+    }
+
+    private function getStats(Carbon $start, Carbon $end): array
+    {
+        $byStatus = Student::selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
 
         return [
-            'total_active' => $totalActive,
-            'total_hsk' => $totalHsk,
-            'total_daily_activity' => $totalDailyActivity,
-            'total_private' => $totalPrivate,
+            'aktif' => (int) ($byStatus['Active'] ?? 0),
+            'cuti'  => (int) ($byStatus['Inactive'] ?? 0),
+            'lulus' => (int) ($byStatus['Graduated'] ?? 0),
+            'baru'  => Student::whereDate('join_date', '>=', $start->toDateString())
+                ->whereDate('join_date', '<=', $end->toDateString())
+                ->count(),
         ];
     }
 
@@ -400,8 +459,8 @@ class SiswaController extends Controller
             ];
         })->values();
 
-        // Ringkasan: program terakhir, pertemuan terakhir, dan batas H+30 biaya pendaftaran
-        [$registrationFeeApplies, $lastClassEnd] = $this->registrationFeeInfo($siswa);
+        // Ringkasan: program terakhir, pertemuan terakhir, dan batas biaya pendaftaran (sampai expired mulai)
+        [$registrationFeeApplies, $lastClassEnd, $expiredStart] = $this->registrationFeeInfo($siswa);
 
         $lastProgram = $programs
             ->filter(fn ($p) => $p['last_class_raw'])
@@ -414,7 +473,8 @@ class SiswaController extends Controller
             'programs'     => $programs,
             'lastProgram'            => $lastProgram,
             'lastClassEnd'           => $lastClassEnd,
-            'graceUntil'             => $lastClassEnd?->copy()->addDays(30),
+            // Hari terakhir sebelum biaya pendaftaran dikenakan lagi (sehari sebelum expired mulai)
+            'graceUntil'             => $expiredStart?->copy()->subDay(),
             'registrationFeeApplies' => $registrationFeeApplies,
             'schedules'    => $siswa->activeEnrollment?->class?->schedules ?? collect(),
             'payments'     => $this->paymentRows($siswa),
@@ -1073,38 +1133,45 @@ class SiswaController extends Controller
     // Biaya tambahan untuk siswa lama yang lanjut program: [biaya pendaftaran, biaya aktivitas, info]
     private function continueFees(Student $siswa): array
     {
-        [$applies, $lastEnd] = $this->registrationFeeInfo($siswa);
+        [$applies, $lastEnd, $expiredStart] = $this->registrationFeeInfo($siswa);
 
         $registrationFee = $applies ? (float) Setting::get('registration_fee', 0) : 0.0;
-        $activityFee     = (float) Setting::get('activity_fee', 0);
+        // Biaya aktivitas hanya sekali seumur hidup: kalau siswa sudah pernah membayarnya, tidak ditagih lagi
+        $activityFee     = $siswa->activity_fee_paid_at ? 0.0 : (float) Setting::get('activity_fee', 0);
 
-        $note = ($applies && $lastEnd)
-            ? 'Biaya pendaftaran dikenakan lagi karena lebih dari 30 hari sejak kelas terakhir berakhir (' . $lastEnd->translatedFormat('d M Y') . ').'
+        $note = ($applies && $expiredStart)
+            ? 'Biaya pendaftaran dikenakan lagi karena masa cuti sudah habis (expired sejak ' . $expiredStart->translatedFormat('d M Y') . ').'
             : null;
 
         return [$registrationFee, $activityFee, $note];
     }
 
-    // Biaya pendaftaran dikenakan lagi kalau sudah lewat 30 hari sejak kelas terakhir berakhir.
-    // Tanggal akhir diambil dari kelas (classes.end_date) atau, untuk data historis tanpa kelas,
-    // dari class_enrollments.last_class_date. Kalau keduanya kosong, dianggap tidak dikenakan.
+    // Biaya pendaftaran dikenakan lagi kalau siswa sudah expired (masa cuti habis), aturan sama dengan status siswa:
+    //   - Reguler: expired mulai 1 bulan kalender + 1 hari setelah kelas berakhir.
+    //   - Private: expired mulai 2 bulan kalender setelah pertemuan pertama (expired paket + 1 bulan cuti).
+    // Tanggal akhir kelas diambil dari classes.end_date atau, untuk data historis tanpa kelas, last_class_date.
+    // Kalau tidak ada tanggal sama sekali, dianggap tidak dikenakan.
+    // Return: [dikenakan?, tanggal kelas terakhir, tanggal expired mulai]
     private function registrationFeeInfo(Student $siswa): array
     {
-        $lastEnd = $siswa->enrollments()
-            ->with('class:id,end_date')
-            ->get()
-            ->map(fn ($e) => $e->class?->end_date ?? $e->last_class_date)
+        $expiry      = app(EnrollmentExpiryService::class);
+        $enrollments = $siswa->enrollments()->with('class:id,end_date')->get();
+
+        $lastEnd = $enrollments
+            ->map(fn ($e) => $expiry->lastClassDate($e))
             ->filter()
-            ->map(fn ($d) => Carbon::parse($d))
             ->max();
 
-        if (! $lastEnd) {
-            return [false, null];
+        $expiredStart = $enrollments
+            ->map(fn ($e) => $expiry->windows($e)['expired_start'] ?? null)
+            ->filter()
+            ->max();
+
+        if (! $lastEnd || ! $expiredStart) {
+            return [false, null, null];
         }
 
-        $lastEnd = Carbon::parse($lastEnd);
-
-        return [$lastEnd->copy()->addDays(30)->lt(today()), $lastEnd];
+        return [today()->gte($expiredStart), Carbon::parse($lastEnd), Carbon::parse($expiredStart)];
     }
 
     private function resolveContinuePackage(array $draft): array
@@ -1504,8 +1571,9 @@ class SiswaController extends Controller
         $lesTotal       = (float) $payments->packageTotalFor($package, $isPrivate);
         $totalBill      = $lesTotal + $registrationFee + $activityFee;
 
-        // Harga termin (installment_price x lama paket). null = paket ini tidak punya harga termin khusus
-        $lesTotalTermin = (! $isPrivate && $package->installment_price)
+        // Harga termin (installment_price x jumlah termin; paket tanpa harga termin memakai harga lunas).
+        // null = paket ini tidak bisa termin
+        $lesTotalTermin = (! $isPrivate && $package->supportsInstallment())
             ? $package->totalFor('Termin')
             : null;
         $totalBillTermin = $lesTotalTermin !== null
@@ -1568,11 +1636,11 @@ class SiswaController extends Controller
 
         $canInstallment = $this->continueAllowsInstallment($payments, $isPrivate, $package);
 
-        // Termin hanya berlaku kalau paket boleh dicicil DAN punya harga termin.
-        // Selain itu otomatis Lunas (private, HSK, dll).
+        // Termin hanya berlaku kalau paket boleh dicicil DAN punya jumlah termin.
+        // Selain itu otomatis Lunas (private, HSK 4 ke atas, dll).
         $scheme = ($canInstallment
             && ! $isPrivate
-            && $package->installment_price
+            && $package->supportsInstallment()
             && ($validated['payment_scheme'] ?? 'Lunas') === 'Termin')
             ? 'Termin'
             : 'Lunas';
@@ -1696,6 +1764,13 @@ class SiswaController extends Controller
                     'discount'           => $discount,
                     // Skema bayar menentukan total tagihan (Lunas = price, Termin = installment_price x lama paket)
                     'payment_scheme'     => $scheme,
+                    // Jumlah termin dikunci mengikuti paket (selain Termin tetap 3)
+                    'termin_count'       => $scheme === 'Termin'
+                        ? min(
+                            max((int) ($package->installmentTermCount() ?? 3), PaymentInstallmentService::TERMIN_MIN),
+                            PaymentInstallmentService::TERMIN_MAX
+                        )
+                        : 3,
                     'requested_material' => $isPrivate ? ($draft['requested_material'] ?? null) : null,
                 ]);
 
@@ -1708,7 +1783,19 @@ class SiswaController extends Controller
                     $proofPath,
                 );
 
-                $siswa->update(['status' => 'Active', 'join_date' => $validated['payment_date']]);
+                // join_date = tanggal pertama bergabung (dipakai kartu "Siswa Baru"), jangan ditimpa saat lanjut program
+                $siswa->forceFill(['status' => 'Active']);
+
+                if (! $siswa->join_date) {
+                    $siswa->join_date = $validated['payment_date'];
+                }
+
+                // Biaya aktivitas dibayar sekali seumur hidup: tandai saat pertama kali ditagihkan
+                if ($activityFee > 0 && ! $siswa->activity_fee_paid_at) {
+                    $siswa->activity_fee_paid_at = $validated['payment_date'];
+                }
+
+                $siswa->save();
 
                 return $new;
             });

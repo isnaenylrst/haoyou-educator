@@ -342,6 +342,7 @@ class ProgramLevelController extends Controller
             'max_students'     => $package->max_students,
             'price'            => (float) $package->price,
             'installment_price' => $package->installment_price !== null ? (float) $package->installment_price : null,
+            'installment_count' => $package->installment_count,
             'is_active'        => (bool) $package->is_active,
         ]);
     }
@@ -385,6 +386,7 @@ class ProgramLevelController extends Controller
             'max_students'     => ['required', 'integer', 'min:1', 'gte:min_students'],
             'price'            => ['required', 'numeric', 'min:0'],
             'installment_price' => ['nullable', 'numeric', 'min:0'],
+            'installment_count' => ['nullable', 'integer', 'min:2', 'max:' . \App\Services\PaymentInstallmentService::TERMIN_MAX],
             'is_active'        => ['nullable', 'boolean'],
         ]);
 
@@ -392,6 +394,17 @@ class ProgramLevelController extends Controller
             $categoryId = $request->input('category_id');
             $levelId    = $request->input('level_id');
             $programId  = $request->input('program_id');
+
+            // Jumlah termin harus membagi habis durasi kelas, supaya jarak antar termin bulat
+            // (mis. 6 bulan: 2, 3, atau 6 termin; 3 bulan: 3 termin).
+            $termCount = (int) $request->input('installment_count');
+            $months    = (int) $request->input('duration_months');
+            if ($termCount > 0 && $months > 0 && ($termCount > $months || $months % $termCount !== 0)) {
+                $validator->errors()->add(
+                    'installment_count',
+                    'Jumlah termin harus membagi habis durasi kelas (mis. 6 bulan: 2, 3, atau 6 termin).'
+                );
+            }
 
             if ($categoryId) {
                 $category = ProgramCategory::find($categoryId);

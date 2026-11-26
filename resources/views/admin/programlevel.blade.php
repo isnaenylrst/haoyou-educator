@@ -178,8 +178,9 @@
                             <td style="text-align: center; vertical-align: middle;">{{ $package->min_students }}–{{ $package->max_students }} siswa</td>
                             <td>Rp{{ number_format($package->price, 0, ',', '.') }}</td>
                             <td style="text-align: center; vertical-align: middle;">
-                                @if ($package->installment_price)
-                                    Rp{{ number_format($package->installment_price, 0, ',', '.') }}
+                                @if ($package->supportsInstallment())
+                                    <div class="cell-stack-main">Rp{{ number_format($package->installmentAmount(), 0, ',', '.') }}</div>
+                                    <div class="cell-stack-sub">{{ $package->installmentTermCount() }}x termin &middot; tiap {{ $package->installmentIntervalMonths() }} bulan</div>
                                 @else
                                     -
                                 @endif
@@ -375,12 +376,17 @@
                                 <input type="number" name="price" min="0" step="1000" required>
                             </div>
                             <div class="form-field">
-                                <label>Harga Termin/bulan (Rp)</label>
+                                <label>Harga Termin (Rp)</label>
                                 <input type="number" name="installment_price" min="0" step="1000">
                             </div>
                             <div class="form-field">
-                                <label>Durasi (bulan) *</label>
+                                <label>Durasi Kelas (bulan) *</label>
                                 <input type="number" name="duration_months" min="1" max="60" required>
+                            </div>
+                            <div class="form-field">
+                                <label>Jumlah Termin</label>
+                                <input type="number" name="installment_count" min="2" max="10" placeholder="Kosongkan jika hanya lunas">
+                                <small>Berapa kali pembayaran biaya les dicicil. Pembayaran jatuh tempo tiap (durasi kelas &divide; jumlah termin) bulan. Contoh: kelas 6 bulan, 2 termin = bayar tiap 3 bulan. Jumlah termin harus membagi habis durasi.</small>
                             </div>
                             <div class="form-field">
                                 <label class="form-checkbox">
@@ -471,12 +477,17 @@
                                 <input type="number" name="price" id="edit_price" min="0" step="1000" required>
                             </div>
                             <div class="form-field">
-                                <label>Harga Termin/bulan (Rp)</label>
+                                <label>Harga Termin (Rp)</label>
                                 <input type="number" name="installment_price" id="edit_installment_price" min="0" step="1000">
                             </div>
                             <div class="form-field">
-                                <label>Durasi (bulan) *</label>
+                                <label>Durasi Kelas (bulan) *</label>
                                 <input type="number" name="duration_months" id="edit_duration_months" min="1" max="60" required>
+                            </div>
+                            <div class="form-field">
+                                <label>Jumlah Termin</label>
+                                <input type="number" name="installment_count" id="edit_installment_count" min="2" max="10" placeholder="Kosongkan jika hanya lunas">
+                                <small>Berapa kali pembayaran biaya les dicicil. Pembayaran jatuh tempo tiap (durasi kelas &divide; jumlah termin) bulan. Contoh: kelas 6 bulan, 2 termin = bayar tiap 3 bulan. Jumlah termin harus membagi habis durasi.</small>
                             </div>
                             <div class="form-field">
                                 <label class="form-checkbox">
@@ -539,7 +550,7 @@
                                 <input type="number" name="price" min="0" step="1000" required>
                             </div>
                             <div class="form-field">
-                                <label>Durasi (bulan) *</label>
+                                <label>Durasi Kelas (bulan) *</label>
                                 <input type="number" name="duration_months" min="1" max="60" required>
                             </div>
                             <div class="form-field">
@@ -603,7 +614,7 @@
                                 <input type="number" name="price" id="edit_priv_price" min="0" step="1000" required>
                             </div>
                             <div class="form-field">
-                                <label>Durasi (bulan) *</label>
+                                <label>Durasi Kelas (bulan) *</label>
                                 <input type="number" name="duration_months" id="edit_priv_duration_months" min="1" max="60" required>
                             </div>
                             <div class="form-field">
@@ -753,6 +764,7 @@
                 document.getElementById('edit_max_students').value = data.max_students ?? '';
                 document.getElementById('edit_price').value = data.price ?? '';
                 document.getElementById('edit_installment_price').value = data.installment_price ?? '';
+                document.getElementById('edit_installment_count').value = data.installment_count ?? '';
                 document.getElementById('edit_is_active').checked = !!data.is_active;
                 document.getElementById('edit_program_id').value = data.program_id ?? '';
 

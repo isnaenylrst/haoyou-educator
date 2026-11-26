@@ -84,7 +84,7 @@
                 @endforeach
             </select>
 
-            @if ($tab === 'laporan')
+            {{-- @if ($tab === 'laporan')
                 <select name="proses" class="select-chip" onchange="this.form.submit()">
                     <option value="">Semua Proses</option>
                     @foreach (\App\Http\Controllers\Admin\ProgressReportController::PROSES as $p)
@@ -98,7 +98,7 @@
                         <option value="{{ $f }}" {{ request('follow_up') === $f ? 'selected' : '' }}>{{ $f }}</option>
                     @endforeach
                 </select>
-            @endif
+            @endif --}}
 
             <a href="{{ route('admin.progress-report', ['tab' => $tab]) }}" class="btn">
                 <i class="fa-solid fa-rotate-right"></i>
@@ -131,7 +131,6 @@
                         <th class="c-laoshi">Laoshi</th>
                         <th class="c-tgl" style="text-align: center; vertical-align: middle;">Tanggal Terbit</th>
                         <th class="c-proses" style="text-align: center; vertical-align: middle;">Proses</th>
-                        <th class="c-follow" style="text-align: center; vertical-align: middle;">Follow Up</th>
                         <th class="c-aksi" style="text-align: center; vertical-align: middle;">Aksi</th>
                     </tr>
                 </thead>
@@ -178,20 +177,6 @@
                             <td class="c-tgl" style="text-align: center; vertical-align: middle;">{{ $issued }}</td>
                             <td class="c-proses" style="text-align: center; vertical-align: middle;">
                                 <span class="badge {{ $prosesBadge }}">{{ $proses }}</span>
-                            </td>
-                            <td class="c-follow" style="text-align: center; vertical-align: middle;">
-                                {{-- Follow up bisa dicatat untuk semua laporan --}}
-                                <form method="POST"
-                                      action="{{ route('admin.progress-report.follow-up', $r) }}">
-                                    @csrf
-                                    @method('PATCH')
-                                    <select name="follow_up_status" class="select-chip" title="Ubah status follow up"
-                                            onchange="this.form.submit()">
-                                        @foreach (\App\Models\ProgressReport::FOLLOW_UPS as $f)
-                                            <option value="{{ $f }}" {{ $r->follow_up_status === $f ? 'selected' : '' }}>{{ $f }}</option>
-                                        @endforeach
-                                    </select>
-                                </form>
                             </td>
                             <td class="c-aksi" style="text-align: center; vertical-align: middle;">
                                 @if ($approved)

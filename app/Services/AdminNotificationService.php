@@ -305,7 +305,7 @@ class AdminNotificationService
         }
 
         $enrollments = ClassEnrollment::query()
-            ->with('student')
+            ->with(['student', 'programPackage'])
             ->whereIn('id', $payments->pluck('enrollment_id'))
             ->whereIn('status', self::ACTIVE_ENROLLMENT)
             ->get()
@@ -318,7 +318,8 @@ class AdminNotificationService
                     return null;
                 }
 
-                $due = Carbon::parse($p->payment_date)->addMonthNoOverflow()->startOfMonth()->addDays(4);
+                // Tanggal 5 sejauh jarak termin paket (1 bulan, 3 bulan, dst.), sama dengan jatuh tempo di invoice
+                $due = app(PaymentInstallmentService::class)->nextDueDate($enrollment, $p->payment_date);
 
                 return today()->gte($due->copy()->subDay()) ? [$p, $enrollment, $due] : null;
             })

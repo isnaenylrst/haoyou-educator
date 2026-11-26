@@ -54,19 +54,12 @@ class PrintTemplateSeeder extends Seeder
                     ['Pertemuan Pertama',   '{pertemuan_pertama}',   'Diskon',            '{diskon}'],
                     ['Jadwal',              '{jadwal}',              'Total Biaya',  '{total_pembayaran}'],
                 ]),
-                // Tabel mengikuti skema yang dipilih siswa: bagian JIKA_TERMIN tampil untuk skema Termin,
-                // JIKA_LUNAS untuk skema Lunas (pemilihan dilakukan RegistrationFormService)
+                // Satu tabel pembayaran gabungan {tabel_pembayaran} (dibuat RegistrationFormService sesuai skema siswa):
+                // Pendaftaran, Aktivitas, lalu Lunas atau Termin 1..N. Catatan cicilan hanya tampil untuk skema Termin.
                 '<!--JIKA_TERMIN-->'
                     . '<p style="font-size:12pt;font-style:italic;margin:0 0 2px;">*Khusus Pembayaran Cicilan Termin wajib di isi tanggalnya dan di tandatangani.</p>'
-                    . $this->regularPaymentTable()
                 . '<!--/JIKA_TERMIN-->'
-                . '<!--JIKA_LUNAS-->'
-                    . $this->paymentTable([
-                        'Pendaftaran' => 'dp_pendaftaran',
-                        'Aktivitas'   => 'dp_aktivitas',
-                        'Lunas'       => 'termin1_lunas',
-                    ])
-                . '<!--/JIKA_LUNAS-->',
+                . '{tabel_pembayaran}',
                 ''
             );
     }
@@ -320,20 +313,6 @@ class PrintTemplateSeeder extends Seeder
         }
 
         return $html . '</table>';
-    }
-
-    /**
-     * Tabel pembayaran formulir reguler: DP (Pendaftaran, Aktivitas), lalu Termin 1 / Lunas,
-     * Termin 2, Termin 3. Bagian biaya les sudah terhitung di kolom Termin 1 / Lunas dan seterusnya,
-     * jadi tidak ada kolom Biaya Les di bawah DP.
-     */
-    private function regularPaymentTable(): string
-    {
-        return $this->paymentTable([
-                'Pendaftaran' => 'dp_pendaftaran',
-                'Aktivitas'   => 'dp_aktivitas',
-            ])
-            . '{tabel_termin}';
     }
 
     /** Tabel pembayaran: kolom pertama 20%, sisanya dibagi rata. */

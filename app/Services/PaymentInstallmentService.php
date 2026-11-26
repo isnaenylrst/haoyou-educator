@@ -27,9 +27,43 @@ class PaymentInstallmentService
      */
     public function terminCountFor(ClassEnrollment $enrollment): int
     {
-        $count = (int) ($enrollment->termin_count ?? 3);
+        $default = (int) ($enrollment->programPackage?->installmentTermCount() ?? 3);
+        $count   = (int) ($enrollment->termin_count ?: $default);
 
-        return ($count >= self::TERMIN_MIN && $count <= self::TERMIN_MAX) ? $count : 3;
+        if ($count >= self::TERMIN_MIN && $count <= self::TERMIN_MAX) {
+            return $count;
+        }
+
+        return ($default >= self::TERMIN_MIN && $default <= self::TERMIN_MAX) ? $default : 3;
+    }
+
+    /**
+     * Jarak antar termin (bulan) untuk enrollment ini = lama kelas / jumlah termin.
+     * Skema Lunas, paket private, atau paket tanpa data durasi memakai 1 bulan.
+     */
+    public function installmentIntervalMonthsFor(ClassEnrollment $enrollment): int
+    {
+        $enrollment->loadMissing('programPackage');
+
+        $package = $enrollment->programPackage;
+
+        if ($enrollment->payment_scheme !== 'Termin' || ! $package) {
+            return 1;
+        }
+
+        return $package->installmentIntervalMonths($this->terminCountFor($enrollment));
+    }
+
+    /**
+     * Jatuh tempo pembayaran berikutnya = tanggal 5, sejauh jarak termin paket dari tanggal bayar.
+     * Dipakai invoice dan notifikasi penagihan supaya keduanya selalu sama.
+     */
+    public function nextDueDate(ClassEnrollment $enrollment, $paymentDate): Carbon
+    {
+        return Carbon::parse($paymentDate)
+            ->addMonthsNoOverflow($this->installmentIntervalMonthsFor($enrollment))
+            ->day(5)
+            ->startOfDay();
     }
 
     /**
@@ -451,7 +485,7 @@ class PaymentInstallmentService
         if (
             ! $isPrivate
             && $e->payment_scheme === 'Termin'
-            && $package?->installment_price
+            && $package?->supportsInstallment()
         ) {
             return $package->totalFor('Termin');
         }
@@ -482,9 +516,9 @@ class PaymentInstallmentService
     }
 
     /**
-     * Termin diizinkan kalau paket reguler (bukan private) punya Harga Termin.
-     * Admin mengatur lewat halaman Program & Level: kosongkan Harga Termin
-     * untuk paket yang wajib Lunas.
+     * Termin diizinkan kalau paket reguler (bukan private) punya Jumlah Termin
+     * atau Harga Termin. Admin mengatur lewat halaman Program & Level: kosongkan
+     * keduanya untuk paket yang wajib Lunas (mis. HSK 4 ke atas).
      */
     public function allowsInstallment(bool $isPrivate, mixed $package = null): bool
     {
@@ -492,7 +526,9 @@ class PaymentInstallmentService
             return false;
         }
 
-        return (float) ($package->installment_price ?? 0) > 0;
+        return method_exists($package, 'supportsInstallment')
+            ? $package->supportsInstallment()
+            : (float) ($package->installment_price ?? 0) > 0;
     }
 
     public function enrollmentAllowsInstallment(ClassEnrollment $e): bool

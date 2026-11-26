@@ -271,9 +271,9 @@ class InvoiceService
         $nextDueDate = null;
 
         if ($unpaid && $paymentDate) {
-            $nextDueDate = Carbon::parse($paymentDate)
-                ->addMonthNoOverflow()
-                ->day(5);
+            // Jarak ke pembayaran berikutnya mengikuti paket: 1 bulan untuk termin bulanan,
+            // 3 bulan untuk HSK 6 bulan dengan 2 termin, dst. Skema Lunas tetap 1 bulan.
+            $nextDueDate = $this->installments->nextDueDate($enrollment, $paymentDate);
         }
 
         $values = [

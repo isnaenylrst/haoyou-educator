@@ -1,9 +1,17 @@
 @extends('admin.app')
 
-@section('title', 'Calon Siswa | CRM')
+@section('title', 'Siswa | Akademik')
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/admin/index.css') }}">
+    <style>
+        a.stat-card { display:block; text-decoration:none; color:inherit; cursor:pointer; transition:transform .12s, box-shadow .12s; }
+        a.stat-card:hover { transform:translateY(-2px); box-shadow:0 6px 16px rgba(0,0,0,.08); }
+        a.stat-card.is-active {transform: translateY(-2px) scale(1.03); outline-offset:-2px; }
+        .date-field { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:#6b7280; }
+        .fu-cell { cursor:pointer; }
+        .fu-date { font-size:12px; color:#6b7280; margin-top:2px; }
+    </style>
 @endpush
 
 @section('content')
@@ -25,42 +33,55 @@
     </div>
 
     {{-- ========================= STATISTIK ========================= --}}
+    @php
+        // Klik kartu = filter; klik lagi pada kartu yang sama = lepas filter
+        $cardUrl = fn (array $params) => route('admin.siswa', array_filter(
+            array_merge(request()->only('search', 'program', 'dari', 'sampai'), $params),
+            fn ($v) => $v !== null && $v !== ''
+        ));
+        $isBaru = request()->boolean('baru');
+    @endphp
+
     <div class="stat-row">
-        <div class="stat-card c-green">
+        <a class="stat-card c-green {{ request('status') === 'Active' ? 'is-active' : '' }}"
+           href="{{ $cardUrl(request('status') === 'Active' ? [] : ['status' => 'Active']) }}">
             <div class="stat-top">
-                <span class="stat-label">Total Siswa Aktif</span>
+                <span class="stat-label">Siswa Aktif</span>
                 <i class="fa-solid fa-users stat-icon"></i>
             </div>
-            <div class="stat-value">{{ $stats['total_active'] }}</div>
-            <div class="stat-note">Siswa yang sedang aktif belajar</div>
-        </div>
+            <div class="stat-value">{{ $stats['aktif'] }}</div>
+            <div class="stat-note">Masih mengikuti kelas</div>
+        </a>
 
-        <div class="stat-card c-blue">
+        <a class="stat-card c-yellow {{ request('status') === 'Inactive' ? 'is-active' : '' }}"
+           href="{{ $cardUrl(request('status') === 'Inactive' ? [] : ['status' => 'Inactive']) }}">
             <div class="stat-top">
-                <span class="stat-label">Daily Activity</span>
-                <i class="fa-solid fa-chalkboard-user stat-icon"></i>
+                <span class="stat-label">Siswa Cuti</span>
+                <i class="fa-solid fa-pause stat-icon"></i>
             </div>
-            <div class="stat-value">{{ $stats['total_daily_activity'] }}</div>
-            <div class="stat-note">Terdaftar pada kelas Daily Activity</div>
-        </div>
+            <div class="stat-value">{{ $stats['cuti'] }}</div>
+            <div class="stat-note">Kelas selesai, belum melewati 30 hari</div>
+        </a>
 
-        <div class="stat-card c-yellow">
+        <a class="stat-card c-blue {{ request('status') === 'Graduated' ? 'is-active' : '' }}"
+           href="{{ $cardUrl(request('status') === 'Graduated' ? [] : ['status' => 'Graduated']) }}">
             <div class="stat-top">
-                <span class="stat-label">HSK</span>
-                <i class="fa-solid fa-book-open stat-icon"></i>
+                <span class="stat-label">Siswa Lulus</span>
+                <i class="fa-solid fa-user-graduate stat-icon"></i>
             </div>
-            <div class="stat-value">{{ $stats['total_hsk'] }}</div>
-            <div class="stat-note">Terdaftar pada program HSK</div>
-        </div>
+            <div class="stat-value">{{ $stats['lulus'] }}</div>
+            <div class="stat-note">Expired (lewat 30 hari setelah kelas terakhir)</div>
+        </a>
 
-        <div class="stat-card c-red">
+        <a class="stat-card c-red {{ $isBaru ? 'is-active' : '' }}"
+           href="{{ $cardUrl($isBaru ? [] : ['baru' => 1]) }}">
             <div class="stat-top">
-                <span class="stat-label">Private</span>
-                <i class="fa-solid fa-user-tie stat-icon"></i>
+                <span class="stat-label">Siswa Baru</span>
+                <i class="fa-solid fa-user-plus stat-icon"></i>
             </div>
-            <div class="stat-value">{{ $stats['total_private'] }}</div>
-            <div class="stat-note">Terdaftar pada kelas Private</div>
-        </div>
+            <div class="stat-value">{{ $stats['baru'] }}</div>
+            <div class="stat-note">Bergabung {{ $rangeLabel }}</div>
+        </a>
     </div>
 
     {{-- ========================= FILTER ========================= --}}
@@ -93,6 +114,19 @@
                 <option value="private" {{ request('program') === 'private' ? 'selected' : '' }}>Private</option>
             </select>
 
+            <span class="date-field">
+                Bergabung
+                <input type="date" name="dari" class="select-chip" value="{{ request('dari') }}"
+                       title="Tanggal bergabung dari" onchange="this.form.submit()">
+                s/d
+                <input type="date" name="sampai" class="select-chip" value="{{ request('sampai') }}"
+                       title="Tanggal bergabung sampai" onchange="this.form.submit()">
+            </span>
+
+            @if (request()->boolean('baru'))
+                <input type="hidden" name="baru" value="1">
+            @endif
+
             <a href="{{ route('admin.siswa') }}" class="btn">
                 <i class="fa-solid fa-rotate-right"></i>
                 Reset
@@ -105,12 +139,14 @@
         <table>
             <thead>
                 <tr>
+                    <th width="48" style="text-align: center;">No</th>
                     <th>Siswa</th>
                     <th style="text-align: center;">Program</th>
                     <th style="text-align: center;">Hadir</th>
                     <th style="text-align: center;">Tidak Hadir</th>
                     <th style="text-align: center;">Status</th>
                     <th style="text-align: center;">Poin</th>
+                    <th style="text-align: center;">Follow Up</th>
                     <th style="text-align: left;">Catatan</th>
                     <th width="120" style="text-align: center;">Aksi</th>
                 </tr>
@@ -152,6 +188,10 @@
                             : '';
                     @endphp
                     <tr>
+                        <td style="text-align: center; vertical-align: middle; color:#6b7280;">
+                            {{ $students->firstItem() + $loop->index }}
+                        </td>
+
                         <td>
                             <div class="name-cell">
                                 <div class="avatar-sm">
@@ -241,6 +281,38 @@
 
                         <td style="text-align: center; vertical-align: middle;">{{ $student->points }}</td>
 
+                        {{-- Follow Up lanjut program --}}
+                        @php
+                            $latestEnrollmentId = $latestEnrollmentIds[$student->id] ?? null;
+                            $fu = $latestEnrollmentId ? ($followUps[$latestEnrollmentId] ?? null) : null;
+                            $fuBadge = match ($fu?->status) {
+                                'Tertarik Lanjut', 'Akan Bayar' => 'badge-completed',
+                                'Tidak Lanjut'                  => 'badge-cancelled',
+                                null                            => '',
+                                default                         => 'badge-pending',
+                            };
+                        @endphp
+                        <td class="fu-cell" style="text-align: center; vertical-align: middle;"
+                            @if ($latestEnrollmentId)
+                                data-url="{{ route('admin.siswa.followup', $student) }}"
+                                data-name="{{ $student->name }}"
+                                data-status="{{ $fu?->status }}"
+                                onclick="openFollowUpModal(this)"
+                                title="Klik untuk mencatat follow up lanjut program"
+                            @endif>
+                            @if ($fu)
+                                <span class="badge {{ $fuBadge }}">
+                                    <span class="badge-dot"></span>
+                                    {{ $fu->status }}
+                                </span>
+                                <div class="fu-date">{{ $fu->followed_up_at->translatedFormat('d M Y') }}</div>
+                            @elseif ($latestEnrollmentId)
+                                <span class="note-empty"><i class="fa-solid fa-plus"></i> Tambah</span>
+                            @else
+                                <span class="cand-sub">-</span>
+                            @endif
+                        </td>
+
                         {{-- Catatan Admin --}}
                         @php $adminNote = trim($student->admin_note ?? ''); @endphp
                         <td class="note-cell {{ $adminNote !== '' ? 'has-note' : '' }}"
@@ -321,7 +393,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="8" style="text-align:center;padding:50px;color:#888;">
+                        <td colspan="10" style="text-align:center;padding:50px;color:#888;">
                             Belum ada data siswa.
                         </td>
                     </tr>
@@ -450,6 +522,62 @@
             </form>
         </div>
     </div>
+
+{{-- ========================= MODAL FOLLOW UP LANJUT PROGRAM ========================= --}}
+<div class="modal-overlay" id="followUpModalOverlay">
+    <div class="modal">
+        <form id="followUpForm" method="POST">
+            @csrf
+
+            <div class="modal-head">
+                <div>
+                    <div class="modal-title">Follow Up Lanjut Program</div>
+                    <div class="modal-sub" id="fu_student_name">-</div>
+                </div>
+                <button type="button" class="modal-close" onclick="closeFollowUpModal()" aria-label="Tutup">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <div class="form-section">
+                    <div class="form-field full">
+                        <label for="fu_status">Status *</label>
+                        <select name="status" id="fu_status" required>
+                            @foreach ($followUpStatuses as $st)
+                                <option value="{{ $st }}">{{ $st }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="form-field full">
+                        <label for="fu_date">Tanggal Follow Up</label>
+                        <input type="date" name="followed_up_at" id="fu_date" max="{{ now()->toDateString() }}">
+                    </div>
+                </div>
+
+                <div class="form-section" style="margin-bottom: 0;">
+                    <div class="form-field full">
+                        <label for="fu_note">Catatan</label>
+                        <textarea name="note" id="fu_note" rows="4" maxlength="500"
+                                  placeholder="Hasil percakapan, kendala, atau rencana lanjut."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-foot">
+                <div class="modal-foot-right">
+                    <button type="button" class="btn btn-secondary" onclick="closeFollowUpModal()">Batal</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa-solid fa-check"></i> Simpan
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
 
 {{-- ========================= MODAL CATATAN ADMIN ========================= --}}
 <div class="modal-overlay" id="noteModalOverlay">
@@ -598,6 +726,7 @@
 
             closeAssignClassModal();
             closeNoteModal();
+            closeFollowUpModal();
         });
         /* ============================================================
             MODAL: CATATAN ADMIN
@@ -617,5 +746,31 @@
             document.getElementById('noteModalOverlay').addEventListener('click', function (e) {
                 if (e.target === this) closeNoteModal();
             });
+
+        /* ============================================================
+        MODAL: FOLLOW UP LANJUT PROGRAM
+        ============================================================ */
+        function openFollowUpModal(cell) {
+            if (!cell.dataset.url) return;
+
+            document.getElementById('followUpForm').action = cell.dataset.url;
+            document.getElementById('fu_student_name').textContent = cell.dataset.name;
+            document.getElementById('fu_note').value = '';
+            document.getElementById('fu_date').value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+
+            if (cell.dataset.status) {
+                document.getElementById('fu_status').value = cell.dataset.status;
+            }
+
+            document.getElementById('followUpModalOverlay').classList.add('open');
+        }
+
+        function closeFollowUpModal() {
+            document.getElementById('followUpModalOverlay').classList.remove('open');
+        }
+
+        document.getElementById('followUpModalOverlay').addEventListener('click', function (e) {
+            if (e.target === this) closeFollowUpModal();
+        });
     </script>
 @endpush

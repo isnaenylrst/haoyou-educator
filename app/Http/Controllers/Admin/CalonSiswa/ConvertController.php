@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CandidateStudent;
 use App\Models\ClassEnrollment;
 use App\Models\ClassModel;
+use App\Models\ClassSession;
 use App\Models\ClassSchedule;
 use App\Models\Level;
 use App\Models\PrivatePackage;
@@ -20,6 +21,7 @@ use App\Services\ClassCapacityService;
 use App\Services\ClassOfferService;
 use App\Services\ClassScheduleService;
 use App\Services\ClassSessionService;
+use App\Services\ExtraFeeService;
 use App\Services\PaymentInstallmentService;
 use App\Services\RegistrationFormService;
 use Carbon\Carbon;
@@ -291,8 +293,9 @@ class ConvertController extends Controller
         $lesTotal        = (float) $this->payments->packageTotalFor($package, $isPrivate);
         $totalBill       = $lesTotal + $registrationFee + $activityFee;
 
-        // Harga termin (installment_price x lama paket). null = paket ini tidak punya harga termin khusus
-        $lesTotalTermin  = (! $isPrivate && $package->installment_price)
+        // Harga termin (installment_price x jumlah termin; paket tanpa harga termin memakai harga lunas).
+        // null = paket ini tidak bisa termin
+        $lesTotalTermin  = (! $isPrivate && $package->supportsInstallment())
             ? $package->totalFor('Termin')
             : null;
         $totalBillTermin = $lesTotalTermin !== null
@@ -343,8 +346,8 @@ class ConvertController extends Controller
         $validated = $request->validate([
             'payment_scheme' => 'nullable|in:Lunas,Termin',
             'discount'       => 'nullable|numeric|min:0',
-            'termin_count'   => 'nullable|integer|min:' . PaymentInstallmentService::TERMIN_MIN . '|max:' . PaymentInstallmentService::TERMIN_MAX,
             'notes'          => 'nullable|string|max:1000',
+            'home_visit_count' => 'nullable|integer|min:0|max:60',
             'amount_paid'    => 'required|numeric|min:1',
             'payment_method' => 'required|string|max:100',
             'payment_date'   => 'required|date|before_or_equal:today',
@@ -358,11 +361,11 @@ class ConvertController extends Controller
 
         $canInstallment = $this->payments->allowsInstallment($isPrivate, $package);
 
-        // Termin hanya berlaku kalau paket boleh dicicil DAN punya harga termin.
-        // Selain itu otomatis Lunas (private, HSK, dll).
+        // Termin hanya berlaku kalau paket boleh dicicil DAN punya jumlah termin.
+        // Selain itu otomatis Lunas (private, HSK 4 ke atas, dll).
         $scheme = ($canInstallment
             && ! $isPrivate
-            && $package->installment_price
+            && $package->supportsInstallment()
             && ($validated['payment_scheme'] ?? 'Lunas') === 'Termin')
             ? 'Termin'
             : 'Lunas';
@@ -400,8 +403,14 @@ class ConvertController extends Controller
             ]);
         }
 
-        // Jumlah termin (2 sampai 10) hanya berlaku untuk skema Termin; selain itu tetap 3
-        $terminCount = $scheme === 'Termin' ? (int) ($validated['termin_count'] ?? 3) : 3;
+        // Jumlah termin dikunci mengikuti paket (diatur di halaman Program & Level), bukan input admin.
+        // Hanya berlaku untuk skema Termin; selain itu tetap 3.
+        $terminCount = $scheme === 'Termin'
+            ? min(
+                max((int) ($package->installmentTermCount() ?? 3), PaymentInstallmentService::TERMIN_MIN),
+                PaymentInstallmentService::TERMIN_MAX
+            )
+            : 3;
 
         // Tanggal manual untuk formulir; kosong = otomatis. Tanggal termin di atas jumlah termin dibuang
         // (skema Lunas hanya menyisakan kolom pertama).
@@ -410,10 +419,36 @@ class ConvertController extends Controller
             $scheme === 'Termin' ? $terminCount : 1,
         );
 
+        // Home visit (Rp50.000 per pertemuan): hanya program private dan kelas private BARU.
+        // Pertemuan awal kelas dijadikan home visit, dibayar bersama DP sebagai baris pembayaran terpisah.
+        $homeVisitCount = (int) ($validated['home_visit_count'] ?? 0);
+
+        if ($homeVisitCount > 0) {
+            if (! $isPrivate) {
+                throw ValidationException::withMessages([
+                    'home_visit_count' => 'Home visit hanya dapat digunakan untuk program private.',
+                ]);
+            }
+
+            if (! empty($draft['join_class_id'])) {
+                throw ValidationException::withMessages([
+                    'home_visit_count' => 'Home visit tidak bisa dipilih saat bergabung ke kelas private yang sudah ada. Atur lewat Ubah Jadwal kelas.',
+                ]);
+            }
+
+            $totalMeetings = (int) ($package->total_meetings ?? 0);
+
+            if ($homeVisitCount > $totalMeetings) {
+                throw ValidationException::withMessages([
+                    'home_visit_count' => 'Jumlah home visit tidak boleh melebihi jumlah pertemuan paket (' . $totalMeetings . ').',
+                ]);
+            }
+        }
+
         $proofPath = $request->file('proof')->store('bukti-pembayaran', 'public');
 
         try {
-            $enrollment = DB::transaction(function () use ($validated, $draft, $candidateStudent, $isPrivate, $levelId, $proofPath, $registrationFee, $activityFee, $discount, $totalBill, $scheme, $terminCount, $formManual) {
+            $enrollment = DB::transaction(function () use ($validated, $draft, $candidateStudent, $isPrivate, $levelId, $proofPath, $registrationFee, $activityFee, $discount, $totalBill, $scheme, $terminCount, $formManual, $homeVisitCount) {
 
                 $studentLevel = Level::where('nama_level', 'Student')->firstOrFail();
 
@@ -433,6 +468,11 @@ class ConvertController extends Controller
                     'join_date'            => now(),
                     'status'               => 'Active',
                 ]);
+
+                // Biaya aktivitas dibayar sekali seumur hidup: tandai siswa baru yang sudah ditagih
+                if ($activityFee > 0) {
+                    $student->forceFill(['activity_fee_paid_at' => now()->toDateString()])->save();
+                }
 
                 $classId = $draft['class_id'] ?? null;
 
@@ -536,6 +576,31 @@ class ConvertController extends Controller
                     $validated['payment_date'],
                     $proofPath, // disimpan ke kolom payment_proof_path
                 );
+
+                // Home visit: N pertemuan awal kelas baru jadi Home Visit, tiap pertemuan satu pembayaran
+                // (satu invoice per pertemuan). Gagal salah satu = seluruh pendaftaran dibatalkan.
+                if ($homeVisitCount > 0) {
+                    $sessionIds = ClassSession::where('class_id', $classId)
+                        ->where('kind', 'Regular')
+                        ->where('status', 'Scheduled')
+                        ->orderBy('session_date')
+                        ->orderBy('start_time')
+                        ->limit($homeVisitCount)
+                        ->pluck('id')
+                        ->all();
+
+                    if (count($sessionIds) < $homeVisitCount) {
+                        throw ValidationException::withMessages([
+                            'home_visit_count' => 'Pertemuan kelas kurang dari jumlah home visit yang dipilih.',
+                        ]);
+                    }
+
+                    $this->sessions->makeHomeVisitMany($sessionIds, $enrollment, [
+                        'payment_date'       => $validated['payment_date'],
+                        'payment_method'     => $validated['payment_method'],
+                        'payment_proof_path' => $proofPath,
+                    ]);
+                }
 
                 return $enrollment;
             });

@@ -1092,6 +1092,8 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
             ->name('enrollments.waiting-class-options');
         Route::patch('/{enrollment}/assign-class', [SiswaController::class, 'assignClass'])
             ->name('enrollments.assign-class');
+        Route::post('/siswa/{siswa}/follow-up', [SiswaController::class, 'storeFollowUp'])
+            ->name('siswa.followup');
     });
 
    // =========================================================

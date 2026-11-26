@@ -55,6 +55,13 @@ class ExtraFeeService
             ]);
         }
 
+        // Home Visit hanya untuk program private.
+        if ($type === Payment::TYPE_HOME_VISIT && ! $enrollment->private_package_id) {
+            throw ValidationException::withMessages([
+                'session' => 'Home Visit hanya dapat digunakan untuk program private.',
+            ]);
+        }
+
         // Validasi tipe biaya.
         if (! in_array($type, Payment::EXTRA_TYPES, true)) {
             throw ValidationException::withMessages([

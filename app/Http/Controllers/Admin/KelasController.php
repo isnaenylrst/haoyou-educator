@@ -113,6 +113,7 @@ class KelasController extends Controller
             'roomSuggestions' => $this->roomSuggestions(),
             'payers'          => $this->payersFor($kelas),
             'homeVisitFee'    => ExtraFeeService::FEE_HOME_VISIT,
+            'homeVisitAllowed' => (bool) $kelas->private_package_id,
         ]);
     }
 
@@ -1216,7 +1217,8 @@ class KelasController extends Controller
                 'can_reschedule' => $s->canBeRescheduled(),
                 'can_following'  => $s->kind === 'Regular' && (bool) $s->schedule?->isCurrent(),
                 'can_complete'   => $s->canBeCompleted(),
-                'can_home_visit' => $s->canBecomeHomeVisit(),
+                // Home visit hanya untuk kelas private
+                'can_home_visit' => $s->canBecomeHomeVisit() && (bool) $kelas->private_package_id,
 
                 // Pertemuan yang sudah berlangsung: sudah ditandai selesai ATAU sudah punya jurnal
                 'started'        => $s->status === 'Completed' || $s->journal !== null,
@@ -1314,6 +1316,13 @@ class KelasController extends Controller
         $payer = null;
 
         if ($wantsHv) {
+            // Home visit hanya untuk kelas private
+            if (! ClassModel::whereKey($classSession->class_id)->whereNotNull('private_package_id')->exists()) {
+                throw ValidationException::withMessages([
+                    'home_visit' => 'Home visit hanya dapat digunakan untuk program private.',
+                ]);
+            }
+
             // Biaya per pertemuan -> hanya untuk "Pertemuan ini saja"
             if ($data['scope'] !== 'one') {
                 throw ValidationException::withMessages([
@@ -1436,6 +1445,12 @@ class KelasController extends Controller
     public function makeHomeVisit(Request $request, $id)
     {
         $kelas = ClassModel::findOrFail($id);
+
+        if (! $kelas->private_package_id) {
+            throw ValidationException::withMessages([
+                'session_ids' => 'Home visit hanya dapat digunakan untuk program private.',
+            ]);
+        }
 
         $data = $request->validate([
             'session_ids'         => ['required', 'array', 'min:1'],

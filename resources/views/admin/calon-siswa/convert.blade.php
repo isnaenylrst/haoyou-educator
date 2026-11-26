@@ -560,10 +560,41 @@
                                     <label class="form-radio">
                                         <input type="radio" name="payment_scheme" value="Termin"
                                                {{ old('payment_scheme') === 'Termin' ? 'checked' : '' }}>
-                                        <span>Termin (Rp {{ number_format($lesTotalTermin, 0, ',', '.') }} total)</span>
+                                        <span>Termin ({{ $package->installmentTermCount() }}x, tiap {{ $package->installmentIntervalMonths() }} bulan &middot; Rp {{ number_format($lesTotalTermin, 0, ',', '.') }} total)</span>
                                     </label>
                                 </div>
                             </div>
+                        @endif
+
+                        {{-- Home visit: hanya program private dan kelas private baru (bukan gabung kelas yang sudah ada) --}}
+                        @if ($isPrivate && ! $chosenClass && empty($settlement))
+                            <div class="form-field">
+                                <label>Jumlah Pertemuan Home Visit</label>
+                                <input type="number" name="home_visit_count" id="home_visit_count" step="1"
+                                       min="0" max="{{ (int) ($package->total_meetings ?? 0) }}"
+                                       value="{{ old('home_visit_count', 0) }}">
+                                <span class="form-section-note" style="margin-top:6px;">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                    <span id="home-visit-note">Home visit Rp{{ number_format(\App\Services\ExtraFeeService::FEE_HOME_VISIT, 0, ',', '.') }} per pertemuan, hanya untuk program private. Pertemuan awal kelas dijadikan home visit.</span>
+                                </span>
+                            </div>
+                            <script>
+                                (function () {
+                                    const input = document.getElementById('home_visit_count');
+                                    const note  = document.getElementById('home-visit-note');
+                                    const fee   = {{ (int) \App\Services\ExtraFeeService::FEE_HOME_VISIT }};
+                                    const base  = note.textContent;
+                                    const fmt   = n => 'Rp' + Math.round(n).toLocaleString('id-ID');
+                                    function render() {
+                                        const n = parseInt(input.value, 10) || 0;
+                                        note.textContent = n > 0
+                                            ? n + ' pertemuan awal menjadi home visit, ' + fmt(n * fee) + ' dibayar bersama DP (dicatat terpisah). Total transfer = DP + ' + fmt(n * fee) + '.'
+                                            : base;
+                                    }
+                                    input.addEventListener('input', render);
+                                    render();
+                                })();
+                            </script>
                         @endif
 
                         <div class="form-field">
@@ -666,7 +697,7 @@
                             @endif
                         @else
                             Pembayaran pertama dicatat sebagai DP (minimal sebesar biaya pendaftaran). Sisanya dibayar setelah siswa aktif,
-                            sesuai skema Lunas (sekali bayar) atau Termin (3 kali).
+                            sesuai skema Lunas (sekali bayar) atau Termin (jumlah termin mengikuti paket).
                         @endif
                     </p>
 
@@ -675,7 +706,7 @@
 
             {{-- ===================== EDIT FORMULIR (khusus konversi calon siswa reguler) =====================
                  Input memakai atribut form="payment-form" supaya ikut terkirim bersama form pembayaran di atas.
-                 Jumlah termin (2/3) menentukan pembagian nominal termin secara otomatis (sistem & formulir).
+                 Jumlah termin dikunci mengikuti paket (Program & Level) dan menentukan pembagian nominal termin secara otomatis (sistem & formulir).
                  Nominal pendaftaran & aktivitas tetap (dari Pengaturan). Tanggal diisi manual; kosong = otomatis. --}}
             @if (! $isContinueFlow && ! $isPrivate)
                 <div class="card" style="margin-top: 16px;">
@@ -713,12 +744,12 @@
                     <div class="form-grid">
                         <div class="form-field" id="manual-termin-count">
                             <label>Jumlah Termin</label>
-                            <input type="number" id="termin-count-input" form="payment-form" name="termin_count" step="1"
-                                   min="{{ \App\Services\PaymentInstallmentService::TERMIN_MIN }}"
-                                   max="{{ \App\Services\PaymentInstallmentService::TERMIN_MAX }}"
-                                   value="{{ old('termin_count', 3) }}">
+                            {{-- Dikunci mengikuti paket. Server menghitung sendiri dari paket, input ini hanya tampilan & dibaca JS. --}}
+                            <input type="number" id="termin-count-input" step="1" readonly
+                                   value="{{ method_exists($package, 'installmentTermCount') ? ($package->installmentTermCount() ?? 3) : 3 }}">
                             <span class="form-section-note" style="margin-top:6px;">
                                 <i class="fa-solid fa-circle-info"></i>
+                                Jumlah termin mengikuti paket dan tidak bisa diubah di sini (atur di Program &amp; Level).
                                 Sisa biaya les dibagi rata sesuai jumlah termin, di sistem pembayaran dan di formulir.
                             </span>
                         </div>
