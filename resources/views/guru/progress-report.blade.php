@@ -9,7 +9,7 @@
             <h2 class="fw-bold mb-1">Progress Report</h2>
             <p class="text-muted">
                                 Isi Achievement Level dan Description setiap siswa. Learning Materials sudah disiapkan Kurikulum
-                (template program). PDF dibuat otomatis, lalu kirim ke Kurikulum. Batas pengisian maksimal H+3 setelah pertemuan terakhir.
+                (template program). PDF dibuat otomatis, lalu kirim ke Kurikulum. Batas pengisian maksimal H+3 setelah pertemuan terakhir. Untuk pertemuan terakhir, report sudah harus tampil di siswa paling lambat H+2 (notifikasi pengingat muncul sejak H-1).
                 Siswa baru bisa melihat report setelah disetujui Kurikulum.
             </p>
         </div>

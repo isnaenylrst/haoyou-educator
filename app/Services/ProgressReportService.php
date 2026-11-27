@@ -12,6 +12,18 @@ class ProgressReportService
     public const GRACE_DAYS = 3;
 
     /**
+     * Progress report pertemuan terakhir harus sudah TAMPIL DI SISWA paling lambat H + 2 hari.
+     * Hanya dipakai untuk notifikasi pengingat ke guru (tidak ada penguncian, GRACE_DAYS tidak berubah).
+     */
+    public const TARGET_DAYS = 2;
+
+    /** Tanggal H+2: report sudah harus tampil di siswa, dihitung dari hari pertemuan terakhir. */
+    public static function targetDate(Carbon $lastMeeting): Carbon
+    {
+        return $lastMeeting->copy()->addDays(self::TARGET_DAYS)->startOfDay();
+    }
+
+    /**
      * "H" = hari pertemuan terakhir kelas (jurnal yang ditandai pertemuan terakhir
      * dan terlaksana). Kalau belum ada jurnal seperti itu, pakai tanggal selesai
      * kelas (classes.end_date). Null = belum ada patokan, belum ada batas.

@@ -55,7 +55,7 @@ class TeacherNotificationService
                      'report_approved', 'report_returned', 'certificate_approved', 'certificate_rejected', 'leave_result'],
         'surat' => ['document', 'sop_new'],
         'konsultasi' => ['consultation', 'consultation_pending', 'consultation_cancelled'],
-        'tugas' => ['task', 'task_done', 'class_assign', 'replacement_request', 'replacement_offer', 'home_visit', 'journal_missing', 'schedule_changed', 'progress_due'],
+        'tugas' => ['task', 'task_done', 'class_assign', 'replacement_request', 'replacement_offer', 'home_visit', 'journal_missing', 'schedule_changed', 'progress_due', 'progress_last_meeting'],
     ];
 
     private ?Collection $cache = null;
@@ -112,6 +112,7 @@ class TeacherNotificationService
             ['type' => 'task',                 'label' => 'Tugas dari Kurikulum',          'hint' => 'Tandai selesai di halaman Notifikasi', 'url' => route('teacher.notifikasi')],
             ['type' => 'report_returned',      'label' => 'Progress report dikembalikan',  'hint' => 'Perbaiki lalu ajukan ulang',           'url' => route('teacher.progress-report')],
             ['type' => 'journal_revision',     'label' => 'Jurnal perlu revisi',           'hint' => 'Dikembalikan Kurikulum',               'url' => route('teacher.teaching-log')],
+            ['type' => 'progress_last_meeting','label' => 'Pertemuan terakhir: selesaikan progress report', 'hint' => 'Harus tampil di siswa paling lambat H+2', 'url' => route('teacher.progress-report')],
             ['type' => 'progress_due',         'label' => 'Progress report belum diisi',   'hint' => 'Isi sebelum batas H+3',               'url' => route('teacher.progress-report')],
             ['type' => 'journal_missing',      'label' => 'Jurnal mengajar belum diisi',   'hint' => 'Lihat sesi yang belum diisi',         'url' => route('teacher.notifikasi')],
             ['type' => 'material_rejected',    'label' => 'LP / PPT perlu direvisi',       'hint' => 'Upload ulang di menu Kelas',           'url' => route('teacher.kelas')],
@@ -292,9 +293,9 @@ class TeacherNotificationService
         //     atau di pertemuan terakhir kalau kelas kurang dari 3 bulan (MissingProgressReportFinder, sama dengan
         //     tab "Belum Diisi" di admin). Yang dikembalikan Kurikulum sudah punya notifikasi sendiri (blok 4),
         //     jadi tidak diulang. Cache 60 detik per guru karena bell dipanggil di tiap halaman.
-        $dueReports = Cache::remember("teacher-{$t->id}-progress-due", 60, fn () =>
+        $dueReports = collect(Cache::remember("teacher-{$t->id}-progress-due-v2", 60, fn () =>
             app(MissingProgressReportFinder::class)
-                ->find(today(), $t->id)
+                ->find(today(), $t->id, 1)   // 1 = pertemuan terakhir sudah diingatkan sejak H-1
                 ->reject(fn ($i) => $i->state === 'Dikembalikan')
                 ->map(fn ($i) => [
                     'key'           => $i->key,
@@ -305,12 +306,15 @@ class TeacherNotificationService
                     'kind'          => $i->kind_label,
                     'due'           => $i->due->toDateString(),
                     'overdue'       => $i->overdue,
+                    'is_final'      => (bool) $i->is_final,
+                    'upcoming'      => (bool) $i->upcoming,
                 ])->values()->all()
-        );
+        ));
 
         $reportReminders = $this->reminderTimes(ProgressReportReminder::class, $t->user_id);
 
-        foreach ($dueReports as $d) {
+        // Siklus 3 bulanan (bukan pertemuan terakhir): notifikasi jatuh tempo seperti biasa
+        foreach ($dueReports->where('is_final', false) as $d) {
             $due        = Carbon::parse($d['due']);
             $remindedAt = $reportReminders[$d['key']] ?? null;
 
@@ -322,6 +326,48 @@ class TeacherNotificationService
                 'category' => 'Progress Report Belum Diisi', 'time' => $remindedAt ?? $due,
                 'note' => "{$d['kind']} · jatuh tempo " . $due->translatedFormat('d M Y')
                     . ($d['overdue'] ? ' · SUDAH LEWAT BATAS H+' . ProgressReportService::GRACE_DAYS : '')
+                    . ($remindedAt ? "\nDiingatkan admin " . $remindedAt->locale('id')->diffForHumans() . '.' : ''),
+                'actionable' => true,
+                'action' => ['kind' => 'link', 'label' => 'Isi Progress Report',
+                    'url' => route('teacher.progress-report.form', $d['enrollment_id'])],
+            ]);
+        }
+
+        // 3d. PERTEMUAN TERAKHIR: progress report harus sudah TAMPIL DI SISWA paling lambat H+2 setelah kelas terakhir
+        //     (siswa baru melihat report setelah di-ACC Kurikulum, jadi guru perlu mengirim lebih awal).
+        //     Hanya notifikasi pengingat, tidak ada penguncian. Muncul sejak H-1 ("pertemuan terakhir besok"),
+        //     terus tampil sampai report dikirim ke Kurikulum, lalu hilang sendiri.
+        foreach ($dueReports->where('is_final', true) as $d) {
+            $h          = Carbon::parse($d['due'])->startOfDay();                  // hari pertemuan terakhir (H)
+            $target     = ProgressReportService::targetDate($h);                   // H+2: harus sudah tampil di siswa
+            $today      = today();
+            $left       = (int) $today->diffInDays($target, false);                // >0 sisa hari, 0 hari ini, <0 terlambat
+            $remindedAt = $reportReminders[$d['key']] ?? null;
+            $who        = "{$d['student']} ({$d['class_name']})";
+            $h2         = 'H+' . ProgressReportService::TARGET_DAYS;
+
+            if ($d['upcoming']) {
+                $title = "Pertemuan terakhir {$d['class_name']} besok: siapkan progress report {$d['student']}";
+            } elseif ($today->eq($h)) {
+                $title = "Hari ini pertemuan terakhir {$d['class_name']}: selesaikan progress report {$d['student']}";
+            } elseif ($today->gt($target)) {
+                $title = "Terlambat dari target {$h2}: segera kirim progress report {$who} agar tampil di siswa";
+            } else {
+                $title = $d['state'] === 'Draft'
+                    ? "Progress report {$who} masih draft: selesaikan & kirim ke Kurikulum"
+                    : "Pertemuan terakhir selesai: selesaikan progress report {$who}";
+            }
+
+            $targetLabel = $left > 0 ? "sisa {$left} hari" : ($left === 0 ? 'hari ini' : 'terlambat ' . abs($left) . ' hari');
+
+            $push([
+                'key' => "prlast-{$d['key']}", 'type' => 'progress_last_meeting',
+                'title' => $title,
+                'category' => 'Progress Report Pertemuan Terakhir',
+                'time' => $remindedAt ?? ($d['upcoming'] ? now() : $h),
+                'note' => 'Pertemuan terakhir: ' . $h->translatedFormat('d M Y')
+                    . "\nProgress report harus sudah tampil di siswa paling lambat {$h2}: " . $target->translatedFormat('d M Y') . " ({$targetLabel})"
+                    . "\nKirim ke Kurikulum lebih awal supaya sempat di-ACC."
                     . ($remindedAt ? "\nDiingatkan admin " . $remindedAt->locale('id')->diffForHumans() . '.' : ''),
                 'actionable' => true,
                 'action' => ['kind' => 'link', 'label' => 'Isi Progress Report',
