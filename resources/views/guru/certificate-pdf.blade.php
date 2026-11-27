@@ -1,13 +1,8 @@
 @php
-    // Level HSK dibaca dari nama kursus, mis. "HSK Class - HSK 2 - Kelas A"
-    preg_match('/HSK\s*([1-6])/i', $cert['course'] ?? '', $m);
-    $level   = (int) ($m[1] ?? 0);
-    $isLow   = $level >= 1 && $level <= 2;
-    $skills  = $isLow
-        ? ['listening' => 'Listening', 'reading' => 'Reading']
-        : ['listening' => 'Listening', 'reading' => 'Reading', 'writing' => 'Writing'];
-    $max     = count($skills) * 100;     // 200 atau 300
-    $passing = $isLow ? 120 : 180;
+    // Semua komponen nilai & standar kelulusan sudah ditentukan controller (sesuai kategori)
+    $skills  = $cert['skills'];      // [['label' => 'Listening', 'value' => 80], ...]
+    $max     = $cert['max'];
+    $passing = $cert['passing'];
     $passed  = $cert['score'] !== null && (float) $cert['score'] >= $passing;
     $fmt = fn ($v) => is_null($v) ? '-' : rtrim(rtrim(number_format((float) $v, 1, '.', ''), '0'), '.');
 
@@ -99,7 +94,7 @@
     @endif
 
     <div class="title serif">Sertifikat Mock Test</div>
-    <div class="sub">MOCK TEST HSK &nbsp;·&nbsp; NO. {{ $number }}</div>
+    <div class="sub">{{ $cert['sub'] }} &nbsp;·&nbsp; NO. {{ $number }}</div>
 
     <div class="intro">Dengan bangga diberikan kepada</div>
     <div class="name serif">{{ $e->student_name }}</div>
@@ -115,8 +110,8 @@
 
     <table class="scores">
         <tr>
-            @foreach ($skills as $key => $label)
-                <td><div class="lbl">{{ $label }}</div><div class="val">{{ $fmt($cert[$key] ?? null) }}</div></td>
+            @foreach ($skills as $s)
+                <td><div class="lbl">{{ $s['label'] }}</div><div class="val">{{ $fmt($s['value']) }}</div></td>
             @endforeach
             <td class="total" style="border-right:0;">
                 <div class="lbl">Total Score</div>

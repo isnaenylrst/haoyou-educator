@@ -4,14 +4,24 @@
 
 @section('content')
 
+@php
+    use App\Http\Controllers\Guru\CertificateController as CertCtl;
+
+    $skillNames = ['listening' => 'Listening', 'reading' => 'Reading', 'writing' => 'Writing', 'speaking' => 'Speaking'];
+    $n = fn ($v) => is_null($v) ? '-' : rtrim(rtrim(number_format((float) $v, 1, '.', ''), '0'), '.');
+@endphp
+
 <div class="container-fluid">
 
     <div class="mb-4">
-        <h2 class="fw-bold mb-1">Sertifikat</h2>
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">
+            <h2 class="fw-bold mb-0">Sertifikat</h2>
+            <a href="{{ route('teacher.sertifikat-kategori.index') }}" class="btn btn-outline-secondary btn-sm">Kelola Kategori Penilaian</a>
+        </div>
         <p class="text-muted mb-0">
-            Buat sertifikat Mock Test HSK siswa. Tanggal dan nilai Listening, Reading, Writing terisi otomatis
-            dari progress report, tetapi tetap bisa Anda ubah. Total nilai dihitung otomatis (dijumlahkan).
-            Sertifikat tampil ke siswa setelah di-ACC Kurikulum.
+            Buat sertifikat Mock Test siswa. Pilih <strong>kategori penilaian</strong> (HSK, Reguler, atau kategori buatan guru),
+            lalu isi nilainya. Tanggal dan nilai terisi otomatis dari progress report bila tersedia, tetapi tetap bisa Anda ubah.
+            Total nilai dihitung otomatis (dijumlahkan). Sertifikat tampil ke siswa setelah di-ACC Kurikulum.
         </p>
     </div>
 
@@ -65,6 +75,16 @@
                                value="{{ old('course_name') }}" class="form-control js-course" required>
                     </div>
 
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold mb-1">Kategori Penilaian</label>
+                        <select name="category" id="category" class="form-select js-category" required>
+                            <option value="">Pilih kategori</option>
+                            @foreach ($categories as $key => $cat)
+                                <option value="{{ $key }}" @selected(old('category') === $key)>{{ $cat['label'] }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
                     <div class="col-md-3">
                         <label class="form-label small fw-semibold mb-1">Tanggal Mulai Les</label>
                         <input type="date" name="start_date" id="start_date"
@@ -79,16 +99,18 @@
 
                     <div class="col-12"></div>
 
-                    @foreach (['listening' => 'Listening', 'reading' => 'Reading', 'writing' => 'Writing'] as $key => $label)
+                    @foreach ($skillNames as $key => $label)
                         <div class="col-6 col-md-2 js-skill-wrap" data-skill="{{ $key }}">
-                            <label class="form-label small fw-semibold mb-1">{{ $label }} <span class="text-muted">(maks 100)</span></label>
+                            <label class="form-label small fw-semibold mb-1">
+                                <span class="js-skill-label">{{ $label }}</span> <span class="text-muted">(maks 100)</span>
+                            </label>
                             <input type="number" name="{{ $key }}_score" id="{{ $key }}_score" data-skill="{{ $key }}"
                                    step="0.1" min="0" max="100" value="{{ old($key . '_score') }}"
-                                   class="form-control js-skill" placeholder="0 - 100" required>
+                                   class="form-control js-skill" placeholder="0 - 100">
                         </div>
                     @endforeach
 
-                    <div class="col-6 col-md-3">
+                    <div class="col-6 col-md-2">
                         <label class="form-label small fw-semibold mb-1">Total Nilai</label>
                         <input type="text" class="form-control bg-light js-total" readonly placeholder="otomatis">
                     </div>
@@ -100,9 +122,9 @@
                     <div class="col-12">
                         <div class="small js-hint"></div>
                         <div class="small text-muted">
-                            Setelah memilih siswa, kolom terisi otomatis dari progress report. Jika ada nilai yang masih kosong,
-                            silakan isi manual. HSK 1-2: Listening + Reading (maks 200, lulus min. 120).
-                            HSK 3-6: Listening + Reading + Writing (maks 300, lulus min. 180).
+                            Kelas HSK: kategori terpilih otomatis dari nama kelas. Kelas Reguler dan Privat: pilih kategori sendiri
+                            (untuk Privat, sesuaikan dengan ujian yang diminta siswa). Jika ada nilai yang masih kosong, isi manual.<br>
+                            @foreach ($categories as $cat){{ $cat['label'] }}: maks {{ $cat['max'] }}, lulus min. {{ $cat['passing'] }}@if (!$loop->last) · @endif @endforeach
                         </div>
                     </div>
                 </form>
@@ -122,7 +144,7 @@
                             <th>Siswa</th>
                             <th>Kursus</th>
                             <th>Periode Les</th>
-                            <th>L / R / W</th>
+                            <th>Nilai</th>
                             <th>Total</th>
                             <th>Status</th>
                             <th class="text-end">Aksi</th>
@@ -131,26 +153,33 @@
                     <tbody>
                     @forelse ($certificates as $c)
                         @php
-                            $n = fn ($v) => is_null($v) ? '-' : rtrim(rtrim(number_format((float) $v, 1, '.', ''), '0'), '.');
-                            preg_match('/HSK\s*([1-6])/i', $c->course_name ?: ($c->enrollment->class->class_name ?? ''), $mm);
-                            $lvl   = (int) ($mm[1] ?? 0);
-                            $isLow = $lvl >= 1 && $lvl <= 2;
-                            $max   = $isLow ? 200 : 300;
+                            $courseText = $c->course_name ?: ($c->enrollment->class->class_name ?? '');
+                            $catKey     = CertCtl::categoryOf($c->category, $courseText);
+                            $cat        = $categories[$catKey];
+                            $storedKey  = isset($categories[$c->category ?? '']) ? $c->category : '';
                         @endphp
                         <tr>
                             <td>
                                 <div class="fw-semibold">{{ $c->student->name ?? '-' }}</div>
                                 <div class="small text-muted">No. {{ $c->certificate_number }}</div>
                             </td>
-                            <td>{{ $c->course_name ?: ($c->enrollment->class->class_name ?? '-') }}</td>
+                            <td>
+                                {{ $courseText ?: '-' }}
+                                <div><span class="badge bg-light text-dark border">{{ $cat['label'] }}</span></div>
+                                @unless ($storedKey)
+                                    <div><span class="badge bg-danger">Kategori belum tersimpan. Klik Edit &amp; pilih ulang</span></div>
+                                @endunless
+                            </td>
                             <td class="small">
                                 {{ $c->start_date->translatedFormat('d M Y') }}<br>
                                 s/d {{ $c->end_date->translatedFormat('d M Y') }}
                             </td>
                             <td class="small text-nowrap">
-                                {{ $n($c->listening_score) }} / {{ $n($c->reading_score) }}@unless ($isLow) / {{ $n($c->writing_score) }}@endunless
+                                @foreach ($cat['skills'] as $sk => $lbl)
+                                    {{ $lbl }}: {{ $n($c->{$sk . '_score'}) }}@if (!$loop->last)<br>@endif
+                                @endforeach
                             </td>
-                            <td class="fw-semibold text-nowrap">{{ $n($c->score) }} <span class="small text-muted fw-normal">/ {{ $max }}</span></td>
+                            <td class="fw-semibold text-nowrap">{{ $n($c->score) }} <span class="small text-muted fw-normal">/ {{ $cat['max'] }}</span></td>
                             <td>
                                 @if ($c->status === 'Approved')
                                     <span class="badge bg-success">Disetujui</span>
@@ -191,7 +220,16 @@
                                     <div class="col-md-4">
                                         <label class="form-label small fw-semibold mb-1">Nama Kursus / Level</label>
                                         <input type="text" name="course_name" maxlength="150" class="form-control form-control-sm js-course"
-                                               value="{{ $c->course_name ?: ($c->enrollment->class->class_name ?? '') }}" required>
+                                               value="{{ $courseText }}" required>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label small fw-semibold mb-1">Kategori Penilaian</label>
+                                        <select name="category" class="form-select form-select-sm js-category" required>
+                                            <option value="">Pilih kategori</option>
+                                            @foreach ($categories as $key => $opt)
+                                                <option value="{{ $key }}" @selected($storedKey === $key)>{{ $opt['label'] }}</option>
+                                            @endforeach
+                                        </select>
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label small fw-semibold mb-1">Mulai</label>
@@ -205,11 +243,11 @@
                                     </div>
                                     <div class="col-12"></div>
 
-                                    @foreach (['listening' => 'Listening', 'reading' => 'Reading', 'writing' => 'Writing'] as $key => $label)
+                                    @foreach ($skillNames as $key => $label)
                                         <div class="col-6 col-md-2 js-skill-wrap" data-skill="{{ $key }}">
-                                            <label class="form-label small fw-semibold mb-1">{{ $label }}</label>
+                                            <label class="form-label small fw-semibold mb-1 js-skill-label">{{ $label }}</label>
                                             <input type="number" name="{{ $key }}_score" data-skill="{{ $key }}" step="0.1" min="0" max="100"
-                                                   class="form-control form-control-sm js-skill" value="{{ $c->{$key . '_score'} }}" required>
+                                                   class="form-control form-control-sm js-skill" value="{{ $c->{$key . '_score'} }}">
                                         </div>
                                     @endforeach
 
@@ -246,55 +284,76 @@
 
 <script>
     const prefill = @json($prefill);
-    const ALL = ['listening', 'reading', 'writing'];
+    const CATS    = @json($categories);
+    const ALL     = ['listening', 'reading', 'writing', 'speaking'];
 
-    function hskLevel(text) {
+    // Tebak kategori dari nama kursus (hanya HSK). '' jika tidak terdeteksi.
+    function detectCategory(text) {
         const m = /HSK\s*([1-6])/i.exec(text || '');
-        return m ? parseInt(m[1], 10) : 0;
-    }
-
-    function rule(level) {
-        return (level >= 1 && level <= 2)
-            ? { skills: ['listening', 'reading'], max: 200, pass: 120 }
-            : { skills: ['listening', 'reading', 'writing'], max: 300, pass: 180 };
+        if (!m) return '';
+        return parseInt(m[1], 10) <= 2 ? 'hsk12' : 'hsk36';
     }
 
     function refreshForm(form) {
-        const course = form.querySelector('.js-course');
-        const level  = hskLevel(course ? course.value : '');
-        const r      = rule(level);
-
-        ALL.forEach(s => {
-            const wrap  = form.querySelector('.js-skill-wrap[data-skill="' + s + '"]');
-            if (!wrap) return;
-            const input = wrap.querySelector('.js-skill');
-            const on    = r.skills.includes(s);
-            wrap.classList.toggle('d-none', !on);
-            input.disabled = !on;   // tidak ikut terkirim & tidak wajib kalau disembunyikan
-            input.required = on;
-        });
-
-        const vals  = r.skills.map(s => parseFloat(form.querySelector('.js-skill[data-skill="' + s + '"]').value));
+        const sel   = form.querySelector('.js-category');
+        const cat   = sel ? (CATS[sel.value] || null) : null;
         const total = form.querySelector('.js-total');
         const hint  = form.querySelector('.js-hint');
+
+        ALL.forEach(s => {
+            const wrap = form.querySelector('.js-skill-wrap[data-skill="' + s + '"]');
+            if (!wrap) return;
+            const input = wrap.querySelector('.js-skill');
+            const on    = !!(cat && cat.skills[s]);
+
+            wrap.classList.toggle('d-none', !on);
+            input.disabled = !on;   // tidak terkirim & tidak wajib bila disembunyikan
+            input.required = on;
+
+            if (on) {
+                const lbl = wrap.querySelector('.js-skill-label');
+                if (lbl) lbl.textContent = cat.skills[s];
+            }
+        });
+
+        if (!cat) {
+            total.value = '';
+            hint.className = 'small js-hint text-muted';
+            hint.textContent = 'Pilih kategori penilaian terlebih dahulu.';
+            return;
+        }
+
+        const keys = Object.keys(cat.skills);
+        const vals = keys.map(s => parseFloat(form.querySelector('.js-skill[data-skill="' + s + '"]').value));
         let sum = null;
-
         if (!vals.some(isNaN)) sum = vals.reduce((a, b) => a + b, 0);
-        total.value = sum === null ? '' : sum.toFixed(1) + ' / ' + r.max;
 
-        let text = 'Standar kelulusan: minimal ' + r.pass + ' dari ' + r.max + '.';
+        total.value = sum === null ? '' : sum.toFixed(1) + ' / ' + cat.max;
+
+        let text = 'Standar kelulusan: minimal ' + cat.passing + ' dari ' + cat.max + '.';
         let cls  = 'text-muted';
         if (sum !== null) {
-            if (sum >= r.pass) { text += ' Memenuhi standar kelulusan.'; cls = 'text-success'; }
-            else               { text += ' Belum memenuhi standar kelulusan.'; cls = 'text-danger'; }
+            if (sum >= cat.passing) { text += ' Memenuhi standar kelulusan.'; cls = 'text-success'; }
+            else                    { text += ' Belum memenuhi standar kelulusan.'; cls = 'text-danger'; }
         }
-        if (level === 0) text += ' (Level HSK tidak terdeteksi di nama kursus, dihitung seperti HSK 3-6.)';
         hint.className = 'small js-hint ' + cls;
         hint.textContent = text;
     }
 
     document.querySelectorAll('.js-cert-form').forEach(form => {
         form.addEventListener('input', () => refreshForm(form));
+        form.addEventListener('change', () => refreshForm(form));
+
+        // Jika nama kursus mengandung HSK, kategori ikut terpilih otomatis.
+        const course = form.querySelector('.js-course');
+        const sel    = form.querySelector('.js-category');
+        if (course && sel) {
+            course.addEventListener('input', () => {
+                const d = detectCategory(course.value);
+                if (d) { sel.value = d; refreshForm(form); }
+            });
+        }
+
         refreshForm(form);
     });
 
@@ -305,6 +364,7 @@
         if (!d) return;
         const form = selEl.closest('form');
         document.getElementById('course_name').value = d.course ?? '';
+        document.getElementById('category').value    = d.category ?? '';
         document.getElementById('start_date').value  = d.start ?? '';
         document.getElementById('end_date').value    = d.end ?? '';
         ALL.forEach(s => document.getElementById(s + '_score').value = d[s] ?? '');
