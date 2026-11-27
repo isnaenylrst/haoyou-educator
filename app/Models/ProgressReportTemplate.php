@@ -11,6 +11,22 @@ class ProgressReportTemplate extends Model
 {
     protected $fillable = ['name', 'program_category_id', 'program_level_id', 'private_package_id', 'updated_by'];
 
+    /**
+     * Daftar program dinamis yang tersedia di Admin:
+     * - Program Categories (Maochong, Jianer, Hudie, Feixiang, HSK Class, HSK Preparation, dll)
+     * - Private Packages (Private VIP Class, Private Exclusive Class, Private 2 on 1 jika dibuat di Paket Private)
+     */
+    public static function availablePrograms(): \Illuminate\Support\Collection
+    {
+        $categories = ProgramCategory::orderBy('sort_order')->orderBy('category_name')->get();
+        $privatePackages = PrivatePackage::orderByDesc('is_active')->orderBy('package_name')->get();
+
+        return collect([
+            'categories'      => $categories,
+            'privatePackages' => $privatePackages,
+        ]);
+    }
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(ProgramCategory::class, 'program_category_id');
@@ -86,7 +102,7 @@ class ProgressReportTemplate extends Model
             ->first(['pp.package_name', 'pc.category_name', 'pl.level_name']);
 
         if ($row?->package_name) {
-            return 'Private ' . $row->package_name;
+            return str_starts_with($row->package_name, 'Private') ? $row->package_name : 'Private ' . $row->package_name;
         }
 
         return $row?->category_name ?: ($row?->level_name ?: 'program ini');

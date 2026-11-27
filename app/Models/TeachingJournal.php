@@ -39,6 +39,7 @@ class TeachingJournal extends Model
         'material_taught',
         'student_names',
         'filled_by',
+        'location',
         'review_note',
         'reviewed_by',
         'reviewed_at',

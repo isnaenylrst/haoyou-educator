@@ -57,6 +57,7 @@
 <table>
     <tr><td class="l">Fokus Materi</td><td>{{ collect($journal->focus_materials)->implode(', ') ?: '-' }}</td></tr>
     <tr><td class="l">Kelas berjalan</td><td>{{ $running ? 'Berjalan' : 'Tidak Berjalan' }}</td></tr>
+    <tr><td class="l">Lokasi</td><td>{{ $journal->location ?? '-' }}</td></tr>
 </table>
 
 <h2>Materi</h2>

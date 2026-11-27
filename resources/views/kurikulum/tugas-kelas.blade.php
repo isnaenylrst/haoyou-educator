@@ -316,9 +316,7 @@
 
                             <small class="text-muted d-block mt-1">
                                 <strong>Guru:</strong> {{ $t->teacher->name ?? '-' }}
-                                @if ($t->class)
-                                    · <strong>Kelas:</strong> {{ $t->class->class_name }}
-                                @endif
+                                · <strong>Kelas:</strong> {{ $t->class->class_name ?? 'Tidak terkait kelas' }}
                                 @if ($t->material)
                                     · <strong>Materi:</strong> P-{{ $t->material->meeting_number }} ({{ $t->material->title }})
                                 @endif
@@ -428,33 +426,40 @@
                     <div class="modal-body">
 
                         @if ($isOpen)
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Kelas</label>
-                                <select name="class_id" required
-                                        class="form-select {{ $useOld && $errors->has('class_id') ? 'is-invalid' : '' }}">
-                                    @foreach ($classes as $c)
-                                        <option value="{{ $c->id }}" @selected((string) $currentClassId === (string) $c->id)>
-                                            {{ $c->class_name }} — {{ $c->teacher->name ?? '-' }}
-                                        </option>
-                                    @endforeach
+                            @if ($t->task_type === 'material_revision')
+                                <div class="alert alert-light border small">
+                                    <strong>Jenis:</strong> Perbaikan Materi · <strong>Guru:</strong> {{ $t->teacher->name ?? '-' }}<br>
+                                    <span class="text-muted">Tugas perbaikan materi tidak terikat kelas spesifik.</span>
+                                </div>
+                            @else
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Kelas</label>
+                                    <select name="class_id" required
+                                            class="form-select {{ $useOld && $errors->has('class_id') ? 'is-invalid' : '' }}">
+                                        @foreach ($classes as $c)
+                                            <option value="{{ $c->id }}" @selected((string) $currentClassId === (string) $c->id)>
+                                                {{ $c->class_name }} — {{ $c->teacher->name ?? '-' }}
+                                            </option>
+                                        @endforeach
 
-                                    {{-- kelas saat ini tetap tampil walau sudah tidak berstatus Open/Running --}}
-                                    @unless ($classes->contains('id', $t->class_id))
-                                        <option value="{{ $t->class_id }}" @selected((string) $currentClassId === (string) $t->class_id)>
-                                            {{ $t->class->class_name ?? 'Kelas' }} — {{ $t->class->teacher->name ?? '-' }}
-                                        </option>
-                                    @endunless
-                                </select>
-                                <small class="text-muted">
-                                    Mengganti kelas memindahkan tugas ke guru pengampu kelas yang baru.
-                                </small>
-                                @if ($useOld && $errors->has('class_id'))
-                                    <div class="invalid-feedback d-block">{{ $errors->first('class_id') }}</div>
-                                @endif
-                            </div>
+                                        {{-- kelas saat ini tetap tampil walau sudah tidak berstatus Open/Running --}}
+                                        @if ($t->class_id && ! $classes->contains('id', $t->class_id))
+                                            <option value="{{ $t->class_id }}" @selected((string) $currentClassId === (string) $t->class_id)>
+                                                {{ $t->class->class_name ?? 'Kelas' }} — {{ $t->class->teacher->name ?? '-' }}
+                                            </option>
+                                        @endif
+                                    </select>
+                                    <small class="text-muted">
+                                        Mengganti kelas memindahkan tugas ke guru pengampu kelas yang baru.
+                                    </small>
+                                    @if ($useOld && $errors->has('class_id'))
+                                        <div class="invalid-feedback d-block">{{ $errors->first('class_id') }}</div>
+                                    @endif
+                                </div>
+                            @endif
                         @else
                             <div class="alert alert-light border small">
-                                <strong>Kelas:</strong> {{ $t->class->class_name ?? '-' }} — {{ $t->teacher->name ?? '-' }}<br>
+                                <strong>Kelas:</strong> {{ $t->class->class_name ?? 'Tidak terkait kelas' }} — {{ $t->teacher->name ?? '-' }}<br>
                                 Tugas ini sudah selesai, jadi kelas tidak bisa diganti dan status tetap Selesai.
                                 Untuk meminta perbaikan ulang, gunakan <strong>Buka Kembali</strong>.
                             </div>
