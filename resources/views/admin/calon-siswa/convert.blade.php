@@ -529,6 +529,248 @@
             {{-- ===================== KOLOM KIRI: PEMBAYARAN + EDIT FORMULIR ===================== --}}
             <div class="payment-column">
 
+            {{-- ===================== ALUR TAGIHAN (konversi calon siswa) =====================
+                 1) skema pembayaran + diskon + catatan, 2) jatuh tempo (Edit Formulir Pendaftaran) + terbitkan invoice,
+                 3) pembayaran DP. Siswa baru dibuat saat bagian 3 disubmit; bagian 1 dan 2 disimpan sebagai draf
+                 (tabel convert_drafts) dan tetap bisa diedit kapan saja. Semua input memakai form="payment-form"
+                 supaya ikut terkirim; tombol simpan tagihan memakai formaction sendiri tanpa validasi bagian 3. --}}
+            @if (! empty($invoiceFlow))
+                @php
+                    $plan          = $draftPlan ?? null;
+                    $invoiceIssued = $plan && $plan->invoice_issued_at;
+                    $savedManual   = ($plan && is_array($plan->form_manual)) ? $plan->form_manual : [];
+                    $manualVal     = fn ($key) => old('form_manual.' . $key, $savedManual[$key] ?? '');
+                    $schemeVal     = old('payment_scheme', $plan->payment_scheme ?? 'Lunas');
+                    $discountVal   = old('discount', $plan ? $plan->discount : 0);
+                    $notesVal      = old('notes', $plan ? $plan->notes : trim(($midClassNote ?? '') . ' ' . ($candidateStudent->notes ?? '')));
+                    $planUrl       = route('admin.calon-siswa.convert.plan', $candidateStudent->id);
+                @endphp
+
+                {{-- ---------- 1. Skema pembayaran ---------- --}}
+                <div class="card">
+                    <div class="form-section-title"><i class="fa-solid fa-sliders"></i> 1. Skema Pembayaran</div>
+
+                    <div class="form-grid">
+                        @if (isset($totalBillTermin) && $canInstallment)
+                            <div class="form-field full">
+                                <label>Skema Pembayaran *</label>
+                                <div class="form-radio-group">
+                                    <label class="form-radio">
+                                        <input type="radio" name="payment_scheme" value="Lunas" form="payment-form"
+                                               {{ $schemeVal === 'Lunas' ? 'checked' : '' }}>
+                                        <span>Lunas di awal (Rp {{ number_format($lesTotal, 0, ',', '.') }})</span>
+                                    </label>
+                                    <label class="form-radio">
+                                        <input type="radio" name="payment_scheme" value="Termin" form="payment-form"
+                                               {{ $schemeVal === 'Termin' ? 'checked' : '' }}>
+                                        <span>Termin ({{ $package->installmentTermCount() }}x, tiap {{ $package->installmentIntervalMonths() }} bulan &middot; Rp {{ number_format($lesTotalTermin, 0, ',', '.') }} total)</span>
+                                    </label>
+                                </div>
+                            </div>
+                        @endif
+
+                        <div class="form-field">
+                            <label>Diskon (Rp)</label>
+                            <input type="number" name="discount" id="discount" form="payment-form" min="0" step="0.01"
+                                   value="{{ $discountVal }}">
+                        </div>
+
+                        @if (! empty($homeVisit))
+                            <div class="form-field">
+                                <label>
+                                    Biaya Home Visit
+                                    ({{ (int) ($package->total_meetings ?? 0) }} pertemuan &times;
+                                    Rp{{ number_format(\App\Services\ExtraFeeService::FEE_HOME_VISIT, 0, ',', '.') }})
+                                </label>
+                                <input type="text" id="home_visit_fee" readonly
+                                       value="Rp{{ number_format($homeVisitTotal, 0, ',', '.') }}">
+                            </div>
+                        @endif
+
+                        @if (! empty($chosenClass) && ! empty($chosenProgress))
+                            <div class="form-field full">
+                                <div class="class-progress-box {{ $chosenProgress['done'] > 0 ? '' : 'fresh' }}">
+                                    <strong>{{ $chosenClass->class_name }}</strong><br>
+                                    @if ($chosenProgress['done'] > 0)
+                                        Sudah berjalan {{ $chosenProgress['done'] }}{{ $chosenProgress['total'] ? ' dari ' . $chosenProgress['total'] : '' }} pertemuan
+                                        @if ($chosenProgress['last_date']) (terakhir {{ $chosenProgress['last_date'] }}) @endif.
+                                        Siswa baru mulai dari pertemuan ke-{{ $chosenProgress['next'] }}.
+                                    @else
+                                        Kelas ini belum memulai pertemuan.
+                                    @endif
+                                </div>
+                            </div>
+                        @endif
+
+                        <div class="form-field full">
+                            <label>Catatan Enrollment</label>
+                            <textarea name="notes" id="notes" rows="3" maxlength="1000" form="payment-form"
+                                      placeholder="Contoh: Masuk di pertengahan kelas (mulai pertemuan ke-5), berhak potongan.">{{ $notesVal }}</textarea>
+                            <span class="form-section-note" style="margin-top:0;">
+                                <i class="fa-solid fa-circle-info"></i>
+                                Catatan ini akan tercetak di invoice.
+                                @if (! empty($midClassNote)) Terisi otomatis karena kelas sudah berjalan, silakan edit kalau perlu. @endif
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- ---------- 2. Jatuh tempo (Edit Formulir Pendaftaran) + terbitkan invoice ---------- --}}
+                <div class="card" style="margin-top: 16px;">
+                    <div class="form-section-title"><i class="fa-solid fa-pen-to-square"></i> 2. Jatuh Tempo (Edit Formulir Pendaftaran)</div>
+
+                    <p class="form-section-note" style="margin-top:0;">
+                        <i class="fa-solid fa-circle-info"></i>
+                        Isi tanggal jatuh tempo tiap pembayaran. Tanggal ini tercetak di invoice tagihan dan formulir pendaftaran.
+                        Nominal pendaftaran &amp; aktivitas tetap sesuai Pengaturan, nominal termin dibagi otomatis sesuai jumlah termin.
+                    </p>
+
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label>Biaya pendaftaran: nominal</label>
+                            <input type="text" value="Rp {{ number_format((float) $registrationFee, 0, ',', '.') }}" readonly>
+                        </div>
+                        <div class="form-field">
+                            <label>Biaya pendaftaran: jatuh tempo</label>
+                            <input type="date" form="payment-form" name="form_manual[dp_pendaftaran_tanggal]"
+                                   value="{{ $manualVal('dp_pendaftaran_tanggal') }}">
+                        </div>
+
+                        <div class="form-field">
+                            <label>Biaya aktivitas: nominal</label>
+                            <input type="text" value="Rp {{ number_format((float) $activityFee, 0, ',', '.') }}" readonly>
+                        </div>
+                        <div class="form-field">
+                            <label>Biaya aktivitas: jatuh tempo</label>
+                            <input type="date" form="payment-form" name="form_manual[dp_aktivitas_tanggal]"
+                                   value="{{ $manualVal('dp_aktivitas_tanggal') }}">
+                        </div>
+                    </div>
+
+                    {{-- Jumlah termin: hanya tampil kalau skema Termin dipilih (diatur JS) --}}
+                    <div class="form-grid">
+                        <div class="form-field" id="manual-termin-count">
+                            <label>Jumlah Termin</label>
+                            <input type="number" id="termin-count-input" step="1" readonly
+                                   value="{{ method_exists($package, 'installmentTermCount') ? ($package->installmentTermCount() ?? 3) : 3 }}">
+                            <span class="form-section-note" style="margin-top:6px;">
+                                <i class="fa-solid fa-circle-info"></i>
+                                Jumlah termin mengikuti paket dan tidak bisa diubah di sini (atur di Program &amp; Level).
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        @for ($n = 1; $n <= \App\Services\PaymentInstallmentService::TERMIN_MAX; $n++)
+                            @php $dateField = $n === 1 ? 'termin1_lunas_tanggal' : "termin{$n}_tanggal"; @endphp
+                            <div class="form-field" id="manual-termin{{ $n }}">
+                                <label>{{ $n === 1 ? 'Termin 1 / Lunas' : 'Termin ' . $n }}: jatuh tempo</label>
+                                <input type="date" form="payment-form" name="form_manual[{{ $dateField }}]"
+                                       value="{{ $manualVal($dateField) }}">
+                            </div>
+                        @endfor
+                    </div>
+
+                    <p class="form-section-note">
+                        <i class="fa-solid fa-circle-info"></i>
+                        @if ($invoiceIssued)
+                            Invoice tagihan <strong>{{ $plan->invoice_number }}</strong> sudah terbit
+                            ({{ $plan->invoice_issued_at->format('d/m/Y H:i') }}). Perubahan yang disimpan otomatis ikut tampil di invoice.
+                        @else
+                            Kalau data sudah fix, klik <strong>Terbitkan Invoice</strong> (semua jatuh tempo harus terisi).
+                            Calon siswa belum perlu membayar, admin boleh keluar dari halaman ini dan melanjutkannya nanti.
+                        @endif
+                    </p>
+
+                    <div class="form-footer" style="margin-top:12px;">
+                        <button type="submit" form="payment-form" formaction="{{ $planUrl }}" formnovalidate class="btn btn-secondary">
+                            <i class="fa-solid fa-floppy-disk"></i> {{ $invoiceIssued ? 'Simpan Perubahan' : 'Simpan Tagihan' }}
+                        </button>
+                        <button type="submit" form="payment-form" formaction="{{ $planUrl }}" formnovalidate
+                                name="issue" value="1" class="btn btn-primary">
+                            <i class="fa-solid fa-file-invoice"></i> {{ $invoiceIssued ? 'Simpan & Perbarui Invoice' : 'Terbitkan Invoice' }}
+                        </button>
+                        @if ($invoiceIssued)
+                            <a href="{{ route('admin.calon-siswa.convert.invoice', $candidateStudent->id) }}" target="_blank" class="btn btn-secondary">
+                                <i class="fa-solid fa-file-pdf"></i> Lihat Invoice
+                            </a>
+                        @endif
+                    </div>
+                </div>
+
+                {{-- ---------- 3. Pembayaran DP (diisi setelah calon siswa membayar) ---------- --}}
+                <div class="card" style="margin-top: 16px;">
+                    <form action="{{ route('admin.calon-siswa.convert.store', $candidateStudent->id) }}"
+                          method="POST" enctype="multipart/form-data"
+                          id="payment-form"
+                          data-base="{{ (float) $totalBill }}"
+                          data-base-termin="{{ isset($totalBillTermin) ? (float) $totalBillTermin : '' }}"
+                          data-les-lunas="{{ isset($lesTotal) ? (float) $lesTotal : '' }}"
+                          data-les-termin="{{ isset($lesTotalTermin) ? (float) $lesTotalTermin : '' }}"
+                          data-installment="{{ $canInstallment ? 1 : 0 }}"
+                          data-reg-fee="{{ (float) ($registrationFee ?? 0) }}"
+                          data-act-fee="{{ (float) ($activityFee ?? 0) }}"
+                          data-settlement="0">
+                        @csrf
+
+                        <div class="form-section-title"><i class="fa-solid fa-money-bill-wave"></i> 3. Pembayaran DP</div>
+
+                        <p class="form-section-note" style="margin-top:0;">
+                            <i class="fa-solid fa-circle-info"></i>
+                            Isi bagian ini setelah calon siswa membayar. Akun siswa baru dibuat saat DP dicatat.
+                        </p>
+
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label>Nominal Dibayar *</label>
+                                <input type="number" name="amount_paid" id="amount_paid" step="0.01" required min="1"
+                                       value="{{ old('amount_paid') }}">
+                                <span class="form-section-note" style="margin-top:6px;">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                    <span id="payment-plan">Isi nominal DP untuk melihat rencana pembayaran. Minimal DP <strong>Rp {{ number_format(max((float) ($registrationFee ?: ($activityFee ?? 0)), 1), 0, ',', '.') }}</strong>.</span>
+                                </span>
+                            </div>
+
+                            <div class="form-field">
+                                <label>Metode Pembayaran *</label>
+                                <select name="payment_method" required>
+                                    <option value="">Pilih Metode</option>
+                                    @foreach (['Transfer Bank', 'Cash', 'QRIS'] as $method)
+                                        <option value="{{ $method }}" {{ old('payment_method') === $method ? 'selected' : '' }}>
+                                            {{ $method }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <div class="form-field">
+                                <label>Tanggal Pembayaran *</label>
+                                <input type="date" name="payment_date" required max="{{ now()->toDateString() }}"
+                                       value="{{ old('payment_date', now()->toDateString()) }}">
+                            </div>
+
+                            <div class="form-field full">
+                                <label>Bukti Pembayaran * (JPG, PNG, atau PDF, maks 4 MB)</label>
+                                <input type="file" name="proof" accept=".jpg,.jpeg,.png,.pdf" required>
+                            </div>
+                        </div>
+
+                        <p class="form-section-note">
+                            <i class="fa-solid fa-circle-info"></i>
+                            Pembayaran pertama dicatat sebagai DP (minimal sebesar biaya pendaftaran). Sisanya dibayar setelah siswa aktif,
+                            sesuai skema Lunas (sekali bayar) atau Termin (jumlah termin mengikuti paket).
+                        </p>
+                    </form>
+                </div>
+
+                <div class="form-footer">
+                    <a href="{{ route('admin.calon-siswa.index') }}" class="btn btn-secondary">Keluar</a>
+                    <button type="submit" form="payment-form" class="btn btn-primary">
+                        <i class="fa-solid fa-check"></i> Simpan &amp; Konversi Jadi Siswa
+                    </button>
+                </div>
+
+            @else
             {{-- ===================== FORM PEMBAYARAN ===================== --}}
             <div class="card">
                 <form action="{{ $formAction ?? route('admin.calon-siswa.convert.store', $candidateStudent->id) }}"
@@ -760,6 +1002,8 @@
                     {{ isset($formAction) ? 'Simpan Pembayaran' : 'Simpan & Konversi Jadi Siswa' }}
                 </button>
             </div>
+
+            @endif
 
             </div>{{-- /payment-column --}}
 

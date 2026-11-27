@@ -78,6 +78,8 @@ class PaymentInstallmentService
      *  - Skema Lunas: pembayaran berikutnya = "Pelunasan", harus sebesar seluruh sisa tagihan.
      *  - Skema Termin: pembayaran berikutnya mengikuti jadwal termin (lihat nextPayment()).
      *
+     * $invoiceNumber (opsional): nomor invoice tagihan yang sudah terbit sebelum pembayaran pertama.
+     *
      * Parameter $stage tetap ada demi kompatibilitas pemanggil lama, tetapi TAHAP SELALU
      * ditentukan service (DP/Lunas untuk pembayaran pertama, selanjutnya dari nextPayment()).
      *
@@ -91,6 +93,7 @@ class PaymentInstallmentService
         string $paymentMethod,
         ?string $paymentDate = null,
         ?string $proofPath = null,
+        ?string $invoiceNumber = null,
     ): Payment {
         if ($amount <= 0) {
             throw ValidationException::withMessages([
@@ -105,6 +108,7 @@ class PaymentInstallmentService
             $paymentMethod,
             $paymentDate,
             $proofPath,
+            $invoiceNumber,
         ) {
             // Kunci enrollment dulu sebelum membaca total pembayaran.
             ClassEnrollment::query()
@@ -179,7 +183,8 @@ class PaymentInstallmentService
 
             return Payment::create([
                 'enrollment_id' => $enrollment->id,
-                'invoice_number' => $this->generateInvoiceNumber(),
+                // Pembayaran pertama memakai nomor invoice tagihan yang sudah diterbitkan sebelum bayar (kalau ada)
+                'invoice_number' => $invoiceNumber ?: $this->generateInvoiceNumber(),
                 'payment_type' => Payment::TYPE_PACKAGE,
                 'payment_stage' => $stage,
                 'total_bill' => $totalBill,

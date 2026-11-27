@@ -18,7 +18,7 @@ class PrintTemplateSeeder extends Seeder
         $templates = [
             'form_regular' => ['Formulir Pendaftaran Regular', $this->regularForm()],
             'form_private' => ['Formulir Pendaftaran Private', $this->privateForm()],
-            'invoice'      => ['Invoice Pembayaran', $this->invoiceForm()],
+            'invoice'      => ['Invoice Tagihan', $this->invoiceForm()],
             'invoice_extra'=> ['Invoice Biaya Tambahan', $this->invoiceExtraForm()],
         ];
 
@@ -101,7 +101,7 @@ class PrintTemplateSeeder extends Seeder
         <div style="font-size:10pt;">Email : haoyoueducator@gmail.com &nbsp; HP : 089679209062</div>
         </div>
 
-        <div style="font-size:20pt;font-weight:bold;color:#FFC000;margin-top:10px;line-height:1.1;">INVOICE</div>
+        <div style="font-size:20pt;font-weight:bold;color:#FFC000;margin-top:10px;line-height:1.1;">INVOICE TAGIHAN</div>
         <div style="font-size:11pt;font-weight:bold;margin-bottom:8px;">No. {nomor_invoice}</div>
 
         <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
@@ -119,7 +119,7 @@ class PrintTemplateSeeder extends Seeder
         </tr>
         <tr>
         <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;">Jadwal</td><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;">{jadwal}</td>
-        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;white-space:nowrap;">Tanggal Bayar</td><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;">{tanggal_bayar}</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;">Tanggal Tagihan / Jatuh Tempo</td><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;">{tanggal_tagihan}</td>
         </tr>
         <tr>
         <td colspan="2" rowspan="2" style="border:1px solid #000;padding:3px 6px;vertical-align:top;">Pertemuan :<br>{daftar_pertemuan}</td>
@@ -132,45 +132,25 @@ class PrintTemplateSeeder extends Seeder
 
         <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
         <tr>
-        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:70%;">Rincian Biaya</td>
-        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:30%;text-align:right;">Jumlah(Rp)</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:28%;">Rincian Bayar</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:22%;text-align:center;">Jatuh Tempo</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:20%;text-align:right;">Nominal</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:30%;text-align:center;">Keterangan</td>
         </tr>
-        <!--RINCIAN_AWAL-->
+        {rincian_tagihan}
         <tr>
-        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;">Biaya Les<br>({paket})</td>
-        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;text-align:right;white-space:nowrap;">{harga_paket}</td>
-        </tr>
-        <!--RINCIAN_DISKON-->
-        <tr>
-        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFF2CC;font-weight:bold;">Total tagihan</td>
+        <td colspan="2" style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFF2CC;font-weight:bold;">Total tagihan</td>
         <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFF2CC;font-weight:bold;text-align:right;white-space:nowrap;">{total_tagihan}</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFF2CC;font-weight:bold;">&nbsp;</td>
         </tr>
         </table>
 
-        <table style="width:100%;border-collapse:collapse;">
-        <tr>
-        <td style="width:46%;vertical-align:top;padding-right:10px;">
+        <div style="margin-bottom:6px;">
         <div style="font-weight:bold;">Catatan:</div>
         <!--JIKA_ADA_CATATAN-->
         <div style="font-size:9.5pt;">{catatan}</div>
         <!--/JIKA_ADA_CATATAN-->
-        </td>
-        <td style="width:54%;vertical-align:top;">
-        <table style="width:100%;border-collapse:collapse;">
-        <!--JIKA_ADA_CICILAN-->
-        <tr><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;width:62%;">Sudah Dibayar Sebelumnya</td><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;text-align:right;white-space:nowrap;">{sudah_dibayar}</td></tr>
-        <!--/JIKA_ADA_CICILAN-->
-        <tr><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFF2CC;font-weight:bold;">Dibayar {rincian_dibayar} (saat ini)</td><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFF2CC;font-weight:bold;text-align:right;white-space:nowrap;">{jumlah_dibayar}</td></tr>
-        <!--JIKA_ADA_CICILAN-->
-        <tr><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;color:#808080;">Sisa Tagihan</td><td style="border:1px solid #000;padding:3px 6px;vertical-align:top;color:#808080;text-align:right;white-space:nowrap;">{sisa_setelah_ini}</td></tr>
-        <!--/JIKA_ADA_CICILAN-->
-        </table>
-        <!--JIKA_BELUM_LUNAS-->
-        <div style="margin-top:4px;">Pembayaran berikutnya <strong style="color:#EE0000;">jatuh tempo pada {jatuh_tempo_berikutnya}</strong></div>
-        <!--/JIKA_BELUM_LUNAS-->
-        </td>
-        </tr>
-        </table>
+        </div>
 
         <table style="width:100%;border-collapse:collapse;margin-top:14px;">
         <tr>

@@ -23,9 +23,11 @@ class InvoiceService
             'logo'          => 'Logo Haoyou',
             'watermark'     => 'Watermark logo di latar invoice (public/assets/img/invoice-watermark.png)',
             'nomor_invoice' => 'Nomor invoice',
-            'tanggal_bayar' => 'Tanggal bayar',
-            'tahap'         => 'Tahap pembayaran (DP / Termin 1 / Pelunasan)',
-            'status'        => 'Status (Lunas / Belum Lunas)',
+            'tanggal_bayar'   => 'Tanggal bayar (format lama)',
+            'tanggal_tagihan' => 'Tanggal tagihan / jatuh tempo pembayaran yang harus dibayar sekarang',
+            'tahap'           => 'Tahap yang harus dibayar sekarang (mis. Biaya Aktivitas & Termin 1)',
+            'status'          => 'Status (Lunas / Belum Lunas)',
+            'rincian_tagihan' => 'Baris rincian bayar (otomatis: Rincian | Jatuh Tempo | Nominal | Keterangan), baris yang harus dibayar berwarna merah',
         ],
 
         'Siswa' => [
@@ -194,6 +196,127 @@ class InvoiceService
     }
 
     /**
+     * Invoice tagihan sebelum ada pembayaran: calon siswa belum menjadi siswa dan belum punya enrollment,
+     * jadi isinya dihitung dari draf konversi (pilihan program, skema bayar, diskon, jatuh tempo).
+     */
+    public function generateForDraft(\App\Models\ConvertDraft $draft, \App\Models\CandidateStudent $candidate): string
+    {
+        abort_if(empty($draft->selection), 404, 'Program belum dipilih.');
+
+        $template = PrintTemplate::where('key', self::TEMPLATE_KEY)->firstOrFail();
+
+        $content = $this->render(
+            $template->content,
+            $this->valuesForDraft($draft, $candidate),
+            true,
+            true
+        );
+
+        return $this->toPdf($content, true);
+    }
+
+    private function valuesForDraft(\App\Models\ConvertDraft $draft, \App\Models\CandidateStudent $candidate): array
+    {
+        $selection = $draft->selection ?? [];
+        $isPrivate = ($selection['package_type'] ?? 'program') === 'private';
+
+        $package = $isPrivate
+            ? \App\Models\PrivatePackage::findOrFail($selection['private_package_id'])
+            : \App\Models\ProgramPackage::with(['program', 'level'])->findOrFail($selection['program_package_id']);
+
+        // Aturan skema sama dengan ConvertController::resolvePlan
+        $scheme = ($draft->payment_scheme === 'Termin' && ! $isPrivate && $package->supportsInstallment())
+            ? 'Termin'
+            : 'Lunas';
+
+        $terminCount = $scheme === 'Termin'
+            ? min(
+                max((int) ($package->installmentTermCount() ?? 3), PaymentInstallmentService::TERMIN_MIN),
+                PaymentInstallmentService::TERMIN_MAX
+            )
+            : 3;
+
+        $classId = $selection['join_class_id'] ?? $selection['class_id'] ?? null;
+        $kelas   = $classId ? \App\Models\ClassModel::with('schedules')->find($classId) : null;
+
+        // Enrollment sementara (tidak disimpan) supaya angka tagihan dihitung PaymentInstallmentService
+        // dengan rumus yang sama persis dengan invoice setelah DP.
+        $enrollment = new \App\Models\ClassEnrollment([
+            'class_id'         => $kelas?->id,
+            'registration_fee' => (float) \App\Models\Setting::get('registration_fee', 0),
+            'activity_fee'     => (float) \App\Models\Setting::get('activity_fee', 0),
+            'discount'         => (float) $draft->discount,
+            'payment_scheme'   => $scheme,
+            'termin_count'     => $terminCount,
+            'form_manual'      => $draft->form_manual,
+        ]);
+
+        $enrollment->setRelation('programPackage', $isPrivate ? null : $package);
+        $enrollment->setRelation('privatePackage', $isPrivate ? $package : null);
+        $enrollment->setRelation('class', $kelas);
+        $enrollment->setRelation('student', null);
+
+        $plan    = $this->billingPlan($enrollment, collect());
+        $current = $this->currentDueIndexes($plan);
+
+        $tahap = $current !== []
+            ? implode(' & ', array_map(fn (int $i) => $plan[$i]['label'], $current))
+            : 'DP';
+
+        $billDate = $current !== [] ? $plan[$current[0]]['due'] : null;
+
+        $months    = $this->installments->monthsFor($enrollment);
+        $lesTotal  = (float) ($this->installments->packageTotal($enrollment) ?? 0);
+        $totalBill = (float) ($this->installments->totalBillFor($enrollment) ?? 0);
+
+        $levelName = $isPrivate
+            ? null
+            : ($package->level?->level_name
+                ?? (! empty($selection['level_id']) ? \App\Models\ProgramLevel::find($selection['level_id'])?->level_name : null));
+
+        return [
+            'logo'          => $this->logoTag(),
+            'watermark'     => $this->watermarkTag(),
+            'nomor_invoice' => e($draft->invoice_number ?: '-'),
+
+            'tanggal_bayar'   => '',
+            'tanggal_tagihan' => e($this->dateId($billDate)),
+            'tahap'           => e($tahap),
+            'status'          => 'Belum Lunas',
+            'rincian_tagihan' => $this->billingRows($plan, $current, 0.0),
+
+            'nama_siswa'       => e($candidate->name),
+            'level'            => e($levelName),
+            'kelas'            => e($kelas?->class_name ?: 'Belum masuk kelas'),
+            'daftar_pertemuan' => $this->sessionDatesByMonth($enrollment) ?: '-',
+            'jadwal'           => implode('<br>', array_map('e', $this->scheduleLines($enrollment))) ?: '-',
+            'lokasi'           => 'Haoyou Educator',
+
+            'paket'            => e($package->package_name),
+            'jumlah_pertemuan' => e($package->total_meetings),
+            'jumlah_bulan'     => (string) $months,
+            'harga_per_bulan'  => $this->rupiah($months > 0 ? round($lesTotal / $months) : $lesTotal),
+            'harga_paket'      => $this->rupiah($lesTotal),
+            'total_tagihan'    => $this->rupiah($totalBill),
+
+            'catatan' => filled($draft->notes) ? nl2br(e(trim($draft->notes))) : '',
+
+            'sudah_dibayar'          => $this->rupiah(0),
+            'rincian_dibayar'        => '',
+            'jumlah_dibayar'         => $this->rupiah(0),
+            'sisa_setelah_ini'       => $this->rupiah($totalBill),
+            'jatuh_tempo_berikutnya' => '',
+
+            // Contoh keterangan transfer untuk pembayaran pertama (DP)
+            'contoh_keterangan' => e(implode('.', array_filter([
+                Str::lower(Str::slug((string) $candidate->name, '')),
+                str_replace(' ', '', (string) $levelName),
+                'DP',
+            ], fn ($part) => $part !== ''))),
+        ];
+    }
+
+    /**
      * Pratinjau template dengan data contoh.
      */
     public function preview(
@@ -227,6 +350,16 @@ class InvoiceService
         $values['rincian_tambahan'] = '';
         $values['rincian_awal']     = '';
         $values['rincian_diskon']   = '';
+
+        $sampleDate = Carbon::create(2026, 11, 26);
+        $samplePlan = [
+            ['label' => 'Biaya Pendaftaran', 'due' => $sampleDate, 'amount' => 300000.0, 'paid' => true, 'paid_date' => $sampleDate],
+            ['label' => 'Biaya Aktivitas', 'due' => Carbon::create(2026, 12, 5), 'amount' => 300000.0, 'paid' => false, 'paid_date' => null],
+            ['label' => 'Termin 1', 'due' => Carbon::create(2026, 12, 5), 'amount' => 1800000.0, 'paid' => false, 'paid_date' => null],
+            ['label' => 'Termin 2', 'due' => Carbon::create(2027, 2, 5), 'amount' => 1800000.0, 'paid' => false, 'paid_date' => null],
+        ];
+
+        $values['rincian_tagihan'] = $this->billingRows($samplePlan, [1, 2], 0.0);
 
         return $this->toPdf(
             $this->render($content, $values, true, true),
@@ -276,16 +409,49 @@ class InvoiceService
             $nextDueDate = $this->installments->nextDueDate($enrollment, $paymentDate);
         }
 
+        // Invoice tagihan: rincian pendaftaran, aktivitas, dan Lunas / Termin 1..N dengan jatuh tempo dari admin
+        $plan    = $this->billingPlan(
+            $enrollment,
+            $enrollment->packagePayments()->where('id', '<=', $payment->id)->orderBy('id')->get()
+        );
+        $current = $this->currentDueIndexes($plan);
+
+        $tahap = $current !== []
+            ? implode(' & ', array_map(fn (int $i) => $plan[$i]['label'], $current))
+            : (string) $payment->payment_stage;
+
+        // Tanggal tagihan = jatuh tempo yang diinput admin; kalau kosong, pakai jarak otomatis seperti sebelumnya.
+        // Kalau sudah lunas semua, tampilkan tanggal pembayaran terakhir ini.
+        $billDate = $current !== []
+            ? ($plan[$current[0]]['due'] ?? $nextDueDate)
+            : ($unpaid ? $nextDueDate : $payment->payment_date);
+
+        $discount = (float) $enrollment->discount;
+        $planSum  = array_sum(array_column($plan, 'amount'));
+        $totalBill = (float) $payment->total_bill;
+
+        // Baris Diskon hanya ditampilkan kalau rincian di atas belum memotong diskon
+        $showDiscount = $discount > 0 && abs(($planSum - $totalBill) - $discount) < 1;
+
         $values = [
             'logo' => $this->logoTag(),
 
             'watermark' => $this->watermarkTag(),
-            'nomor_invoice' => e($payment->invoice_number),
+
+            // Satu invoice per pendaftaran: nomor = nomor pembayaran pertama (sama dengan invoice tagihan sebelum bayar)
+            'nomor_invoice' => e(
+                $enrollment->packagePayments()->orderBy('id')->value('invoice_number') ?: $payment->invoice_number
+            ),
+
+            // Format lama, dipertahankan untuk template yang sudah diedit admin
             'tanggal_bayar' => e(
                 $this->dateId($payment->payment_date)
             ),
-            'tahap' => e($payment->payment_stage),
+
+            'tanggal_tagihan' => e($this->dateId($billDate)),
+            'tahap' => e($tahap),
             'status' => $unpaid ? 'Belum Lunas' : 'Lunas',
+            'rincian_tagihan' => $this->billingRows($plan, $current, $showDiscount ? $discount : 0.0),
 
             'nama_siswa' => e($student?->name),
             'level' => e($levelName),
@@ -380,6 +546,223 @@ class InvoiceService
         ];
 
         return [$values, $hasInstallment, $unpaid];
+    }
+
+    /**
+     * Rencana tagihan enrollment per baris: Biaya Pendaftaran, Biaya Aktivitas, lalu Lunas / Pelunasan
+     * atau Termin 1..N. Status lunas dihitung sampai pembayaran invoice ini (id <= payment ini), jadi
+     * invoice lama tetap menunjukkan kondisi pada saat itu. Jatuh tempo = tanggal yang diinput admin
+     * saat konversi (class_enrollments.form_manual); kosong kalau admin belum mengisinya.
+     *
+     * @return array<int, array{label: string, due: ?Carbon, amount: float, paid: bool, paid_date: mixed}>
+     */
+    private function billingPlan(\App\Models\ClassEnrollment $enrollment, \Illuminate\Support\Collection $ordered): array
+    {
+        // $ordered = pembayaran paket sampai invoice ini; kosong = invoice tagihan sebelum ada pembayaran
+        // (enrollment belum tersimpan), jadwal dihitung dengan asumsi DP minimal.
+        $first      = $ordered->first();
+        $firstStage = $first?->payment_stage;
+
+        $manual = is_array($enrollment->form_manual) ? $enrollment->form_manual : [];
+
+        $manualDate = function (string ...$keys) use ($manual): ?Carbon {
+            foreach ($keys as $key) {
+                $raw = $manual[$key] ?? null;
+
+                if ($raw === null || trim((string) $raw) === '') {
+                    continue;
+                }
+
+                try {
+                    return Carbon::parse($raw);
+                } catch (\Throwable) {
+                    // tanggal tidak valid: abaikan
+                }
+            }
+
+            return null;
+        };
+
+        // Sebaran uang per pembayaran: pendaftaran, aktivitas, lalu biaya les (urutan sama dengan formulir)
+        $due        = $this->installments->componentsDue($enrollment);
+        $previous   = 0.0;
+        $regPaid    = 0.0;
+        $actPaid    = 0.0;
+        $regDate    = null;
+        $actDate    = null;
+        $lesByStage = [];
+
+        foreach ($ordered as $paid) {
+            $amount = (float) $paid->amount_paid;
+            $parts  = $this->installments->paymentComponents($enrollment, $previous, $amount);
+
+            $regPaid += $parts['pendaftaran'];
+            $actPaid += $parts['aktivitas'];
+
+            if ($parts['pendaftaran'] > 0) {
+                $regDate = $paid->payment_date;
+            }
+
+            if ($parts['aktivitas'] > 0) {
+                $actDate = $paid->payment_date;
+            }
+
+            $lesByStage[$paid->payment_stage] = ['amount' => $parts['les'], 'date' => $paid->payment_date];
+            $previous += $amount;
+        }
+
+        $lines = [];
+
+        if ($due['pendaftaran'] > 0) {
+            $lines[] = [
+                'label'     => 'Biaya Pendaftaran',
+                'due'       => $manualDate('dp_pendaftaran_tanggal'),
+                'amount'    => (float) $due['pendaftaran'],
+                'paid'      => $regPaid + 0.005 >= $due['pendaftaran'],
+                'paid_date' => $regDate,
+            ];
+        }
+
+        if ($due['aktivitas'] > 0) {
+            $lines[] = [
+                'label'     => 'Biaya Aktivitas',
+                'due'       => $manualDate('dp_aktivitas_tanggal'),
+                'amount'    => (float) $due['aktivitas'],
+                'paid'      => $actPaid + 0.005 >= $due['aktivitas'],
+                'paid_date' => $actDate,
+            ];
+        }
+
+        $dp = $first
+            ? (float) $first->amount_paid
+            : $this->installments->minimumDownPayment(
+                (float) $enrollment->registration_fee,
+                (float) $enrollment->activity_fee,
+                (float) ($this->installments->totalBillFor($enrollment) ?? 0),
+            );
+
+        if ($firstStage === 'Lunas') {
+            // Dibayar sekaligus: biaya les masuk baris Lunas
+            $les = $lesByStage['Lunas'] ?? null;
+
+            if ($les && $les['amount'] > 0) {
+                $lines[] = [
+                    'label'     => 'Lunas',
+                    'due'       => $manualDate('termin1_lunas_tanggal', 'termin1_tanggal'),
+                    'amount'    => (float) $les['amount'],
+                    'paid'      => true,
+                    'paid_date' => $les['date'],
+                ];
+            }
+        } elseif ($enrollment->payment_scheme === 'Termin') {
+            // Termin 1..N sebanyak jumlah termin program; yang sudah dibayar memakai nominal sebenarnya
+            $shares = $this->installments->terminLesShares($enrollment, $dp)['shares'];
+
+            foreach (range(1, count($shares)) as $n) {
+                $paidLes = $lesByStage['Termin ' . $n] ?? null;
+                $isPaid  = $paidLes !== null && $paidLes['amount'] > 0;
+
+                $lines[] = [
+                    'label'     => 'Termin ' . $n,
+                    'due'       => $n === 1
+                        ? $manualDate('termin1_lunas_tanggal', 'termin1_tanggal')
+                        : $manualDate('termin' . $n . '_tanggal'),
+                    'amount'    => (float) ($isPaid ? $paidLes['amount'] : ($shares[$n - 1] ?? 0)),
+                    'paid'      => $isPaid,
+                    'paid_date' => $isPaid ? $paidLes['date'] : null,
+                ];
+            }
+        } else {
+            // Skema Lunas dengan DP: pelunasan membayar sisa biaya les
+            $paidLes = $lesByStage['Pelunasan'] ?? null;
+            $isPaid  = $paidLes !== null && $paidLes['amount'] > 0;
+            $amount  = $isPaid
+                ? $paidLes['amount']
+                : $this->installments->terminLesShares($enrollment, $dp)['les_remaining'];
+
+            if ($amount > 0) {
+                $lines[] = [
+                    'label'     => 'Lunas',
+                    'due'       => $manualDate('termin1_lunas_tanggal', 'termin1_tanggal'),
+                    'amount'    => (float) $amount,
+                    'paid'      => $isPaid,
+                    'paid_date' => $isPaid ? $paidLes['date'] : null,
+                ];
+            }
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Baris yang harus dibayar sekarang: baris belum lunas yang pertama, ditambah baris belum lunas
+     * berikutnya yang jatuh tempo di tanggal yang sama (mis. Aktivitas bersama Termin 1).
+     *
+     * @return array<int, int> indeks baris di $plan
+     */
+    private function currentDueIndexes(array $plan): array
+    {
+        $indexes = [];
+        $dueDate = null;
+
+        foreach ($plan as $i => $line) {
+            if ($line['paid']) {
+                continue;
+            }
+
+            $date = $line['due']?->toDateString();
+
+            if ($indexes === []) {
+                $indexes[] = $i;
+                $dueDate   = $date;
+
+                continue;
+            }
+
+            if ($dueDate !== null && $date === $dueDate) {
+                $indexes[] = $i;
+            }
+        }
+
+        return $indexes;
+    }
+
+    /**
+     * Baris tabel rincian bayar invoice tagihan (header dan baris Total tagihan ada di template).
+     * Baris yang harus dibayar sekarang berwarna merah. Keterangan: "Lunas (tanggal)" atau "Belum Lunas".
+     */
+    private function billingRows(array $plan, array $current, float $discount): string
+    {
+        $td = 'border:1px solid #000;padding:3px 6px;vertical-align:top;';
+
+        $html = '';
+
+        foreach ($plan as $i => $line) {
+            $row = $td . (in_array($i, $current, true)
+                ? 'color:#EE0000;font-weight:bold;background:#FDECEC;'
+                : '');
+
+            $note = $line['paid']
+                ? 'Lunas' . ($line['paid_date'] ? ' (' . $this->dateId($line['paid_date']) . ')' : '')
+                : 'Belum Lunas';
+
+            $html .= '<tr>'
+                . '<td style="' . $row . '">' . e($line['label']) . '</td>'
+                . '<td style="' . $row . 'text-align:center;">' . ($line['due'] ? e($this->dateId($line['due'])) : '-') . '</td>'
+                . '<td style="' . $row . 'text-align:right;white-space:nowrap;">' . $this->rupiah($line['amount']) . '</td>'
+                . '<td style="' . $row . 'text-align:center;">' . e($note) . '</td>'
+                . '</tr>';
+        }
+
+        if ($discount > 0) {
+            $html .= '<tr>'
+                . '<td colspan="2" style="' . $td . '">Diskon</td>'
+                . '<td style="' . $td . 'text-align:right;white-space:nowrap;">- ' . $this->rupiah($discount) . '</td>'
+                . '<td style="' . $td . '">&nbsp;</td>'
+                . '</tr>';
+        }
+
+        return $html;
     }
 
     /* ==========================================================

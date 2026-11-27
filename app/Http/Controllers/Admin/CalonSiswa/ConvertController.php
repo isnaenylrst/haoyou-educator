@@ -7,6 +7,7 @@ use App\Models\CandidateStudent;
 use App\Models\ClassEnrollment;
 use App\Models\ClassModel;
 use App\Models\ClassSchedule;
+use App\Models\ConvertDraft;
 use App\Models\Level;
 use App\Models\PrivatePackage;
 use App\Models\ProgramLevel;
@@ -21,6 +22,7 @@ use App\Services\ClassOfferService;
 use App\Services\ClassScheduleService;
 use App\Services\ClassSessionService;
 use App\Services\ExtraFeeService;
+use App\Services\InvoiceService;
 use App\Services\PaymentInstallmentService;
 use App\Services\RegistrationFormService;
 use Carbon\Carbon;
@@ -42,6 +44,7 @@ class ConvertController extends Controller
         private ClassSessionService $sessions,
         private ClassCapacityService $capacity,
         private ClassOfferService $offers,
+        private InvoiceService $invoices,
     ) {
     }
 
@@ -139,7 +142,7 @@ class ConvertController extends Controller
         $defaultPackageType = $candidateStudent->private_package_id ? 'private' : 'program';
 
         // Pilihan step 1 sebelumnya (kalau admin kembali dari step 2)
-        $draft = session(self::SESSION_KEY . $candidateStudent->id, []);
+        $draft = $this->selectionDraft($candidateStudent) ?? [];
 
         return view('admin.calon-siswa.convert', compact(
             'candidateStudent',
@@ -274,6 +277,13 @@ class ConvertController extends Controller
 
         session([self::SESSION_KEY . $candidateStudent->id => $validated]);
 
+        // Simpan juga ke database supaya tagihan di step 2 tetap ada walau admin keluar atau sesi habis.
+        // Skema, diskon, jatuh tempo, dan nomor invoice yang sudah tersimpan tidak ikut terhapus.
+        ConvertDraft::updateOrCreate(
+            ['candidate_student_id' => $candidateStudent->id],
+            ['selection' => $validated]
+        );
+
         return redirect()->route('admin.calon-siswa.convert.step2', $candidateStudent);
     }
 
@@ -284,7 +294,7 @@ class ConvertController extends Controller
     {
         abort_if($candidateStudent->student()->exists(), 404, 'Calon siswa ini sudah menjadi siswa.');
 
-        $draft = session(self::SESSION_KEY . $candidateStudent->id);
+        $draft = $this->selectionDraft($candidateStudent);
 
         if (! $draft) {
             return redirect()
@@ -322,11 +332,14 @@ class ConvertController extends Controller
         $chosenProgress = $chosenClass ? $this->meetingProgress($chosenClass) : null;
         $midClassNote   = $this->midClassNote($chosenClass, $chosenProgress);
 
+        $draftPlan = $this->draftRow($candidateStudent);
+
         return view('admin.calon-siswa.convert', compact(
             'candidateStudent',
             'package',
             'isPrivate',
             'canInstallment',
+            'draftPlan',
             'registrationFee',
             'activityFee',
             'months',
@@ -338,6 +351,7 @@ class ConvertController extends Controller
             'chosenClass',
             'chosenProgress'
         ))->with('step', 2)
+            ->with('invoiceFlow', true)
             ->with('homeVisit', $isPrivate && ! empty($draft['home_visit']) && empty($draft['join_class_id']))
             ->with('homeVisitTotal', ($isPrivate && ! empty($draft['home_visit']) && empty($draft['join_class_id']))
                 ? (int) ($package->total_meetings ?? 0) * ExtraFeeService::FEE_HOME_VISIT
@@ -352,7 +366,7 @@ class ConvertController extends Controller
     {
         abort_if($candidateStudent->student()->exists(), 404, 'Calon siswa ini sudah menjadi siswa.');
 
-        $draft = session(self::SESSION_KEY . $candidateStudent->id);
+        $draft = $this->selectionDraft($candidateStudent);
 
         if (! $draft) {
             return redirect()
@@ -377,30 +391,16 @@ class ConvertController extends Controller
 
         $canInstallment = $this->payments->allowsInstallment($isPrivate, $package);
 
-        // Termin hanya berlaku kalau paket boleh dicicil DAN punya jumlah termin.
-        // Selain itu otomatis Lunas (private, HSK 4 ke atas, dll).
-        $scheme = ($canInstallment
-            && ! $isPrivate
-            && $package->supportsInstallment()
-            && ($validated['payment_scheme'] ?? 'Lunas') === 'Termin')
-            ? 'Termin'
-            : 'Lunas';
+        // Skema, diskon, total tagihan, jumlah termin, dan tanggal jatuh tempo (aturan sama dengan simpan tagihan)
+        $plan = $this->resolvePlan($validated, $isPrivate, $package);
 
-        $registrationFee = (float) Setting::get('registration_fee', 0);
-        $activityFee     = (float) Setting::get('activity_fee', 0);
-        $discount        = round((float) ($validated['discount'] ?? 0), 2);
-        $lesTotal        = $scheme === 'Termin'
-            ? $package->totalFor('Termin')
-            : (float) $this->payments->packageTotalFor($package, $isPrivate);
-        $baseTotal       = $lesTotal + $registrationFee + $activityFee;
-
-        if ($discount >= $baseTotal) {
-            throw ValidationException::withMessages([
-                'discount' => 'Diskon harus lebih kecil dari total tagihan (Rp' . number_format($baseTotal, 0, ',', '.') . ').',
-            ]);
-        }
-
-        $totalBill = $baseTotal - $discount;
+        $scheme          = $plan['scheme'];
+        $registrationFee = $plan['registrationFee'];
+        $activityFee     = $plan['activityFee'];
+        $discount        = $plan['discount'];
+        $totalBill       = $plan['totalBill'];
+        $terminCount     = $plan['terminCount'];
+        $formManual      = $plan['formManual'];
 
         // Aturan DP: pembayaran pertama minimal sebesar biaya pendaftaran dan tidak boleh melebihi total tagihan.
         // Berlaku untuk skema Lunas maupun Termin (PaymentInstallmentService mengecek ulang saat dicatat).
@@ -419,21 +419,8 @@ class ConvertController extends Controller
             ]);
         }
 
-        // Jumlah termin dikunci mengikuti paket (diatur di halaman Program & Level), bukan input admin.
-        // Hanya berlaku untuk skema Termin; selain itu tetap 3.
-        $terminCount = $scheme === 'Termin'
-            ? min(
-                max((int) ($package->installmentTermCount() ?? 3), PaymentInstallmentService::TERMIN_MIN),
-                PaymentInstallmentService::TERMIN_MAX
-            )
-            : 3;
-
-        // Tanggal manual untuk formulir; kosong = otomatis. Tanggal termin di atas jumlah termin dibuang
-        // (skema Lunas hanya menyisakan kolom pertama).
-        $formManual = RegistrationFormService::cleanManual(
-            $validated['form_manual'] ?? [],
-            $scheme === 'Termin' ? $terminCount : 1,
-        );
+        // Nomor invoice tagihan yang sudah diterbitkan sebelum bayar dipakai lagi oleh pembayaran pertama
+        $draftRow = $this->draftRow($candidateStudent);
 
         // Home visit dipilih di step 1 (kelas private baru): semua pertemuan sudah dibuat sebagai Home Visit,
         // di sini tinggal dibayar (jumlah pertemuan x tarif), dicatat terpisah dari DP, satu invoice per pertemuan.
@@ -442,7 +429,7 @@ class ConvertController extends Controller
         $proofPath = $request->file('proof')->store('bukti-pembayaran', 'public');
 
         try {
-            $enrollment = DB::transaction(function () use ($validated, $draft, $candidateStudent, $isPrivate, $levelId, $proofPath, $registrationFee, $activityFee, $discount, $totalBill, $scheme, $terminCount, $formManual, $homeVisit) {
+            $enrollment = DB::transaction(function () use ($validated, $draft, $candidateStudent, $isPrivate, $levelId, $proofPath, $registrationFee, $activityFee, $discount, $totalBill, $scheme, $terminCount, $formManual, $homeVisit, $draftRow) {
 
                 $studentLevel = Level::where('nama_level', 'Student')->firstOrFail();
 
@@ -569,6 +556,7 @@ class ConvertController extends Controller
                     $validated['payment_method'],
                     $validated['payment_date'],
                     $proofPath, // disimpan ke kolom payment_proof_path
+                    $draftRow?->invoice_number, // nomor invoice tagihan yang sudah terbit (kalau ada)
                 );
 
                 // Home visit: semua pertemuan kelas baru berlokasi Home Visit, bayar Rp50.000 per pertemuan.
@@ -607,10 +595,104 @@ class ConvertController extends Controller
         }
 
         session()->forget(self::SESSION_KEY . $candidateStudent->id);
+        $draftRow?->delete();
 
         return redirect()
             ->route('admin.calon-siswa.convert.step3', $enrollment)
             ->with('success', $message);
+    }
+
+    /* =====================================================================
+     |  STEP 2: simpan tagihan (skema, diskon, jatuh tempo) dan terbitkan invoice tagihan.
+     |  Belum ada siswa/enrollment/pembayaran: semuanya disimpan di draf (tabel convert_drafts).
+     * ===================================================================== */
+    public function savePlan(Request $request, CandidateStudent $candidateStudent)
+    {
+        abort_if($candidateStudent->student()->exists(), 404, 'Calon siswa ini sudah menjadi siswa.');
+
+        $selection = $this->selectionDraft($candidateStudent);
+
+        if (! $selection) {
+            return redirect()
+                ->route('admin.calon-siswa.convert', $candidateStudent)
+                ->with('error', 'Lengkapi data diri dan program dulu.');
+        }
+
+        $validated = $request->validate([
+            'payment_scheme' => 'nullable|in:Lunas,Termin',
+            'discount'       => 'nullable|numeric|min:0',
+            'notes'          => 'nullable|string|max:1000',
+        ] + RegistrationFormService::manualRules('form_manual'));
+
+        [$isPrivate, $package] = $this->resolveSelection($selection, $candidateStudent);
+
+        $plan  = $this->resolvePlan($validated, $isPrivate, $package);
+        $issue = $request->boolean('issue');
+
+        // Invoice tagihan wajib punya jatuh tempo di setiap baris supaya bisa ditagihkan
+        if ($issue) {
+            $required = [];
+
+            if ($plan['registrationFee'] > 0) {
+                $required[] = 'dp_pendaftaran_tanggal';
+            }
+
+            if ($plan['activityFee'] > 0) {
+                $required[] = 'dp_aktivitas_tanggal';
+            }
+
+            $required[] = 'termin1_lunas_tanggal';
+
+            if ($plan['scheme'] === 'Termin') {
+                for ($n = 2; $n <= $plan['terminCount']; $n++) {
+                    $required[] = "termin{$n}_tanggal";
+                }
+            }
+
+            $missing = array_filter($required, fn ($key) => empty($plan['formManual'][$key]));
+
+            if ($missing !== []) {
+                throw ValidationException::withMessages([
+                    'form_manual' => 'Isi semua tanggal jatuh tempo dulu sebelum menerbitkan invoice.',
+                ]);
+            }
+        }
+
+        $row = ConvertDraft::firstOrNew(['candidate_student_id' => $candidateStudent->id]);
+
+        $row->selection      = $selection;
+        $row->payment_scheme = $plan['scheme'];
+        $row->discount       = $plan['discount'];
+        $row->notes          = filled($validated['notes'] ?? null) ? trim($validated['notes']) : null;
+        $row->form_manual    = $plan['formManual'] ?: null;
+
+        if ($issue) {
+            $row->invoice_number    = $row->invoice_number ?: $this->newDraftInvoiceNumber();
+            $row->invoice_issued_at = $row->invoice_issued_at ?: now();
+        }
+
+        $row->save();
+
+        return redirect()
+            ->route('admin.calon-siswa.convert.step2', $candidateStudent)
+            ->with('success', $issue
+                ? 'Invoice tagihan ' . $row->invoice_number . ' sudah diterbitkan. Klik "Lihat Invoice" untuk membuka file-nya.'
+                : 'Tagihan tersimpan. Admin bisa melanjutkan nanti dan tetap bisa mengeditnya.');
+    }
+
+    /** PDF invoice tagihan (sebelum ada pembayaran), selalu mengikuti isi draf terbaru. */
+    public function invoice(CandidateStudent $candidateStudent)
+    {
+        abort_if($candidateStudent->student()->exists(), 404, 'Calon siswa ini sudah menjadi siswa, gunakan invoice dari pembayaran.');
+
+        $row = $this->draftRow($candidateStudent);
+
+        abort_unless($row && $row->invoice_issued_at, 404, 'Invoice tagihan belum diterbitkan.');
+
+        return response($this->invoices->generateForDraft($row, $candidateStudent), 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $row->invoice_number . '.pdf"',
+        ]);
     }
 
     /* =====================================================================
@@ -661,6 +743,104 @@ class ConvertController extends Controller
     /* =====================================================================
      |  Helper
      * ===================================================================== */
+
+    private function draftRow(CandidateStudent $candidateStudent): ?ConvertDraft
+    {
+        return ConvertDraft::where('candidate_student_id', $candidateStudent->id)->first();
+    }
+
+    /**
+     * Pilihan step 1: dari session, atau dari database kalau sesi sudah habis
+     * (admin keluar lalu kembali ke step 2 di lain waktu).
+     */
+    private function selectionDraft(CandidateStudent $candidateStudent): ?array
+    {
+        $key = self::SESSION_KEY . $candidateStudent->id;
+
+        $selection = session($key);
+
+        if ($selection) {
+            return $selection;
+        }
+
+        $selection = $this->draftRow($candidateStudent)?->selection;
+
+        if ($selection) {
+            session([$key => $selection]);
+
+            return $selection;
+        }
+
+        return null;
+    }
+
+    private function newDraftInvoiceNumber(): string
+    {
+        do {
+            $number = $this->payments->generateInvoiceNumber();
+        } while (ConvertDraft::where('invoice_number', $number)->exists());
+
+        return $number;
+    }
+
+    /**
+     * Skema, diskon, total tagihan, jumlah termin, dan tanggal jatuh tempo untuk satu draf.
+     * Dipakai simpan tagihan dan submit DP supaya aturannya selalu sama.
+     *
+     * @return array{scheme:string, registrationFee:float, activityFee:float, discount:float, totalBill:float, terminCount:int, formManual:array}
+     */
+    private function resolvePlan(array $validated, bool $isPrivate, $package): array
+    {
+        $canInstallment = $this->payments->allowsInstallment($isPrivate, $package);
+
+        // Termin hanya berlaku kalau paket boleh dicicil DAN punya jumlah termin.
+        // Selain itu otomatis Lunas (private, HSK 4 ke atas, dll).
+        $scheme = ($canInstallment
+            && ! $isPrivate
+            && $package->supportsInstallment()
+            && ($validated['payment_scheme'] ?? 'Lunas') === 'Termin')
+            ? 'Termin'
+            : 'Lunas';
+
+        $registrationFee = (float) Setting::get('registration_fee', 0);
+        $activityFee     = (float) Setting::get('activity_fee', 0);
+        $discount        = round((float) ($validated['discount'] ?? 0), 2);
+        $lesTotal        = $scheme === 'Termin'
+            ? $package->totalFor('Termin')
+            : (float) $this->payments->packageTotalFor($package, $isPrivate);
+        $baseTotal       = $lesTotal + $registrationFee + $activityFee;
+
+        if ($discount >= $baseTotal) {
+            throw ValidationException::withMessages([
+                'discount' => 'Diskon harus lebih kecil dari total tagihan (Rp' . number_format($baseTotal, 0, ',', '.') . ').',
+            ]);
+        }
+
+        // Jumlah termin dikunci mengikuti paket (diatur di halaman Program & Level), bukan input admin.
+        $terminCount = $scheme === 'Termin'
+            ? min(
+                max((int) ($package->installmentTermCount() ?? 3), PaymentInstallmentService::TERMIN_MIN),
+                PaymentInstallmentService::TERMIN_MAX
+            )
+            : 3;
+
+        // Tanggal jatuh tempo; kosong = otomatis. Tanggal termin di atas jumlah termin dibuang
+        // (skema Lunas hanya menyisakan kolom pertama).
+        $formManual = RegistrationFormService::cleanManual(
+            $validated['form_manual'] ?? [],
+            $scheme === 'Termin' ? $terminCount : 1,
+        );
+
+        return [
+            'scheme'          => $scheme,
+            'registrationFee' => $registrationFee,
+            'activityFee'     => $activityFee,
+            'discount'        => $discount,
+            'totalBill'       => $baseTotal - $discount,
+            'terminCount'     => $terminCount,
+            'formManual'      => $formManual,
+        ];
+    }
 
     /**
      * Validasi pilihan paket/level/kelas. Dipakai di step 1 dan step 2.
