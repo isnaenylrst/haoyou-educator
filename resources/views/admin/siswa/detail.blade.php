@@ -109,17 +109,17 @@
                     </small>
                 </div>
 
-                <div class="form-field">
+                {{-- <div class="form-field">
                     <label>Program Terakhir</label>
                     <div class="sd-info">{{ $lastProgram['program_name'] ?? '-' }}</div>
-                </div>
+                </div> --}}
 
-                <div class="form-field">
+                {{-- <div class="form-field">
                     <label>Pertemuan Terakhir</label>
                     <div class="sd-info">{{ $lastClassEnd?->format('d M Y') ?? '-' }}</div>
-                </div>
+                </div> --}}
 
-                <div class="form-field">
+                {{-- <div class="form-field">
                     <label>Batas Lanjut (H+30)</label>
                     <div class="sd-info">{{ $graceUntil?->format('d M Y') ?? '-' }}</div>
                     @if ($graceUntil)
@@ -132,7 +132,7 @@
                             @endif
                         </small>
                     @endif
-                </div>
+                </div> --}}
             </div>
         </div>
 
@@ -219,46 +219,17 @@
         </div>
     </div>
 
-    {{-- ===== Jadwal kelas aktif ===== --}}
-    <div class="sd-card">
-        <div class="form-section" style="margin-bottom:0;">
-            <div class="form-section-title"><i class="fa-solid fa-calendar-week"></i> Jadwal Siswa</div>
-
-            <div class="sd-scroll">
-                <table class="table-mini">
-                    <thead>
-                        <tr>
-                            <th>Hari</th>
-                            <th style="text-align: center; vertical-align: middle;">Jam Mulai</th>
-                            <th style="text-align: center; vertical-align: middle;">Jam Selesai</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse ($schedules as $s)
-                            <tr>
-                                <td>{{ $s->day }}</td>
-                                <td style="text-align: center; vertical-align: middle;">{{ substr($s->start_time, 0, 5) }}</td>
-                                <td style="text-align: center; vertical-align: middle;">{{ substr($s->end_time, 0, 5) }}</td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="3">Belum ada jadwal kelas aktif.</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
+    @include('admin.siswa.partials.program-expiry', ['programs' => $programs])
 
     {{-- ===== Program yang diikuti (+ kelas pengganti) ===== --}}
     <div class="sd-card">
         <div class="form-section" style="margin-bottom:0;">
-            <div class="form-section-title"><i class="fa-solid fa-graduation-cap"></i> Program yang Diikuti</div>
+            <div class="form-section-title"><i class="fa-solid fa-graduation-cap"></i> Kelas yang Diikuti</div>
 
             <div class="sd-scroll">
                 <table class="table-mini">
                     <thead>
                         <tr>
-                            <th>Program</th>
                             <th>Kelas</th>
                             <th style="text-align: center; vertical-align: middle;">Tipe</th>
                             <th style="text-align: center; vertical-align: middle;">Status</th>
@@ -276,9 +247,6 @@
                                 $reps  = $p['replacements'];
                             @endphp
                             <tr>
-                                <td>
-                                    {{ $p['program_name'] }}
-                                </td>
                                 <td>
                                     {{ $p['class_name'] }}
                                 </td>
@@ -330,7 +298,37 @@
                             </tr>
 
                         @empty
-                            <tr><td colspan="9">Belum ada program yang diikuti.</td></tr>
+                            <tr><td colspan="8">Belum ada program yang diikuti.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {{-- ===== Jadwal kelas aktif ===== --}}
+    <div class="sd-card">
+        <div class="form-section" style="margin-bottom:0;">
+            <div class="form-section-title"><i class="fa-solid fa-calendar-week"></i> Jadwal Siswa</div>
+
+            <div class="sd-scroll">
+                <table class="table-mini">
+                    <thead>
+                        <tr>
+                            <th>Hari</th>
+                            <th style="text-align: center; vertical-align: middle;">Jam Mulai</th>
+                            <th style="text-align: center; vertical-align: middle;">Jam Selesai</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($schedules as $s)
+                            <tr>
+                                <td>{{ $s->day }}</td>
+                                <td style="text-align: center; vertical-align: middle;">{{ substr($s->start_time, 0, 5) }}</td>
+                                <td style="text-align: center; vertical-align: middle;">{{ substr($s->end_time, 0, 5) }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="3">Belum ada jadwal kelas aktif.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

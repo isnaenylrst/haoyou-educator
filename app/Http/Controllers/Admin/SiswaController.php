@@ -13,6 +13,7 @@ use App\Models\PrivatePackage;
 use App\Models\Program;
 use App\Models\ProgramLevel;
 use App\Models\ProgramPackage;
+use App\Models\ReplacementBill;
 use App\Models\Setting;
 use App\Models\Student;
 use App\Models\Teacher;
@@ -25,6 +26,8 @@ use App\Services\ClassScheduleService;
 use App\Services\ClassSessionService;
 use App\Services\ClassSessionOfferService;
 use App\Services\ExtraFeeService;
+use App\Services\InvoiceNumberService;
+use App\Services\InvoiceService;
 use App\Services\EnrollmentExpiryService;
 use App\Services\PaymentInstallmentService;
 use App\Services\PointService;
@@ -39,6 +42,9 @@ use Illuminate\Validation\ValidationException;
 class SiswaController extends Controller
 {
     private const CONTINUE_DRAFT = 'continue_draft.';
+
+    // Penanda "Tambah Program": siswa mengikuti program kedua bersamaan, bukan lanjut ke program berikutnya
+    private const ADDITIONAL_FLAG = 'continue_additional.';
     private const ATTENDED_STATUSES = ['Present', 'Late'];
     private const PAYMENT_METHODS = ['Transfer Bank', 'Cash', 'QRIS'];
 
@@ -429,7 +435,9 @@ class SiswaController extends Controller
         // Kelas pengganti dikelompokkan per pendaftaran (enrollment)
         $replacementsByEnrollment = $this->replacementHistory($siswa)->groupBy('enrollment_id');
 
-        $programs = $siswa->enrollments->map(function ($e) use ($attendedByClass, $absentByClass, $replacementsByEnrollment) {
+        $expirySvc = app(EnrollmentExpiryService::class);
+
+        $programs = $siswa->enrollments->map(function ($e) use ($siswa, $expirySvc, $attendedByClass, $absentByClass, $replacementsByEnrollment) {
             $isPrivate = (bool) $e->private_package_id;
             $package = $isPrivate
                 ? $e->privatePackage
@@ -439,7 +447,45 @@ class SiswaController extends Controller
             $lastClassDate = $e->class?->end_date ?? $e->last_class_date;
             $lastClassDate = $lastClassDate ? Carbon::parse($lastClassDate) : null;
 
+            // Masa cuti dan expired per program (aturan private/reguler ada di EnrollmentExpiryService)
+            $phase = null;
+            $w     = null;
+
+            if ($e->status !== 'Cancelled') {
+                $w = $expirySvc->windows($e);
+
+                $continued = $siswa->enrollments
+                    ->where('id', '>', $e->id)
+                    ->where('status', '!=', 'Cancelled')
+                    ->reject(fn ($n) => $n->is_additional_program)
+                    ->isNotEmpty();
+
+                $classEnd = $e->class?->end_date ? Carbon::parse($e->class->end_date) : null;
+                $ongoing  = $e->status === 'Active'
+                    && $e->class
+                    && in_array($e->class->status, ['Open', 'Running'], true)
+                    && (! $classEnd || $classEnd->gte(today()));
+
+                if ($e->status === 'Waiting Class') {
+                    $phase = 'Menunggu kelas';
+                } elseif ($ongoing) {
+                    $phase = 'Berjalan';
+                } elseif ($continued && $e->status === 'Completed') {
+                    $phase = 'Dilanjutkan';
+                } elseif ($w) {
+                    $phase = today()->gte($w['expired_start'])
+                        ? 'Expired'
+                        : (today()->gte($w['leave_start']) ? 'Cuti' : 'Berjalan');
+                }
+            }
+
             return [
+                'phase'           => $phase,
+                'expiry_basis'    => $w['basis'] ?? null,
+                'leave_start'     => $w ? $w['leave_start']->format('d M Y') : null,
+                'leave_end'       => $w ? $w['expired_start']->copy()->subDay()->format('d M Y') : null,
+                'expired_start'   => $w ? $w['expired_start']->format('d M Y') : null,
+                'expired_raw'     => $w ? $w['expired_start']->toDateString() : null,
                 'enrollment_id'   => $e->id,
                 'class_name'      => $e->class->class_name ?? '-',
                 'program_name'    => $isPrivate
@@ -725,9 +771,43 @@ class SiswaController extends Controller
                 ->with('error', "{$siswa->name} tidak sedang mengikuti kelas yang berlangsung, jadi belum bisa menambah kelas pengganti.");
         }
 
+        // Tagihan yang sudah terbit tapi belum dibayar. ?bill=ID membuka salah satunya untuk dibayar:
+        // isian jadwal dan guru diambil dari tagihan lewat old(), kecuali ada isian lama dari validasi gagal.
+        $pendingBills = ReplacementBill::unpaid()
+            ->whereIn('class_enrollment_id', $enrollments->pluck('id'))
+            ->orderByDesc('id')
+            ->get();
+
+        $activeBill = request()->filled('bill')
+            ? $pendingBills->firstWhere('id', (int) request('bill'))
+            : null;
+
+        if ($activeBill && ! request()->session()->hasOldInput()) {
+            request()->session()->now('_old_input', array_merge(
+                $activeBill->session ?? [],
+                ['due_date' => $activeBill->due_date?->toDateString()]
+            ));
+        }
+
+        $classNames = $enrollments->pluck('class_name', 'id');
+
+        $pendingBills = $pendingBills->map(fn (ReplacementBill $b) => [
+            'id'             => $b->id,
+            'class_name'     => $classNames[$b->class_enrollment_id] ?? '-',
+            'date'           => Carbon::parse($b->session['session_date'] ?? today())->format('d M Y'),
+            'location'       => $b->session['location_type'] ?? '-',
+            'total'          => (float) $b->replacement_amount + (float) ($b->home_visit_amount ?? 0),
+            'due'            => $b->due_date?->format('d M Y'),
+            'invoice_number' => $b->invoice_number,
+            'invoice_url'    => route('admin.siswa.replacement.bill.invoice', [$siswa->id, $b->id]),
+            'pay_url'        => route('admin.siswa.replacement', [$siswa->id, 'bill' => $b->id]),
+        ])->values();
+
         return view('admin.siswa.kelaspengganti', [
             'siswa'          => $siswa,
             'enrollments'    => $enrollments,
+            'pendingBills'   => $pendingBills,
+            'activeBill'     => $activeBill,
             'history'        => $this->replacementHistory($siswa),
             'fees'           => [
                 'replacement' => ExtraFeeService::FEE_REPLACEMENT,
@@ -785,17 +865,26 @@ class SiswaController extends Controller
             'amount'              => ['nullable', 'numeric', 'min:1'],
             'home_visit_amount'   => ['nullable', 'numeric', 'min:1'],
             'proof'               => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'],
+            'bill_id'             => ['nullable', 'integer'],
         ], [
             'class_enrollment_id.exists'     => 'Pendaftaran tidak ditemukan atau tidak aktif.',
             'end_time.after'                 => 'Jam selesai harus setelah jam mulai.',
             'offer_teacher_ids.required_if'  => 'Pilih minimal satu guru untuk diajukan.',
         ]);
 
+        // Tagihan yang dibayar: nomor invoice-nya dipakai ulang oleh pembayaran (kelas pengganti + Home Visit satu nomor)
+        $bill = ! empty($data['bill_id'])
+            ? ReplacementBill::unpaid()
+                ->whereKey($data['bill_id'])
+                ->whereIn('class_enrollment_id', ClassEnrollment::withTrashed()->where('student_id', $siswa->id)->pluck('id'))
+                ->first()
+            : null;
+
         $proofPath = $request->file('proof')->store('payment-proofs', 'public');
         $names     = collect();
 
         try {
-            $session = DB::transaction(function () use ($data, $service, $offers, $proofPath, &$names) {
+            $session = DB::transaction(function () use ($data, $service, $offers, $proofPath, $bill, &$names) {
                 $session = $service->createReplacement([
                     'class_enrollment_id' => $data['class_enrollment_id'],
                     // teacher_id sengaja tidak dikirim: guru terisi setelah ada yang menerima
@@ -810,7 +899,11 @@ class SiswaController extends Controller
                     'payment_proof_path'  => $proofPath,
                     'amount'              => $data['amount'] ?? null,
                     'home_visit_amount'   => $data['home_visit_amount'] ?? null,
+                    'invoice_number'      => $bill?->invoice_number,
                 ]);
+
+                // Tagihan lunas: tandai supaya tidak muncul lagi di daftar tagihan
+                $bill?->update(['class_session_id' => $session->id]);
 
                 $names = $offers->offer($session, $data['offer_mode'], $data['offer_teacher_ids'] ?? []);
 
@@ -822,12 +915,118 @@ class SiswaController extends Controller
         }
 
         $total = (float) $session->payments->sum('amount_paid');
-        $count = $session->payments->count();
+        $count = $session->payments->pluck('invoice_number')->unique()->count();
         $list  = $names->take(5)->implode(', ') . ($names->count() > 5 ? ', ...' : '');
 
         return redirect()->route('admin.siswa.replacement', $siswa)
             ->with('success', "Kelas pengganti telah diajukan, guru akan terisi setelah ada yang menerima. "
                 . 'Pembayaran Rp' . number_format($total, 0, ',', '.') . ' tercatat lunas (' . $count . ' invoice).');
+    }
+
+    /**
+     * Terbitkan invoice tagihan kelas pengganti SEBELUM dibayar. Sesi pengganti dan pembayarannya belum dibuat
+     * (aturan "bayar dulu baru dijadwalkan"), jadi jadwal, guru yang diajukan, dan jatuh tempo disimpan sebagai
+     * tagihan (tabel replacement_bills). Pembayaran lewat storeReplacement dengan bill_id memakai nomor invoice yang sama.
+     */
+    public function storeReplacementBill(Request $request, Student $siswa, InvoiceNumberService $numbers)
+    {
+        $ownedIds = ClassEnrollment::withTrashed()->where('student_id', $siswa->id)->pluck('id');
+
+        $data = $request->validate([
+            'class_enrollment_id' => ['required', 'integer', Rule::exists('class_enrollments', 'id')->where(
+                fn ($q) => $q->where('student_id', $siswa->id)->where('status', 'Active')->whereNull('deleted_at')
+            )],
+            'session_date'        => ['required', 'date', 'after_or_equal:today'],
+            'start_time'          => ['required', 'date_format:H:i'],
+            'end_time'            => ['required', 'date_format:H:i', 'after:start_time'],
+            'location_type'       => ['required', Rule::in(['Studio', 'Online', 'Home Visit'])],
+            'room'                => [Rule::requiredIf($request->input('location_type') === 'Studio'), 'nullable', 'string', 'max:255'],
+
+            'offer_mode'          => ['required', Rule::in(['selected', 'matching', 'all'])],
+            'offer_teacher_ids'   => ['required_if:offer_mode,selected', 'nullable', 'array'],
+            'offer_teacher_ids.*' => ['integer', 'exists:teachers,id'],
+
+            'due_date'            => ['required', 'date', 'after_or_equal:today'],
+            'amount'              => ['nullable', 'numeric', 'min:1'],
+            'bill_id'             => ['nullable', 'integer'],
+        ], [
+            'class_enrollment_id.exists'    => 'Pendaftaran tidak ditemukan atau tidak aktif.',
+            'end_time.after'                => 'Jam selesai harus setelah jam mulai.',
+            'room.required'                 => 'Pilih ruangan untuk pertemuan di studio.',
+            'offer_teacher_ids.required_if' => 'Pilih minimal satu guru untuk diajukan.',
+            'due_date.required'             => 'Jatuh tempo wajib diisi untuk menerbitkan invoice.',
+        ]);
+
+        $bill = ! empty($data['bill_id'])
+            ? ReplacementBill::unpaid()->whereKey($data['bill_id'])->whereIn('class_enrollment_id', $ownedIds)->first()
+            : null;
+
+        $bill ??= new ReplacementBill();
+
+        $isHome = $data['location_type'] === 'Home Visit';
+
+        $bill->fill([
+            'class_enrollment_id' => $data['class_enrollment_id'],
+            'session'             => [
+                'class_enrollment_id' => (int) $data['class_enrollment_id'],
+                'session_date'        => $data['session_date'],
+                'start_time'          => $data['start_time'],
+                'end_time'            => $data['end_time'],
+                'location_type'       => $data['location_type'],
+                'room'                => $data['room'] ?? null,
+                'offer_mode'          => $data['offer_mode'],
+                'offer_teacher_ids'   => array_map('intval', $data['offer_teacher_ids'] ?? []),
+            ],
+            'replacement_amount'  => (float) ($data['amount'] ?? ExtraFeeService::FEE_REPLACEMENT),
+            'home_visit_amount'   => $isHome ? (float) ExtraFeeService::FEE_HOME_VISIT : null,
+            'due_date'            => $data['due_date'],
+        ]);
+
+        // Nomor dibuat sekali (PP atau PHV); nomor tetap sama kalau tagihan diperbarui. Cek bentrok juga ke tagihan lain.
+        if (! $bill->invoice_number) {
+            $enrollment = ClassEnrollment::with('student.currentLevel.category')->find($data['class_enrollment_id']);
+
+            $base = $numbers->forExtra(
+                $enrollment,
+                $isHome ? [\App\Models\Payment::TYPE_REPLACEMENT, \App\Models\Payment::TYPE_HOME_VISIT] : [\App\Models\Payment::TYPE_REPLACEMENT],
+                today()
+            );
+
+            $number = $base;
+            $i      = 2;
+
+            while (ReplacementBill::where('invoice_number', $number)->exists()) {
+                $number = $base . '-' . $i++;
+            }
+
+            $bill->invoice_number = $number;
+            $bill->issued_at      = now();
+        }
+
+        $bill->save();
+
+        return redirect()->route('admin.siswa.replacement', [$siswa, 'bill' => $bill->id])
+            ->with('success', 'Invoice tagihan ' . $bill->invoice_number . ' sudah diterbitkan. Klik "Lihat Invoice" untuk membukanya, '
+                . 'isi pembayaran setelah siswa membayar.');
+    }
+
+    /** PDF invoice tagihan kelas pengganti sebelum dibayar. */
+    public function replacementBillInvoice(Student $siswa, ReplacementBill $bill, InvoiceService $invoices)
+    {
+        abort_unless(
+            ClassEnrollment::withTrashed()
+                ->where('student_id', $siswa->id)
+                ->whereKey($bill->class_enrollment_id)
+                ->exists(),
+            404
+        );
+
+        abort_if($bill->isPaid(), 404, 'Tagihan ini sudah dibayar, gunakan invoice dari riwayat pembayaran.');
+
+        return response($invoices->generateForReplacementBill($bill), 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $bill->invoice_number . '.pdf"',
+        ]);
     }
 
     /** Ajukan ulang kelas pengganti yang masih menunggu guru (mis. guru sebelumnya menolak). */
@@ -1130,6 +1329,12 @@ class SiswaController extends Controller
         $class->update(['status' => 'Completed']);
     }
 
+    /** Alur lanjut program sedang dipakai untuk menambah program kedua (program lama tetap berjalan). */
+    private function isAdditional(Student $siswa): bool
+    {
+        return (bool) session(self::ADDITIONAL_FLAG . $siswa->id);
+    }
+
     // Biaya tambahan untuk siswa lama yang lanjut program: [biaya pendaftaran, biaya aktivitas, info]
     private function continueFees(Student $siswa): array
     {
@@ -1298,8 +1503,12 @@ class SiswaController extends Controller
      * ===================================================================== */
 
     // STEP 1 (tampilan)
-    public function continueProgramPage(Student $siswa)
+    public function continueProgramPage(Request $request, Student $siswa)
     {
+        // ?tambah=1 -> Tambah Program (program kedua bersamaan). Tanpa itu -> Lanjut Program biasa.
+        $additional = $request->boolean('tambah');
+        session([self::ADDITIONAL_FLAG . $siswa->id => $additional]);
+
         $siswa->load(
             'candidateStudent',
             'activeEnrollment.class.programPackage.program',
@@ -1309,8 +1518,13 @@ class SiswaController extends Controller
 
         $enrollment = $siswa->activeEnrollment;
 
-        // Belum lunas → kondisi 1 (pelunasan)
-        if ($this->hasOutstandingBalance($enrollment)) {
+        if ($additional && ! $enrollment) {
+            return redirect()->route('admin.siswa')
+                ->with('error', 'Siswa belum punya program aktif. Gunakan Lanjut Program.');
+        }
+
+        // Belum lunas → kondisi 1 (pelunasan). Tambah Program tidak menunggu pelunasan program pertama.
+        if (! $additional && $this->hasOutstandingBalance($enrollment)) {
             return redirect()->route('admin.siswa.settle', $siswa);
         }
 
@@ -1381,7 +1595,7 @@ class SiswaController extends Controller
         // Jadwal tersedia & jam terpakai tiap guru (untuk label "cocok" / "di luar jadwal").
         // Kelas private lama siswa ini diabaikan (akan ditutup saat lanjut program).
         $teacherSlots = app(ClassScheduleService::class)
-            ->teacherSlotsMap($this->closableClass($enrollment)?->id);
+            ->teacherSlotsMap($additional ? null : $this->closableClass($enrollment)?->id);
 
         $roomSuggestions = ClassSchedule::whereNotNull('room')
             ->where('room', '!=', '')
@@ -1416,8 +1630,11 @@ class SiswaController extends Controller
             'stepDisplay'         => 1,
             'candidateStudent'    => $candidateStudent,
             'personName'          => $siswa->name,
-            'eyebrow'             => 'Lanjut Program:',
-            'subtitle'            => 'Pilih program berikutnya untuk siswa ini, lalu lanjut ke pembayaran.',
+            'additional'          => $additional,
+            'eyebrow'             => $additional ? 'Tambah Program:' : 'Lanjut Program:',
+            'subtitle'            => $additional
+                ? 'Pilih program tambahan yang diikuti bersamaan dengan program yang sedang berjalan, lalu lanjut ke pembayaran.'
+                : 'Pilih program berikutnya untuk siswa ini, lalu lanjut ke pembayaran.',
             'step1Action'         => route('admin.siswa.continue', $siswa),
             'backUrl'             => route('admin.siswa'),
             'cancelUrl'           => route('admin.siswa'),
@@ -1440,8 +1657,9 @@ class SiswaController extends Controller
     public function continueProgram(Request $request, Student $siswa)
     {
         $currentEnrollment = $siswa->activeEnrollment;
+        $additional        = $this->isAdditional($siswa);
 
-        if ($this->hasOutstandingBalance($currentEnrollment)) {
+        if (! $additional && $this->hasOutstandingBalance($currentEnrollment)) {
             return redirect()->route('admin.siswa.settle', $siswa);
         }
 
@@ -1552,7 +1770,7 @@ class SiswaController extends Controller
     // STEP 2 (tampilan)
     public function continuePayment(Student $siswa, PaymentInstallmentService $payments)
     {
-        if ($this->hasOutstandingBalance($siswa->activeEnrollment)) {
+        if (! $this->isAdditional($siswa) && $this->hasOutstandingBalance($siswa->activeEnrollment)) {
             return redirect()->route('admin.siswa.settle', $siswa);
         }
 
@@ -1609,8 +1827,9 @@ class SiswaController extends Controller
     public function continueStore(Request $request, Student $siswa, PaymentInstallmentService $payments)
     {
         $currentEnrollment = $siswa->activeEnrollment;
+        $additional        = $this->isAdditional($siswa);
 
-        if ($this->hasOutstandingBalance($currentEnrollment)) {
+        if (! $additional && $this->hasOutstandingBalance($currentEnrollment)) {
             return redirect()->route('admin.siswa.settle', $siswa);
         }
 
@@ -1685,14 +1904,18 @@ class SiswaController extends Controller
 
         try {
             $enrollment = DB::transaction(function () use (
-                $siswa, $currentEnrollment, $draft, $isPrivate, $validated, $payments,
+                $siswa, $currentEnrollment, $additional, $draft, $isPrivate, $validated, $payments,
                 $registrationFee, $activityFee, $discount, $amountPaid, $totalBill, $classId, $levelId, $proofPath, $scheme,
                 &$newClass
             ) {
-                $currentEnrollment?->update(['status' => 'Completed']);
+                // Lanjut Program: program lama selesai dan kelas private lama ditutup.
+                // Tambah Program: program lama tetap berjalan, tidak disentuh.
+                if (! $additional) {
+                    $currentEnrollment?->update(['status' => 'Completed']);
 
-                // Kelas private lama (kalau tidak dipakai siswa lain) ditutup dan pertemuan yang belum terjadi dibatalkan
-                $this->releaseOldClass($currentEnrollment);
+                    // Kelas private lama (kalau tidak dipakai siswa lain) ditutup dan pertemuan yang belum terjadi dibatalkan
+                    $this->releaseOldClass($currentEnrollment);
+                }
 
                 // kuota kelas reguler (dikunci supaya dua admin tidak mengisi kursi terakhir bersamaan)
                 if ($classId) {
@@ -1775,6 +1998,11 @@ class SiswaController extends Controller
                     'requested_material' => $isPrivate ? ($draft['requested_material'] ?? null) : null,
                 ]);
 
+                // Program tambahan (bersamaan): tidak dihitung sebagai kelanjutan program lama di Retention Rate
+                if ($additional) {
+                    $new->forceFill(['is_additional_program' => true])->save();
+                }
+
                 $payments->recordPayment(
                     $new->load(['programPackage.program', 'privatePackage', 'student.currentLevel']),
                     $amountPaid >= $totalBill ? 'Lunas' : 'DP',
@@ -1805,9 +2033,11 @@ class SiswaController extends Controller
             throw $e;
         }
 
-        session()->forget(self::CONTINUE_DRAFT . $siswa->id);
+        session()->forget([self::CONTINUE_DRAFT . $siswa->id, self::ADDITIONAL_FLAG . $siswa->id]);
 
-        $message = "Siswa {$siswa->name} berhasil dilanjutkan ke program berikutnya.";
+        $message = $additional
+            ? "Program tambahan untuk {$siswa->name} berhasil ditambahkan."
+            : "Siswa {$siswa->name} berhasil dilanjutkan ke program berikutnya.";
 
         // Kelas private baru: ajukan ke guru di luar transaksi, supaya kegagalan pengajuan
         // tidak membatalkan pembayaran dan enrollment.

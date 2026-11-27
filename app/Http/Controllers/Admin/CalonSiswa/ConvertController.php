@@ -641,6 +641,11 @@ class ConvertController extends Controller
                 $required[] = 'dp_aktivitas_tanggal';
             }
 
+            // Home Visit (kelas private baru) ikut ditagihkan bersama pendaftaran dan aktivitas
+            if ($isPrivate && ! empty($selection['home_visit']) && empty($selection['join_class_id'])) {
+                $required[] = 'dp_home_visit_tanggal';
+            }
+
             $required[] = 'termin1_lunas_tanggal';
 
             if ($plan['scheme'] === 'Termin') {

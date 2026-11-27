@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -41,6 +42,9 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->text('requested_material')->nullable();
 
+            // Alamat tujuan guru untuk kelas private Home Visit.
+            $table->text('home_visit_address')->nullable();
+
             $table->enum('payment_scheme', [
                 'Lunas',
                 'Termin'
@@ -48,6 +52,9 @@ return new class extends Migration
 
             $table->unsignedTinyInteger('termin_count')->default(3);
             $table->json('form_manual')->nullable();
+
+            // true = program kedua yang diikuti bersamaan (Tambah Program).
+            $table->boolean('is_additional_program')->default(false);
 
             $table->enum('status', [
                 'Waiting Class',

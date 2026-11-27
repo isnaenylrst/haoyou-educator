@@ -46,6 +46,14 @@ class Student extends Model
             ->latestOfMany('enrollment_date');
     }
 
+    /** Semua program yang sedang diikuti (siswa bisa mengikuti lebih dari satu program bersamaan). */
+    public function activeEnrollments()
+    {
+        return $this->hasMany(ClassEnrollment::class)
+            ->whereIn('status', ['Active', 'Waiting Class'])
+            ->orderByDesc('enrollment_date');
+    }
+
     public function progressReports()
     {
         return $this->hasMany(ProgressReport::class);

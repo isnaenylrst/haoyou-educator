@@ -575,18 +575,6 @@
                                    value="{{ $discountVal }}">
                         </div>
 
-                        @if (! empty($homeVisit))
-                            <div class="form-field">
-                                <label>
-                                    Biaya Home Visit
-                                    ({{ (int) ($package->total_meetings ?? 0) }} pertemuan &times;
-                                    Rp{{ number_format(\App\Services\ExtraFeeService::FEE_HOME_VISIT, 0, ',', '.') }})
-                                </label>
-                                <input type="text" id="home_visit_fee" readonly
-                                       value="Rp{{ number_format($homeVisitTotal, 0, ',', '.') }}">
-                            </div>
-                        @endif
-
                         @if (! empty($chosenClass) && ! empty($chosenProgress))
                             <div class="form-field full">
                                 <div class="class-progress-box {{ $chosenProgress['done'] > 0 ? '' : 'fresh' }}">
@@ -645,6 +633,24 @@
                             <input type="date" form="payment-form" name="form_manual[dp_aktivitas_tanggal]"
                                    value="{{ $manualVal('dp_aktivitas_tanggal') }}">
                         </div>
+
+                        {{-- Home Visit (kelas private baru) ditagihkan bersama pendaftaran dan aktivitas --}}
+                        @if (! empty($homeVisit))
+                            <div class="form-field">
+                                <label>
+                                    Biaya Home Visit: nominal
+                                    ({{ (int) ($package->total_meetings ?? 0) }} pertemuan &times;
+                                    Rp{{ number_format(\App\Services\ExtraFeeService::FEE_HOME_VISIT, 0, ',', '.') }})
+                                </label>
+                                <input type="text" id="home_visit_fee" readonly
+                                       value="Rp {{ number_format($homeVisitTotal, 0, ',', '.') }}">
+                            </div>
+                            <div class="form-field">
+                                <label>Biaya Home Visit: jatuh tempo</label>
+                                <input type="date" form="payment-form" name="form_manual[dp_home_visit_tanggal]"
+                                       value="{{ $manualVal('dp_home_visit_tanggal') }}">
+                            </div>
+                        @endif
                     </div>
 
                     {{-- Jumlah termin: hanya tampil kalau skema Termin dipilih (diatur JS) --}}

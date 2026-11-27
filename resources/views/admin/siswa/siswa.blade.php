@@ -388,6 +388,14 @@
                                         <i class="fa-solid fa-forward"></i>
                                     </a>
                                 @endif
+
+{{-- 4. Tambah Program (diikuti bersamaan dengan program yang sedang berjalan) --}}
+@if ($canReplace)
+    <a class="icon-btn wa" title="Tambah Program (diikuti bersamaan)"
+       href="{{ route('admin.siswa.continue.program', $student) }}?tambah=1">
+        <i class="fa-solid fa-layer-group"></i>
+    </a>
+@endif                              
                             </div>
                         </td>
                     </tr>

@@ -86,6 +86,8 @@ class RetentionService
 
             $next = ($later[$e->student_id] ?? collect())
                 ->filter(fn ($n) => $n->id > $e->id
+                    // program tambahan (diikuti bersamaan) bukan kelanjutan program ini
+                    && ! $n->is_additional_program
                     && (is_null($n->class_id) || (int) $n->class_id !== (int) $e->class_id))
                 ->values();
 

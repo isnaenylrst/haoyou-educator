@@ -256,7 +256,18 @@ class InvoiceService
         $enrollment->setRelation('class', $kelas);
         $enrollment->setRelation('student', null);
 
-        $plan    = $this->billingPlan($enrollment, collect());
+        // Home Visit: kelas private baru dengan semua pertemuan Home Visit, Rp50.000 per pertemuan
+        $hvSessions = ($isPrivate && ! empty($selection['home_visit']) && empty($selection['join_class_id']))
+            ? (int) ($package->total_meetings ?? 0)
+            : 0;
+        $hvAmount = (float) ($hvSessions * ExtraFeeService::FEE_HOME_VISIT);
+
+        $plan = $this->billingPlan($enrollment, collect(), $hvSessions > 0 ? [
+            'amount'    => $hvAmount,
+            'paid'      => false,
+            'paid_date' => null,
+            'sessions'  => $hvSessions,
+        ] : null);
         $current = $this->currentDueIndexes($plan);
 
         $tahap = $current !== []
@@ -297,14 +308,14 @@ class InvoiceService
             'jumlah_bulan'     => (string) $months,
             'harga_per_bulan'  => $this->rupiah($months > 0 ? round($lesTotal / $months) : $lesTotal),
             'harga_paket'      => $this->rupiah($lesTotal),
-            'total_tagihan'    => $this->rupiah($totalBill),
+            'total_tagihan'    => $this->rupiah($totalBill + $hvAmount),
 
             'catatan' => filled($draft->notes) ? nl2br(e(trim($draft->notes))) : '',
 
             'sudah_dibayar'          => $this->rupiah(0),
             'rincian_dibayar'        => '',
             'jumlah_dibayar'         => $this->rupiah(0),
-            'sisa_setelah_ini'       => $this->rupiah($totalBill),
+            'sisa_setelah_ini'       => $this->rupiah($totalBill + $hvAmount),
             'jatuh_tempo_berikutnya' => '',
 
             // Contoh keterangan transfer untuk pembayaran pertama (DP)
@@ -410,9 +421,11 @@ class InvoiceService
         }
 
         // Invoice tagihan: rincian pendaftaran, aktivitas, dan Lunas / Termin 1..N dengan jatuh tempo dari admin
+        $homeVisit = $this->homeVisitAtConversion($enrollment);
         $plan    = $this->billingPlan(
             $enrollment,
-            $enrollment->packagePayments()->where('id', '<=', $payment->id)->orderBy('id')->get()
+            $enrollment->packagePayments()->where('id', '<=', $payment->id)->orderBy('id')->get(),
+            $homeVisit
         );
         $current = $this->currentDueIndexes($plan);
 
@@ -427,7 +440,8 @@ class InvoiceService
             : ($unpaid ? $nextDueDate : $payment->payment_date);
 
         $discount = (float) $enrollment->discount;
-        $planSum  = array_sum(array_column($plan, 'amount'));
+        $hvAmount = (float) ($homeVisit['amount'] ?? 0);
+        $planSum  = array_sum(array_column($plan, 'amount')) - $hvAmount;
         $totalBill = (float) $payment->total_bill;
 
         // Baris Diskon hanya ditampilkan kalau rincian di atas belum memotong diskon
@@ -514,8 +528,9 @@ class InvoiceService
                     true
                 ),
 
+            // Termasuk Home Visit saat konversi (digabung di invoice yang sama)
             'total_tagihan' => $this->rupiah(
-                (float) $payment->total_bill
+                (float) $payment->total_bill + $hvAmount
             ),
 
             'catatan' => filled($enrollment->notes)
@@ -556,8 +571,11 @@ class InvoiceService
      *
      * @return array<int, array{label: string, due: ?Carbon, amount: float, paid: bool, paid_date: mixed}>
      */
-    private function billingPlan(\App\Models\ClassEnrollment $enrollment, \Illuminate\Support\Collection $ordered): array
-    {
+    private function billingPlan(
+        \App\Models\ClassEnrollment $enrollment,
+        \Illuminate\Support\Collection $ordered,
+        ?array $homeVisit = null,
+    ): array {
         // $ordered = pembayaran paket sampai invoice ini; kosong = invoice tagihan sebelum ada pembayaran
         // (enrollment belum tersimpan), jadwal dihitung dengan asumsi DP minimal.
         $first      = $ordered->first();
@@ -633,6 +651,17 @@ class InvoiceService
             ];
         }
 
+        // Home Visit saat konversi (kelas private baru): dibayar bersamaan dengan DP, jatuh tempo mengikuti tanggal DP
+        if ($homeVisit && $homeVisit['amount'] > 0) {
+            $lines[] = [
+                'label'     => 'Biaya Home Visit' . ($homeVisit['sessions'] ? ' (' . $homeVisit['sessions'] . ' pertemuan)' : ''),
+                'due'       => $manualDate('dp_home_visit_tanggal', 'dp_pendaftaran_tanggal'),
+                'amount'    => (float) $homeVisit['amount'],
+                'paid'      => (bool) $homeVisit['paid'],
+                'paid_date' => $homeVisit['paid_date'],
+            ];
+        }
+
         $dp = $first
             ? (float) $first->amount_paid
             : $this->installments->minimumDownPayment(
@@ -695,6 +724,42 @@ class InvoiceService
     }
 
     /**
+     * Biaya Home Visit yang dibayar saat konversi (dicatat bersamaan dengan DP, per pertemuan), digabung
+     * ke invoice tagihan. Home Visit yang ditagih belakangan per sesi tetap punya invoice sendiri
+     * (invoice biaya tambahan): hanya pembayaran yang dibuat dalam transaksi konversi yang sama yang dihitung.
+     *
+     * @return array{amount: float, paid: bool, paid_date: mixed, sessions: int}|null
+     */
+    private function homeVisitAtConversion(\App\Models\ClassEnrollment $enrollment): ?array
+    {
+        $first = $enrollment->packagePayments()->orderBy('id')->first();
+
+        if (! $first || ! $first->created_at) {
+            return null;
+        }
+
+        $charges = Payment::query()
+            ->where('enrollment_id', $enrollment->id)
+            ->where('payment_type', Payment::TYPE_HOME_VISIT)
+            ->whereBetween('created_at', [
+                $first->created_at->copy()->subMinutes(2),
+                $first->created_at->copy()->addMinutes(2),
+            ])
+            ->get();
+
+        if ($charges->isEmpty()) {
+            return null;
+        }
+
+        return [
+            'amount'    => (float) $charges->sum('amount_paid'),
+            'paid'      => true,
+            'paid_date' => $charges->first()->payment_date,
+            'sessions'  => $charges->count(),
+        ];
+    }
+
+    /**
      * Baris yang harus dibayar sekarang: baris belum lunas yang pertama, ditambah baris belum lunas
      * berikutnya yang jatuh tempo di tanggal yang sama (mis. Aktivitas bersama Termin 1).
      *
@@ -729,7 +794,7 @@ class InvoiceService
 
     /**
      * Baris tabel rincian bayar invoice tagihan (header dan baris Total tagihan ada di template).
-     * Baris yang harus dibayar sekarang berwarna merah. Keterangan: "Lunas (tanggal)" atau "Belum Lunas".
+     * Baris yang harus dibayar sekarang berwarna merah. Keterangan: "Lunas" (hijau) atau "Belum Lunas", tanggal lunas di kolom sendiri.
      */
     private function billingRows(array $plan, array $current, float $discount): string
     {
@@ -742,15 +807,19 @@ class InvoiceService
                 ? 'color:#EE0000;font-weight:bold;background:#FDECEC;'
                 : '');
 
+            // Keterangan: Lunas (hijau) atau Belum Lunas; tanggal lunas di kolom terpisah
             $note = $line['paid']
-                ? 'Lunas' . ($line['paid_date'] ? ' (' . $this->dateId($line['paid_date']) . ')' : '')
+                ? '<span style="color:#1E8E3E;font-weight:bold;">Lunas</span>'
                 : 'Belum Lunas';
+
+            $paidDate = ($line['paid'] && $line['paid_date']) ? e($this->dateId($line['paid_date'])) : '-';
 
             $html .= '<tr>'
                 . '<td style="' . $row . '">' . e($line['label']) . '</td>'
                 . '<td style="' . $row . 'text-align:center;">' . ($line['due'] ? e($this->dateId($line['due'])) : '-') . '</td>'
                 . '<td style="' . $row . 'text-align:right;white-space:nowrap;">' . $this->rupiah($line['amount']) . '</td>'
-                . '<td style="' . $row . 'text-align:center;">' . e($note) . '</td>'
+                . '<td style="' . $row . 'text-align:center;">' . $note . '</td>'
+                . '<td style="' . $row . 'text-align:center;">' . $paidDate . '</td>'
                 . '</tr>';
         }
 
@@ -758,7 +827,7 @@ class InvoiceService
             $html .= '<tr>'
                 . '<td colspan="2" style="' . $td . '">Diskon</td>'
                 . '<td style="' . $td . 'text-align:right;white-space:nowrap;">- ' . $this->rupiah($discount) . '</td>'
-                . '<td style="' . $td . '">&nbsp;</td>'
+                . '<td colspan="2" style="' . $td . '">&nbsp;</td>'
                 . '</tr>';
         }
 

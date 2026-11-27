@@ -25,17 +25,20 @@ class ClassEnrollment extends Model
         'discount',
         'notes',
         'requested_material',
+        'home_visit_address',
         'payment_scheme',
         'termin_count',
         'form_manual',
+        'is_additional_program',
         'status',
     ];
 
     protected $casts = [
         'enrollment_date' => 'date',
-        'termin_count' => 'integer',
-        'form_manual'  => 'array',
         'last_class_date' => 'date',
+        'termin_count' => 'integer',
+        'form_manual' => 'array',
+        'is_additional_program' => 'boolean',
     ];
 
     protected static function booted()

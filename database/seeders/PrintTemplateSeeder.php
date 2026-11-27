@@ -132,16 +132,17 @@ class PrintTemplateSeeder extends Seeder
 
         <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
         <tr>
-        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:28%;">Rincian Bayar</td>
-        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:22%;text-align:center;">Jatuh Tempo</td>
-        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:20%;text-align:right;">Nominal</td>
-        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:30%;text-align:center;">Keterangan</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:26%;">Rincian Bayar</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:20%;text-align:center;">Jatuh Tempo</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:18%;text-align:right;">Nominal</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:18%;text-align:center;">Keterangan</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFD966;font-weight:bold;width:18%;text-align:center;">Tanggal Lunas</td>
         </tr>
         {rincian_tagihan}
         <tr>
-        <td colspan="2" style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFF2CC;font-weight:bold;">Total tagihan</td>
-        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFF2CC;font-weight:bold;text-align:right;white-space:nowrap;">{total_tagihan}</td>
-        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFF2CC;font-weight:bold;">&nbsp;</td>
+        <td colspan="2" style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFFAEB;font-weight:bold;">Total tagihan</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFFAEB;font-weight:bold;text-align:right;white-space:nowrap;">{total_tagihan}</td>
+        <td colspan="2" style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFFAEB;font-weight:bold;">&nbsp;</td>
         </tr>
         </table>
 

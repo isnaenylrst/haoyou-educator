@@ -77,7 +77,7 @@ class RegistrationFormService
     /** Kolom tanggal yang boleh diisi manual oleh admin (disimpan di class_enrollments.form_manual). */
     public static function manualDateKeys(): array
     {
-        $keys = ['dp_pendaftaran_tanggal', 'dp_aktivitas_tanggal', 'termin1_lunas_tanggal'];
+        $keys = ['dp_pendaftaran_tanggal', 'dp_aktivitas_tanggal', 'dp_home_visit_tanggal', 'termin1_lunas_tanggal'];
 
         for ($n = 1; $n <= PaymentInstallmentService::TERMIN_MAX; $n++) {
             $keys[] = "termin{$n}_tanggal";

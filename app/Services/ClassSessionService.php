@@ -244,6 +244,12 @@ class ClassSessionService
             $pay['amount'] = $data['amount'];
         }
 
+        // Nomor invoice tagihan yang sudah terbit sebelum bayar: kelas pengganti dan Home Visit
+        // memakai nomor yang sama (satu invoice). Kosong = nomor dibuat otomatis seperti biasa.
+        if (! empty($data['invoice_number'])) {
+            $pay['invoice_number'] = $data['invoice_number'];
+        }
+
         return DB::transaction(function () use (
             $data,
             $date,
