@@ -16,12 +16,14 @@ class ReportTemplateController extends Controller
 {
     public function index()
     {
+        $programs = ProgressReportTemplate::availablePrograms();
+
         return view('kurikulum.report-templates.index', [
             'templates'  => ProgressReportTemplate::with(['category', 'level', 'privatePackage'])->withCount('meetings')->orderBy('name')->get(),
-            'categories' => ProgramCategory::orderBy('sort_order')->orderBy('category_name')->get(),
+            'categories' => $programs['categories'],
             'levels'     => ProgramLevel::with('category')->orderBy('level_name')->get(),
-            // paket private sesuai menu Admin -> Program & Level -> Paket Private
-            'privatePackages' => PrivatePackage::orderByDesc('is_active')->orderBy('package_name')->get(),
+            // paket private sesuai menu Admin -> Program & Level -> Paket Private (sumber tunggal dinamis)
+            'privatePackages' => $programs['privatePackages'],
             // template tingkat program (tanpa level khusus) per kategori: dasar tabel "status per program"
             'byCategory' => ProgressReportTemplate::whereNotNull('program_category_id')->whereNull('program_level_id')
                 ->withCount('meetings')->get()->keyBy('program_category_id'),

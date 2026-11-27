@@ -22,9 +22,12 @@
     $statusLabels   = config('journal.attendance_status', [
         'Present' => 'Hadir', 'Sick' => 'Sakit', 'Permission' => 'Izin', 'Absent' => 'Alpha',
     ]);
+    $achievementLevels = ['Sufficient', 'Proficient', 'Excellent'];
 
     $attStatus = $j ? $j->attendances->pluck('status', 'student_id') : collect();
     $attNote   = $j ? $j->attendances->pluck('note', 'student_id') : collect();
+    $attAch    = $j ? $j->attendances->pluck('achievement_level', 'student_id') : collect();
+    $attDesc   = $j ? $j->attendances->mapWithKeys(fn ($a) => [$a->student_id => ($a->description !== null && $a->description !== '' ? $a->description : $a->note)]) : collect();
 
     $deadline = $item['deadline'] ?? null;
     $isPastDeadline = $item['is_past_deadline'] ?? false;
@@ -34,6 +37,12 @@
     $showDate = $showDate ?? false;
     $cardDate = $item['session_date'] ?? $date;
     $dateCanFill = !$cardDate->isFuture();
+
+    // Template Progress Report Kurikulum untuk sesi ini
+    $curriculumTemplate = \App\Models\ProgressReportTemplate::forClass($class->id);
+    $curriculumMeetingNo = (int) $old('meeting_number', $j?->meeting_number ?? $autoMeetingNumber);
+    $curriculumMaterial = $curriculumTemplate?->meetings->firstWhere('meeting_number', $curriculumMeetingNo)?->materials;
+    $locationVal = $old('location', $j?->location ?? 'Di Haoyou');
 @endphp
 
 <div class="card border-0 shadow-sm rounded-4 mb-3" data-status="{{ $item['status'] }}">
@@ -201,15 +210,28 @@
 
                 {{-- Keterangan berjalannya kelas --}}
                 <h6 class="fw-bold border-top pt-3 mb-3"><i class="fa-solid fa-chalkboard-user text-warning me-1"></i> Pelaksanaan Kelas & Materi</h6>
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Status Pelaksanaan Kelas</label>
-                    <div class="d-flex gap-4">
-                        @foreach (['Berjalan', 'Tidak Berjalan'] as $v)
-                            <label class="d-flex align-items-center gap-2">
-                                <input type="radio" name="class_running" value="{{ $v }}" required
-                                       @checked($old('class_running', $j ? ($j->class_status === 'Conducted' ? 'Berjalan' : 'Tidak Berjalan') : 'Berjalan') === $v)> {{ $v }}
-                            </label>
-                        @endforeach
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Status Pelaksanaan Kelas</label>
+                        <div class="d-flex gap-4">
+                            @foreach (['Berjalan', 'Tidak Berjalan'] as $v)
+                                <label class="d-flex align-items-center gap-2">
+                                    <input type="radio" name="class_running" value="{{ $v }}" required
+                                           @checked($old('class_running', $j ? ($j->class_status === 'Conducted' ? 'Berjalan' : 'Tidak Berjalan') : 'Berjalan') === $v)> {{ $v }}
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Lokasi <span class="text-danger">*</span></label>
+                        <div class="d-flex gap-4">
+                            @foreach (['Di Haoyou', 'Visit ke rumah'] as $loc)
+                                <label class="d-flex align-items-center gap-2">
+                                    <input type="radio" name="location" value="{{ $loc }}" required
+                                           @checked($locationVal === $loc)> {{ $loc }}
+                                </label>
+                            @endforeach
+                        </div>
                     </div>
                 </div>
 
@@ -253,16 +275,28 @@
 
                 {{-- Absensi Siswa per Nama --}}
                 <h6 class="fw-bold border-top pt-3 mb-2"><i class="fa-solid fa-user-check text-warning me-1"></i> Absensi Siswa (Wajib diisi per nama)</h6>
-                <p class="text-muted small mb-3">Tentukan kehadiran tiap siswa. Bila tidak ada siswa yang hadir, jurnal tetap wajib diisi dengan absensi Alpha/Izin/Sakit (jumlah hadir 0). Kolom Poin Sesi diisi hanya untuk siswa yang mendapat poin. Maksimal 1 siswa Kuning dan 1 siswa Merah per sesi; siswa yang tidak dipilih tidak mendapat poin.</p>
+                <p class="text-muted small mb-2">Tentukan kehadiran tiap siswa. Bila tidak ada siswa yang hadir, jurnal tetap wajib diisi dengan absensi Alpha/Izin/Sakit (jumlah hadir 0). Kolom Poin Sesi diisi hanya untuk siswa yang mendapat poin. Maksimal 1 siswa Kuning dan 1 siswa Merah per sesi; siswa yang tidak dipilih tidak mendapat poin.</p>
+
+                <div class="alert alert-light border small py-2 px-3 mb-3">
+                    <i class="fa-solid fa-book-open text-primary me-1"></i> <strong>Learning Material (Template Kurikulum):</strong>
+                    <div class="mt-1">
+                        @if ($curriculumMaterial)
+                            <div class="text-dark">{!! \App\Support\RichText::render($curriculumMaterial) !!}</div>
+                        @else
+                            <span class="text-muted">-</span>
+                        @endif
+                    </div>
+                </div>
 
                 <div class="table-responsive mb-3">
                     <table class="table table-bordered align-middle">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 30%;">Nama Siswa</th>
-                                <th style="width: 20%;">Status Kehadiran</th>
-                                <th style="width: 20%;" class="run-group">Poin Sesi</th>
-                                <th>Keterangan (Opsional)</th>
+                                <th style="width: 22%;">Nama Siswa</th>
+                                <th style="width: 16%;">Status Kehadiran</th>
+                                <th style="width: 16%;" class="run-group">Poin Sesi</th>
+                                <th style="width: 18%;">Achievement Level</th>
+                                <th style="width: 28%;">Description</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -301,13 +335,21 @@
                                         @endif
                                     </td>
                                     <td>
-                                        <input type="text" name="attendance_note[{{ $stId }}]" class="form-control form-control-sm"
-                                               placeholder="Catatan..." value="{{ $old("attendance_note.$stId", $attNote[$stId] ?? null) }}">
+                                        <select name="achievement_level[{{ $stId }}]" class="form-select form-select-sm">
+                                            <option value="">-- pilih --</option>
+                                            @foreach ($achievementLevels as $al)
+                                                <option value="{{ $al }}" @selected($old("achievement_level.$stId", $attAch[$stId] ?? null) === $al)>{{ $al }}</option>
+                                            @endforeach
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input type="text" name="description[{{ $stId }}]" class="form-control form-control-sm"
+                                               placeholder="Description..." value="{{ $old("description.$stId", $attDesc[$stId] ?? null) }}">
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="4" class="text-center text-muted py-3">Belum ada murid aktif yang terdaftar di kelas ini.</td>
+                                    <td colspan="5" class="text-center text-muted py-3">Belum ada murid aktif yang terdaftar di kelas ini.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -407,6 +449,7 @@
                     <span class="badge {{ $journal->class_status === 'Conducted' ? 'bg-success' : 'bg-secondary' }}">
                         {{ $journal->class_status === 'Conducted' ? 'Berjalan' : 'Tidak Berjalan' }}
                     </span>
+                    &middot; Lokasi: <span class="fw-semibold">{{ $journal->location ?? '-' }}</span>
                 </dd>
 
                 <dt class="col-sm-3">Fokus Materi</dt>

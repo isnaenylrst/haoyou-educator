@@ -201,14 +201,18 @@ class NotifikasiController extends Controller
             ->get();
 
         foreach ($tasks as $task) {
-            $className = $task->class->class_name ?? '-';
+            $className = $task->class->class_name ?? 'Tidak terkait kelas';
             $due = $task->due_date ? ' · batas ' . $task->due_date->translatedFormat('d M Y') : '';
             if ($task->is_overdue) {
                 $due .= ' · TERLAMBAT';
             }
 
+            $notifTitle = ($task->task_type === 'material_revision')
+                ? "Tugas perbaikan materi: {$task->title}"
+                : "Tugas perbaikan kelas {$className}: {$task->title}";
+
             $notifications->push([
-                'title' => "Tugas perbaikan kelas {$className}: {$task->title}",
+                'title' => $notifTitle,
                 'category' => 'Tugas dari Kurikulum' . $due,
                 'time' => $task->created_at,
                 'note' => $task->description,

@@ -135,13 +135,8 @@ class TugasKelasController extends Controller
             try {
                 DB::transaction(function () use ($data, $attachPath, $attachName) {
                     foreach ($data['teacher_ids'] as $teacherId) {
-                        // Cari kelas aktif/terdaftar yang diampu guru ini sebagai fallback bila class_id required di level schema
-                        $assignedClass = ClassModel::where('teacher_id', $teacherId)
-                            ->whereIn('status', ['Open', 'Running'])
-                            ->first() ?? ClassModel::where('teacher_id', $teacherId)->first() ?? ClassModel::first();
-
                         $task = ClassTask::create([
-                            'class_id'        => $assignedClass?->id,
+                            'class_id'        => null,
                             'teacher_id'      => $teacherId,
                             'task_type'       => 'material_revision',
                             'material_id'     => $data['material_id'] ?? null,
@@ -262,6 +257,7 @@ class TugasKelasController extends Controller
     public function update(Request $request, ClassTask $classTask)
     {
         $isOpen = $classTask->status === 'Open';
+        $isMaterialRevision = $classTask->task_type === 'material_revision';
 
         $rules = [
             'title'       => ['required', 'string', 'max:255'],
@@ -270,7 +266,7 @@ class TugasKelasController extends Controller
             'attachment'  => ['nullable', 'file', 'max:10240', 'mimes:pdf,doc,docx,jpg,jpeg,png'],
         ];
 
-        if ($isOpen) {
+        if ($isOpen && ! $isMaterialRevision) {
             $rules['class_id'] = ['required', 'integer', 'exists:classes,id'];
         }
 
@@ -291,40 +287,42 @@ class TugasKelasController extends Controller
                 return back()->withInput()->withErrors(['due_date' => self::MESSAGES['due_date.after_or_equal']]);
             }
 
-            $class = ClassModel::with('teacher')->find($data['class_id']);
+            if (! $isMaterialRevision) {
+                $class = ClassModel::with('teacher')->find($data['class_id']);
 
-            if (!$class || !$class->teacher_id) {
-                return back()->withInput()->withErrors([
-                    'class_id' => 'Kelas ini belum punya guru pengampu, tugas tidak bisa dikirim.',
-                ]);
-            }
+                if (!$class || !$class->teacher_id) {
+                    return back()->withInput()->withErrors([
+                        'class_id' => 'Kelas ini belum punya guru pengampu, tugas tidak bisa dikirim.',
+                    ]);
+                }
 
-            $classChanged = (int) $class->id !== (int) $classTask->class_id;
+                $classChanged = (int) $class->id !== (int) $classTask->class_id;
 
-            if ($classChanged && !in_array($class->status, ['Open', 'Running'], true)) {
-                return back()->withInput()->withErrors([
-                    'class_id' => 'Kelas tujuan harus berstatus Open atau Running.',
-                ]);
-            }
+                if ($classChanged && !in_array($class->status, ['Open', 'Running'], true)) {
+                    return back()->withInput()->withErrors([
+                        'class_id' => 'Kelas tujuan harus berstatus Open atau Running.',
+                    ]);
+                }
 
-            // Cegah tugas ganda yang masih terbuka
-            $duplicate = ClassTask::open()
-                ->where('class_id', $class->id)
-                ->where('title', $attrs['title'])
-                ->where('id', '!=', $classTask->id)
-                ->exists();
+                // Cegah tugas ganda yang masih terbuka
+                $duplicate = ClassTask::open()
+                    ->where('class_id', $class->id)
+                    ->where('title', $attrs['title'])
+                    ->where('id', '!=', $classTask->id)
+                    ->exists();
 
-            if ($duplicate) {
-                return back()->withInput()->withErrors([
-                    'title' => 'Tugas dengan judul yang sama untuk kelas ini masih terbuka.',
-                ]);
-            }
+                if ($duplicate) {
+                    return back()->withInput()->withErrors([
+                        'title' => 'Tugas dengan judul yang sama untuk kelas ini masih terbuka.',
+                    ]);
+                }
 
-            $attrs['class_id']   = $class->id;
-            $attrs['teacher_id'] = $class->teacher_id;   // ikut guru pengampu terbaru
+                $attrs['class_id']   = $class->id;
+                $attrs['teacher_id'] = $class->teacher_id;   // ikut guru pengampu terbaru
 
-            if ($classChanged || (int) $class->teacher_id !== (int) $classTask->teacher_id) {
-                $message = 'Tugas diperbarui dan dikirim ke ' . ($class->teacher->name ?? 'guru pengampu') . '.';
+                if ($classChanged || (int) $class->teacher_id !== (int) $classTask->teacher_id) {
+                    $message = 'Tugas diperbarui dan dikirim ke ' . ($class->teacher->name ?? 'guru pengampu') . '.';
+                }
             }
         }
 
@@ -359,8 +357,13 @@ class TugasKelasController extends Controller
         ], self::MESSAGES);
 
         $class = $classTask->class;
-        if (!$class || !$class->teacher_id) {
-            return back()->with('error', 'Kelas ini belum punya guru pengampu.');
+        $teacherId = $classTask->teacher_id;
+
+        if ($classTask->task_type !== 'material_revision') {
+            if (!$class || !$class->teacher_id) {
+                return back()->with('error', 'Kelas ini belum punya guru pengampu.');
+            }
+            $teacherId = $class->teacher_id;
         }
 
         // Alasan ditambahkan ke deskripsi agar terbaca guru di Notifikasi
@@ -373,7 +376,7 @@ class TugasKelasController extends Controller
             'status'       => 'Open',
             'done_at'      => null,
             'teacher_note' => null,
-            'teacher_id'   => $class->teacher_id,
+            'teacher_id'   => $teacherId,
             'description'  => mb_substr(trim(($classTask->description ?? '') . $append), 0, 4000),
         ]);
 

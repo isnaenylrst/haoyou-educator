@@ -147,21 +147,41 @@ class ProgressReportController extends Controller
         return view('guru.progress-report', compact('classes', 'classId', 'students', 'history', 'templateMissing', 'templateName', 'templateMessage'));
     }
 
+    /**
+     * Ambil data absensi jurnal untuk siswa ini per nomor pertemuan,
+     * sebagai prefill achievement_level & description (atau note bila description kosong).
+     */
+    private function journalAttendanceForStudent(int $classId, int $studentId): \Illuminate\Support\Collection
+    {
+        return DB::table('attendances as a')
+            ->join('teaching_journals as j', 'j.id', '=', 'a.teaching_journal_id')
+            ->where('j.class_id', $classId)
+            ->where('a.student_id', $studentId)
+            ->orderBy('j.meeting_number')
+            ->select('j.meeting_number', 'a.achievement_level', 'a.description', 'a.note')
+            ->get()
+            ->keyBy(fn ($row) => (string) (int) $row->meeting_number);
+    }
+
     /** Baris awal editor (hanya bila template tidak diwajibkan): report tersimpan, jurnal mengajar, lalu satu baris kosong. */
     private function initialRows(object $e, ?ProgressReport $report): array
     {
         $dates = ProgressReportDocument::meetingDatesForClass($e->class_id);
+        $journalAtts = $this->journalAttendanceForStudent($e->class_id, $e->student_id);
 
         if ($report && !empty($report->content)) {
-            return collect($report->content)->map(function ($r, $i) use ($dates) {
+            return collect($report->content)->map(function ($r, $i) use ($dates, $journalAtts) {
                 $mNum = $r['meeting'] ?? ($i + 1);
                 $mKey = (string) (int) $mNum;
+                $jAtt = $journalAtts->get($mKey);
+                $jDesc = $jAtt?->description ?: ($jAtt?->note ?? '');
+
                 return [
                     'meeting'      => $mNum,
                     'meeting_date' => $dates->get($mKey) ?? ($r['meeting_date'] ?? '-'),
                     'material'     => $r['material'] ?? '',
-                    'level'        => $r['level'] ?? '',
-                    'description'  => $r['description'] ?? '',
+                    'level'        => !empty($r['level']) ? $r['level'] : ($jAtt?->achievement_level ?? ''),
+                    'description'  => !empty($r['description']) ? $r['description'] : $jDesc,
                 ];
             })->values()->all();
         }
@@ -173,38 +193,47 @@ class ProgressReportController extends Controller
             ->get(['j.meeting_number', 'j.material_taught', 'j.learning_activities', 'm.title as material_title']);
 
         if ($journals->isNotEmpty()) {
-            return $journals->values()->map(function ($j, $i) use ($dates) {
+            return $journals->values()->map(function ($j, $i) use ($dates, $journalAtts) {
                 $mNum = $j->meeting_number ?: ($i + 1);
                 $mKey = (string) (int) $mNum;
+                $jAtt = $journalAtts->get($mKey);
+                $jDesc = $jAtt?->description ?: ($jAtt?->note ?? '');
+
                 return [
                     'meeting'      => $mNum,
                     'meeting_date' => $dates->get($mKey) ?? '-',
                     'material'     => trim((string) ($j->material_taught ?: ($j->material_title ?: $j->learning_activities))),
-                    'level'        => '',
-                    'description'  => '',
+                    'level'        => $jAtt?->achievement_level ?? '',
+                    'description'  => $jDesc,
                 ];
             })->all();
         }
 
-        return [['meeting' => 1, 'meeting_date' => $dates->get('1') ?? '-', 'material' => '', 'level' => '', 'description' => '']];
+        $jAtt1 = $journalAtts->get('1');
+        $jDesc1 = $jAtt1?->description ?: ($jAtt1?->note ?? '');
+
+        return [['meeting' => 1, 'meeting_date' => $dates->get('1') ?? '-', 'material' => '', 'level' => $jAtt1?->achievement_level ?? '', 'description' => $jDesc1]];
     }
 
-    /** Baris editor dari template Kurikulum; level & description diambil dari isian guru yang sudah tersimpan. */
-    private function templateRows(ProgressReportTemplate $template, ?ProgressReport $report, ?int $classId = null): array
+    /** Baris editor dari template Kurikulum; level & description diambil dari isian guru yang sudah tersimpan atau dari jurnal. */
+    private function templateRows(ProgressReportTemplate $template, ?ProgressReport $report, ?int $classId = null, ?int $studentId = null): array
     {
         $saved = collect($report?->content ?? [])->keyBy(fn ($r) => (string) (int) ($r['meeting'] ?? 0));
         $dates = ProgressReportDocument::meetingDatesForClass($classId);
+        $journalAtts = ($classId && $studentId) ? $this->journalAttendanceForStudent($classId, $studentId) : collect();
 
-        return $template->meetings->map(function ($m) use ($saved, $dates) {
+        return $template->meetings->map(function ($m) use ($saved, $dates, $journalAtts) {
             $mKey = (string) $m->meeting_number;
             $old = $saved->get($mKey, []);
+            $jAtt = $journalAtts->get($mKey);
+            $jDesc = $jAtt?->description ?: ($jAtt?->note ?? '');
 
             return [
                 'meeting'      => $m->meeting_number,
                 'meeting_date' => $dates->get($mKey) ?? ($old['meeting_date'] ?? '-'),
                 'material'     => $m->materials,   // dikunci: dari Kurikulum
-                'level'        => $old['level'] ?? '',
-                'description'  => $old['description'] ?? '',
+                'level'        => !empty($old['level']) ? $old['level'] : ($jAtt?->achievement_level ?? ''),
+                'description'  => !empty($old['description']) ? $old['description'] : $jDesc,
             ];
         })->values()->all();
     }
@@ -263,7 +292,7 @@ class ProgressReportController extends Controller
             'method'     => 'POST',
             'backUrl'    => route('teacher.progress-report', ['class_id' => $e->class_id]),
             'header'     => $header,
-            'rows'       => $template ? $this->templateRows($template, $report, $e->class_id) : $this->initialRows($e, $report),
+            'rows'       => $template ? $this->templateRows($template, $report, $e->class_id, $e->student_id) : $this->initialRows($e, $report),
             'assessments' => $assessments,
             'overall'    => $report->overall_achievement_level ?? 'Proficient',
             'suggestion' => $report->suggestion_box ?? '',

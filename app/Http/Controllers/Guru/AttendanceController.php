@@ -338,6 +338,7 @@ class AttendanceController extends Controller
             'end_time'              => ['required', 'date_format:H:i', 'after:start_time'],
             'course_type'           => ['nullable', 'string', 'max:100'],
             'course_level'          => ['nullable', 'string', 'max:100'],
+            'location'              => ['required', 'string', 'in:Di Haoyou,Visit ke rumah'],
             'class_running'         => ['required', 'in:Berjalan,Tidak Berjalan'],
             'focus_materials'       => [$req, 'array'],
             'focus_materials.*'     => ['string', 'max:100'],
@@ -355,6 +356,10 @@ class AttendanceController extends Controller
             ])))],
             'attendance_note'       => ['nullable', 'array'],
             'attendance_note.*'     => ['nullable', 'string', 'max:255'],
+            'achievement_level'     => ['nullable', 'array'],
+            'achievement_level.*'   => ['nullable', 'string', 'in:Sufficient,Proficient,Excellent'],
+            'description'           => ['nullable', 'array'],
+            'description.*'         => ['nullable', 'string', 'max:5000'],
         ]);
     }
 
@@ -372,6 +377,7 @@ class AttendanceController extends Controller
             'meeting_number'        => $data['meeting_number'],
             'course_type'           => $data['course_type'] ?? 'Regular',
             'course_level'          => $data['course_level'] ?? null,
+            'location'              => $data['location'] ?? null,
             'class_status'          => $running ? 'Conducted' : 'Cancelled',
             'focus_materials'       => $data['focus_materials'] ?? [],
             'material_taught'       => $data['material_taught'] ?? null,
@@ -385,6 +391,11 @@ class AttendanceController extends Controller
     private function saveAttendances(TeachingJournal $journal, iterable $studentIds, array $data): void
     {
         foreach ($studentIds as $sid) {
+            $desc = $data['description'][$sid] ?? null;
+            if ($desc === null || $desc === '') {
+                $desc = $data['attendance_note'][$sid] ?? null;
+            }
+
             Attendance::create([
                 'teaching_journal_id' => $journal->id,
                 'student_id'          => $sid,
@@ -392,6 +403,8 @@ class AttendanceController extends Controller
                 'session_date'        => $data['session_date'],
                 'status'              => $data['attendance'][$sid] ?? 'Absent',
                 'note'                => $data['attendance_note'][$sid] ?? null,
+                'achievement_level'   => $data['achievement_level'][$sid] ?? null,
+                'description'         => $desc,
             ]);
         }
     }
@@ -551,6 +564,9 @@ class AttendanceController extends Controller
                 ));
             }
 
+            // Sinkron ke Progress Report untuk siswa-siswa di kelas ini (hanya yang statusnya Draft dan tidak menimpa data yang sudah ada)
+            $this->syncToProgressReports($journal);
+
         } catch (\DomainException $e) {
             // batas poin terlewati (mis. admin menginput bersamaan): jurnal dibatalkan, tidak ada yang tersimpan
             return back()->withInput()->with('error', $e->getMessage());
@@ -634,6 +650,9 @@ class AttendanceController extends Controller
                     icon: 'fa-book-open'
                 ));
             }
+
+            // Sinkron ke Progress Report untuk siswa-siswa di kelas ini
+            $this->syncToProgressReports($journal);
         } catch (\Throwable $e) {
             report($e);
 
@@ -711,6 +730,66 @@ class AttendanceController extends Controller
     }
 
     // ------------------------------------------------------------------ PDF
+
+    /**
+     * Sinkron data absensi jurnal ke Progress Report guru.
+     * Mengisi ulang jurnal hanya mengisi yang masih kosong di progress report (tidak menimpa edit manual).
+     * Progress report berstatus Diajukan / Disetujui tidak berubah otomatis.
+     */
+    private function syncToProgressReports(TeachingJournal $journal): void
+    {
+        $classId = (int) $journal->class_id;
+        $meetingNo = (int) $journal->meeting_number;
+        if (! $classId || ! $meetingNo) {
+            return;
+        }
+
+        $attendances = $journal->attendances()->get()->keyBy('student_id');
+        if ($attendances->isEmpty()) {
+            return;
+        }
+
+        $enrollments = DB::table('class_enrollments')
+            ->where('class_id', $classId)
+            ->whereIn('student_id', $attendances->keys())
+            ->pluck('id', 'student_id');
+
+        foreach ($enrollments as $studentId => $enrollmentId) {
+            $att = $attendances->get($studentId);
+            if (! $att) {
+                continue;
+            }
+
+            $report = \App\Models\ProgressReport::where('enrollment_id', $enrollmentId)->latest('id')->first();
+            // Hanya draft yang disinkronkan. Diajukan / Disetujui (Submitted, Published) tidak disentuh.
+            if (! $report || $report->status !== 'Draft' || empty($report->content)) {
+                continue;
+            }
+
+            $content = (array) $report->content;
+            $updated = false;
+
+            foreach ($content as $idx => $row) {
+                $rowMeeting = (int) ($row['meeting'] ?? ($idx + 1));
+                if ($rowMeeting === $meetingNo) {
+                    // Hanya isi yang masih kosong di progress report (tidak menimpa edit manual)
+                    if (empty($row['level']) && ! empty($att->achievement_level)) {
+                        $content[$idx]['level'] = $att->achievement_level;
+                        $updated = true;
+                    }
+                    $attDesc = $att->description ?: $att->note;
+                    if (empty($row['description']) && ! empty($attDesc)) {
+                        $content[$idx]['description'] = $attDesc;
+                        $updated = true;
+                    }
+                }
+            }
+
+            if ($updated) {
+                $report->update(['content' => $content]);
+            }
+        }
+    }
 
     public function pdf(TeachingJournal $journal)
     {

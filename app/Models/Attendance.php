@@ -18,6 +18,8 @@ class Attendance extends Model
         'session_date',
         'status',
         'note',
+        'achievement_level',
+        'description',
     ];
 
     // attendance_date dipakai Monitoring Kurikulum, session_date dipakai jurnal.
