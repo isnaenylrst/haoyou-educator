@@ -180,6 +180,9 @@
                                         <div class="cand-sub" style="color: {{ $kelas->zoom_link ? '#16a34a' : '#dc2626' }};">
                                             {{ $kelas->zoom_link ? 'Zoom ✓' : 'Belum ada link kelas' }}
                                         </div>
+                                    @elseif (isset($roomMissing[$kelas->id]))
+                                        {{-- Kelas offline yang ruangannya belum diisi (private dari convert); isi lewat Ubah Jadwal --}}
+                                        <div class="cand-sub" style="color:#dc2626;">Ruangan belum diisi</div>
                                     @endif
                                 </div>
                             </div>

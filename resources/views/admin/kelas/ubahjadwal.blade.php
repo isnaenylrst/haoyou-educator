@@ -177,6 +177,23 @@
                         <span class="form-hint">Pertemuan ini sudah Home Visit dan sudah dibayar. Pindah jadwal tidak dikenai biaya lagi.</span>
                     </div>
 
+                    {{-- Lokasi pertemuan yang home visit-nya sudah dibayar: boleh pindah ke kantor/online tanpa biaya baru, tanpa pengembalian --}}
+                    <div class="form-field full" id="rs_loc_wrap" style="display:none;">
+                        <label>Lokasi pertemuan</label>
+                        <div class="form-radio-group">
+                            <label class="form-radio">
+                                <input type="radio" name="rs_loc" value="Home Visit" onchange="refreshHomeVisitUi()"> Home Visit
+                            </label>
+                            <label class="form-radio">
+                                <input type="radio" name="rs_loc" value="Studio" onchange="refreshHomeVisitUi()"> Kantor (Studio)
+                            </label>
+                            <label class="form-radio">
+                                <input type="radio" name="rs_loc" value="Online" onchange="refreshHomeVisitUi()"> Online
+                            </label>
+                        </div>
+                        <span class="form-hint">Biaya home visit pertemuan ini sudah dibayar dan tidak dikembalikan. Pindah ke kantor atau online, atau kembali ke Home Visit, tidak dikenai biaya lagi.</span>
+                    </div>
+
                     <div class="form-field full" id="rs_hv_wrap" style="display:none;">
                         <label>Home Visit (guru datang ke rumah)</label>
                         <div class="form-radio-group">
@@ -735,6 +752,10 @@
         pd.value = todayIso();
         document.getElementById('rs_pay_method').value = 'Transfer Bank';
         document.getElementById('rs_pay_proof').value = '';
+
+        // Lokasi awal = lokasi pertemuan sekarang
+        const cur = rsSession && document.querySelector(`input[name="rs_loc"][value="${rsSession.location_type}"]`);
+        if (cur) cur.checked = true;
     }
 
     function refreshHomeVisitUi() {
@@ -765,9 +786,15 @@
         const on = offered && selectedHv() === '1';
         document.querySelectorAll('.rs-hv-field').forEach(el => el.style.display = on ? '' : 'none');
 
-        // Ruangan tidak relevan kalau pertemuan jadi Home Visit
-        const isStudio = s.location_type === 'Studio';
-        document.getElementById('rs_room_field').style.display = (isStudio && ! on) ? '' : 'none';
+        // Pilihan lokasi: hanya untuk pertemuan yang home visit-nya sudah dibayar, dan hanya satu pertemuan
+        const hvPaid = !! s.hv_paid && ! following;
+        document.getElementById('rs_loc_wrap').style.display = hvPaid ? '' : 'none';
+
+        const locEl = document.querySelector('input[name="rs_loc"]:checked');
+        const loc   = (hvPaid && locEl) ? locEl.value : s.location_type;
+
+        // Ruangan hanya untuk pertemuan di studio (dan tidak relevan kalau baru dijadikan Home Visit)
+        document.getElementById('rs_room_field').style.display = (loc === 'Studio' && ! on) ? '' : 'none';
     }
 
     function showRescheduleError(messages) {
@@ -820,8 +847,23 @@
             form.append('payment_date', document.getElementById('rs_pay_date').value);
             form.append('payment_method', document.getElementById('rs_pay_method').value);
             form.append('proof', proof);
-        } else if (s.location_type === 'Studio') {
-            form.append('room', canonicalRoom(document.getElementById('rs_room').value.trim()));
+        } else {
+            const hvPaid = !! s.hv_paid && ! following;
+            const locEl  = document.querySelector('input[name="rs_loc"]:checked');
+            const loc    = (hvPaid && locEl) ? locEl.value : s.location_type;
+            const room   = canonicalRoom(document.getElementById('rs_room').value.trim());
+
+            if (hvPaid && loc !== s.location_type) {
+                form.append('location_type', loc);
+            }
+
+            if (loc === 'Studio') {
+                if (! room) {
+                    showRescheduleError(['Pilih ruangan untuk pertemuan di kantor.']);
+                    return;
+                }
+                form.append('room', room);
+            }
         }
 
         const btn = document.getElementById('rs_submit');

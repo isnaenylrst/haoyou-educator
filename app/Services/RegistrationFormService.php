@@ -69,8 +69,7 @@ class RegistrationFormService
             'termin2_tanggal'  => 'Termin 2: tanggal',
             'termin3_nominal'  => 'Termin 3: nominal (rencana jadwal, atau yang sudah dibayar)',
             'termin3_tanggal'  => 'Termin 3: tanggal',
-            'tabel_pembayaran' => 'Tabel pembayaran gabungan (Rincian | Jatuh Tempo | Nominal: pendaftaran, aktivitas, lalu Lunas atau Termin 1..N)',
-            'tabel_termin'     => 'Tabel semua termin saja (format lama, dipertahankan untuk template yang sudah diedit)',
+            'tabel_termin'     => 'Tabel semua termin (otomatis sebanyak jumlah termin: nomor, nominal, tanggal)',
         ],
     ];
 
@@ -163,15 +162,10 @@ class RegistrationFormService
         $manual = is_array($enrollment->form_manual) ? $enrollment->form_manual : [];
         $values = $this->applyManual($this->valuesFor($student, $enrollment), $manual);
 
-        // Tabel pembayaran dibuat setelah tanggal manual (jatuh tempo dari admin) diterapkan
-        $isTermin    = $enrollment->payment_scheme === 'Termin';
-        $terminCount = $isTermin ? $this->installments()->terminCountFor($enrollment) : 0;
-
-        // Tabel gabungan: Pendaftaran, Aktivitas, lalu Lunas atau Termin 1..N dalam satu tabel
-        $values['tabel_pembayaran'] = $this->paymentTable($values, $isTermin, $terminCount);
-
-        // Format lama (tabel termin terpisah), tetap diisi supaya template yang sudah diedit admin tidak rusak
-        $values['tabel_termin'] = $isTermin ? $this->terminTable($values, $terminCount) : '';
+        // Tabel semua termin (sebanyak jumlah termin pilihan admin), dibuat setelah tanggal manual diterapkan
+        $values['tabel_termin'] = $enrollment->payment_scheme === 'Termin'
+            ? $this->terminTable($values, $this->installments()->terminCountFor($enrollment))
+            : '';
 
         // Tabel pembayaran formulir reguler mengikuti skema siswa (Termin atau Lunas)
         return $this->toPdf($this->render(
@@ -474,13 +468,6 @@ class RegistrationFormService
 
         $values['tabel_termin'] = $this->terminTable($sample, 3);
 
-        foreach (['dp_pendaftaran', 'dp_aktivitas', 'termin1_lunas'] as $prefix) {
-            $sample[$prefix . '_tanggal'] = '[Tanggal]';
-            $sample[$prefix . '_nominal'] = '[Nominal]';
-        }
-
-        $values['tabel_pembayaran'] = $this->paymentTable($sample, true, 3);
-
         return $values;
     }
 
@@ -498,57 +485,6 @@ class RegistrationFormService
     private function rupiah(float $amount): string
     {
         return 'Rp' . number_format($amount, 0, ',', '.');
-    }
-
-    /**
-     * Tabel pembayaran gabungan (satu tabel): Rincian Pembayaran | Jatuh Tempo | Nominal.
-     * Baris: Biaya Pendaftaran, Biaya Aktivitas, lalu "Lunas" (skema Lunas) atau Termin 1..N (skema Termin,
-     * sebanyak $terminCount). Tanggal = jatuh tempo yang diinput admin saat konversi (form_manual);
-     * kalau tidak diisi, tetap memakai tanggal otomatis seperti sebelumnya.
-     * Nilai di $values sudah berformat (rupiah / d/m/Y), jadi aman dimasukkan ke HTML.
-     */
-    private function paymentTable(array $values, bool $termin, int $terminCount): string
-    {
-        $lines = [
-            ['Biaya Pendaftaran', 'dp_pendaftaran'],
-            ['Biaya Aktivitas', 'dp_aktivitas'],
-        ];
-
-        if ($termin) {
-            for ($n = 1; $n <= $terminCount; $n++) {
-                $lines[] = ['Termin ' . $n, 'termin' . $n];
-            }
-        } else {
-            $lines[] = ['Lunas', 'termin1_lunas'];
-        }
-
-        // Baris dipadatkan kalau terlalu banyak supaya formulir tidak meluber ke halaman berikutnya
-        $height = count($lines) <= 6 ? 26 : 18;
-
-        $base  = 'border:1px solid #000;padding:2px 6px;vertical-align:middle;text-align:center;';
-        $head  = $base . 'background:#e6e6e6;font-weight:bold;font-size:12pt;';
-        $cell  = $base . 'height:' . $height . 'px;';
-        $label = $cell . 'text-align:left;font-weight:bold;';
-
-        $rows = '';
-
-        foreach ($lines as [$name, $prefix]) {
-            $tanggal = $values[$prefix . '_tanggal'] ?? '';
-            $nominal = $values[$prefix . '_nominal'] ?? '';
-
-            $rows .= '<tr>'
-                . '<td style="' . $label . '">' . $name . '</td>'
-                . '<td style="' . $cell . '">' . ($tanggal === '' ? '&nbsp;' : $tanggal) . '</td>'
-                . '<td style="' . $cell . '">' . ($nominal === '' ? '&nbsp;' : $nominal) . '</td>'
-                . '</tr>';
-        }
-
-        return '<table style="width:100%;border-collapse:collapse;margin-bottom:8px;">'
-            . '<tr>'
-            . '<th style="' . $head . 'width:34%;text-align:left;">Rincian Pembayaran</th>'
-            . '<th style="' . $head . 'width:33%;">Jatuh Tempo</th>'
-            . '<th style="' . $head . 'width:33%;">Nominal</th>'
-            . '</tr>' . $rows . '</table>';
     }
 
     /**

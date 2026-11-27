@@ -460,6 +460,19 @@ class KelasController extends Controller
             ->get()
             ->keyBy('class_id');
 
+        // ---- Kelas yang punya pertemuan Studio mendatang tanpa ruangan (kelas private dari convert) ----
+        // Home Visit tidak ikut dihitung: lokasinya memang bukan studio.
+        $roomMissing = ClassSession::query()
+            ->whereIn('class_id', $classes->pluck('id'))
+            ->where('kind', 'Regular')
+            ->where('status', 'Scheduled')
+            ->whereDate('session_date', '>=', today())
+            ->where('location_type', 'Studio')
+            ->where(fn ($q) => $q->whereNull('room')->orWhere('room', ''))
+            ->distinct()
+            ->pluck('class_id')
+            ->flip();
+
         // ---- Statistik: hanya kelas aktif (Open & Running), tidak terpengaruh filter ----
         $activeClasses = ClassModel::query()
             ->whereIn('status', self::ACTIVE_STATUSES)
@@ -489,6 +502,7 @@ class KelasController extends Controller
         return view('admin.kelas.index', compact(
             'classes',
             'meetingProgress',
+            'roomMissing',
             'programs',
             'teachers',
             'kelasAktif',
@@ -1218,7 +1232,10 @@ class KelasController extends Controller
                 'can_following'  => $s->kind === 'Regular' && (bool) $s->schedule?->isCurrent(),
                 'can_complete'   => $s->canBeCompleted(),
                 // Home visit hanya untuk kelas private
-                'can_home_visit' => $s->canBecomeHomeVisit() && (bool) $kelas->private_package_id,
+                'hv_paid'        => $s->payments->contains('payment_type', \App\Models\Payment::TYPE_HOME_VISIT),
+                'can_home_visit' => $s->canBecomeHomeVisit()
+                    && (bool) $kelas->private_package_id
+                    && ! $s->payments->contains('payment_type', \App\Models\Payment::TYPE_HOME_VISIT),
 
                 // Pertemuan yang sudah berlangsung: sudah ditandai selesai ATAU sudah punya jurnal
                 'started'        => $s->status === 'Completed' || $s->journal !== null,
@@ -1300,6 +1317,9 @@ class KelasController extends Controller
             'reason'                       => ['nullable', 'string', 'max:255'],
             'confirm_outside_availability' => ['nullable', 'boolean'],
 
+            // Ganti lokasi pertemuan yang home visit-nya sudah dibayar (tanpa biaya baru, tanpa pengembalian)
+            'location_type'                => ['nullable', Rule::in(['Studio', 'Online', 'Home Visit'])],
+
             // Home visit (opsional)
             'home_visit'          => ['nullable', 'boolean'],
             'payer_enrollment_id' => [Rule::requiredIf($wantsHv), 'nullable', 'integer', 'exists:class_enrollments,id'],
@@ -1347,6 +1367,15 @@ class KelasController extends Controller
             }
         }
 
+        // Ganti lokasi hanya untuk satu pertemuan, dan bukan bersamaan dengan membeli home visit baru
+        $newLocation = (! $wantsHv && ! empty($data['location_type'])) ? $data['location_type'] : null;
+
+        if ($newLocation && $data['scope'] !== 'one') {
+            throw ValidationException::withMessages([
+                'location_type' => 'Lokasi hanya bisa diubah untuk "Pertemuan ini saja".',
+            ]);
+        }
+
         // "Seterusnya": admin memilih hari. Tanggal pertemuan yang diklik = hari itu di minggu yang sama
         // (pertemuan sesudahnya mengikuti di service dengan aturan yang sama).
         if ($data['scope'] === 'following') {
@@ -1366,12 +1395,18 @@ class KelasController extends Controller
             'scope', 'session_date', 'day', 'start_time', 'room', 'reason', 'confirm_outside_availability',
         ]);
 
+        // Ruangan baru dipakai saat lokasi diganti ke Studio, bukan saat memindah jadwal
+        $locationRoom = $reschedule['room'] ?? null;
+        if ($newLocation) {
+            unset($reschedule['room']);
+        }
+
         $proofPath = $wantsHv ? $request->file('proof')->store('payment-proofs', 'public') : null;
         $count     = 1;
         $journalCount = 0;
 
         try {
-            DB::transaction(function () use ($wantsHv, $classSession, $payer, $data, $proofPath, $reschedule, &$count, &$journalCount) {
+            DB::transaction(function () use ($wantsHv, $classSession, $payer, $data, $proofPath, $reschedule, $newLocation, $locationRoom, &$count, &$journalCount) {
                 // Bayar dulu, baru dijadwalkan
                 if ($wantsHv) {
                     $this->sessionSvc->makeHomeVisitMany([$classSession->id], $payer, [
@@ -1385,7 +1420,20 @@ class KelasController extends Controller
 
                 if ($data['scope'] === 'one') {
                     $hasJournal = $classSession->journal()->exists();
+
+                    // Ke Home Visit/Online dulu baru pindah jadwal (tidak perlu cek ruangan).
+                    // Ke Studio: pindah jadwal dulu, ruangan dicek di tanggal dan jam yang baru.
+                    if ($newLocation && $newLocation !== 'Studio') {
+                        $this->sessionSvc->changeLocation($classSession, $newLocation);
+                        $classSession->refresh();
+                    }
+
                     $this->rescheduleSvc->rescheduleOne($classSession, $reschedule);
+
+                    if ($newLocation === 'Studio') {
+                        $this->sessionSvc->changeLocation($classSession->refresh(), 'Studio', $locationRoom);
+                    }
+
                     $journalCount = $hasJournal ? 1 : 0;
                 } else {
                     $oldScheduleId = $classSession->class_schedule_id;
@@ -1412,6 +1460,10 @@ class KelasController extends Controller
             $message = "Jadwal {$count} pertemuan (ini dan seterusnya) berhasil dipindah ke hari {$data['day']}. Jadwal guru, kurikulum"
                 . ($journalCount > 0 ? ", dan {$journalCount} jurnal" : '')
                 . ' ikut diperbarui.';
+        }
+
+        if ($newLocation) {
+            $message .= " Lokasi pertemuan diubah ke {$newLocation}. Biaya home visit yang sudah dibayar tetap tercatat lunas dan tidak dikembalikan.";
         }
 
         if ($wantsHv) {

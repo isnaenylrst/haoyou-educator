@@ -2,114 +2,120 @@
 
 namespace App\Services;
 
-use App\Models\ClassEnrollment;
-use App\Models\ClassSession;
+use App\Models\Student;
 use Illuminate\Support\Carbon;
 
 /**
- * Satu-satunya tempat yang menghitung masa Cuti dan Expired sebuah enrollment.
- * Status siswa, Retention Rate, dan formulir pendaftaran memakai service ini
- * supaya aturannya tidak berbeda-beda.
+ * Status siswa mengikuti kondisi kelas:
+ *   Active    (Aktif) : masih punya kelas berjalan / menunggu kelas, atau paket private belum expired
+ *   Inactive  (Cuti)  : masa cuti berjalan (hitungan masa cuti ada di EnrollmentExpiryService)
+ *   Graduated (Lulus) : masa cuti habis (expired)
  *
- * PRIVATE
- *   - Expired date paket = tanggal pertemuan pertama + 1 bulan kalender
- *     (tidak melihat tanggal pertemuan terakhir / kelas selesai).
- *   - Cuti mulai di expired date paket, berlaku 1 bulan kalender.
- *   - Expired (Lulus) mulai tepat 1 bulan kalender setelah cuti mulai.
- *     Contoh: pertemuan pertama 1 Nov -> cuti 1 Des -> expired 1 Jan.
- *
- * REGULER
- *   - Cuti mulai sehari setelah kelas berakhir, berlaku 1 bulan kalender.
- *   - Expired mulai sehari setelah masa cuti habis.
- *     Contoh: kelas berakhir 26 Jan -> cuti 27 Jan s/d 26 Feb -> expired 27 Feb.
+ * Private : cuti mulai di expired date paket (pertemuan pertama + 1 bulan), expired 1 bulan setelahnya.
+ * Reguler : cuti mulai sehari setelah kelas berakhir, 1 bulan, lalu expired.
  */
-class EnrollmentExpiryService
+class StudentStatusService
 {
-    /**
-     * Tanggal pertemuan pertama enrollment (pertemuan Regular pertama pada/setelah
-     * tanggal daftar; kalau tidak ada, pertemuan Regular paling awal di kelas itu).
-     */
-    public function firstSessionDate(ClassEnrollment $enrollment): ?Carbon
+    /** @deprecated Tidak dipakai lagi untuk status; aturan ada di EnrollmentExpiryService. */
+    public const GRACE_DAYS = 30;
+
+    public function __construct(private ?EnrollmentExpiryService $expiry = null)
     {
-        if (! $enrollment->class_id) {
+    }
+
+    private function expiry(): EnrollmentExpiryService
+    {
+        return $this->expiry ??= new EnrollmentExpiryService();
+    }
+
+    /** Status yang seharusnya, atau null kalau tidak bisa ditentukan (belum punya riwayat kelas). */
+    public function resolve(Student $student): ?string
+    {
+        $enrollments = $student->enrollments()
+            ->with('class:id,status,end_date')
+            ->where('status', '!=', 'Cancelled')
+            ->get();
+
+        if ($enrollments->isEmpty()) {
             return null;
         }
 
-        $base = ClassSession::where('class_id', $enrollment->class_id)->where('kind', 'Regular');
+        $ongoing = $enrollments->contains(function ($e) {
+            if ($e->status === 'Waiting Class') {
+                return true;
+            }
 
-        $session = (clone $base)
-            ->whereDate('session_date', '>=', $enrollment->enrollment_date?->toDateString() ?? now()->toDateString())
-            ->orderBy('session_date')
-            ->first()
-            ?? $base->orderBy('session_date')->first();
+            if ($e->status !== 'Active') {
+                return false;
+            }
 
-        return $session ? Carbon::parse($session->session_date)->startOfDay() : null;
-    }
+            $class = $e->class;
 
-    /**
-     * Expired date paket private = pertemuan pertama + 1 bulan kalender.
-     * Null untuk paket reguler atau private yang belum punya pertemuan.
-     *
-     * @param Carbon|null $firstSession  isi kalau pemanggil sudah punya tanggal pertemuan pertama
-     */
-    public function packageExpiry(ClassEnrollment $enrollment, ?Carbon $firstSession = null): ?Carbon
-    {
-        if (! $enrollment->private_package_id) {
+            if (! $class) {
+                return true;
+            }
+
+            $end = $class->end_date ? Carbon::parse($class->end_date) : null;
+
+            return in_array($class->status, ['Open', 'Running'], true)
+                && (! $end || $end->gte(today()));
+        });
+
+        if ($ongoing) {
+            return 'Active';
+        }
+
+        // Masa cuti dan expired tiap enrollment; yang dipakai adalah enrollment dengan expired paling akhir
+        $latest = $enrollments
+            ->map(fn ($e) => $this->expiry()->windows($e))
+            ->filter()
+            ->sortByDesc(fn ($w) => $w['expired_start']->timestamp)
+            ->first();
+
+        if (! $latest) {
             return null;
         }
 
-        $first = $firstSession?->copy()->startOfDay() ?? $this->firstSessionDate($enrollment);
+        $today = today();
 
-        return $first?->copy()->addMonthNoOverflow();
-    }
-
-    /** Tanggal kelas terakhir: akhir kelas, atau (data historis tanpa kelas) last_class_date. */
-    public function lastClassDate(ClassEnrollment $enrollment): ?Carbon
-    {
-        $date = $enrollment->class?->end_date ?? $enrollment->last_class_date;
-
-        return $date ? Carbon::parse($date)->startOfDay() : null;
-    }
-
-    /**
-     * Awal masa cuti dan awal expired untuk satu enrollment.
-     * Null kalau belum bisa ditentukan (tidak ada tanggal pertemuan pertama / kelas terakhir).
-     *
-     * @return array{leave_start: Carbon, expired_start: Carbon, basis: string}|null
-     */
-    public function windows(ClassEnrollment $enrollment): ?array
-    {
-        $expiry = $this->packageExpiry($enrollment);
-
-        if ($expiry) {
-            return [
-                'leave_start'   => $expiry,
-                'expired_start' => $expiry->copy()->addMonthNoOverflow(),
-                'basis'         => 'private',
-            ];
+        if ($today->gte($latest['expired_start'])) {
+            return 'Graduated';
         }
 
-        $end = $this->lastClassDate($enrollment);
-
-        if (! $end) {
-            return null;
-        }
-
-        return [
-            'leave_start'   => $end->copy()->addDay(),
-            'expired_start' => $end->copy()->addMonthNoOverflow()->addDay(),
-            'basis'         => 'reguler',
-        ];
+        // Private: sebelum expired date paket siswa masih Aktif walau semua pertemuan sudah selesai
+        return $today->gte($latest['leave_start']) ? 'Inactive' : 'Active';
     }
 
-    /**
-     * Hari terakhir siswa masih bisa lanjut program (sehari sebelum expired mulai).
-     * Dipakai Retention Rate: lewat tanggal ini tanpa lanjut + bayar = expired.
-     */
-    public function continuationDeadline(ClassEnrollment $enrollment): ?Carbon
+    /** Sinkronkan satu siswa. Mengembalikan true kalau statusnya berubah. */
+    public function sync(Student $student): bool
     {
-        $w = $this->windows($enrollment);
+        $status = $this->resolve($student);
 
-        return $w ? $w['expired_start']->copy()->subDay() : null;
+        if ($status === null || $status === $student->status) {
+            return false;
+        }
+
+        $student->forceFill(['status' => $status])->save();
+
+        return true;
+    }
+
+    /** Sinkronkan semua siswa. @return array{checked:int, changed:int} */
+    public function syncAll(): array
+    {
+        $checked = 0;
+        $changed = 0;
+
+        Student::query()->chunkById(200, function ($students) use (&$checked, &$changed) {
+            foreach ($students as $student) {
+                $checked++;
+
+                if ($this->sync($student)) {
+                    $changed++;
+                }
+            }
+        });
+
+        return ['checked' => $checked, 'changed' => $changed];
     }
 }

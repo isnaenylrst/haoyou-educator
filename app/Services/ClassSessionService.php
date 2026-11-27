@@ -26,12 +26,16 @@ class ClassSessionService
      */
     public function generateForNewClass(
         ClassModel $class,
-        int $totalMeetings
+        int $totalMeetings,
+        bool $homeVisit = false
     ): Collection {
+        // Home Visit dipilih di awal (convert): semua pertemuan langsung berlokasi di rumah siswa.
         $sessions = $this->generate(
             $class,
             $class->start_date,
-            $totalMeetings
+            $totalMeetings,
+            null,
+            $homeVisit ? 'Home Visit' : null
         );
 
         if ($sessions->isNotEmpty() && ! $class->end_date) {
@@ -73,14 +77,16 @@ class ClassSessionService
         ClassModel $class,
         Carbon|string $from,
         int $count,
-        ?int $startNumber = null
+        ?int $startNumber = null,
+        ?string $location = null
     ): Collection {
         return DB::transaction(
             fn () => $this->doGenerate(
                 $class,
                 $from,
                 $count,
-                $startNumber
+                $startNumber,
+                $location
             )
         );
     }
@@ -89,7 +95,8 @@ class ClassSessionService
         ClassModel $class,
         Carbon|string $from,
         int $count,
-        ?int $startNumber
+        ?int $startNumber,
+        ?string $forcedLocation = null
     ): Collection {
         $created = collect();
 
@@ -115,9 +122,8 @@ class ClassSessionService
         $limit = $date->copy()->addYears(2);
 
         // Jadwal rutin tidak otomatis menjadi Home Visit.
-        $location = $class->delivery_mode === 'Online'
-            ? 'Online'
-            : 'Studio';
+        $location = $forcedLocation
+            ?? ($class->delivery_mode === 'Online' ? 'Online' : 'Studio');
 
         while ($created->count() < $count && $date->lte($limit)) {
             $dayName = ClassScheduleService::DAYS[
@@ -161,7 +167,8 @@ class ClassSessionService
                     'session_date' => $date->toDateString(),
                     'start_time' => $pattern->start_time,
                     'end_time' => $pattern->end_time,
-                    'room' => $pattern->room,
+                    // Home Visit tidak memakai ruangan
+                    'room' => $location === 'Home Visit' ? null : $pattern->room,
                     'teacher_id' => $class->teacher_id,
                     'location_type' => $location,
                     'status' => 'Scheduled',
@@ -421,6 +428,110 @@ class ClassSessionService
             }
 
             return $updated;
+        });
+    }
+
+    /**
+     * Mencatat biaya Home Visit untuk pertemuan yang SUDAH berlokasi Home Visit
+     * (kelas private dibuat dengan home visit sejak awal). Satu pembayaran dan satu invoice per pertemuan.
+     *
+     * @param iterable<ClassSession> $sessions
+     */
+    public function chargeHomeVisit(
+        iterable $sessions,
+        ClassEnrollment $payer,
+        array $pay
+    ): Collection {
+        return DB::transaction(function () use ($sessions, $payer, $pay) {
+            $payments = collect();
+
+            foreach ($sessions as $session) {
+                $payments->push(
+                    $this->fees->record($payer, Payment::TYPE_HOME_VISIT, $session, $pay)
+                );
+            }
+
+            return $payments;
+        });
+    }
+
+    /**
+     * Mengubah lokasi pertemuan private yang SUDAH dibayar Home Visit
+     * (Home Visit, Studio/kantor, atau Online). Tidak ada pembayaran baru dan
+     * tidak ada pengembalian: biaya home visit pertemuan itu tetap lunas.
+     * Pindah balik ke Home Visit juga tanpa biaya baru.
+     */
+    public function changeLocation(
+        ClassSession $session,
+        string $type,
+        ?string $room = null
+    ): ClassSession {
+        if (! in_array($type, ['Studio', 'Online', 'Home Visit'], true)) {
+            throw ValidationException::withMessages([
+                'location_type' => 'Tipe lokasi pertemuan tidak valid.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($session, $type, $room) {
+            $locked = ClassSession::query()
+                ->whereKey($session->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $class = $locked->class_id ? ClassModel::find($locked->class_id) : null;
+
+            if (! $class || ! $class->private_package_id) {
+                throw ValidationException::withMessages([
+                    'location_type' => 'Lokasi pertemuan hanya bisa diubah untuk kelas private.',
+                ]);
+            }
+
+            if (! $locked->canBeRescheduled() || $locked->isLocked()) {
+                throw ValidationException::withMessages([
+                    'location_type' => 'Lokasi pertemuan ini tidak bisa diubah (sudah berlangsung atau selesai).',
+                ]);
+            }
+
+            if ($type === $locked->location_type) {
+                return $locked;
+            }
+
+            $hvPaid = Payment::query()
+                ->where('class_session_id', $locked->id)
+                ->where('payment_type', Payment::TYPE_HOME_VISIT)
+                ->exists();
+
+            if (! $hvPaid) {
+                throw ValidationException::withMessages([
+                    'location_type' => 'Lokasi hanya bisa diubah untuk pertemuan yang sudah dibayar Home Visit. Untuk menjadikannya Home Visit, pilih opsi Home Visit (berbayar).',
+                ]);
+            }
+
+            if ($type === 'Studio') {
+                if (! $room || $room === 'Online') {
+                    throw ValidationException::withMessages([
+                        'room' => 'Pilih ruangan untuk pertemuan di studio.',
+                    ]);
+                }
+
+                $this->schedules->assertRoomFreeOn(
+                    $room,
+                    Carbon::parse($locked->session_date)->startOfDay(),
+                    $locked->start_time,
+                    $locked->end_time
+                );
+            }
+
+            $locked->update([
+                'location_type' => $type,
+                'room' => match ($type) {
+                    'Studio' => $room,
+                    'Online' => 'Online',
+                    default => null,
+                },
+            ]);
+
+            return $locked->fresh();
         });
     }
 

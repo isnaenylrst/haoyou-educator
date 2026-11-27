@@ -35,8 +35,17 @@ class JadwalController extends Controller
         'Beijing', 'Basement', 'Atas', 'Kaca', 'Online',
     ];
 
-    /** Kolom untuk pertemuan yang ruangannya kosong (mis. Home Visit). */
+    /** Kolom untuk pertemuan yang ruangannya kosong dan bukan Studio/Home Visit/Online. */
     private const OTHER_ROOM = 'Lainnya';
+
+    /** Kolom khusus: pertemuan Home Visit (rumah siswa, tanpa ruangan). */
+    private const HOME_VISIT_ROOM = 'Home Visit';
+
+    /** Kolom khusus: pertemuan Studio yang ruangannya belum diisi (kelas private dari convert). */
+    private const NO_ROOM = 'Belum ada ruangan';
+
+    /** Kolom khusus, hanya tampil kalau ada isinya. */
+    private const SPECIAL_COLUMNS = [self::NO_ROOM, self::OTHER_ROOM, self::HOME_VISIT_ROOM];
 
     private const SLOT_MINUTES = 30;
 
@@ -922,8 +931,9 @@ class JadwalController extends Controller
         /*
          * Kolom ruangan = ruangan bawaan + ruangan yang diketik admin saat
          * membuat/mengedit kelas (class_schedules.room) + ruangan sesi minggu
-         * ini. Hanya pertemuan tanpa ruangan (mis. Home Visit) yang masuk
-         * ke kolom "Lainnya".
+         * ini. Pertemuan tanpa ruangan masuk kolom khusus: "Home Visit" untuk
+         * pertemuan di rumah siswa, "Belum ada ruangan" untuk Studio yang
+         * ruangannya belum diisi, dan "Lainnya" untuk sisanya.
          */
         $knownRooms = $this->knownRooms($allItems->pluck('room_value'));
 
@@ -933,12 +943,34 @@ class JadwalController extends Controller
             $roomIndex[$this->normalizeRoom($knownRoom)] = $knownRoom;
         }
 
-        $roomKeyOf = fn (array $item) => $roomIndex[
-            $this->normalizeRoom($item['room_value'] ?? null)
-        ] ?? self::OTHER_ROOM;
+        $roomKeyOf = function (array $item) use ($roomIndex) {
+            $location = $item['location_type'] ?? null;
+
+            // Home Visit tidak punya ruangan: kolom sendiri
+            if ($location === 'Home Visit') {
+                return self::HOME_VISIT_ROOM;
+            }
+
+            $known = $roomIndex[$this->normalizeRoom($item['room_value'] ?? null)] ?? null;
+
+            if ($known) {
+                return $known;
+            }
+
+            if ($location === 'Online') {
+                return $roomIndex['online'] ?? 'Online';
+            }
+
+            return $location === 'Studio' ? self::NO_ROOM : self::OTHER_ROOM;
+        };
 
         $usedRooms = $allItems->map($roomKeyOf)->unique();
-        $hasBlankRoom = $usedRooms->contains(self::OTHER_ROOM);
+
+        // Kolom khusus hanya muncul kalau minggu ini ada pertemuan di dalamnya
+        $usedSpecial = array_values(array_filter(
+            self::SPECIAL_COLUMNS,
+            fn ($column) => $usedRooms->contains($column)
+        ));
 
         if ($roomFilter) {
             $roomColumns = [
@@ -950,13 +982,9 @@ class JadwalController extends Controller
                 fn ($room) => $usedRooms->contains($room)
             ));
 
-            if ($hasBlankRoom) {
-                $roomColumns[] = self::OTHER_ROOM;
-            }
+            $roomColumns = [...$roomColumns, ...$usedSpecial];
         } else {
-            $roomColumns = $hasBlankRoom
-                ? [...$knownRooms, self::OTHER_ROOM]
-                : $knownRooms;
+            $roomColumns = [...$knownRooms, ...$usedSpecial];
         }
 
         $roomColumns = $this->orderRoomColumns($roomColumns ?: [self::OTHER_ROOM]);
@@ -968,7 +996,7 @@ class JadwalController extends Controller
                 $used = collect($byDay[$i] ?? [])->map($roomKeyOf)->unique();
 
                 $cols = $this->orderRoomColumns(array_values(array_filter(
-                    [...$knownRooms, self::OTHER_ROOM],
+                    [...$knownRooms, ...self::SPECIAL_COLUMNS],
                     fn ($room) => $used->contains($room)
                 )));
 
@@ -1220,15 +1248,21 @@ class JadwalController extends Controller
         return $this->orderRoomColumns(array_values($rooms + $extra));
     }
 
-    /** Urutan kolom: ruangan biasa, lalu "Lainnya", dan "Online" selalu paling kanan. */
+    /**
+     * Urutan kolom: ruangan biasa, "Belum ada ruangan", "Lainnya", "Online",
+     * dan "Home Visit" paling kanan.
+     */
     private function orderRoomColumns(array $columns): array
     {
         $isOnline = fn ($room) => $this->normalizeRoom($room) === 'online';
+        $isSpecial = fn ($room) => in_array($room, self::SPECIAL_COLUMNS, true);
 
         return array_values([
-            ...array_filter($columns, fn ($r) => ! $isOnline($r) && $r !== self::OTHER_ROOM),
+            ...array_filter($columns, fn ($r) => ! $isOnline($r) && ! $isSpecial($r)),
+            ...array_filter($columns, fn ($r) => $r === self::NO_ROOM),
             ...array_filter($columns, fn ($r) => $r === self::OTHER_ROOM),
             ...array_filter($columns, $isOnline),
+            ...array_filter($columns, fn ($r) => $r === self::HOME_VISIT_ROOM),
         ]);
     }
 

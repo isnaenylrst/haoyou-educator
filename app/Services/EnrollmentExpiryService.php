@@ -6,20 +6,6 @@ use App\Models\ClassEnrollment;
 use App\Models\ClassSession;
 use Illuminate\Support\Carbon;
 
-/**
- *
- * PRIVATE
- *   - Expired date paket = tanggal pertemuan pertama + 1 bulan kalender
- *     (tidak melihat tanggal pertemuan terakhir / kelas selesai).
- *   - Cuti mulai di expired date paket, berlaku 1 bulan kalender.
- *   - Expired (Lulus) mulai tepat 1 bulan kalender setelah cuti mulai.
- *     Contoh: pertemuan pertama 1 Nov -> cuti 1 Des -> expired 1 Jan.
- *
- * REGULER
- *   - Cuti mulai sehari setelah kelas berakhir, berlaku 1 bulan kalender.
- *   - Expired mulai sehari setelah masa cuti habis.
- *     Contoh: kelas berakhir 26 Jan -> cuti 27 Jan s/d 26 Feb -> expired 27 Feb.
- */
 class EnrollmentExpiryService
 {
     /**

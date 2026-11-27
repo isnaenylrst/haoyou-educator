@@ -14,8 +14,13 @@ class ClassScheduleService
     public const DAYS = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
     public const ACTIVE_STATUSES = ['Open', 'Running'];
 
-    /** Ruangan mengikuti mode kelas + cek jadwal bertabrakan dalam form yang sama. */
-    public function normalizeSchedules(array $rows, string $mode): array
+    /**
+     * Ruangan mengikuti mode kelas + cek jadwal bertabrakan dalam form yang sama.
+     *
+     * $roomOptional = true: kelas Offline boleh tanpa ruangan (dipakai convert kelas private).
+     * Ruangan dikosongkan dan baru diisi nanti lewat Ubah Jadwal.
+     */
+    public function normalizeSchedules(array $rows, string $mode, bool $roomOptional = false): array
     {
         $errors = [];
         $out = [];
@@ -26,7 +31,11 @@ class ClassScheduleService
             if ($mode === 'Online') {
                 $row['room'] = 'Online';
             } elseif (empty($row['room']) || $row['room'] === 'Online') {
-                $errors["schedules.$i.room"] = 'Pilih ruangan untuk kelas offline.';
+                if ($roomOptional) {
+                    $row['room'] = null;
+                } else {
+                    $errors["schedules.$i.room"] = 'Pilih ruangan untuk kelas offline.';
+                }
             }
             $out[] = $row;
         }

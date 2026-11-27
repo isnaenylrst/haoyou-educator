@@ -1136,8 +1136,9 @@ class SiswaController extends Controller
         [$applies, $lastEnd, $expiredStart] = $this->registrationFeeInfo($siswa);
 
         $registrationFee = $applies ? (float) Setting::get('registration_fee', 0) : 0.0;
-        // Biaya aktivitas hanya sekali seumur hidup: kalau siswa sudah pernah membayarnya, tidak ditagih lagi
-        $activityFee     = $siswa->activity_fee_paid_at ? 0.0 : (float) Setting::get('activity_fee', 0);
+        // Biaya aktivitas hanya untuk siswa baru (saat convert). Siswa yang lanjut program sudah pasti
+        // pernah didaftarkan, jadi tidak ditagih lagi walau penanda activity_fee_paid_at kosong (data lama).
+        $activityFee     = 0.0;
 
         $note = ($applies && $expiredStart)
             ? 'Biaya pendaftaran dikenakan lagi karena masa cuti sudah habis (expired sejak ' . $expiredStart->translatedFormat('d M Y') . ').'

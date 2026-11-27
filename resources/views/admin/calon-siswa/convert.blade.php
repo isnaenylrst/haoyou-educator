@@ -132,7 +132,7 @@
             }
 
             $oldTeacherId    = old('teacher_id', $draft['teacher_id'] ?? '');
-            $oldDeliveryMode = old('delivery_mode', $draft['delivery_mode'] ?? 'Offline');
+            $oldDeliveryMode = old('delivery_mode', ! empty($draft['home_visit']) ? 'Home Visit' : ($draft['delivery_mode'] ?? 'Offline'));
             $oldStartDate    = old('start_date', $draft['start_date'] ?? '');
             $oldEndDate      = old('end_date', '');
         @endphp
@@ -368,39 +368,11 @@
                             @endphp
 
                             <div class="form-field full">
-                                <label>Ajukan ke Guru</label>
-
-                                <div class="offer-modes">
-                                    @foreach ($offerModes as $value => $label)
-                                        <label class="offer-mode">
-                                            <input type="radio" name="offer_mode" value="{{ $value }}"
-                                                   {{ $oldOfferMode === $value ? 'checked' : '' }} onchange="applyOfferMode()">
-                                            <span>{{ $label }}</span>
-                                        </label>
-                                    @endforeach
-                                </div>
-
-                                <div class="offer-teacher-list" id="offer-teacher-list">
-                                    @forelse ($teachers ?? [] as $teacher)
-                                        <label class="offer-teacher" data-teacher="{{ $teacher->id }}">
-                                            <input type="checkbox" name="offer_teacher_ids[]" value="{{ $teacher->id }}"
-                                                   {{ in_array($teacher->id, $oldOfferIds, true) ? 'checked' : '' }}>
-                                            <span class="offer-teacher-name">{{ $teacher->name }}</span>
-                                            <span class="offer-teacher-tag"></span>
-                                        </label>
-                                    @empty
-                                        <span class="form-section-note" style="margin:0;">Belum ada guru aktif.</span>
-                                    @endforelse
-                                </div>
-
-                                <p class="form-section-note" id="offer-hint" style="margin-top:8px;"></p>
-                            </div>
-
-                            <div class="form-field">
                                 <label>Mode Kelas *</label>
                                 <select name="delivery_mode" id="delivery_mode" required onchange="applyPrivateState()">
                                     <option value="Offline" {{ $oldDeliveryMode === 'Offline' ? 'selected' : '' }}>Offline</option>
                                     <option value="Online" {{ $oldDeliveryMode === 'Online' ? 'selected' : '' }}>Online</option>
+                                    <option value="Home Visit" {{ $oldDeliveryMode === 'Home Visit' ? 'selected' : '' }}>Home Visit (guru ke rumah siswa)</option>
                                 </select>
                             </div>
 
@@ -429,6 +401,35 @@
                                     <i class="fa-solid fa-circle-info"></i>
                                     Baris awal diisi dari jadwal yang diminta calon siswa. Bentrok jadwal/ruangan dicek saat menekan "Lanjut ke Pembayaran".
                                 </span>
+                            </div>
+
+                            <div class="form-field full">
+                                <label>Ajukan ke Guru</label>
+
+                                <div class="offer-modes">
+                                    @foreach ($offerModes as $value => $label)
+                                        <label class="offer-mode">
+                                            <input type="radio" name="offer_mode" value="{{ $value }}"
+                                                   {{ $oldOfferMode === $value ? 'checked' : '' }} onchange="applyOfferMode()">
+                                            <span>{{ $label }}</span>
+                                        </label>
+                                    @endforeach
+                                </div>
+
+                                <div class="offer-teacher-list" id="offer-teacher-list">
+                                    @forelse ($teachers ?? [] as $teacher)
+                                        <label class="offer-teacher" data-teacher="{{ $teacher->id }}">
+                                            <input type="checkbox" name="offer_teacher_ids[]" value="{{ $teacher->id }}"
+                                                   {{ in_array($teacher->id, $oldOfferIds, true) ? 'checked' : '' }}>
+                                            <span class="offer-teacher-name">{{ $teacher->name }}</span>
+                                            <span class="offer-teacher-tag"></span>
+                                        </label>
+                                    @empty
+                                        <span class="form-section-note" style="margin:0;">Belum ada guru aktif.</span>
+                                    @endforelse
+                                </div>
+
+                                <p class="form-section-note" id="offer-hint" style="margin-top:8px;"></p>
                             </div>
                         </div>
 
@@ -566,37 +567,6 @@
                             </div>
                         @endif
 
-                        {{-- Home visit: hanya program private dan kelas private baru (bukan gabung kelas yang sudah ada) --}}
-                        @if ($isPrivate && ! $chosenClass && empty($settlement))
-                            <div class="form-field">
-                                <label>Jumlah Pertemuan Home Visit</label>
-                                <input type="number" name="home_visit_count" id="home_visit_count" step="1"
-                                       min="0" max="{{ (int) ($package->total_meetings ?? 0) }}"
-                                       value="{{ old('home_visit_count', 0) }}">
-                                <span class="form-section-note" style="margin-top:6px;">
-                                    <i class="fa-solid fa-circle-info"></i>
-                                    <span id="home-visit-note">Home visit Rp{{ number_format(\App\Services\ExtraFeeService::FEE_HOME_VISIT, 0, ',', '.') }} per pertemuan, hanya untuk program private. Pertemuan awal kelas dijadikan home visit.</span>
-                                </span>
-                            </div>
-                            <script>
-                                (function () {
-                                    const input = document.getElementById('home_visit_count');
-                                    const note  = document.getElementById('home-visit-note');
-                                    const fee   = {{ (int) \App\Services\ExtraFeeService::FEE_HOME_VISIT }};
-                                    const base  = note.textContent;
-                                    const fmt   = n => 'Rp' + Math.round(n).toLocaleString('id-ID');
-                                    function render() {
-                                        const n = parseInt(input.value, 10) || 0;
-                                        note.textContent = n > 0
-                                            ? n + ' pertemuan awal menjadi home visit, ' + fmt(n * fee) + ' dibayar bersama DP (dicatat terpisah). Total transfer = DP + ' + fmt(n * fee) + '.'
-                                            : base;
-                                    }
-                                    input.addEventListener('input', render);
-                                    render();
-                                })();
-                            </script>
-                        @endif
-
                         <div class="form-field">
                             <label>
                                 Nominal Dibayar *
@@ -632,6 +602,19 @@
                         @else
                             {{-- pelunasan tidak memakai diskon; input tetap ada karena dibaca JS --}}
                             <input type="hidden" name="discount" id="discount" value="0">
+                        @endif
+
+                        {{-- Home visit dipilih di step 1; nominalnya otomatis (jumlah pertemuan x tarif), tidak bisa diubah --}}
+                        @if (! empty($homeVisit) && empty($settlement))
+                            <div class="form-field full">
+                                <label>
+                                    Biaya Home Visit
+                                    ({{ (int) ($package->total_meetings ?? 0) }} pertemuan &times;
+                                    Rp{{ number_format(\App\Services\ExtraFeeService::FEE_HOME_VISIT, 0, ',', '.') }})
+                                </label>
+                                <input type="text" id="home_visit_fee" readonly
+                                       value="Rp{{ number_format($homeVisitTotal, 0, ',', '.') }}">
+                            </div>
                         @endif
 
                         {{-- Catatan enrollment: konversi calon siswa dan lanjut program (tidak untuk pelunasan) --}}
@@ -1137,7 +1120,7 @@
             <input type="time" name="schedules[${i}][end_time]" required>
             <div class="room-wrap">
                 <input type="text" class="js-room" name="schedules[${i}][room]"
-                       list="room-suggestions" placeholder="Ruangan" maxlength="255" autocomplete="off">
+                       list="room-suggestions" placeholder="Ruangan (opsional)" maxlength="255" autocomplete="off">
             </div>
             <button type="button" class="schedule-remove" title="Hapus jadwal" onclick="removeScheduleRow(this)">
                 <i class="fa-solid fa-xmark"></i>
@@ -1372,7 +1355,11 @@
      */
     function applyPrivateState() {
         const isPrivate = document.querySelector('input[name="package_type"]:checked').value === 'private';
-        const online = document.getElementById('delivery_mode').value === 'Online';
+        const mode = document.getElementById('delivery_mode').value;
+        // Online dan Home Visit tidak memakai ruangan studio (server mengisi otomatis)
+        const online = mode === 'Online' || mode === 'Home Visit';
+        const hvHint = document.getElementById('home-visit-hint');
+        if (hvHint) hvHint.style.display = mode === 'Home Visit' ? '' : 'none';
         const box = document.getElementById('private-class-fields');
 
         // Mode gabung kelas (hanya ada di konversi calon siswa): form kelas baru disembunyikan & dinonaktifkan
@@ -1401,7 +1388,7 @@
         box.querySelectorAll('select, input').forEach(el => {
             if (el.classList.contains('js-room')) {
                 el.disabled = ! isPrivate || joining || online;
-                el.required = isPrivate && ! joining && ! online;
+                el.required = false; // ruangan tidak wajib untuk kelas private (diisi nanti lewat Ubah Jadwal)
                 el.closest('.room-wrap').style.display = online ? 'none' : '';
                 el.closest('.schedule-row').classList.toggle('no-room', online);
             } else {
