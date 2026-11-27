@@ -22,9 +22,11 @@ use App\Models\TeachingJournal;
 use App\Models\User;
 use App\Services\ProgressReportDocument;
 use App\Services\TeacherAvailabilityUrgencyService;
+use App\Services\TeacherNotificationService;
 use App\Services\TerbilangService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -725,5 +727,67 @@ class GuruFeaturesAndAttendanceFeatureTest extends TestCase
             'name'               => 'Private VIP Test (lagi)',
             'private_package_id' => $pkg->id,
         ])->assertSessionHasErrors('name');
+    }
+
+    // ------------------------------------------------------------------
+    // Notifikasi progress report di PERTEMUAN TERAKHIR: harus sudah tampil di siswa paling lambat H+2
+    // (hanya pengingat, tidak ada penguncian). Kelas fixture berakhir 2026-12-20.
+    // ------------------------------------------------------------------
+
+    public function test_progress_report_last_meeting_notification_h_plus_2(): void
+    {
+        $feed = function (string $now) {
+            $this->travelTo(Carbon::parse($now));
+            Cache::flush();   // bell dicache 60 detik per guru
+
+            return TeacherNotificationService::for($this->teacher->fresh())->all()->where('type', 'progress_last_meeting')->values();
+        };
+
+        // Sebelum H-1: belum ada notifikasi
+        $this->assertCount(0, $feed('2026-12-18 09:00:00'));
+
+        // H-1: pengingat dini "pertemuan terakhir besok"
+        $n = $feed('2026-12-19 09:00:00');
+        $this->assertCount(1, $n);
+        $this->assertStringContainsString('besok', $n->first()['title']);
+        $this->assertStringContainsString('tampil di siswa', $n->first()['note']);
+        $this->assertStringContainsString('H+2', $n->first()['note']);
+        $this->assertTrue($n->first()['actionable']);
+
+        // H: hari pertemuan terakhir
+        $n = $feed('2026-12-20 09:00:00');
+        $this->assertCount(1, $n);
+        $this->assertStringContainsString('Hari ini pertemuan terakhir', $n->first()['title']);
+
+        // H+1: sisa 1 hari menuju H+2
+        $n = $feed('2026-12-21 09:00:00');
+        $this->assertCount(1, $n);
+        $this->assertStringContainsString('selesaikan progress report', $n->first()['title']);
+        $this->assertStringContainsString('sisa 1 hari', $n->first()['note']);
+
+        // H+2: hari target
+        $n = $feed('2026-12-22 09:00:00');
+        $this->assertCount(1, $n);
+        $this->assertStringContainsString('hari ini', $n->first()['note']);
+
+        // Lewat H+2: tetap hanya pengingat (tidak ada kunci), kata-katanya "terlambat"
+        $n = $feed('2026-12-24 09:00:00');
+        $this->assertCount(1, $n);
+        $this->assertStringContainsString('Terlambat dari target H+2', $n->first()['title']);
+        $this->assertStringContainsString('terlambat 2 hari', $n->first()['note']);
+        $this->assertStringNotContainsString('TERKUNCI', $n->first()['title']);
+
+        // Setelah report dikirim ke Kurikulum, notifikasi hilang sendiri
+        ProgressReport::create([
+            'student_id'    => $this->student->id,
+            'teacher_id'    => $this->teacher->id,
+            'enrollment_id' => $this->enrollment->id,
+            'status'        => 'Submitted',
+            'report_type'   => 'Trimester Academic Progress Report',
+            'report_period' => 'Des 2026',
+            'content'       => [],
+            'submitted_at'  => '2026-12-21 10:00:00',
+        ]);
+        $this->assertCount(0, $feed('2026-12-24 09:00:00'));
     }
 }

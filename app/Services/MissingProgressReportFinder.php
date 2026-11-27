@@ -17,10 +17,13 @@ class MissingProgressReportFinder
     /**
      * @param  Carbon|null  $asOf       tanggal acuan (default hari ini); berguna untuk uji coba
      * @param  int|null     $teacherId  batasi ke satu laoshi (guru kelas)
+     * @param  int          $leadDays   pertemuan TERAKHIR kelas ikut ditampilkan sejak H-$leadDays (pengingat dini).
+     *                                  Default 0 = perilaku lama (baru tampil saat jatuh tempo).
      */
-    public function find(?Carbon $asOf = null, ?int $teacherId = null): Collection
+    public function find(?Carbon $asOf = null, ?int $teacherId = null, int $leadDays = 0): Collection
     {
         $today  = ($asOf ?? now())->copy()->startOfDay();
+        $horizon = $today->copy()->addDays(max(0, $leadDays));
         $oldest = $today->copy()->subDays(self::LOOKBACK_DAYS);
 
         $enrollments = ClassEnrollment::query()
@@ -94,8 +97,9 @@ class MissingProgressReportFinder
             foreach ($cycles as $i => $cycle) {
                 $due = $cycle['due'];
 
-                if ($due->gt($today)) {
-                    break; // belum jatuh tempo, siklus berikutnya pasti lebih lambat
+                // Siklus 3 bulanan baru tampil saat jatuh tempo; pertemuan terakhir boleh tampil sejak H-$leadDays
+                if ($due->gt($cycle['final'] ? $horizon : $today)) {
+                    break; // belum waktunya, siklus berikutnya pasti lebih lambat
                 }
 
                 if ($due->lt($oldest)) {
@@ -128,7 +132,8 @@ class MissingProgressReportFinder
                     'due'        => $due->copy(),
                     'report'     => $report,
                     'state'      => $state,
-                    'days_late'  => (int) $due->diffInDays($today, true),
+                    'upcoming'   => $due->gt($today),   // pertemuan terakhir belum terjadi (pengingat H-1)
+                    'days_late'  => $due->gt($today) ? 0 : (int) $due->diffInDays($today, true),
                     'overdue'    => $today->gt($due->copy()->addDays(ProgressReportService::GRACE_DAYS)),
                     'reminded_at' => null,
                 ]);

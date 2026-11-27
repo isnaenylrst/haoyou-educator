@@ -84,7 +84,7 @@
 
                 @if (($notif['action']['kind'] ?? null) === 'done')
                     <span class="badge rounded-pill bg-success px-3 py-2">Selesai</span>
-                @elseif (in_array($notif['type'] ?? null, ['journal_missing', 'progress_due'], true))
+                @elseif (in_array($notif['type'] ?? null, ['journal_missing', 'progress_due', 'progress_last_meeting'], true))
                     <span class="badge rounded-pill text-danger border border-danger px-3 py-2 bg-white">
                         Belum Diisi
                     </span>
