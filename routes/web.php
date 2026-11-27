@@ -90,6 +90,7 @@ use App\Http\Controllers\Guru\TrainingMaterialController as GuruTrainingMaterial
 use App\Http\Controllers\Guru\ConsultationResultController as GuruConsultationResultController;
 use App\Http\Controllers\Guru\RequestBelajarController as GuruRequestBelajarController;
 use App\Http\Controllers\Guru\ReplacementOfferController;
+use App\Http\Controllers\Guru\CertificateCategoryController;
 use App\Http\Controllers\Guru\RiwayatPengajuanController as GuruRiwayatPengajuanController;
 
 // ===== OWNER =====
@@ -244,12 +245,14 @@ Route::middleware(['auth', 'role:Student'])->group(function () {
     Route::get('/sertifikat/{certificate}/download', [SiswaLearningController::class, 'downloadSertifikat'])
         ->name('sertifikat.download');
 
+    
+
      // SERTIFIKAT OTOMATIS (HSK)
     Route::prefix('student/certificates')->name('student.certificates.')->group(function () {
         Route::get('/', [StudentCertificateController::class, 'index'])->name('index');
         Route::post('/', [StudentCertificateController::class, 'store'])->name('store');
         Route::get('/{certificate}/download', [StudentCertificateController::class, 'download'])->name('download');
-    }); // <-- INI YANG HILANG
+    }); 
 
     // SERTIFIKAT BELAJAR MANDIRI
     Route::prefix('student/belajar-mandiri/sertifikat')->name('student.mandiri-certificates.')
@@ -785,6 +788,12 @@ Route::middleware(['auth', 'role:Teacher', 'teacher.profile'])
         Route::put('/sertifikat/{certificate}', [GuruCertificateController::class, 'update'])->name('sertifikat.update');
         Route::delete('/sertifikat/{certificate}', [GuruCertificateController::class, 'destroy'])->name('sertifikat.destroy');
         Route::get('/sertifikat/{certificate}/download', [GuruCertificateController::class, 'download'])->name('sertifikat.download');
+
+        // Kategori penilaian sertifikat (dikelola guru)
+        Route::get('/kategori-sertifikat', [CertificateCategoryController::class, 'index'])->name('sertifikat-kategori.index');
+        Route::post('/kategori-sertifikat', [CertificateCategoryController::class, 'store'])->name('sertifikat-kategori.store');
+        Route::put('/kategori-sertifikat/{category}', [CertificateCategoryController::class, 'update'])->name('sertifikat-kategori.update');
+        Route::delete('/kategori-sertifikat/{category}', [CertificateCategoryController::class, 'destroy'])->name('sertifikat-kategori.destroy');
 
         // Schedule
         Route::get('/schedule', [GuruScheduleController::class, 'index'])->name('schedule');

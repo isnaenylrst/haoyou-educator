@@ -18,6 +18,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class SiswaDashboardController extends Controller
 {
@@ -37,25 +38,36 @@ class SiswaDashboardController extends Controller
 
         // Satu sumber urutan untuk peringkat kartu & leaderboard
         $ranking = Student::where('status', 'Active')
+            ->where('points', '>', 0)          // <- tambahkan ini
             ->orderByRaw('COALESCE(points, 0) DESC')
             ->orderBy('name')
             ->orderBy('id')
             ->get(['id', 'name', 'points']);
 
-        $posisi = $ranking->search(fn ($s) => $s->id === $student->id);
-        $peringkat = $posisi === false ? $ranking->count() + 1 : $posisi + 1;
+         $posisi = $ranking->search(fn ($s) => $s->id === $student->id);
+         $peringkat = $posisi === false ? null : $posisi + 1;
+       
+        $perPage = 10;
+        $page = max(1, (int) request('lb', 1));
 
-        $leaderboard = $ranking
-            ->take(10)
-            ->map(fn ($item, $i) => [
-                'id'   => $item->id,
-                'rank' => $i + 1,
-                'nama' => $item->name,
-                'poin' => $item->points ?? 0,
-            ])
-            ->values()
-            ->all();
-    
+        $leaderboard = new LengthAwarePaginator(
+            $ranking->forPage($page, $perPage)
+                ->values()
+                ->map(fn ($item, $i) => [
+                    'id'   => $item->id,
+                    'rank' => (($page - 1) * $perPage) + $i + 1,
+                    'nama' => $item->name,
+                    'poin' => $item->points ?? 0,
+                ]),
+            $ranking->count(),
+            $perPage,
+            $page,
+            ['path' => request()->url(), 'pageName' => 'lb']
+            );
+
+            $tiers = config('hadiah.tiers');
+            $waAdmin = config('hadiah.whatsapp');
+
         $enrollments = ClassEnrollment::with([
             'class.teacher',
             'class.schedules',
@@ -116,7 +128,9 @@ class SiswaDashboardController extends Controller
             'leaderboard',
             'enrollments',
             'progressReports',
-            'documents'
+            'documents',
+            'tiers',
+            'waAdmin'
         ));
     }
 

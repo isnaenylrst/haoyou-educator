@@ -150,6 +150,7 @@ class StudentPointSeeder extends Seeder
 
     public function run(): void
     {
+        Student::query()->update(['points' => 0]);   // reset semua poin dulu
         $updated  = 0;
         $notFound = [];
 

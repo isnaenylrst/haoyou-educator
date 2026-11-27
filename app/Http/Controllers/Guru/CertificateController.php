@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Guru;
 
 use App\Http\Controllers\Controller;
 use App\Models\Certificate;
+use App\Models\CertificateCategory;
 use App\Models\User;
 use App\Services\ProgressReportService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -12,20 +13,27 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class CertificateController extends Controller
 {
     /*
     |--------------------------------------------------------------------------
-    | Sertifikat Mock Test HSK oleh Guru
+    | Sertifikat Mock Test oleh Guru
     |--------------------------------------------------------------------------
-    | - HSK 1-2 : Listening + Reading           (maks 200, lulus min. 120)
-    | - HSK 3-6 : Listening + Reading + Writing (maks 300, lulus min. 180)
-    | - Total = JUMLAH nilai (bukan rata-rata). Tiap komponen maks 100.
-    | - Level dibaca dari Nama Kursus (mis. "HSK Class - HSK 2 - Kelas A").
-    |   Jika level tidak terbaca, diperlakukan seperti HSK 3-6.
+    | Guru memilih KATEGORI PENILAIAN, lalu mengisi nilai (tiap komponen maks 100).
+    | Total = JUMLAH nilai komponen. Kategori disimpan di tabel certificate_categories dan dikelola guru lewat menu Kelola Kategori.
+    |
+    | - hsk12  : Listening + Reading             (maks 200, lulus min. 120)
+    | - hsk36  : Listening + Reading + Writing   (maks 300, lulus min. 180)
+    | - reg_rw : Membaca + Menulis               (maks 200, lulus min. 120)
+    | - reg_ls : Mendengar + Berbicara           (maks 200, lulus min. 120)
+    |
+    | Kelas Privat: guru bebas memilih kategori mana pun sesuai ujian yang diminta.
     |--------------------------------------------------------------------------
     */
+
+    public const SKILLS = ['listening', 'reading', 'writing', 'speaking'];
 
     private function teacher()
     {
@@ -35,20 +43,40 @@ class CertificateController extends Controller
         return $teacher;
     }
 
-    /** Ambil angka level HSK (1-6) dari teks, 0 jika tidak ada. */
-    private function hskLevel(?string $text): int
+    /** Daftar kategori dari database (dikelola guru di menu Kelola Kategori). */
+    public static function cats(): array
     {
-        return preg_match('/HSK\s*([1-6])/i', (string) $text, $m) ? (int) $m[1] : 0;
+        static $cache = null;
+
+        return $cache ??= CertificateCategory::map();
     }
 
-    /** Aturan nilai berdasarkan level. */
-    private function ruleFor(int $level): array
+    /** Tebak kategori dari nama kursus (hanya HSK yang bisa ditebak). Null jika tidak bisa. */
+    public static function detect(?string $text): ?string
     {
-        if ($level >= 1 && $level <= 2) {
-            return ['skills' => ['listening', 'reading'], 'max' => 200, 'passing' => 120];
+        if (preg_match('/HSK\s*([1-6])/i', (string) $text, $m)) {
+            $code = (int) $m[1] <= 2 ? 'hsk12' : 'hsk36';
+
+            return isset(self::cats()[$code]) ? $code : null;
         }
 
-        return ['skills' => ['listening', 'reading', 'writing'], 'max' => 300, 'passing' => 180];
+        return null;
+    }
+
+    /** Kategori tersimpan; sertifikat lama (belum punya kategori) ditebak dari nama kursus. */
+    public static function categoryOf(?string $stored, ?string $course): string
+    {
+        $all = self::cats();
+
+        if ($stored && isset($all[$stored])) {
+            return $stored;
+        }
+
+        if ($d = self::detect($course)) {
+            return $d;
+        }
+
+        return isset($all['hsk36']) ? 'hsk36' : (string) array_key_first($all);
     }
 
     private function enrollmentRow(int $id): object
@@ -80,19 +108,22 @@ class CertificateController extends Controller
 
     private function rules(Request $request, bool $withEnrollment = false): array
     {
-        $rule = $this->ruleFor($this->hskLevel($request->input('course_name')));
+        $cat    = self::cats()[$request->input('category')] ?? null;
+        $active = array_keys($cat['skills'] ?? []);
 
         $rules = [
-            'course_name'     => ['required', 'string', 'max:150'],
-            'start_date'      => ['required', 'date'],
-            'end_date'        => ['required', 'date', 'after_or_equal:start_date'],
-            'listening_score' => ['required', 'numeric', 'min:0', 'max:100'],
-            'reading_score'   => ['required', 'numeric', 'min:0', 'max:100'],
-            'writing_score'   => [
-                in_array('writing', $rule['skills'], true) ? 'required' : 'nullable',
-                'numeric', 'min:0', 'max:100',
-            ],
+            'category'    => ['required', Rule::in(array_keys(self::cats()))],
+            'course_name' => ['required', 'string', 'max:150'],
+            'start_date'  => ['required', 'date'],
+            'end_date'    => ['required', 'date', 'after_or_equal:start_date'],
         ];
+
+        foreach (self::SKILLS as $s) {
+            $rules[$s . '_score'] = [
+                in_array($s, $active, true) ? 'required' : 'nullable',
+                'numeric', 'min:0', 'max:100',
+            ];
+        }
 
         if ($withEnrollment) {
             $rules = ['enrollment_id' => ['required', 'integer']] + $rules;
@@ -101,7 +132,7 @@ class CertificateController extends Controller
         return $rules;
     }
 
-    /** Total nilai = JUMLAH komponen sesuai level. */
+    /** Total nilai = JUMLAH komponen sesuai kategori. */
     private function total(array $data, array $skills): float
     {
         $sum = 0;
@@ -115,8 +146,13 @@ class CertificateController extends Controller
     /** Simpan data, kembalikan ke Pending, lalu buat ulang PDF. */
     private function persist(Certificate $certificate, object $e, array $data): void
     {
-        $rule   = $this->ruleFor($this->hskLevel($data['course_name']));
-        $skills = $rule['skills'];
+        $catKey = $data['category'];
+        $skills = array_keys(self::cats()[$catKey]['skills']);
+
+        $values = [];
+        foreach (self::SKILLS as $s) {
+            $values[$s . '_score'] = in_array($s, $skills, true) ? $data[$s . '_score'] : null;
+        }
 
         $certificate->fill([
             'enrollment_id'      => $e->id,
@@ -125,19 +161,20 @@ class CertificateController extends Controller
             'certificate_number' => $certificate->certificate_number
                 ?: 'HY/LES/' . now()->format('Y') . '/' . str_pad($e->id, 4, '0', STR_PAD_LEFT),
             'verification_code'  => $certificate->verification_code ?: Str::random(32),
+            'category'           => $catKey,
             'course_name'        => $data['course_name'],
             'start_date'         => $data['start_date'],
             'end_date'           => $data['end_date'],
-            'listening_score'    => $data['listening_score'],
-            'reading_score'      => $data['reading_score'],
-            'speaking_score'     => null, // tidak dipakai lagi
-            'writing_score'      => in_array('writing', $skills, true) ? $data['writing_score'] : null,
             'score'              => $this->total($data, $skills),
             'status'             => 'Pending',
             'review_note'        => null,
             'reviewed_by'        => null,
             'reviewed_at'        => null,
-        ])->save();
+        ] + $values)->save();
+
+        // Diset langsung supaya kategori tetap tersimpan walau 'category' belum ada di $fillable model.
+        $certificate->category = $catKey;
+        $certificate->save();
 
         $this->render($certificate, $e);
     }
@@ -149,21 +186,25 @@ class CertificateController extends Controller
                 ->orWhere('nama_level', 'like', '%urriculum%'))->first();
 
         $course = $certificate->course_name ?: $e->class_name;
-        $rule   = $this->ruleFor($this->hskLevel($course));
+        $cat    = self::cats()[self::categoryOf($certificate->category, $course)];
+
+        $skills = [];
+        foreach ($cat['skills'] as $key => $label) {
+            $skills[] = ['label' => $label, 'value' => $certificate->{$key . '_score'}];
+        }
 
         $pdf = Pdf::loadView('guru.certificate-pdf', [
             'e'      => $e,
             'number' => $certificate->certificate_number,
             'cert'   => [
-                'course'    => $course,
-                'start'     => $certificate->start_date,
-                'end'       => $certificate->end_date,
-                'listening' => $certificate->listening_score,
-                'reading'   => $certificate->reading_score,
-                'writing'   => $certificate->writing_score,
-                'score'     => $certificate->score,
-                'max'       => $rule['max'],
-                'passing'   => $rule['passing'],
+                'course'  => $course,
+                'start'   => $certificate->start_date,
+                'end'     => $certificate->end_date,
+                'sub'     => $cat['sub'],
+                'skills'  => $skills,
+                'score'   => $certificate->score,
+                'max'     => $cat['max'],
+                'passing' => $cat['passing'],
             ],
             'owner' => [
                 'name'      => $owner?->name ?: 'Joy Limmunandar',
@@ -188,11 +229,13 @@ class CertificateController extends Controller
 
         return [
             'course'    => $e->class_name,
+            'category'  => self::detect($e->class_name),
             'start'     => $auto['start']->toDateString(),
             'end'       => $auto['end']->toDateString(),
             'listening' => $auto['listening'] ?? null,
             'reading'   => $auto['reading'] ?? null,
             'writing'   => $auto['writing'] ?? null,
+            'speaking'  => $auto['speaking'] ?? null,
         ];
     }
 
@@ -224,7 +267,9 @@ class CertificateController extends Controller
             $prefill[$e->id] = $this->autoFill($e);
         }
 
-        return view('guru.sertifikat', compact('certificates', 'enrollments', 'prefill'));
+        $categories = self::cats();
+
+        return view('guru.sertifikat', compact('certificates', 'enrollments', 'prefill', 'categories'));
     }
 
     // ------------------------------------------------------------------ TAMBAH
@@ -246,7 +291,8 @@ class CertificateController extends Controller
 
     /**
      * Tombol cepat di halaman Progress Report.
-     * Hanya jika kelas selesai, report di-ACC, dan nilai yang dibutuhkan tersedia.
+     * Hanya jika kelas selesai, report di-ACC, kategori bisa dikenali (HSK),
+     * dan nilai yang dibutuhkan tersedia. Kelas reguler/privat dibuat manual.
      */
     public function quickStore(int $enrollment)
     {
@@ -268,21 +314,27 @@ class CertificateController extends Controller
 
         $auto   = $this->autoFill($e);
         $course = $certificate->course_name ?? $e->class_name;
-        $rule   = $this->ruleFor($this->hskLevel($course));
+        $catKey = ($certificate && $certificate->category) ? $certificate->category : self::detect($course);
 
-        foreach ($rule['skills'] as $s) {
-            if ($auto[$s] === null || $auto[$s] === '') {
+        if (!$catKey) {
+            return back()->with('error', 'Kategori penilaian tidak bisa dikenali dari nama kelas. Buat sertifikat manual di menu Sertifikat dan pilih kategorinya.');
+        }
+
+        foreach (array_keys(self::cats()[$catKey]['skills']) as $s) {
+            if (($auto[$s] ?? null) === null || $auto[$s] === '') {
                 return back()->with('error', 'Nilai ' . ucfirst($s) . ' belum tersedia di progress report. Buat sertifikat manual di menu Sertifikat.');
             }
         }
 
         $this->persist($certificate ?? new Certificate(), $e, [
+            'category'        => $catKey,
             'course_name'     => $course,
             'start_date'      => $auto['start'],
             'end_date'        => $auto['end'],
             'listening_score' => $auto['listening'],
             'reading_score'   => $auto['reading'],
             'writing_score'   => $auto['writing'],
+            'speaking_score'  => $auto['speaking'],
         ]);
 
         return back()->with('success', 'Sertifikat dibuat dan dikirim ke Kurikulum untuk di-ACC.');
