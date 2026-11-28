@@ -46,6 +46,7 @@ class InvoiceService
             'harga_per_bulan'  => 'Rata-rata harga per bulan',
             'harga_paket'      => 'Total biaya les',
             'total_tagihan'    => 'Total tagihan enrollment',
+            'alamat_home_visit' => 'Alamat Home Visit (baris tampil hanya kalau kelas private Home Visit)',
         ],
 
         'Pembayaran ini' => [
@@ -72,9 +73,13 @@ class InvoiceService
         'Invoice' => [
             'logo'          => 'Logo Haoyou',
             'nomor_invoice' => 'Nomor invoice',
-            'tanggal_bayar' => 'Tanggal pembayaran',
+            'tanggal_bayar' => 'Tanggal pembayaran (format lama)',
+            'tanggal_tagihan' => 'Tanggal tagihan / jatuh tempo',
+            'status'          => 'Status (Lunas / Belum Lunas)',
             'jenis_biaya'   => 'Jenis biaya tambahan (gabungan kalau Home Visit + Pengganti)',
-            'rincian_biaya' => 'Baris rincian biaya, satu baris per jenis (otomatis)',
+            'rincian_biaya' => 'Baris rincian biaya format lama, satu baris per jenis (otomatis)',
+            'rincian_tagihan' => 'Baris rincian bayar (otomatis: Rincian | Jatuh Tempo | Nominal | Keterangan | Tanggal Lunas)',
+            'total_tagihan'   => 'Total tagihan',
         ],
 
         'Siswa' => [
@@ -106,7 +111,15 @@ class InvoiceService
     public function generate(Payment $payment): string
     {
         if ($payment->isExtra()) {
-            return $this->generateExtra($payment);
+            // Home Visit yang dibayar saat konversi satu nomor dengan invoice paket: tampilkan invoice paketnya
+            $package = Payment::query()
+                ->where('enrollment_id', $payment->enrollment_id)
+                ->where('invoice_number', $payment->invoice_number)
+                ->where('payment_type', Payment::TYPE_PACKAGE)
+                ->orderBy('id')
+                ->first();
+
+            return $package ? $this->generate($package) : $this->generateExtra($payment);
         }
 
         $payment->loadMissing([
@@ -239,10 +252,15 @@ class InvoiceService
         $classId = $selection['join_class_id'] ?? $selection['class_id'] ?? null;
         $kelas   = $classId ? \App\Models\ClassModel::with('schedules')->find($classId) : null;
 
+        // Home Visit: kelas private baru dengan semua pertemuan Home Visit, Rp50.000 per pertemuan
+        $draftHomeVisit = $isPrivate && ! empty($selection['home_visit']) && empty($selection['join_class_id']);
+
         // Enrollment sementara (tidak disimpan) supaya angka tagihan dihitung PaymentInstallmentService
-        // dengan rumus yang sama persis dengan invoice setelah DP.
+        // dengan rumus yang sama persis dengan invoice setelah DP (termasuk Home Visit lewat home_visit_address).
         $enrollment = new \App\Models\ClassEnrollment([
             'class_id'         => $kelas?->id,
+            'private_package_id' => $isPrivate ? $package->id : null,
+            'home_visit_address' => $draftHomeVisit ? (trim((string) ($selection['home_visit_address'] ?? '')) ?: null) : null,
             'registration_fee' => (float) \App\Models\Setting::get('registration_fee', 0),
             'activity_fee'     => (float) \App\Models\Setting::get('activity_fee', 0),
             'discount'         => (float) $draft->discount,
@@ -260,14 +278,8 @@ class InvoiceService
         $hvSessions = ($isPrivate && ! empty($selection['home_visit']) && empty($selection['join_class_id']))
             ? (int) ($package->total_meetings ?? 0)
             : 0;
-        $hvAmount = (float) ($hvSessions * ExtraFeeService::FEE_HOME_VISIT);
 
-        $plan = $this->billingPlan($enrollment, collect(), $hvSessions > 0 ? [
-            'amount'    => $hvAmount,
-            'paid'      => false,
-            'paid_date' => null,
-            'sessions'  => $hvSessions,
-        ] : null);
+        $plan = $this->billingPlan($enrollment, collect());
         $current = $this->currentDueIndexes($plan);
 
         $tahap = $current !== []
@@ -295,6 +307,9 @@ class InvoiceService
             'tahap'           => e($tahap),
             'status'          => 'Belum Lunas',
             'rincian_tagihan' => $this->billingRows($plan, $current, 0.0),
+            'alamat_home_visit' => ($hvSessions > 0 && filled($selection['home_visit_address'] ?? null))
+                ? nl2br(e(trim($selection['home_visit_address'])))
+                : '',
 
             'nama_siswa'       => e($candidate->name),
             'level'            => e($levelName),
@@ -308,14 +323,14 @@ class InvoiceService
             'jumlah_bulan'     => (string) $months,
             'harga_per_bulan'  => $this->rupiah($months > 0 ? round($lesTotal / $months) : $lesTotal),
             'harga_paket'      => $this->rupiah($lesTotal),
-            'total_tagihan'    => $this->rupiah($totalBill + $hvAmount),
+            'total_tagihan'    => $this->rupiah($totalBill),
 
             'catatan' => filled($draft->notes) ? nl2br(e(trim($draft->notes))) : '',
 
             'sudah_dibayar'          => $this->rupiah(0),
             'rincian_dibayar'        => '',
             'jumlah_dibayar'         => $this->rupiah(0),
-            'sisa_setelah_ini'       => $this->rupiah($totalBill + $hvAmount),
+            'sisa_setelah_ini'       => $this->rupiah($totalBill),
             'jatuh_tempo_berikutnya' => '',
 
             // Contoh keterangan transfer untuk pembayaran pertama (DP)
@@ -324,6 +339,91 @@ class InvoiceService
                 str_replace(' ', '', (string) $levelName),
                 'DP',
             ], fn ($part) => $part !== ''))),
+        ];
+    }
+
+    /**
+     * Invoice tagihan kelas pengganti sebelum dibayar. Sesi dan pembayarannya belum ada,
+     * jadi isinya dibaca dari tagihan (tabel replacement_bills).
+     */
+    public function generateForReplacementBill(\App\Models\ReplacementBill $bill): string
+    {
+        $bill->loadMissing('enrollment.student', 'enrollment.class');
+
+        abort_if(! $bill->enrollment, 404, 'Pendaftaran tidak ditemukan.');
+
+        $template = PrintTemplate::where('key', self::TEMPLATE_KEY_EXTRA)->firstOrFail();
+
+        return $this->toPdf(
+            $this->render($template->content, $this->valuesForReplacementBill($bill), false, false),
+            true
+        );
+    }
+
+    private function valuesForReplacementBill(\App\Models\ReplacementBill $bill): array
+    {
+        $session    = $bill->session ?? [];
+        $enrollment = $bill->enrollment;
+        $due        = $bill->due_date;
+
+        // Belum dibayar: semua baris jatuh tempo di tanggal yang sama, jadi semuanya merah
+        $lines = [[
+            'label'     => 'Kelas Pengganti',
+            'due'       => $due,
+            'amount'    => (float) $bill->replacement_amount,
+            'paid'      => false,
+            'paid_date' => null,
+        ]];
+
+        if ($bill->home_visit_amount > 0) {
+            $lines[] = [
+                'label'     => 'Home Visit (guru ke rumah)',
+                'due'       => $due,
+                'amount'    => (float) $bill->home_visit_amount,
+                'paid'      => false,
+                'paid_date' => null,
+            ];
+        }
+
+        $total = (float) array_sum(array_column($lines, 'amount'));
+
+        $time = substr((string) ($session['start_time'] ?? ''), 0, 5);
+
+        if (! empty($session['end_time'])) {
+            $time .= ($time !== '' ? ' - ' : '') . substr((string) $session['end_time'], 0, 5);
+        }
+
+        $location = collect([
+            $session['location_type'] ?? null,
+            $session['room'] ?? null,
+            ($session['location_type'] ?? null) === 'Online' ? ($session['meeting_link'] ?? null) : null,
+        ])->filter()->unique()->implode(' - ');
+
+        return [
+            'logo'          => $this->logoTag(),
+            'nomor_invoice' => e($bill->invoice_number),
+
+            'tanggal_bayar'   => '',
+            'tanggal_tagihan' => e($this->dateId($due)),
+            'status'          => '<span style="color:#EE0000;font-weight:bold;">Belum Lunas</span>',
+            'rincian_tagihan' => $this->billingRows($lines, array_keys($lines), 0.0),
+            'total_tagihan'   => $this->rupiah($total),
+
+            'jenis_biaya'   => implode('<br>', array_map(fn ($l) => e($l['label']), $lines)),
+            'rincian_biaya' => '',
+
+            'nama_siswa' => e($enrollment->student?->name),
+            'kelas'      => e($enrollment->class?->class_name ?? ''),
+
+            'tanggal_pertemuan' => e(
+                ! empty($session['session_date']) ? $this->dateId($session['session_date']) : ''
+            ),
+            'jam_pertemuan' => e($time),
+            'guru'          => 'Menunggu guru',
+            'lokasi'        => e($location !== '' ? $location : 'Haoyou Educator'),
+
+            'jumlah_dibayar' => '',
+            'metode_bayar'   => '',
         ];
     }
 
@@ -466,6 +566,9 @@ class InvoiceService
             'tahap' => e($tahap),
             'status' => $unpaid ? 'Belum Lunas' : 'Lunas',
             'rincian_tagihan' => $this->billingRows($plan, $current, $showDiscount ? $discount : 0.0),
+            'alamat_home_visit' => filled($enrollment->home_visit_address)
+                ? nl2br(e(trim($enrollment->home_visit_address)))
+                : '',
 
             'nama_siswa' => e($student?->name),
             'level' => e($levelName),
@@ -608,6 +711,8 @@ class InvoiceService
         $actPaid    = 0.0;
         $regDate    = null;
         $actDate    = null;
+        $hvPaid     = 0.0;
+        $hvDate     = null;
         $lesByStage = [];
 
         foreach ($ordered as $paid) {
@@ -616,6 +721,7 @@ class InvoiceService
 
             $regPaid += $parts['pendaftaran'];
             $actPaid += $parts['aktivitas'];
+            $hvPaid  += $parts['home_visit'];
 
             if ($parts['pendaftaran'] > 0) {
                 $regDate = $paid->payment_date;
@@ -623,6 +729,10 @@ class InvoiceService
 
             if ($parts['aktivitas'] > 0) {
                 $actDate = $paid->payment_date;
+            }
+
+            if ($parts['home_visit'] > 0) {
+                $hvDate = $paid->payment_date;
             }
 
             $lesByStage[$paid->payment_stage] = ['amount' => $parts['les'], 'date' => $paid->payment_date];
@@ -638,6 +748,7 @@ class InvoiceService
                 'amount'    => (float) $due['pendaftaran'],
                 'paid'      => $regPaid + 0.005 >= $due['pendaftaran'],
                 'paid_date' => $regDate,
+                'paid_amount' => min($regPaid, (float) $due['pendaftaran']),
             ];
         }
 
@@ -648,10 +759,31 @@ class InvoiceService
                 'amount'    => (float) $due['aktivitas'],
                 'paid'      => $actPaid + 0.005 >= $due['aktivitas'],
                 'paid_date' => $actDate,
+                'paid_amount' => min($actPaid, (float) $due['aktivitas']),
             ];
         }
 
-        // Home Visit saat konversi (kelas private baru): dibayar bersamaan dengan DP, jatuh tempo mengikuti tanggal DP
+        // Home Visit bagian dari tagihan paket (kelas private baru): uang masuk menutup pendaftaran, aktivitas,
+        // lalu Home Visit (Rp50.000 per pertemuan) sebelum biaya les. Pertemuan yang belum tertutup tetap Belum Lunas.
+        if (($due['home_visit'] ?? 0) > 0) {
+            $meetings = $this->installments->homeVisitMeetingsFor($enrollment);
+            $perFee   = ExtraFeeService::FEE_HOME_VISIT;
+            $hvLunas  = $hvPaid + 0.005 >= $due['home_visit'];
+            $closed   = $hvLunas ? $meetings : min($meetings, (int) floor(($hvPaid + 0.005) / $perFee));
+
+            $lines[] = [
+                'label'       => 'Biaya Home Visit (' . $meetings . ' pertemuan)',
+                'due'         => $manualDate('dp_home_visit_tanggal', 'dp_pendaftaran_tanggal'),
+                'amount'      => (float) $due['home_visit'],
+                'paid'        => $hvLunas,
+                'paid_date'   => $hvDate,
+                'paid_amount' => min($hvPaid, (float) $due['home_visit']),
+                'danger'      => true,
+                'detail'      => $closed . ' dari ' . $meetings . ' pertemuan lunas',
+            ];
+        }
+
+        // Home Visit lama (dicatat per pertemuan bersama DP): dibayar bersamaan dengan DP, jatuh tempo mengikuti tanggal DP
         if ($homeVisit && $homeVisit['amount'] > 0) {
             $lines[] = [
                 'label'     => 'Biaya Home Visit' . ($homeVisit['sessions'] ? ' (' . $homeVisit['sessions'] . ' pertemuan)' : ''),
@@ -741,10 +873,14 @@ class InvoiceService
         $charges = Payment::query()
             ->where('enrollment_id', $enrollment->id)
             ->where('payment_type', Payment::TYPE_HOME_VISIT)
-            ->whereBetween('created_at', [
-                $first->created_at->copy()->subMinutes(2),
-                $first->created_at->copy()->addMinutes(2),
-            ])
+            ->where(function ($q) use ($first) {
+                // Satu nomor invoice dengan DP; data lama (nomor terpisah) dikenali lewat waktu pembuatan
+                $q->where('invoice_number', $first->invoice_number)
+                    ->orWhereBetween('created_at', [
+                        $first->created_at->copy()->subMinutes(2),
+                        $first->created_at->copy()->addMinutes(2),
+                    ]);
+            })
             ->get();
 
         if ($charges->isEmpty()) {
@@ -808,9 +944,16 @@ class InvoiceService
                 : '');
 
             // Keterangan: Lunas (hijau) atau Belum Lunas; tanggal lunas di kolom terpisah
+            // Home Visit yang belum lunas selalu merah
             $note = $line['paid']
                 ? '<span style="color:#1E8E3E;font-weight:bold;">Lunas</span>'
-                : 'Belum Lunas';
+                : (! empty($line['danger'])
+                    ? '<span font-weight:bold;">Belum Lunas</span>'
+                    : 'Belum Lunas');
+
+            // Nominal tagihan ada di kolom Nominal; dibayar dan sisa ditulis di bawah status
+            $paidAmount = (float) ($line['paid_amount'] ?? ($line['paid'] ? $line['amount'] : 0.0));
+            $sisa       = max((float) $line['amount'] - $paidAmount, 0.0);
 
             $paidDate = ($line['paid'] && $line['paid_date']) ? e($this->dateId($line['paid_date'])) : '-';
 
@@ -884,9 +1027,22 @@ class InvoiceService
         $jenisBiaya = $group->map(fn (Payment $p) => e($label($p)))->implode('<br>');
         $total      = (float) $group->sum('amount_paid');
 
+        // Jatuh tempo diambil dari tagihan dengan nomor invoice yang sama; invoice lama tanpa tagihan memakai tanggal bayar
+        $billDue = \App\Models\ReplacementBill::where('invoice_number', $payment->invoice_number)->value('due_date')
+            ?: $payment->payment_date;
+
+        $lines = $group->map(fn (Payment $p) => [
+            'label'     => $p->payment_type === Payment::TYPE_HOME_VISIT ? 'Home Visit (guru ke rumah)' : 'Kelas Pengganti',
+            'due'       => $billDue ? Carbon::parse($billDue) : null,
+            'amount'    => (float) $p->amount_paid,
+            'paid'      => true,
+            'paid_date' => $p->payment_date,
+        ])->values()->all();
+
         $location = collect([
             $session->location_type,
             $session->room,
+            $session->location_type === 'Online' ? $session->meeting_link : null,
         ])->filter()->unique()->implode(' - ');
 
         return [
@@ -923,6 +1079,12 @@ class InvoiceService
             'metode_bayar' => e(
                 $payment->payment_method
             ),
+
+            // Invoice tagihan: jatuh tempo dari tagihan yang terbit sebelum bayar (kalau ada)
+            'tanggal_tagihan' => e($this->dateId($billDue)),
+            'status'          => '<span style="color:#1E8E3E;font-weight:bold;">Lunas</span>',
+            'rincian_tagihan' => $this->billingRows($lines, [], 0.0),
+            'total_tagihan'   => $this->rupiah($total),
         ];
     }
 
@@ -971,6 +1133,10 @@ class InvoiceService
 
         if ($parts['aktivitas'] > 0) {
             $labels[] = 'Biaya Aktivitas';
+        }
+
+        if (($parts['home_visit'] ?? 0) > 0) {
+            $labels[] = 'Biaya Home Visit';
         }
 
         if ($parts['les'] > 0) {
@@ -1024,6 +1190,12 @@ class InvoiceService
             $html,
             'JIKA_ADA_CATATAN',
             ($values['catatan'] ?? '') !== ''
+        );
+
+        $html = $this->block(
+            $html,
+            'JIKA_HOME_VISIT',
+            ($values['alamat_home_visit'] ?? '') !== ''
         );
 
         $map = [];

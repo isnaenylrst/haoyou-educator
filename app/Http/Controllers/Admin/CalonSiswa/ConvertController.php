@@ -186,6 +186,11 @@ class ConvertController extends Controller
 
             // kelas private BARU: tanpa guru, guru diajukan setelah convert
             'delivery_mode'          => [Rule::requiredIf($needsNewClass), 'nullable', Rule::in(['Offline', 'Online', 'Home Visit'])],
+            // Alamat tujuan guru: wajib kalau kelas private baru berlokasi Home Visit
+            'home_visit_address'     => [
+                Rule::requiredIf($needsNewClass && $request->input('delivery_mode') === 'Home Visit'),
+                'nullable', 'string', 'max:500',
+            ],
             'start_date'             => [Rule::requiredIf($needsNewClass), 'nullable', 'date'],
             'end_date'               => ['nullable', 'date', 'after_or_equal:start_date'],
             'schedules'              => [Rule::requiredIf($needsNewClass), 'nullable', 'array', 'min:1'],
@@ -203,6 +208,7 @@ class ConvertController extends Controller
             'offer_teacher_ids.required_if' => 'Centang minimal satu guru, atau pilih opsi pengajuan lain.',
             'requested_material.required' => 'Materi yang diminta siswa private wajib diisi.',
             'delivery_mode.required'     => 'Mode kelas wajib dipilih.',
+            'home_visit_address.required' => 'Alamat Home Visit wajib diisi.',
             'start_date.required'        => 'Tanggal mulai wajib diisi.',
             'schedules.required'         => 'Tambahkan minimal satu jadwal mingguan.',
             'schedules.min'              => 'Tambahkan minimal satu jadwal mingguan.',
@@ -223,6 +229,7 @@ class ConvertController extends Controller
             unset(
                 $validated['delivery_mode'],
                 $validated['home_visit'],
+                $validated['home_visit_address'],
                 $validated['start_date'],
                 $validated['end_date'],
                 $validated['schedules'],
@@ -246,6 +253,9 @@ class ConvertController extends Controller
 
             if ($homeVisit) {
                 $validated['delivery_mode'] = 'Offline';
+                $validated['home_visit_address'] = trim((string) $validated['home_visit_address']);
+            } else {
+                unset($validated['home_visit_address']);
             }
 
             // Tanggal selesai otomatis kalau dikosongkan
@@ -267,6 +277,7 @@ class ConvertController extends Controller
                 $validated['requested_material'],
                 $validated['delivery_mode'],
                 $validated['home_visit'],
+                $validated['home_visit_address'],
                 $validated['start_date'],
                 $validated['end_date'],
                 $validated['schedules'],
@@ -312,9 +323,13 @@ class ConvertController extends Controller
         $activityFee     = (float) Setting::get('activity_fee', 0);
         $months          = $this->payments->monthsForPackage($package, $isPrivate);
 
+        // Home Visit (kelas private baru) ikut total tagihan: jumlah pertemuan x tarif per pertemuan
+        $homeVisitTotal  = $this->homeVisitFee($draft, $isPrivate, $package);
+        $homeVisit       = $homeVisitTotal > 0;
+
         // Harga lunas (skema "Lunas")
         $lesTotal        = (float) $this->payments->packageTotalFor($package, $isPrivate);
-        $totalBill       = $lesTotal + $registrationFee + $activityFee;
+        $totalBill       = $lesTotal + $registrationFee + $activityFee + $homeVisitTotal;
 
         // Harga termin (installment_price x jumlah termin; paket tanpa harga termin memakai harga lunas).
         // null = paket ini tidak bisa termin
@@ -322,7 +337,7 @@ class ConvertController extends Controller
             ? $package->totalFor('Termin')
             : null;
         $totalBillTermin = $lesTotalTermin !== null
-            ? $lesTotalTermin + $registrationFee + $activityFee
+            ? $lesTotalTermin + $registrationFee + $activityFee + $homeVisitTotal
             : null;
 
         // Kelas yang dipilih di step 1 (reguler atau private yang digabung): tampilkan progres
@@ -352,10 +367,8 @@ class ConvertController extends Controller
             'chosenProgress'
         ))->with('step', 2)
             ->with('invoiceFlow', true)
-            ->with('homeVisit', $isPrivate && ! empty($draft['home_visit']) && empty($draft['join_class_id']))
-            ->with('homeVisitTotal', ($isPrivate && ! empty($draft['home_visit']) && empty($draft['join_class_id']))
-                ? (int) ($package->total_meetings ?? 0) * ExtraFeeService::FEE_HOME_VISIT
-                : 0);
+            ->with('homeVisit', $homeVisit)
+            ->with('homeVisitTotal', $homeVisitTotal);
     }
 
     /* =====================================================================
@@ -392,7 +405,7 @@ class ConvertController extends Controller
         $canInstallment = $this->payments->allowsInstallment($isPrivate, $package);
 
         // Skema, diskon, total tagihan, jumlah termin, dan tanggal jatuh tempo (aturan sama dengan simpan tagihan)
-        $plan = $this->resolvePlan($validated, $isPrivate, $package);
+        $plan = $this->resolvePlan($validated, $isPrivate, $package, $this->homeVisitFee($draft, $isPrivate, $package));
 
         $scheme          = $plan['scheme'];
         $registrationFee = $plan['registrationFee'];
@@ -422,8 +435,9 @@ class ConvertController extends Controller
         // Nomor invoice tagihan yang sudah diterbitkan sebelum bayar dipakai lagi oleh pembayaran pertama
         $draftRow = $this->draftRow($candidateStudent);
 
-        // Home visit dipilih di step 1 (kelas private baru): semua pertemuan sudah dibuat sebagai Home Visit,
-        // di sini tinggal dibayar (jumlah pertemuan x tarif), dicatat terpisah dari DP, satu invoice per pertemuan.
+        // Home visit dipilih di step 1 (kelas private baru): semua pertemuan sudah dibuat sebagai Home Visit.
+        // Biayanya (jumlah pertemuan x tarif) sudah masuk total tagihan, jadi dibayar lewat nominal pembayaran
+        // yang sama dan dialokasikan PaymentInstallmentService: pendaftaran, aktivitas, Home Visit, lalu les.
         $homeVisit = $isPrivate && ! empty($draft['home_visit']) && empty($draft['join_class_id']);
 
         $proofPath = $request->file('proof')->store('bukti-pembayaran', 'public');
@@ -502,6 +516,11 @@ class ConvertController extends Controller
                     'form_manual'      => $formManual ?: null,
                 ]);
 
+                // Alamat Home Visit (kolom class_enrollments.home_visit_address, lihat migrasi); tampil di invoice
+                if ($homeVisit && filled($draft['home_visit_address'] ?? null)) {
+                    $enrollment->forceFill(['home_visit_address' => trim($draft['home_visit_address'])])->save();
+                }
+
                 // Sinkronkan ke student_learning_requests jika siswa private mengisi requested_material
                 if ($isPrivate && filled($enrollment->requested_material)) {
                     \App\Models\StudentLearningRequest::create([
@@ -549,7 +568,7 @@ class ConvertController extends Controller
                 $amountPaid = (float) $validated['amount_paid'];
 
                 // Service menghitung remaining_bill, status Paid/Partial, dan nomor invoice
-                $this->payments->recordPayment(
+                $dpPayment = $this->payments->recordPayment(
                     $enrollment->load(['programPackage.program', 'privatePackage']),
                     round($amountPaid, 2) >= round($totalBill, 2) ? 'Lunas' : 'DP',
                     $amountPaid,
@@ -559,23 +578,8 @@ class ConvertController extends Controller
                     $draftRow?->invoice_number, // nomor invoice tagihan yang sudah terbit (kalau ada)
                 );
 
-                // Home visit: semua pertemuan kelas baru berlokasi Home Visit, bayar Rp50.000 per pertemuan.
-                // Gagal salah satu = seluruh pendaftaran dibatalkan.
-                if ($homeVisit) {
-                    $hvSessions = \App\Models\ClassSession::where('class_id', $classId)
-                        ->where('kind', 'Regular')
-                        ->where('location_type', 'Home Visit')
-                        ->where('status', 'Scheduled')
-                        ->orderBy('session_date')
-                        ->orderBy('start_time')
-                        ->get();
-
-                    $this->sessions->chargeHomeVisit($hvSessions, $enrollment, [
-                        'payment_date'       => $validated['payment_date'],
-                        'payment_method'     => $validated['payment_method'],
-                        'payment_proof_path' => $proofPath,
-                    ]);
-                }
+                // Home Visit TIDAK lagi dicatat sebagai transaksi terpisah. Pertemuan yang sudah tertutup
+                // pembayaran dihitung dari total uang masuk (PaymentInstallmentService::homeVisitStatus).
 
                 return $enrollment;
             });
@@ -626,7 +630,7 @@ class ConvertController extends Controller
 
         [$isPrivate, $package] = $this->resolveSelection($selection, $candidateStudent);
 
-        $plan  = $this->resolvePlan($validated, $isPrivate, $package);
+        $plan  = $this->resolvePlan($validated, $isPrivate, $package, $this->homeVisitFee($selection, $isPrivate, $package));
         $issue = $request->boolean('issue');
 
         // Invoice tagihan wajib punya jatuh tempo di setiap baris supaya bisa ditagihkan
@@ -794,7 +798,7 @@ class ConvertController extends Controller
      *
      * @return array{scheme:string, registrationFee:float, activityFee:float, discount:float, totalBill:float, terminCount:int, formManual:array}
      */
-    private function resolvePlan(array $validated, bool $isPrivate, $package): array
+    private function resolvePlan(array $validated, bool $isPrivate, $package, float $homeVisitFee = 0.0): array
     {
         $canInstallment = $this->payments->allowsInstallment($isPrivate, $package);
 
@@ -813,7 +817,7 @@ class ConvertController extends Controller
         $lesTotal        = $scheme === 'Termin'
             ? $package->totalFor('Termin')
             : (float) $this->payments->packageTotalFor($package, $isPrivate);
-        $baseTotal       = $lesTotal + $registrationFee + $activityFee;
+        $baseTotal       = $lesTotal + $registrationFee + $activityFee + $homeVisitFee;
 
         if ($discount >= $baseTotal) {
             throw ValidationException::withMessages([
@@ -845,6 +849,19 @@ class ConvertController extends Controller
             'terminCount'     => $terminCount,
             'formManual'      => $formManual,
         ];
+    }
+
+    /**
+     * Biaya Home Visit kelas private baru: jumlah pertemuan paket x tarif per pertemuan (0 kalau bukan Home Visit
+     * atau siswa hanya bergabung ke kelas private yang sudah ada).
+     */
+    private function homeVisitFee(array $selection, bool $isPrivate, $package): float
+    {
+        if (! $isPrivate || empty($selection['home_visit']) || ! empty($selection['join_class_id'])) {
+            return 0.0;
+        }
+
+        return (float) ((int) ($package->total_meetings ?? 0) * ExtraFeeService::FEE_HOME_VISIT);
     }
 
     /**

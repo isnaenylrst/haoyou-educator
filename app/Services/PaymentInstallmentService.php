@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ClassEnrollment;
+use App\Models\ClassSession;
 use App\Models\Payment;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -344,6 +345,7 @@ class PaymentInstallmentService
             (float) $enrollment->registration_fee,
             (float) $enrollment->activity_fee,
             (float) ($this->totalBillFor($enrollment) ?? 0),
+            $this->homeVisitFeeFor($enrollment),
         );
 
         $les   = $alloc['les_remaining'];
@@ -363,45 +365,44 @@ class PaymentInstallmentService
     }
 
     /**
-     * Nominal tiap komponen tagihan: pendaftaran, aktivitas, dan biaya les (setelah diskon).
-     * Jumlah ketiganya sama dengan total tagihan.
+     * Nominal tiap komponen tagihan: pendaftaran, aktivitas, Home Visit, dan biaya les (setelah diskon).
+     * Jumlah keempatnya sama dengan total tagihan.
      *
-     * @return array{pendaftaran: float, aktivitas: float, les: float}
+     * @return array{pendaftaran: float, aktivitas: float, home_visit: float, les: float}
      */
     public function componentsDue(ClassEnrollment $enrollment): array
     {
-        $total = (float) ($this->totalBillFor($enrollment) ?? 0);
-        $reg   = (float) $enrollment->registration_fee;
-        $act   = (float) $enrollment->activity_fee;
-
-        $lesNet = max($total - $reg - $act, 0);
-        $feeDue = $total - $lesNet;
-        $regDue = min($reg, $feeDue);
+        $d = $this->splitDue(
+            (float) ($this->totalBillFor($enrollment) ?? 0),
+            (float) $enrollment->registration_fee,
+            (float) $enrollment->activity_fee,
+            $this->homeVisitFeeFor($enrollment),
+        );
 
         return [
-            'pendaftaran' => round($regDue, 2),
-            'aktivitas'   => round($feeDue - $regDue, 2),
-            'les'         => round($lesNet, 2),
+            'pendaftaran' => round($d['reg'], 2),
+            'aktivitas'   => round($d['act'], 2),
+            'home_visit'  => round($d['hv'], 2),
+            'les'         => round($d['les'], 2),
         ];
     }
 
+
     /**
      * Pecah satu pembayaran ke komponen tagihan (untuk formulir dan invoice).
-     * Uang disebar berurutan: pendaftaran, aktivitas, lalu biaya les, dimulai dari titik
+     * Uang disebar berurutan: pendaftaran, aktivitas, Home Visit, lalu biaya les, dimulai dari titik
      * "sudah dibayar sebelumnya" ($previousPaid), jadi pembayaran kedua dst. ikut menutup sisa komponen.
      *
-     * @return array{pendaftaran:float, aktivitas:float, les:float}
+     * @return array{pendaftaran:float, aktivitas:float, home_visit:float, les:float}
      */
     public function paymentComponents(ClassEnrollment $enrollment, float $previousPaid, float $amount): array
     {
-        $total = (float) ($this->totalBillFor($enrollment) ?? 0);
-        $reg   = (float) $enrollment->registration_fee;
-        $act   = (float) $enrollment->activity_fee;
-
-        $lesNet = max($total - $reg - $act, 0);
-        $feeDue = $total - $lesNet;
-        $regDue = min($reg, $feeDue);
-        $actDue = $feeDue - $regDue;
+        $d = $this->splitDue(
+            (float) ($this->totalBillFor($enrollment) ?? 0),
+            (float) $enrollment->registration_fee,
+            (float) $enrollment->activity_fee,
+            $this->homeVisitFeeFor($enrollment),
+        );
 
         // Irisan rentang uang [from, to] dengan rentang komponen [start, end]
         $overlap = fn (float $from, float $to, float $start, float $end): float
@@ -410,45 +411,47 @@ class PaymentInstallmentService
         $from = $previousPaid;
         $to   = $previousPaid + $amount;
 
-        $toReg = $overlap($from, $to, 0, $regDue);
-        $toAct = $overlap($from, $to, $regDue, $regDue + $actDue);
+        $toReg = $overlap($from, $to, 0, $d['reg']);
+        $toAct = $overlap($from, $to, $d['reg'], $d['reg'] + $d['act']);
+        $toHv  = $overlap($from, $to, $d['reg'] + $d['act'], $d['reg'] + $d['act'] + $d['hv']);
 
         return [
             'pendaftaran' => round($toReg, 2),
             'aktivitas'   => round($toAct, 2),
-            'les'         => round(max($amount - $toReg - $toAct, 0), 2),
+            'home_visit'  => round($toHv, 2),
+            'les'         => round(max($amount - $toReg - $toAct - $toHv, 0), 2),
         ];
     }
 
+
     /**
-     * Sebar sejumlah uang ke komponen tagihan: pendaftaran, aktivitas, lalu biaya les (setelah diskon).
+     * Sebar sejumlah uang ke komponen tagihan: pendaftaran, aktivitas, Home Visit, lalu biaya les (setelah diskon).
      * Diskon yang lebih besar dari biaya les mengurangi biaya tetap, jadi jumlah semua komponen
      * selalu sama dengan total tagihan.
      *
-     * @return array{les_net:float, activity_unpaid:float, les_remaining:float}
+     * @return array{les_net:float, activity_unpaid:float, home_visit_unpaid:float, les_remaining:float}
      */
-    private function allocate(float $amount, float $registrationFee, float $activityFee, float $totalBill): array
+    private function allocate(float $amount, float $registrationFee, float $activityFee, float $totalBill, float $homeVisitFee = 0.0): array
     {
-        $lesNet = max($totalBill - $registrationFee - $activityFee, 0);
-        $feeDue = $totalBill - $lesNet;
+        $d = $this->splitDue($totalBill, $registrationFee, $activityFee, $homeVisitFee);
 
-        $regDue = min($registrationFee, $feeDue);
-        $actDue = $feeDue - $regDue;
-
-        $toReg = min($amount, $regDue);
-        $toAct = min($amount - $toReg, $actDue);
-        $toLes = $amount - $toReg - $toAct;
+        $toReg = min($amount, $d['reg']);
+        $toAct = min($amount - $toReg, $d['act']);
+        $toHv  = min($amount - $toReg - $toAct, $d['hv']);
+        $toLes = $amount - $toReg - $toAct - $toHv;
 
         return [
-            'les_net'         => round($lesNet, 2),
-            'activity_unpaid' => round($actDue - $toAct, 2),
-            'les_remaining'   => round(max($lesNet - $toLes, 0), 2),
+            'les_net'           => round($d['les'], 2),
+            'activity_unpaid'   => round($d['act'] - $toAct, 2),
+            'home_visit_unpaid' => round($d['hv'] - $toHv, 2),
+            'les_remaining'     => round(max($d['les'] - $toLes, 0), 2),
         ];
     }
 
+
     /**
      * Total tagihan enrollment = harga paket + biaya pendaftaran
-     * + biaya aktivitas - diskon.
+     * + biaya aktivitas + biaya Home Visit (pertemuan x tarif) - diskon.
      */
     public function totalBillFor(ClassEnrollment $enrollment): ?float
     {
@@ -461,9 +464,150 @@ class PaymentInstallmentService
         $total = $packageTotal
             + (float) $enrollment->registration_fee
             + (float) $enrollment->activity_fee
+            + $this->homeVisitFeeFor($enrollment)
             - (float) $enrollment->discount;
 
         return max($total, 0);
+    }
+
+    /* ==========================================================
+     * HOME VISIT (private) DALAM TAGIHAN PAKET
+     * ==========================================================
+     * Home Visit dari konversi ditagihkan sebagai bagian dari total tagihan paket dan dibayar lewat
+     * nominal pembayaran yang sama (tanpa transaksi terpisah, tanpa kolom baru). Urutan alokasi uang:
+     * pendaftaran -> aktivitas -> Home Visit (Rp50.000 menutup satu pertemuan) -> biaya les.
+     * Status lunas per pertemuan TIDAK disimpan, selalu dihitung dari total uang yang benar-benar masuk
+     * (SUM payments paket), jadi tidak mungkin ada alokasi ganda.
+     */
+
+    /**
+     * Pembagian total tagihan ke empat komponen (setelah diskon). Diskon mengurangi biaya les dulu,
+     * lalu Home Visit, aktivitas, dan pendaftaran, sehingga jumlah komponen selalu sama dengan total.
+     *
+     * @return array{les:float, reg:float, act:float, hv:float}
+     */
+    private function splitDue(float $total, float $reg, float $act, float $hv): array
+    {
+        $lesNet = max($total - $reg - $act - $hv, 0);
+        $fixed  = $total - $lesNet;
+        $regDue = min($reg, $fixed);
+        $actDue = min($act, $fixed - $regDue);
+        $hvDue  = max($fixed - $regDue - $actDue, 0);
+
+        return ['les' => $lesNet, 'reg' => $regDue, 'act' => $actDue, 'hv' => $hvDue];
+    }
+
+    /**
+     * Jumlah pertemuan Home Visit yang ditagihkan di paket private enrollment ini (0 kalau tidak ada).
+     *
+     * Penanda: paket private + class_enrollments.home_visit_address terisi (hanya diisi ConvertController
+     * saat kelas private baru dibuat sebagai Home Visit). Data lama yang Home Visit-nya sudah dicatat
+     * per pertemuan dengan nomor invoice yang sama dengan pembayaran paket tidak ikut dihitung lagi.
+     */
+    public function homeVisitMeetingsFor(ClassEnrollment $enrollment): int
+    {
+        if (! $enrollment->private_package_id || ! filled($enrollment->home_visit_address)) {
+            return 0;
+        }
+
+        if ($enrollment->exists && $this->hasLegacyHomeVisitCharges($enrollment)) {
+            return 0;
+        }
+
+        $enrollment->loadMissing('privatePackage');
+
+        return max((int) ($enrollment->privatePackage?->total_meetings ?? 0), 0);
+    }
+
+    public function homeVisitFeeFor(ClassEnrollment $enrollment): float
+    {
+        return (float) ($this->homeVisitMeetingsFor($enrollment) * ExtraFeeService::FEE_HOME_VISIT);
+    }
+
+    /** Home Visit lama yang dicatat per pertemuan bersama DP (satu nomor invoice dengan pembayaran paket). */
+    private function hasLegacyHomeVisitCharges(ClassEnrollment $enrollment): bool
+    {
+        return Payment::query()
+            ->where('enrollment_id', $enrollment->id)
+            ->where('payment_type', Payment::TYPE_HOME_VISIT)
+            ->whereIn('invoice_number', Payment::query()
+                ->where('enrollment_id', $enrollment->id)
+                ->where('payment_type', Payment::TYPE_PACKAGE)
+                ->select('invoice_number'))
+            ->exists();
+    }
+
+    /**
+     * Status Home Visit berdasarkan uang yang benar-benar masuk.
+     *
+     * @return array{meetings:int, fee:int, due:float, paid:float, remaining:float, closed:int, lunas:bool}
+     */
+    public function homeVisitStatus(ClassEnrollment $enrollment, ?float $paidTotal = null): array
+    {
+        $meetings = $this->homeVisitMeetingsFor($enrollment);
+        $fee      = ExtraFeeService::FEE_HOME_VISIT;
+
+        if ($meetings === 0) {
+            return ['meetings' => 0, 'fee' => $fee, 'due' => 0.0, 'paid' => 0.0, 'remaining' => 0.0, 'closed' => 0, 'lunas' => true];
+        }
+
+        $due  = $this->componentsDue($enrollment)['home_visit'];
+        $paid = $this->paymentComponents($enrollment, 0.0, $paidTotal ?? $this->totalPaid($enrollment))['home_visit'];
+
+        $lunas  = $paid + 0.005 >= $due;
+        $closed = $lunas ? $meetings : min($meetings, (int) floor(($paid + 0.005) / $fee));
+
+        return [
+            'meetings'  => $meetings,
+            'fee'       => $fee,
+            'due'       => $due,
+            'paid'      => $paid,
+            'remaining' => round(max($due - $paid, 0), 2),
+            'closed'    => $closed,
+            'lunas'     => $lunas,
+        ];
+    }
+
+    /**
+     * ID pertemuan yang sudah tertutup pembayaran Home Visit: pertemuan reguler kelas (tanpa yang dibatalkan)
+     * berurutan dari yang paling awal, sebanyak pertemuan yang tertutup.
+     *
+     * @return array<int, int>
+     */
+    public function homeVisitCoveredSessionIds(ClassEnrollment $enrollment): array
+    {
+        $closed = $this->homeVisitStatus($enrollment)['closed'];
+
+        if ($closed < 1 || ! $enrollment->class_id) {
+            return [];
+        }
+
+        return ClassSession::query()
+            ->where('class_id', $enrollment->class_id)
+            ->where('kind', 'Regular')
+            ->where('status', '!=', 'Cancelled')
+            ->orderBy('session_date')
+            ->orderBy('start_time')
+            ->orderBy('id')
+            ->limit($closed)
+            ->pluck('id')
+            ->all();
+    }
+
+    /** True kalau pertemuan ini sudah tertutup pembayaran Home Visit lewat tagihan paket. */
+    public function sessionHomeVisitCovered(ClassSession $session): bool
+    {
+        if (! $session->class_id || $session->kind !== 'Regular') {
+            return false;
+        }
+
+        return ClassEnrollment::query()
+            ->where('class_id', $session->class_id)
+            ->whereNotNull('private_package_id')
+            ->whereNotNull('home_visit_address')
+            ->whereIn('status', ['Active', 'Completed'])
+            ->get()
+            ->contains(fn (ClassEnrollment $e) => in_array($session->id, $this->homeVisitCoveredSessionIds($e), true));
     }
 
     /**

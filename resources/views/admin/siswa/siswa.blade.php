@@ -136,7 +136,9 @@
 
     {{-- ========================= TABLE ========================= --}}
     <div class="card">
-        <table>
+        {{-- Tabel bisa digeser ke samping kalau lebih lebar dari layar (kolom Aksi tidak lagi terpotong) --}}
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+        <table style="min-width:1180px;">
             <thead>
                 <tr>
                     <th width="48" style="text-align: center;">No</th>
@@ -148,7 +150,7 @@
                     <th style="text-align: center;">Poin</th>
                     <th style="text-align: center;">Follow Up</th>
                     <th style="text-align: left;">Catatan</th>
-                    <th width="120" style="text-align: center;">Aksi</th>
+                    <th width="170" style="text-align: center;">Aksi</th>
                 </tr>
             </thead>
 
@@ -186,6 +188,50 @@
                         $programBadgeStyle = $programBadgeClass === 'badge-program-other'
                             ? 'background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;'
                             : '';
+
+                        // Satu baris per program yang sedang diikuti (siswa bisa mengikuti lebih dari satu program).
+                        // Poin, follow up, catatan, dan aksi tetap satu per siswa.
+                        // Tinggi tiap baris program sama di kolom Siswa, Program, Hadir, dan Tidak Hadir supaya sejajar
+                        $lineStyle  = 'height:48px;display:flex;align-items:center;justify-content:center;gap:4px;';
+                        $lineBorder = 'border-top:1px dashed #e5e7eb;';
+
+                        $lines = $student->activeEnrollments->map(function ($e) use ($student, $attendedMap, $absentMap, $activeEnrollment) {
+                            $priv = (bool) $e->private_package_id;
+                            $pkg  = $priv ? $e->privatePackage : ($e->class?->programPackage ?? $e->programPackage);
+
+                            $programName = $priv ? 'Private' : ($pkg?->program?->program_name ?? '-');
+                            $category    = $priv
+                                ? 'Private'
+                                : ($pkg?->category?->category_name
+                                    ?? ($e->id === $activeEnrollment?->id ? $student->currentLevel?->category?->category_name : null)
+                                    ?? $programName);
+
+                            $badge = match ($programName) {
+                                'HSK' => 'badge-warning',
+                                'Daily Activity' => 'badge-cold',
+                                'Private' => 'badge-completed',
+                                default => 'badge-program-other',
+                            };
+
+                            $classId = $e->class_id;
+
+                            return [
+                                'waiting'  => $e->status === 'Waiting Class',
+                                'kelas'    => $priv ? ($e->privatePackage->package_name ?? 'Private') : ($e->class?->class_name ?? '-'),
+                                'category' => $category,
+                                'badge'    => $badge,
+                                'style'    => $badge === 'badge-program-other' ? 'background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;' : '',
+                                'class_id' => $classId,
+                                'attended' => $classId ? (int) ($attendedMap[$student->id][$classId] ?? 0) : 0,
+                                'absent'   => ($classId && isset($absentMap)) ? (int) ($absentMap[$student->id][$classId] ?? 0) : null,
+                                'total'    => (int) (
+                                    $e->class?->programPackage?->total_meetings
+                                    ?? $e->programPackage?->total_meetings
+                                    ?? $e->privatePackage?->total_meetings
+                                    ?? 0
+                                ),
+                            ];
+                        })->values();
                     @endphp
                     <tr>
                         <td style="text-align: center; vertical-align: middle; color:#6b7280;">
@@ -197,65 +243,78 @@
                                 <div class="avatar-sm">
                                     {{ strtoupper(substr($student->name, 0, 1)) }}
                                 </div>
-                                <div>
-                                    <div class="cand-name">{{ $student->name }}</div>
-                                    <div class="cand-sub">
-                                        @if ($isWaitingClass)
-                                            <span style="color:#dc2626;font-weight:600;">Menunggu Kelas</span>
-                                        @else
-                                            {{ $kelasAktifLabel }}
-                                        @endif
-                                    </div>
+                                <div style="min-width:0;max-width:230px;">
+                                    @forelse ($lines as $line)
+                                        {{-- Satu baris per program; baris pertama memuat nama siswa --}}
+                                        <div style="height:48px;display:flex;flex-direction:column;justify-content:center;min-width:0;{{ $loop->index > 0 ? $lineBorder : '' }}">
+                                            @if ($loop->first)
+                                                <div class="cand-name">{{ $student->name }}</div>
+                                            @endif
+                                            <div class="cand-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                                                 title="{{ $line['waiting'] ? 'Menunggu Kelas' : $line['kelas'] }}">
+                                                @if ($line['waiting'])
+                                                    <span style="color:#dc2626;font-weight:600;">Menunggu Kelas</span>
+                                                @else
+                                                    {{ $line['kelas'] }}
+                                                @endif
+                                            </div>
+                                        </div>
+                                    @empty
+                                        <div class="cand-name">{{ $student->name }}</div>
+                                        <div class="cand-sub">-</div>
+                                    @endforelse
                                 </div>
                             </div>
                         </td>
 
                         <td style="text-align: center; vertical-align: middle;">
-                            @if ($categoryLabel && $categoryLabel !== '-')
-                                <span class="badge {{ $programBadgeClass }}" @if ($programBadgeStyle) style="{{ $programBadgeStyle }}" @endif>{{ $categoryLabel }}</span>
-                            @else
+                            @forelse ($lines as $line)
+                                <div style="{{ $lineStyle }}{{ $loop->index > 0 ? $lineBorder : '' }}">
+                                    @if ($line['category'] && $line['category'] !== '-')
+                                        <span class="badge {{ $line['badge'] }}" @if ($line['style']) style="{{ $line['style'] }}" @endif>{{ $line['category'] }}</span>
+                                    @else
+                                        -
+                                    @endif
+                                </div>
+                            @empty
                                 -
-                            @endif
+                            @endforelse
                         </td>
 
-                        @php
-                            $classId = $activeEnrollment?->class_id;
-                            $attended = $classId ? (int) ($attendedMap[$student->id][$classId] ?? 0) : 0;
-                            // $absentMap = [student_id => [class_id => jumlah tidak hadir]] dari controller
-                            $absent = ($classId && isset($absentMap)) ? (int) ($absentMap[$student->id][$classId] ?? 0) : null;
-                            $held = $classId ? (int) ($heldMap[$classId] ?? 0) : 0;
-                            $totalMeetings = (int) (
-                                $activeEnrollment?->class?->programPackage?->total_meetings
-                                ?? $activeEnrollment?->programPackage?->total_meetings
-                                ?? $activeEnrollment?->privatePackage?->total_meetings
-                                ?? 0
-                            );
-                            $pct = $totalMeetings > 0 ? min(100, (int) round($attended / $totalMeetings * 100)) : 0;
-                            $absentPct = ($totalMeetings > 0 && $absent !== null) ? min(100, (int) round($absent / $totalMeetings * 100)) : 0;
-                        @endphp
-
-                        {{-- Hadir --}}
+                        {{-- Hadir (satu baris per program) --}}
                         <td style="text-align: center; vertical-align: middle;">
-                            @if ($classId)
-                                <div class="meet-label">
-                                    <strong>{{ $attended }}</strong>@if ($totalMeetings > 0)<span>/{{ $totalMeetings }}</span>@endif
-                                    <span>(hadir)</span>
+                            @forelse ($lines as $line)
+                                <div style="{{ $lineStyle }}{{ $loop->index > 0 ? $lineBorder : '' }}">
+                                    @if ($line['class_id'])
+                                        <div class="meet-label">
+                                            <strong>{{ $line['attended'] }}</strong>@if ($line['total'] > 0)<span>/{{ $line['total'] }}</span>@endif
+                                            <span>(hadir)</span>
+                                        </div>
+                                    @else
+                                        <span class="cand-sub">-</span>
+                                    @endif
                                 </div>
-                            @else
+                            @empty
                                 <span class="cand-sub">-</span>
-                            @endif
+                            @endforelse
                         </td>
 
-                        {{-- Tidak Hadir --}}
+                        {{-- Tidak Hadir (satu baris per program) --}}
                         <td style="text-align: center; vertical-align: middle;">
-                            @if ($classId && $absent !== null)
-                                <div class="meet-label absent">
-                                    <strong>{{ $absent }}</strong>@if ($totalMeetings > 0)<span>/{{ $totalMeetings }}</span>@endif
-                                    <span>(tidak hadir)</span>
+                            @forelse ($lines as $line)
+                                <div style="{{ $lineStyle }}{{ $loop->index > 0 ? $lineBorder : '' }}">
+                                    @if ($line['class_id'] && $line['absent'] !== null)
+                                        <div class="meet-label absent">
+                                            <strong>{{ $line['absent'] }}</strong>@if ($line['total'] > 0)<span>/{{ $line['total'] }}</span>@endif
+                                            <span>(tidak hadir)</span>
+                                        </div>
+                                    @else
+                                        <span class="cand-sub">-</span>
+                                    @endif
                                 </div>
-                            @else
+                            @empty
                                 <span class="cand-sub">-</span>
-                            @endif
+                            @endforelse
                         </td>
 
                         <td style="text-align: center; vertical-align: middle;">
@@ -354,14 +413,14 @@
 
                             <div class="row-actions">
                                 {{-- 1. Detail & Edit --}}
-                                <a class="icon-btn" title="Detail & Edit"
+                                <a class="icon-btn hv hv-edit" title="Detail & Edit"
                                    href="{{ route('admin.siswa.detail', $student) }}">
                                     <i class="fa-regular fa-pen-to-square"></i>
                                 </a>
 
                                 {{-- 2. Kelas Pengganti --}}
                                 @if ($canReplace)
-                                    <a class="icon-btn wa" title="{{ $replaceHint }}"
+                                    <a class="icon-btn hv hv-replace" title="{{ $replaceHint }}"
                                        href="{{ route('admin.siswa.replacement', $student) }}">
                                         <i class="fa-solid fa-calendar-plus"></i>
                                     </a>
@@ -373,17 +432,17 @@
 
                                 {{-- 3. Assign Kelas / Lanjutkan Pembayaran / Lanjut Program --}}
                                 @if ($isWaitingClass)
-                                    <button type="button" class="icon-btn wa" title="Assign Kelas"
+                                    <button type="button" class="icon-btn hv hv-assign" title="Assign Kelas"
                                             onclick="openAssignClassModal({{ $activeEnrollment->id }})">
                                         <i class="fa-solid fa-chalkboard-user"></i>
                                     </button>
                                 @elseif ($hasOutstanding)
-                                    <a class="icon-btn wa" title="Lanjutkan Pembayaran"
+                                    <a class="icon-btn hv hv-pay" title="Lanjutkan Pembayaran"
                                        href="{{ route('admin.siswa.continue.program', $student) }}">
                                         <i class="fa-solid fa-money-bill-wave"></i>
                                     </a>
                                 @else
-                                    <a class="icon-btn wa" title="Lanjut Program Berikutnya"
+                                    <a class="icon-btn hv hv-next" title="Lanjut Program Berikutnya"
                                        href="{{ route('admin.siswa.continue.program', $student) }}">
                                         <i class="fa-solid fa-forward"></i>
                                     </a>
@@ -391,7 +450,7 @@
 
 {{-- 4. Tambah Program (diikuti bersamaan dengan program yang sedang berjalan) --}}
 @if ($canReplace)
-    <a class="icon-btn wa" title="Tambah Program (diikuti bersamaan)"
+    <a class="icon-btn hv hv-add" title="Tambah Program (diikuti bersamaan)"
        href="{{ route('admin.siswa.continue.program', $student) }}?tambah=1">
         <i class="fa-solid fa-layer-group"></i>
     </a>
@@ -408,6 +467,7 @@
                 @endforelse
             </tbody>
         </table>
+        </div>
 
         <div class="table-footer">
             <span class="table-footer-info">

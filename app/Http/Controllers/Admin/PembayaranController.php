@@ -28,7 +28,7 @@ class PembayaranController extends Controller
     ];
 
     // Sama dengan PaymentInstallmentService::totalBillFor():
-    // harga paket (termin: installment_price x lama paket) + pendaftaran + aktivitas - diskon, minimal 0.
+    // harga paket (termin: installment_price x lama paket) + pendaftaran + aktivitas + Home Visit (pertemuan x tarif) - diskon, minimal 0.
     private const BILL_SQL = 'GREATEST(COALESCE(
         (select case
             when class_enrollments.payment_scheme = \'Termin\' and program_packages.installment_price > 0
@@ -40,6 +40,18 @@ class PembayaranController extends Controller
         0)
         + class_enrollments.registration_fee
         + class_enrollments.activity_fee
+        + (case when class_enrollments.private_package_id is not null
+                and coalesce(class_enrollments.home_visit_address, \'\') <> \'\'
+                and not exists (
+                    select 1 from payments hv
+                    join payments pk on pk.enrollment_id = hv.enrollment_id and pk.invoice_number = hv.invoice_number
+                    where hv.enrollment_id = class_enrollments.id
+                        and hv.payment_type = \'Home Visit\' and pk.payment_type = \'Package\'
+                        and hv.deleted_at is null and pk.deleted_at is null)
+            then coalesce((select total_meetings from private_packages
+                    where private_packages.id = class_enrollments.private_package_id), 0)
+                * ' . \App\Services\ExtraFeeService::FEE_HOME_VISIT . '
+            else 0 end)
         - class_enrollments.discount, 0)';
 
     // Hanya pembayaran paket yang mengurangi tagihan paket.

@@ -480,6 +480,14 @@ a.icon-btn {
     color: #2563eb;
 }
 
+/* Tombol aksi di daftar siswa: hover kuning seperti tombol di halaman detail.
+   Latar, border, dan ikon satu gaya untuk semua tombol. */
+.icon-btn.hv:hover {
+    background: var(--yellow);
+    border-color: var(--yellow);
+    color: #111827;
+}
+
 /* WhatsApp */
 .icon-btn.wa:hover {
     background: #25D366;

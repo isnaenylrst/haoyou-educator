@@ -1089,6 +1089,10 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
             ->name('siswa.replacement.reoffer');
         Route::post('/{siswa}/kelas-pengganti/{classSession}/batal', [SiswaController::class, 'cancelReplacement'])
             ->name('siswa.replacement.cancel');
+        Route::post('/{siswa}/kelas-pengganti/tagihan', [SiswaController::class, 'storeReplacementBill'])
+            ->name('siswa.replacement.bill');
+        Route::get('/{siswa}/kelas-pengganti/tagihan/{bill}/invoice', [SiswaController::class, 'replacementBillInvoice'])
+            ->name('siswa.replacement.bill.invoice');
     });
 
     // ENROLLMENTS

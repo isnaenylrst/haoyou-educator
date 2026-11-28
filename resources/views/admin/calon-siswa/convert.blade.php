@@ -376,6 +376,17 @@
                                 </select>
                             </div>
 
+                            {{-- Alamat tujuan guru: hanya untuk mode Home Visit (diatur applyPrivateState) --}}
+                            <div class="form-field full" id="home-visit-address-wrap" style="display:none;">
+                                <label>Alamat Home Visit *</label>
+                                <textarea name="home_visit_address" id="home_visit_address" rows="2" maxlength="500"
+                                          placeholder="Alamat lengkap rumah siswa tempat guru mengajar">{{ old('home_visit_address', ($draft ?? [])['home_visit_address'] ?? '') }}</textarea>
+                                <span class="form-section-note" style="margin-top:0;">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                    Alamat ini tercetak di invoice tagihan.
+                                </span>
+                            </div>
+
                             <div class="form-field">
                                 <label>Tanggal Mulai *</label>
                                 <input type="date" name="start_date" id="start_date" required value="{{ $oldStartDate }}">
@@ -616,7 +627,7 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label>Biaya pendaftaran: nominal</label>
-                            <input type="text" value="Rp {{ number_format((float) $registrationFee, 0, ',', '.') }}" readonly>
+                            <input type="text" id="nominal-reg" value="Rp {{ number_format((float) $registrationFee, 0, ',', '.') }}" readonly>
                         </div>
                         <div class="form-field">
                             <label>Biaya pendaftaran: jatuh tempo</label>
@@ -626,7 +637,7 @@
 
                         <div class="form-field">
                             <label>Biaya aktivitas: nominal</label>
-                            <input type="text" value="Rp {{ number_format((float) $activityFee, 0, ',', '.') }}" readonly>
+                            <input type="text" id="nominal-act" value="Rp {{ number_format((float) $activityFee, 0, ',', '.') }}" readonly>
                         </div>
                         <div class="form-field">
                             <label>Biaya aktivitas: jatuh tempo</label>
@@ -666,16 +677,23 @@
                         </div>
                     </div>
 
-                    <div class="form-grid">
-                        @for ($n = 1; $n <= \App\Services\PaymentInstallmentService::TERMIN_MAX; $n++)
-                            @php $dateField = $n === 1 ? 'termin1_lunas_tanggal' : "termin{$n}_tanggal"; @endphp
-                            <div class="form-field" id="manual-termin{{ $n }}">
-                                <label>{{ $n === 1 ? 'Termin 1 / Lunas' : 'Termin ' . $n }}: jatuh tempo</label>
+                    @for ($n = 1; $n <= \App\Services\PaymentInstallmentService::TERMIN_MAX; $n++)
+                        @php
+                            $dateField = $n === 1 ? 'termin1_lunas_tanggal' : "termin{$n}_tanggal";
+                            $rowLabel  = $n === 1 ? 'Termin 1 / Lunas' : 'Termin ' . $n;
+                        @endphp
+                        <div class="form-grid" id="manual-termin{{ $n }}">
+                            <div class="form-field">
+                                <label>{{ $rowLabel }}: nominal</label>
+                                <input type="text" id="nominal-termin{{ $n }}" value="" readonly>
+                            </div>
+                            <div class="form-field">
+                                <label>{{ $rowLabel }}: jatuh tempo</label>
                                 <input type="date" form="payment-form" name="form_manual[{{ $dateField }}]"
                                        value="{{ $manualVal($dateField) }}">
                             </div>
-                        @endfor
-                    </div>
+                        </div>
+                    @endfor
 
                     <p class="form-section-note">
                         <i class="fa-solid fa-circle-info"></i>
@@ -716,6 +734,8 @@
                           data-installment="{{ $canInstallment ? 1 : 0 }}"
                           data-reg-fee="{{ (float) ($registrationFee ?? 0) }}"
                           data-act-fee="{{ (float) ($activityFee ?? 0) }}"
+                          data-hv-fee="{{ (float) ($homeVisitTotal ?? 0) }}"
+                          data-hv-per="{{ \App\Services\ExtraFeeService::FEE_HOME_VISIT }}"
                           data-settlement="0">
                         @csrf
 
@@ -789,6 +809,8 @@
                       data-installment="{{ $canInstallment ? 1 : 0 }}"
                       data-reg-fee="{{ (float) ($registrationFee ?? 0) }}"
                       data-act-fee="{{ (float) ($activityFee ?? 0) }}"
+                          data-hv-fee="{{ (float) ($homeVisitTotal ?? 0) }}"
+                          data-hv-per="{{ \App\Services\ExtraFeeService::FEE_HOME_VISIT }}"
                       data-settlement="{{ ! empty($settlement) ? 1 : 0 }}">
                     @csrf
 
@@ -1070,6 +1092,16 @@
                                 <div class="bill-row">
                                     <span>Biaya aktivitas</span>
                                     <span>Rp {{ number_format($activityFee, 0, ',', '.') }}</span>
+                                </div>
+                            @endif
+
+                            @if (! empty($homeVisit) && ($homeVisitTotal ?? 0) > 0)
+                                <div class="bill-row">
+                                    <span>
+                                        Biaya Home Visit
+                                        <br><small style="color:#9ca3af;">{{ (int) ($package->total_meetings ?? 0) }} pertemuan &times; Rp{{ number_format(\App\Services\ExtraFeeService::FEE_HOME_VISIT, 0, ',', '.') }}</small>
+                                    </span>
+                                    <span>Rp {{ number_format($homeVisitTotal, 0, ',', '.') }}</span>
                                 </div>
                             @endif
 
@@ -1628,6 +1660,16 @@
         // Kartu jadwal terpisah: tampil hanya untuk Private + buat kelas baru (bukan gabung kelas)
         box.style.display = (isPrivate && ! joining) ? '' : 'none';
 
+        // Alamat Home Visit: tampil dan wajib hanya untuk private kelas baru (bukan gabung kelas) dengan mode Home Visit
+        const hvAddressWrap = document.getElementById('home-visit-address-wrap');
+        const hvAddress = document.getElementById('home_visit_address');
+        const needsHvAddress = isPrivate && ! joining && mode === 'Home Visit';
+        if (hvAddressWrap) hvAddressWrap.style.display = needsHvAddress ? '' : 'none';
+        if (hvAddress) {
+            hvAddress.required = needsHvAddress;
+            hvAddress.disabled = ! needsHvAddress;
+        }
+
         // Materi permintaan siswa: hanya untuk paket private
         const material = document.getElementById('requested_material');
         if (material) {
@@ -1913,6 +1955,8 @@
         const hasTermin     = ! isNaN(baseTermin);
         const regFee        = parseFloat(form.dataset.regFee) || 0;
         const actFee        = parseFloat(form.dataset.actFee) || 0;
+        const hvFee         = parseFloat(form.dataset.hvFee) || 0;
+        const hvPer         = parseFloat(form.dataset.hvPer) || 0;
         const isSettlement  = form.dataset.settlement === '1';
         const discountInput = document.getElementById('discount');
         const amountInput   = document.getElementById('amount_paid');
@@ -1942,16 +1986,18 @@
             return Math.min(Math.max(min, 1), Math.max(totalBill, 1));
         }
 
-        // Sebar uang masuk: pendaftaran, aktivitas, lalu biaya les (sama dengan PaymentInstallmentService::allocate)
+        // Sebar uang masuk: pendaftaran, aktivitas, Home Visit, lalu biaya les (sama dengan PaymentInstallmentService::allocate)
         function allocate(amount, totalBill) {
-            const lesNet = Math.max(totalBill - regFee - actFee, 0);
+            const lesNet = Math.max(totalBill - regFee - actFee - hvFee, 0);
             const feeDue = totalBill - lesNet;
             const regDue = Math.min(regFee, feeDue);
-            const actDue = feeDue - regDue;
+            const actDue = Math.min(actFee, feeDue - regDue);
+            const hvDue  = Math.max(feeDue - regDue - actDue, 0);
             const toReg  = Math.min(amount, regDue);
             const toAct  = Math.min(amount - toReg, actDue);
-            const toLes  = amount - toReg - toAct;
-            return { toReg, toAct, toLes, actUnpaid: actDue - toAct, lesRemaining: Math.max(lesNet - toLes, 0) };
+            const toHv   = Math.min(amount - toReg - toAct, hvDue);
+            const toLes  = amount - toReg - toAct - toHv;
+            return { toReg, toAct, toHv, hvDue, toLes, actUnpaid: actDue - toAct, lesRemaining: Math.max(lesNet - toLes, 0) };
         }
 
         function renderPlan() {
@@ -1978,7 +2024,16 @@
             let html = '<strong>Rencana pembayaran</strong><br>'
                 + 'DP ' + rupiah(amount) + ' &rarr; pendaftaran ' + rupiah(a.toReg)
                 + (a.toAct > 0 ? ', aktivitas ' + rupiah(a.toAct) : '')
+                + (a.toHv > 0 ? ', Home Visit ' + rupiah(a.toHv) : '')
                 + (a.toLes > 0 ? ', biaya les ' + rupiah(a.toLes) : '') + '.<br>';
+
+            // Home Visit: Rp50.000 menutup satu pertemuan, sisanya tetap Belum Lunas
+            if (a.hvDue > 0 && hvPer > 0) {
+                const meetings = Math.round(hvFee / hvPer);
+                const closed   = a.toHv >= a.hvDue - 0.005 ? meetings : Math.min(meetings, Math.floor((a.toHv + 0.005) / hvPer));
+                html += 'Home Visit: <strong>' + closed + ' dari ' + meetings + ' pertemuan lunas</strong>'
+                    + (closed < meetings ? ' <span style="color:#d00;font-weight:bold;">(Belum Lunas, sisa ' + rupiah(a.hvDue - a.toHv) + ')</span>' : '') + '.<br>';
+            }
 
             if (amount >= total - 0.005) {
                 planBox.innerHTML = html + 'Tagihan <strong>lunas</strong>, tidak ada pembayaran berikutnya.';
@@ -2055,6 +2110,53 @@
         discountInput.addEventListener('input', recalc);
         recalc();
     });
+
+    /* Nominal tiap pembayaran di bagian jatuh tempo: mengikuti skema dan diskon (rumus sama dengan PaymentInstallmentService) */
+    (function () {
+        const form = document.getElementById('payment-form');
+        if (! form || ! document.getElementById('nominal-reg')) return;
+
+        const MAX_TERMIN = {{ \App\Services\PaymentInstallmentService::TERMIN_MAX }};
+        const num = v => parseFloat(v) || 0;
+        const rp  = n => 'Rp ' + Math.round(n).toLocaleString('id-ID');
+        const put = (id, v) => { const e = document.getElementById(id); if (e) e.value = rp(v); };
+
+        function updateDueNominals() {
+            const reg = num(form.dataset.regFee);
+            const act = num(form.dataset.actFee);
+            const schemeEl = document.querySelector('input[name="payment_scheme"]:checked');
+            const termin = !! (schemeEl && schemeEl.value === 'Termin' && form.dataset.lesTermin !== '');
+            const les = termin ? num(form.dataset.lesTermin) : num(form.dataset.lesLunas);
+            const discountEl = document.getElementById('discount');
+            const discount = discountEl ? num(discountEl.value) : 0;
+
+            // Diskon mengurangi biaya les dulu (sama dengan PaymentInstallmentService::componentsDue)
+            const hv     = num(form.dataset.hvFee);
+            const total  = Math.max(reg + act + hv + les - discount, 0);
+            const lesNet = Math.max(total - reg - act - hv, 0);
+            const feeDue = total - lesNet;
+            const regDue = Math.min(reg, feeDue);
+            const actDue = Math.min(act, feeDue - regDue);
+
+            put('nominal-reg', regDue);
+            put('nominal-act', actDue);
+            put('home_visit_fee', feeDue - regDue - actDue);
+
+            const countEl = document.getElementById('termin-count-input');
+            const count = termin ? (parseInt(countEl ? countEl.value : '3', 10) || 3) : 1;
+            const base = Math.floor(lesNet / count);
+
+            for (let n = 1; n <= MAX_TERMIN; n++) {
+                // Termin terakhir menyerap selisih pembulatan
+                put('nominal-termin' + n, n > count ? 0 : (n === count ? lesNet - (count - 1) * base : base));
+            }
+        }
+
+        document.querySelectorAll('input[name="payment_scheme"]').forEach(r => r.addEventListener('change', updateDueNominals));
+        const discountInput = document.getElementById('discount');
+        if (discountInput) discountInput.addEventListener('input', updateDueNominals);
+        updateDueNominals();
+    })();
 </script>
 @endpush
 @endif

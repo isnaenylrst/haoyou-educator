@@ -228,10 +228,9 @@ class ClassSessionService
             default => null,
         };
 
-        if ($type === 'Studio' && (! $room || $room === 'Online')) {
-            throw ValidationException::withMessages([
-                'room' => 'Pilih ruangan untuk pertemuan di studio.',
-            ]);
+        // Ruangan tidak wajib: boleh dikosongkan dan diisi nanti. "Online" bukan ruangan studio.
+        if ($room === 'Online' || ($room !== null && trim($room) === '')) {
+            $room = null;
         }
 
         $pay = [
@@ -294,7 +293,8 @@ class ClassSessionService
                 );
             }
 
-            if ($type === 'Studio') {
+            // Bentrok ruangan hanya dicek kalau ruangan diisi
+            if ($type === 'Studio' && $room) {
                 $this->schedules->assertRoomFreeOn(
                     $room,
                     $date,
@@ -317,6 +317,11 @@ class ClassSessionService
                 'location_type' => $type,
                 'status' => 'Scheduled',
             ]);
+
+            // Link kelas online (kolom class_sessions.meeting_link, lihat migrasi)
+            if ($type === 'Online' && filled($data['meeting_link'] ?? null)) {
+                $session->forceFill(['meeting_link' => trim($data['meeting_link'])])->save();
+            }
 
             // Biaya kelas pengganti selalu dicatat.
             $this->fees->record(
@@ -505,7 +510,9 @@ class ClassSessionService
             $hvPaid = Payment::query()
                 ->where('class_session_id', $locked->id)
                 ->where('payment_type', Payment::TYPE_HOME_VISIT)
-                ->exists();
+                ->exists()
+                // Home Visit yang dibayar lewat tagihan paket (status dihitung dari uang yang masuk)
+                || app(PaymentInstallmentService::class)->sessionHomeVisitCovered($locked);
 
             if (! $hvPaid) {
                 throw ValidationException::withMessages([

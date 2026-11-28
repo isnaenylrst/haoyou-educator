@@ -60,6 +60,12 @@ class SiswaController extends Controller
                 'activeEnrollment.class.schedules',
                 'activeEnrollment.programPackage.program',
                 'activeEnrollment.privatePackage',
+                // Siswa bisa mengikuti lebih dari satu program: semua program aktif tampil di tabel
+                'activeEnrollments.class.programPackage.program',
+                'activeEnrollments.class.programPackage.category',
+                'activeEnrollments.programPackage.program',
+                'activeEnrollments.programPackage.category',
+                'activeEnrollments.privatePackage',
             ]);
 
         if ($request->filled('search')) {
@@ -91,11 +97,21 @@ class SiswaController extends Controller
         if ($request->filled('program')) {
             $program = $request->program;
 
+            // Siswa bisa mengikuti lebih dari satu program: cocok kalau SALAH SATU program aktifnya sesuai filter
             if ($program === 'private') {
-                $query->whereHas('activeEnrollment', fn ($q) => $q->whereNotNull('private_package_id'));
+                $query->whereHas('activeEnrollments', fn ($q) => $q->whereNotNull('private_package_id'));
             } else {
-                $query->whereHas('currentLevel', fn ($q) => $q->where('category_id', $program))
-                      ->whereDoesntHave('activeEnrollment', fn ($q) => $q->whereNotNull('private_package_id'));
+                $query->where(function ($w) use ($program) {
+                    $w->whereHas('activeEnrollments', fn ($q) => $q
+                        ->whereNull('private_package_id')
+                        ->where(fn ($e) => $e
+                            ->whereHas('programPackage', fn ($p) => $p->where('category_id', $program))
+                            ->orWhereHas('class.programPackage', fn ($p) => $p->where('category_id', $program))))
+                      // Tanpa program aktif (cuti/lulus, data lama): memakai level siswa seperti sebelumnya
+                      ->orWhere(fn ($x) => $x
+                        ->whereDoesntHave('activeEnrollments')
+                        ->whereHas('currentLevel', fn ($l) => $l->where('category_id', $program)));
+                });
             }
         }
 
@@ -111,7 +127,7 @@ class SiswaController extends Controller
         $attendedMap = $this->attendedByStudentClass($students->pluck('id'));
         $absentMap   = $this->absentByStudentClass($students->pluck('id'));
         $heldMap     = $this->heldByClass(
-            $students->map(fn ($s) => $s->activeEnrollment?->class_id)->filter()->unique()->values()
+            $students->flatMap(fn ($s) => $s->activeEnrollments->pluck('class_id'))->filter()->unique()->values()
         );
 
         // Opsi dropdown filter: kategori program, sama seperti yang tampil di kolom Program
@@ -422,6 +438,7 @@ class SiswaController extends Controller
             'enrollments.programPackage.program',
             'enrollments.privatePackage',
             'activeEnrollment.class.schedules',
+            'activeEnrollments.class.schedules',
             'progressReports',
             'payments.session',
             'payments.enrollment.class.programPackage.program',
@@ -522,7 +539,7 @@ class SiswaController extends Controller
             // Hari terakhir sebelum biaya pendaftaran dikenakan lagi (sehari sebelum expired mulai)
             'graceUntil'             => $expiredStart?->copy()->subDay(),
             'registrationFeeApplies' => $registrationFeeApplies,
-            'schedules'    => $siswa->activeEnrollment?->class?->schedules ?? collect(),
+            'schedules'    => $this->activeSchedules($siswa),
             'payments'     => $this->paymentRows($siswa),
             // Riwayat poin (siapa yang input, kapan, sebelum -> sesudah)
             'pointLogs'    => $siswa->pointLogs()
@@ -855,6 +872,7 @@ class SiswaController extends Controller
             'end_time'            => ['required', 'date_format:H:i', 'after:start_time'],
             'location_type'       => ['required', Rule::in(['Studio', 'Online', 'Home Visit'])],
             'room'                => ['nullable', 'string', 'max:255'],
+            'meeting_link'        => ['nullable', 'url', 'max:500'], // link kelas online
 
             'offer_mode'          => ['required', Rule::in(['selected', 'matching', 'all'])],
             'offer_teacher_ids'   => ['required_if:offer_mode,selected', 'nullable', 'array'],
@@ -893,6 +911,7 @@ class SiswaController extends Controller
                     'end_time'            => $data['end_time'],
                     'location_type'       => $data['location_type'],
                     'room'                => $data['room'] ?? null,
+                    'meeting_link'        => $data['meeting_link'] ?? null,
 
                     'payment_date'        => $data['payment_date'],
                     'payment_method'      => $data['payment_method'],
@@ -940,7 +959,8 @@ class SiswaController extends Controller
             'start_time'          => ['required', 'date_format:H:i'],
             'end_time'            => ['required', 'date_format:H:i', 'after:start_time'],
             'location_type'       => ['required', Rule::in(['Studio', 'Online', 'Home Visit'])],
-            'room'                => [Rule::requiredIf($request->input('location_type') === 'Studio'), 'nullable', 'string', 'max:255'],
+            'room'                => ['nullable', 'string', 'max:255'], // ruangan tidak wajib
+            'meeting_link'        => ['nullable', 'url', 'max:500'],    // link kelas online
 
             'offer_mode'          => ['required', Rule::in(['selected', 'matching', 'all'])],
             'offer_teacher_ids'   => ['required_if:offer_mode,selected', 'nullable', 'array'],
@@ -952,7 +972,6 @@ class SiswaController extends Controller
         ], [
             'class_enrollment_id.exists'    => 'Pendaftaran tidak ditemukan atau tidak aktif.',
             'end_time.after'                => 'Jam selesai harus setelah jam mulai.',
-            'room.required'                 => 'Pilih ruangan untuk pertemuan di studio.',
             'offer_teacher_ids.required_if' => 'Pilih minimal satu guru untuk diajukan.',
             'due_date.required'             => 'Jatuh tempo wajib diisi untuk menerbitkan invoice.',
         ]);
@@ -974,6 +993,7 @@ class SiswaController extends Controller
                 'end_time'            => $data['end_time'],
                 'location_type'       => $data['location_type'],
                 'room'                => $data['room'] ?? null,
+                'meeting_link'        => $data['location_type'] === 'Online' ? ($data['meeting_link'] ?? null) : null,
                 'offer_mode'          => $data['offer_mode'],
                 'offer_teacher_ids'   => array_map('intval', $data['offer_teacher_ids'] ?? []),
             ],
@@ -1327,6 +1347,23 @@ class SiswaController extends Controller
             ]);
 
         $class->update(['status' => 'Completed']);
+    }
+
+    /**
+     * Jadwal mingguan dari SEMUA program yang sedang diikuti (siswa bisa mengikuti lebih dari satu kelas),
+     * diurutkan per hari dan jam. Tiap jadwal membawa atribut class_name untuk membedakan kelasnya.
+     */
+    private function activeSchedules(Student $siswa): \Illuminate\Support\Collection
+    {
+        return $siswa->activeEnrollments
+            ->filter(fn ($e) => $e->class)
+            ->flatMap(fn ($e) => $e->class->schedules->map(function ($s) use ($e) {
+                $s->setAttribute('class_name', $e->class->class_name);
+
+                return $s;
+            }))
+            ->sortBy(fn ($s) => [array_search($s->day, ClassScheduleService::DAYS), $s->start_time])
+            ->values();
     }
 
     /** Alur lanjut program sedang dipakai untuk menambah program kedua (program lama tetap berjalan). */

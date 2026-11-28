@@ -78,6 +78,10 @@
           data-old-end="{{ old('end_time') ? '1' : '0' }}">
         @csrf
 
+        @if (! empty($activeBill))
+            <input type="hidden" name="bill_id" value="{{ $activeBill->id }}">
+        @endif
+
         <div class="rp-layout">
 
             <div>
@@ -126,8 +130,16 @@
                                 </select>
                             </div>
 
+                            {{-- Link kelas online: tampil hanya untuk lokasi Online --}}
+                            <div class="form-field full" id="link_wrap" style="display:none;">
+                                <label for="meeting_link">Link kelas online</label>
+                                <input type="url" name="meeting_link" id="meeting_link" maxlength="500" value="{{ old('meeting_link') }}"
+                                       placeholder="https://zoom.us/j/... atau https://meet.google.com/...">
+                                <div class="rp-hint">Tercetak di invoice dan bisa diisi nanti kalau belum ada.</div>
+                            </div>
+
                             <div class="form-field full" id="room_wrap">
-                                <label for="room" id="room_label">Ruangan</label>
+                                <label for="room" id="room_label">Ruangan (opsional, boleh diisi nanti)</label>
                                 <input type="text" name="room" id="room" maxlength="255" value="{{ old('room') }}"
                                        placeholder="Mis. Beijing, Basement, Atas, Kaca">
                             </div>
@@ -162,10 +174,70 @@
                     </div>
                 </div>
 
-                {{-- ===== 2. Pembayaran ===== --}}
+                {{-- ===== 2. Invoice tagihan (terbit sebelum siswa membayar) ===== --}}
+                <div class="rp-card">
+                    <div class="form-section" style="margin-bottom:0;">
+                        <div class="form-section-title"><i class="fa-solid fa-file-invoice"></i> Invoice Tagihan</div>
+
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label for="due_date">Jatuh tempo *</label>
+                                <input type="date" name="due_date" id="due_date"
+                                       min="{{ today()->toDateString() }}" value="{{ old('due_date') }}">
+                            </div>
+                        </div>
+
+                        {{-- Rincian dan total yang harus dibayar (ikut berubah saat lokasi Home Visit dipilih) --}}
+                        <div class="rp-line" style="margin-top:4px;">
+                            <span>Kelas pengganti</span>
+                            <span>Rp {{ number_format($fees['replacement'], 0, ',', '.') }}</span>
+                        </div>
+                        <div class="rp-line" id="invoice_home_row" style="display:none;">
+                            <span>Guru ke rumah (Home Visit)</span>
+                            <span>Rp {{ number_format($fees['home_visit'], 0, ',', '.') }}</span>
+                        </div>
+                        <div class="rp-line total">
+                            <span>Total yang harus dibayar</span>
+                            <span id="invoice_total">Rp {{ number_format($fees['replacement'], 0, ',', '.') }}</span>
+                        </div>
+
+                        <div class="rp-hint">
+                            @if (! empty($activeBill))
+                                Invoice tagihan <strong>{{ $activeBill->invoice_number }}</strong> sudah terbit. Perubahan jadwal atau jatuh tempo
+                                disimpan lewat "Simpan Perubahan Tagihan", nomor invoice tetap sama.
+                            @else
+                                Isi jadwal dan jatuh tempo, lalu terbitkan invoice. Siswa belum perlu membayar: kelas baru dijadwalkan dan
+                                diajukan ke guru setelah pembayaran dicatat di bagian bawah.
+                            @endif
+                        </div>
+
+                        <div class="rp-actions" style="justify-content:flex-start;margin-top:12px;">
+                            <button type="submit" class="btn btn-primary" formnovalidate
+                                    formaction="{{ route('admin.siswa.replacement.bill', $siswa) }}">
+                                <i class="fa-solid fa-file-invoice"></i>
+                                {{ ! empty($activeBill) ? 'Simpan Perubahan Tagihan' : 'Terbitkan Invoice Tagihan' }}
+                            </button>
+
+                            @if (! empty($activeBill))
+                                <a href="{{ route('admin.siswa.replacement.bill.invoice', [$siswa, $activeBill]) }}" target="_blank" class="btn btn-secondary">
+                                    <i class="fa-solid fa-file-pdf"></i> Lihat Invoice
+                                </a>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+
+                {{-- ===== 3. Pembayaran (diisi setelah siswa membayar) ===== --}}
                 <div class="rp-card">
                     <div class="form-section" style="margin-bottom:0;">
                         <div class="form-section-title"><i class="fa-solid fa-money-bill-wave"></i> Pembayaran</div>
+
+                        <div class="rp-hint" style="margin-bottom:10px;">
+                            Isi bagian ini setelah siswa membayar. Saat disimpan, kelas pengganti dijadwalkan dan diajukan ke guru.
+                            @if (! empty($activeBill))
+                                Pembayaran ini melunasi invoice <strong>{{ $activeBill->invoice_number }}</strong>.
+                            @endif
+                        </div>
 
                         <div class="form-grid">
                             <div class="form-field">
@@ -196,7 +268,7 @@
                     <a href="{{ route('admin.siswa') }}" class="btn btn-secondary">Batal</a>
                     <button type="submit" class="btn btn-primary" id="submitBtn">
                         <i class="fa-solid fa-check"></i>
-                        Simpan &amp; Ajukan ke Guru
+                        Catat Pembayaran &amp; Ajukan ke Guru
                     </button>
                 </div>
             </div>
@@ -215,7 +287,7 @@
                         <span>Rp {{ number_format($fees['home_visit'], 0, ',', '.') }}</span>
                     </div>
                     <div class="rp-line total">
-                        <span>Total dibayar</span>
+                        <span>Total tagihan</span>
                         <span id="fee_total">Rp {{ number_format($fees['replacement'], 0, ',', '.') }}</span>
                     </div>
 
@@ -225,6 +297,45 @@
             </aside>
         </div>
     </form>
+
+    {{-- ===== Tagihan menunggu pembayaran ===== --}}
+    @if (! empty($pendingBills) && $pendingBills->isNotEmpty())
+        <div class="rp-card" style="margin-top:20px;">
+            <div class="form-section" style="margin-bottom:0;">
+                <div class="form-section-title"><i class="fa-solid fa-hourglass-half"></i> Tagihan Menunggu Pembayaran</div>
+
+                <div class="rp-history-wrap">
+                    <table class="rp-history">
+                        <thead>
+                            <tr>
+                                <th>No. Invoice</th>
+                                <th>Kelas</th>
+                                <th>Pertemuan</th>
+                                <th>Total</th>
+                                <th>Jatuh Tempo</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($pendingBills as $b)
+                                <tr>
+                                    <td>{{ $b['invoice_number'] }}</td>
+                                    <td>{{ $b['class_name'] }}</td>
+                                    <td>{{ $b['date'] }} &middot; {{ $b['location'] }}</td>
+                                    <td>Rp {{ number_format($b['total'], 0, ',', '.') }}</td>
+                                    <td>{{ $b['due'] }}</td>
+                                    <td style="white-space:nowrap;">
+                                        <a href="{{ $b['invoice_url'] }}" target="_blank" class="btn btn-secondary">Lihat Invoice</a>
+                                        <a href="{{ $b['pay_url'] }}" class="btn btn-primary">Bayar</a>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    @endif
 
     {{-- ===== Riwayat ===== --}}
     @php
@@ -380,7 +491,9 @@
                 const wrap = el('room_wrap');
 
                 wrap.style.display = type === 'Online' ? 'none' : '';
-                el('room_label').textContent = type === 'Home Visit' ? 'Alamat / catatan lokasi' : 'Ruangan';
+                el('link_wrap').style.display = type === 'Online' ? '' : 'none';
+                if (type !== 'Online') el('meeting_link').value = '';
+                el('room_label').textContent = type === 'Home Visit' ? 'Alamat / catatan lokasi' : 'Ruangan (opsional, boleh diisi nanti)';
                 el('room').placeholder = type === 'Home Visit'
                     ? 'Alamat siswa'
                     : 'Mis. Beijing, Basement, Atas, Kaca';
@@ -389,8 +502,13 @@
                 const home = type === 'Home Visit';
                 el('fee_home_row').style.display = home ? '' : 'none';
                 el('fee_total').textContent = rupiah(FEE_REPLACEMENT + (home ? FEE_HOME_VISIT : 0));
+
+                // Total yang harus dibayar di kartu Invoice Tagihan
+                el('invoice_total').textContent = rupiah(FEE_REPLACEMENT + (home ? FEE_HOME_VISIT : 0));
+                el('invoice_home_row').style.display = home ? '' : 'none';
+
                 el('invoice_note').textContent = home
-                    ? 'Home visit membuat dua pembayaran dan dua invoice: kelas pengganti dan guru ke rumah.'
+                    ? 'Kelas pengganti dan guru ke rumah digabung dalam satu invoice.'
                     : 'Satu pertemuan, satu invoice.';
             }
 

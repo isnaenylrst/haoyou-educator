@@ -315,7 +315,8 @@
                 <table class="table-mini">
                     <thead>
                         <tr>
-                            <th>Hari</th>
+                            <th>Kelas</th>
+                            <th style="text-align: center; vertical-align: middle;">Hari</th>
                             <th style="text-align: center; vertical-align: middle;">Jam Mulai</th>
                             <th style="text-align: center; vertical-align: middle;">Jam Selesai</th>
                         </tr>
@@ -323,12 +324,13 @@
                     <tbody>
                         @forelse ($schedules as $s)
                             <tr>
-                                <td>{{ $s->day }}</td>
+                                <td>{{ $s->class_name ?? '-' }}</td>
+                                <td style="text-align: center; vertical-align: middle;">{{ $s->day }}</td>
                                 <td style="text-align: center; vertical-align: middle;">{{ substr($s->start_time, 0, 5) }}</td>
                                 <td style="text-align: center; vertical-align: middle;">{{ substr($s->end_time, 0, 5) }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="3">Belum ada jadwal kelas aktif.</td></tr>
+                            <tr><td colspan="5">Belum ada jadwal kelas aktif.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

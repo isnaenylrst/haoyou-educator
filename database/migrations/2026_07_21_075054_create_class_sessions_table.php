@@ -1,4 +1,3 @@
-
 <?php
 
 use Illuminate\Database\Migrations\Migration;
@@ -58,6 +57,9 @@ return new class extends Migration
                 'Online',
                 'Home Visit'
             ])->default('Studio');
+
+            // Link kelas online (Zoom/Meet)
+            $table->string('meeting_link', 500)->nullable();
 
             $table->enum('status', [
                 'Scheduled',

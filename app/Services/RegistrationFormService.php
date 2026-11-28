@@ -48,12 +48,15 @@ class RegistrationFormService
             'biaya_les'         => 'Biaya les (harga paket)',
             'total_pembayaran'  => 'Total pembayaran',
             'diskon' => 'Diskon',
+            'biaya_home_visit' => 'Biaya Home Visit (Rp50.000 per pertemuan, Rp0 kalau bukan Home Visit)',
         ],
         'Pembayaran' => [
             'dp_pendaftaran_nominal' => 'Biaya pendaftaran: nominal',
             'dp_pendaftaran_tanggal' => 'Biaya pendaftaran: tanggal dibayar',
             'dp_aktivitas_nominal'   => 'Biaya aktivitas: nominal',
             'dp_aktivitas_tanggal'   => 'Biaya aktivitas: tanggal dibayar (kosong sampai lunas)',
+            'dp_home_visit_nominal'  => 'Biaya Home Visit: nominal (kosong kalau bukan Home Visit)',
+            'dp_home_visit_tanggal'  => 'Biaya Home Visit: tanggal dibayar (kosong sampai lunas)',
             'dp_awal_tanggal'        => 'Pembayaran pertama: tanggal',
             'termin1_lunas_nominal'  => 'Termin 1 / Lunas / Pelunasan: nominal',
             'termin1_lunas_tanggal'  => 'Termin 1 / Lunas / Pelunasan: tanggal',
@@ -69,7 +72,7 @@ class RegistrationFormService
             'termin2_tanggal'  => 'Termin 2: tanggal',
             'termin3_nominal'  => 'Termin 3: nominal (rencana jadwal, atau yang sudah dibayar)',
             'termin3_tanggal'  => 'Termin 3: tanggal',
-            'tabel_pembayaran' => 'Tabel pembayaran gabungan (Rincian | Jatuh Tempo | Nominal: pendaftaran, aktivitas, lalu Lunas atau Termin 1..N)',
+            'tabel_pembayaran' => 'Tabel pembayaran gabungan (Rincian | Jatuh Tempo | Nominal: pendaftaran, aktivitas, Home Visit kalau ada, lalu Lunas atau Termin 1..N)',
             'tabel_termin'     => 'Tabel semua termin saja (format lama, dipertahankan untuk template yang sudah diedit)',
         ],
     ];
@@ -174,8 +177,13 @@ class RegistrationFormService
         $values['tabel_termin'] = $isTermin ? $this->terminTable($values, $terminCount) : '';
 
         // Tabel pembayaran formulir reguler mengikuti skema siswa (Termin atau Lunas)
+        // Template private lama masih memakai tabel DP | LUNAS: samakan dengan tabel formulir reguler
+        $content = $enrollment->private_package_id
+            ? $this->useCombinedPaymentTable($template->content)
+            : $template->content;
+
         return $this->toPdf($this->render(
-            $template->content,
+            $content,
             $values,
             $enrollment->payment_scheme === 'Termin',
         ));
@@ -212,6 +220,7 @@ class RegistrationFormService
         $lines = [
             ['Biaya Pendaftaran', 'dp_pendaftaran'],
             ['Biaya Aktivitas', 'dp_aktivitas'],
+            [(string) ($auto['dp_home_visit_label'] ?? 'Biaya Home Visit'), 'dp_home_visit'],
         ];
 
         if ($isTermin) {
@@ -252,6 +261,11 @@ class RegistrationFormService
                 $dueRaw = $manual['termin1_lunas_tanggal'] ?? null;
             }
 
+            // Home Visit dibayar bersama pendaftaran: tanpa jatuh tempo sendiri, ikut tanggal pendaftaran
+            if ($dueRaw === null && $prefix === 'dp_home_visit') {
+                $dueRaw = $manual['dp_pendaftaran_tanggal'] ?? null;
+            }
+
             $paidRaw  = (string) ($auto[$prefix . '_tanggal'] ?? '');
             $paidDate = null;
 
@@ -273,6 +287,53 @@ class RegistrationFormService
         }
 
         return $rows;
+    }
+
+    /**
+     * Ganti blok tabel lama formulir private (catatan "Pembayaran Terisi Otomatis" + tabel
+     * Keterangan | DP | LUNAS) dengan tabel gabungan {tabel_pembayaran}
+     * (Rincian Pembayaran | Jatuh Tempo | Nominal), sama seperti formulir reguler.
+     * Kalau template sudah memakai {tabel_pembayaran} atau polanya tidak ditemukan, dibiarkan apa adanya.
+     */
+    private function useCombinedPaymentTable(string $html): string
+    {
+        if (str_contains($html, '{tabel_pembayaran}')) {
+            return $html;
+        }
+
+        $pos = stripos($html, 'Pembayaran Terisi Otomatis');
+
+        if ($pos === false) {
+            return $html;
+        }
+
+        $before = substr($html, 0, $pos);
+
+        // Awal blok = tag <p>/<div> terdekat sebelum kalimat penanda
+        if (preg_match_all('/<(?:p|div)\b/i', $before, $m, PREG_OFFSET_CAPTURE) && $m[0]) {
+            $start = end($m[0])[1];
+        } else {
+            $start = strrpos($before, '<');
+        }
+
+        // Akhir blok = </table> pertama setelah header "LUNAS" (tabel DP/LUNAS)
+        $lunas = strpos($html, 'LUNAS', $pos);
+        $close = $lunas === false ? false : stripos($html, '</table>', $lunas);
+
+        if ($start === false || $close === false) {
+            return $html;
+        }
+
+        $end = $close + strlen('</table>');
+
+        if (stripos(substr($html, $start, $end - $start), '<table') === false) {
+            return $html;
+        }
+
+        $replacement = '<p style="margin:0 0 4px;"><em>*Khusus Pembayaran Cicilan Termin wajib di isi tanggalnya dan di tandatangani.</em></p>'
+            . '{tabel_pembayaran}';
+
+        return substr($html, 0, $start) . $replacement . substr($html, $end);
     }
 
     /** Pratinjau dengan data contoh (isi editor yang belum disimpan pun bisa). */
@@ -347,6 +408,10 @@ class RegistrationFormService
 
         $discount = (float) $enrollment->discount;
 
+        // Biaya Home Visit (kelas private Home Visit): bagian dari tagihan paket, Rp50.000 per pertemuan
+        $homeVisitFee      = (float) ($this->installments()->componentsDue($enrollment)['home_visit'] ?? 0);
+        $homeVisitMeetings = $homeVisitFee > 0 ? $this->installments()->homeVisitMeetingsFor($enrollment) : 0;
+
         $firstSession = $this->firstSessionFor($enrollment);
 
         $values = [
@@ -386,7 +451,8 @@ class RegistrationFormService
             'biaya_aktivitas'   => $this->rupiah($activityFee),
             'biaya_les'         => $this->rupiah($lesTotal),
             'diskon'            => $this->rupiah($discount),
-            'total_pembayaran'  => $this->rupiah(max($lesTotal + $registrationFee + $activityFee - $discount, 0)),
+            'biaya_home_visit'  => $this->rupiah($homeVisitFee),
+            'total_pembayaran'  => $this->rupiah(max($lesTotal + $registrationFee + $activityFee + $homeVisitFee - $discount, 0)),
         ];
 
         // Pembayaran dipetakan ke kolom berdasarkan tahapnya
@@ -435,6 +501,8 @@ class RegistrationFormService
         $actPaid  = 0.0;
         $regDate  = null;
         $actDate  = null;
+        $hvPaid   = 0.0;
+        $hvDate   = null;
         $lesByStage = [];
 
         foreach ($ordered as $payment) {
@@ -443,6 +511,11 @@ class RegistrationFormService
 
             $regPaid += $parts['pendaftaran'];
             $actPaid += $parts['aktivitas'];
+            $hvPaid  += (float) ($parts['home_visit'] ?? 0);
+
+            if (($parts['home_visit'] ?? 0) > 0) {
+                $hvDate = $payment->payment_date;
+            }
 
             if ($parts['pendaftaran'] > 0) {
                 $regDate = $payment->payment_date;
@@ -461,6 +534,12 @@ class RegistrationFormService
         $values['dp_pendaftaran_tanggal'] = ($due['pendaftaran'] > 0 && $regPaid + 0.005 >= $due['pendaftaran']) ? $fmt($regDate) : '';
         $values['dp_aktivitas_nominal']   = $due['aktivitas'] > 0 ? $this->rupiah($due['aktivitas']) : '';
         $values['dp_aktivitas_tanggal']   = ($due['aktivitas'] > 0 && $actPaid + 0.005 >= $due['aktivitas']) ? $fmt($actDate) : '';
+
+        $hvDue = (float) ($due['home_visit'] ?? 0);
+
+        $values['dp_home_visit_nominal']  = $hvDue > 0 ? $this->rupiah($hvDue) : '';
+        $values['dp_home_visit_tanggal']  = ($hvDue > 0 && $hvPaid + 0.005 >= $hvDue) ? $fmt($hvDate) : '';
+        $values['dp_home_visit_label']    = 'Biaya Home Visit' . ($homeVisitMeetings > 0 ? ' (' . $homeVisitMeetings . ' pertemuan)' : '');
 
         $values['termin1_lunas_nominal'] = '';
         $values['termin1_lunas_tanggal'] = '';
@@ -512,7 +591,7 @@ class RegistrationFormService
         // Formulir private (kolom DP / Lunas): nominal terisi otomatis dari tagihan,
         // tanggal tetap kosong sampai benar-benar dibayar.
         if ($enrollment->private_package_id) {
-            $total  = max($lesTotal + $registrationFee + $activityFee - $discount, 0);
+            $total  = max($lesTotal + $registrationFee + $activityFee + $homeVisitFee - $discount, 0);
             $dpPaid = (float) ($slots['dp']->amount_paid ?? 0);
 
             if (! isset($slots['lunas'])) {
@@ -568,7 +647,9 @@ class RegistrationFormService
 
         $values['tabel_termin'] = $this->terminTable($sample, 3);
 
-        foreach (['dp_pendaftaran', 'dp_aktivitas', 'termin1_lunas'] as $prefix) {
+        $sample['dp_home_visit_label'] = 'Biaya Home Visit';
+
+        foreach (['dp_pendaftaran', 'dp_aktivitas', 'dp_home_visit', 'termin1_lunas'] as $prefix) {
             $sample[$prefix . '_tanggal'] = '[Tanggal]';
             $sample[$prefix . '_nominal'] = '[Nominal]';
         }
@@ -607,6 +688,11 @@ class RegistrationFormService
             ['Biaya Pendaftaran', 'dp_pendaftaran'],
             ['Biaya Aktivitas', 'dp_aktivitas'],
         ];
+
+        // Baris Biaya Home Visit hanya muncul kalau kelas private ini Home Visit
+        if (($values['dp_home_visit_nominal'] ?? '') !== '') {
+            $lines[] = [(string) ($values['dp_home_visit_label'] ?? 'Biaya Home Visit'), 'dp_home_visit'];
+        }
 
         if ($termin) {
             for ($n = 1; $n <= $terminCount; $n++) {
@@ -697,6 +783,15 @@ class RegistrationFormService
             } catch (\Throwable) {
                 // tanggal tidak valid: abaikan
             }
+        }
+
+        // Home Visit dibayar bersama pendaftaran: kalau tanggalnya belum diisi, ikut tanggal pendaftaran
+        if (
+            ($values['dp_home_visit_nominal'] ?? '') !== ''
+            && ($values['dp_home_visit_tanggal'] ?? '') === ''
+            && filled($manual['dp_pendaftaran_tanggal'] ?? null)
+        ) {
+            $values['dp_home_visit_tanggal'] = $values['dp_pendaftaran_tanggal'];
         }
 
         // Kolom "Termin 1 / Lunas" dan "Termin 1" adalah satu isian yang sama
