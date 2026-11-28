@@ -1065,6 +1065,10 @@ Route::middleware(['auth', 'role:Admin'])->prefix('admin')->name('admin.')->grou
             ->name('siswa.continue');
         Route::get('/{siswa}/continue/pembayaran', [SiswaController::class, 'continuePayment'])
             ->name('siswa.continue.payment');
+        Route::post('/{siswa}/continue/pembayaran/tagihan', [SiswaController::class, 'continuePlanStore'])
+            ->name('siswa.continue.plan');  
+        Route::get('/{siswa}/continue/pembayaran/invoice', [SiswaController::class, 'continueInvoice'])
+            ->name('siswa.continue.invoice');          
         Route::post('/{siswa}/continue/pembayaran', [SiswaController::class, 'continueStore'])
             ->name('siswa.continue.store');
 

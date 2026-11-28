@@ -101,7 +101,7 @@ class PrintTemplateSeeder extends Seeder
         <div style="font-size:10pt;">Email : haoyoueducator@gmail.com &nbsp; HP : 089679209062</div>
         </div>
 
-        <div style="font-size:20pt;font-weight:bold;color:#FFC000;margin-top:10px;line-height:1.1;">INVOICE TAGIHAN</div>
+        <div style="font-size:20pt;font-weight:bold;color:#FFC000;margin-top:10px;line-height:1.1;">INVOICE</div>
         <div style="font-size:11pt;font-weight:bold;margin-bottom:8px;">No. {nomor_invoice}</div>
 
         <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
@@ -147,6 +147,11 @@ class PrintTemplateSeeder extends Seeder
         <tr>
         <td colspan="2" style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFFAEB;font-weight:bold;">Total tagihan</td>
         <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFFAEB;font-weight:bold;text-align:right;white-space:nowrap;">{total_tagihan}</td>
+        <td colspan="2" style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFFAEB;font-weight:bold;">&nbsp;</td>
+        </tr>
+        <tr>
+        <td colspan="2" style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFFAEB;font-weight:bold;">Sisa tagihan</td>
+        <td style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFFAEB;font-weight:bold;text-align:right;white-space:nowrap;">{sisa_setelah_ini}</td>
         <td colspan="2" style="border:1px solid #000;padding:3px 6px;vertical-align:top;background:#FFFAEB;font-weight:bold;">&nbsp;</td>
         </tr>
         </table>

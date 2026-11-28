@@ -553,8 +553,12 @@
                     $manualVal     = fn ($key) => old('form_manual.' . $key, $savedManual[$key] ?? '');
                     $schemeVal     = old('payment_scheme', $plan->payment_scheme ?? 'Lunas');
                     $discountVal   = old('discount', $plan ? $plan->discount : 0);
-                    $notesVal      = old('notes', $plan ? $plan->notes : trim(($midClassNote ?? '') . ' ' . ($candidateStudent->notes ?? '')));
-                    $planUrl       = route('admin.calon-siswa.convert.plan', $candidateStudent->id);
+                    $notesVal      = old('notes', $plan ? $plan->notes : trim(($midClassNote ?? '') . ' ' . (isset($candidateStudent) ? ($candidateStudent->notes ?? '') : '')));
+                    // Alur siswa lama (Lanjut/Tambah Program) mengirim $planUrl sendiri; alur calon siswa memakai rute convert.plan
+                    $planUrl       = $planUrl ?? route('admin.calon-siswa.convert.plan', $candidateStudent->id);
+                    // Biaya Rp0 (siswa lama) tidak perlu baris jatuh tempo
+                    $hideZero      = ! empty($hideZeroFees);
+                    $deferInvoice  = ! empty($invoiceDeferred);
                 @endphp
 
                 {{-- ---------- 1. Skema pembayaran ---------- --}}
@@ -622,9 +626,13 @@
                         <i class="fa-solid fa-circle-info"></i>
                         Isi tanggal jatuh tempo tiap pembayaran. Tanggal ini tercetak di invoice tagihan dan formulir pendaftaran.
                         Nominal pendaftaran &amp; aktivitas tetap sesuai Pengaturan, nominal termin dibagi otomatis sesuai jumlah termin.
+                        @if ($hideZero && ! empty($registrationNote))
+                            <br>{{ $registrationNote }}
+                        @endif
                     </p>
 
                     <div class="form-grid">
+                        @if (! $hideZero || (float) $registrationFee > 0)
                         <div class="form-field">
                             <label>Biaya pendaftaran: nominal</label>
                             <input type="text" id="nominal-reg" value="Rp {{ number_format((float) $registrationFee, 0, ',', '.') }}" readonly>
@@ -634,7 +642,9 @@
                             <input type="date" form="payment-form" name="form_manual[dp_pendaftaran_tanggal]"
                                    value="{{ $manualVal('dp_pendaftaran_tanggal') }}">
                         </div>
+                        @endif
 
+                        @if (! $hideZero || (float) $activityFee > 0)
                         <div class="form-field">
                             <label>Biaya aktivitas: nominal</label>
                             <input type="text" id="nominal-act" value="Rp {{ number_format((float) $activityFee, 0, ',', '.') }}" readonly>
@@ -644,6 +654,7 @@
                             <input type="date" form="payment-form" name="form_manual[dp_aktivitas_tanggal]"
                                    value="{{ $manualVal('dp_aktivitas_tanggal') }}">
                         </div>
+                        @endif
 
                         {{-- Home Visit (kelas private baru) ditagihkan bersama pendaftaran dan aktivitas --}}
                         @if (! empty($homeVisit))
@@ -697,12 +708,15 @@
 
                     <p class="form-section-note">
                         <i class="fa-solid fa-circle-info"></i>
-                        @if ($invoiceIssued)
+                        @if ($deferInvoice)
+                            Klik <strong>Simpan Tagihan</strong> untuk menyimpan skema, diskon, catatan, dan jatuh tempo.
+                            Invoice terbit otomatis setelah DP dicatat di bagian 3 dan bisa diunduh di halaman berikutnya.
+                        @elseif ($invoiceIssued)
                             Invoice tagihan <strong>{{ $plan->invoice_number }}</strong> sudah terbit
                             ({{ $plan->invoice_issued_at->format('d/m/Y H:i') }}). Perubahan yang disimpan otomatis ikut tampil di invoice.
                         @else
                             Kalau data sudah fix, klik <strong>Terbitkan Invoice</strong> (semua jatuh tempo harus terisi).
-                            Calon siswa belum perlu membayar, admin boleh keluar dari halaman ini dan melanjutkannya nanti.
+                            {{ $personLabel ?? 'Calon siswa' }} belum perlu membayar, admin boleh keluar dari halaman ini dan melanjutkannya nanti.
                         @endif
                     </p>
 
@@ -710,12 +724,14 @@
                         <button type="submit" form="payment-form" formaction="{{ $planUrl }}" formnovalidate class="btn btn-secondary">
                             <i class="fa-solid fa-floppy-disk"></i> {{ $invoiceIssued ? 'Simpan Perubahan' : 'Simpan Tagihan' }}
                         </button>
+                        @if (! $deferInvoice)
                         <button type="submit" form="payment-form" formaction="{{ $planUrl }}" formnovalidate
                                 name="issue" value="1" class="btn btn-primary">
                             <i class="fa-solid fa-file-invoice"></i> {{ $invoiceIssued ? 'Simpan & Perbarui Invoice' : 'Terbitkan Invoice' }}
                         </button>
-                        @if ($invoiceIssued)
-                            <a href="{{ route('admin.calon-siswa.convert.invoice', $candidateStudent->id) }}" target="_blank" class="btn btn-secondary">
+                        @endif
+                        @if ($invoiceIssued && ! $deferInvoice)
+                            <a href="{{ $invoiceUrl ?? route('admin.calon-siswa.convert.invoice', $candidateStudent->id) }}" target="_blank" class="btn btn-secondary">
                                 <i class="fa-solid fa-file-pdf"></i> Lihat Invoice
                             </a>
                         @endif
@@ -724,7 +740,7 @@
 
                 {{-- ---------- 3. Pembayaran DP (diisi setelah calon siswa membayar) ---------- --}}
                 <div class="card" style="margin-top: 16px;">
-                    <form action="{{ route('admin.calon-siswa.convert.store', $candidateStudent->id) }}"
+                    <form action="{{ $formAction ?? route('admin.calon-siswa.convert.store', $candidateStudent->id) }}"
                           method="POST" enctype="multipart/form-data"
                           id="payment-form"
                           data-base="{{ (float) $totalBill }}"
@@ -743,7 +759,11 @@
 
                         <p class="form-section-note" style="margin-top:0;">
                             <i class="fa-solid fa-circle-info"></i>
-                            Isi bagian ini setelah calon siswa membayar. Akun siswa baru dibuat saat DP dicatat.
+                            @if ($hideZero)
+                                Isi bagian ini setelah pembayaran diterima. Program {{ ! empty($additional) ? 'tambahan' : 'berikutnya' }} dibuat saat DP dicatat.
+                            @else
+                                Isi bagian ini setelah calon siswa membayar. Akun siswa baru dibuat saat DP dicatat.
+                            @endif
                         </p>
 
                         <div class="form-grid">
@@ -790,9 +810,9 @@
                 </div>
 
                 <div class="form-footer">
-                    <a href="{{ route('admin.calon-siswa.index') }}" class="btn btn-secondary">Keluar</a>
+                    <a href="{{ $cancelUrl ?? route('admin.calon-siswa.index') }}" class="btn btn-secondary">Keluar</a>
                     <button type="submit" form="payment-form" class="btn btn-primary">
-                        <i class="fa-solid fa-check"></i> Simpan &amp; Konversi Jadi Siswa
+                        <i class="fa-solid fa-check"></i> {{ $submitLabel ?? 'Simpan & Konversi Jadi Siswa' }}
                     </button>
                 </div>
 
@@ -2114,7 +2134,8 @@
     /* Nominal tiap pembayaran di bagian jatuh tempo: mengikuti skema dan diskon (rumus sama dengan PaymentInstallmentService) */
     (function () {
         const form = document.getElementById('payment-form');
-        if (! form || ! document.getElementById('nominal-reg')) return;
+        // nominal-reg bisa tidak ada (siswa lama: biaya pendaftaran Rp0 disembunyikan), jadi patokannya baris Termin 1 / Lunas
+        if (! form || ! document.getElementById('nominal-termin1')) return;
 
         const MAX_TERMIN = {{ \App\Services\PaymentInstallmentService::TERMIN_MAX }};
         const num = v => parseFloat(v) || 0;

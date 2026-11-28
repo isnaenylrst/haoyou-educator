@@ -261,8 +261,10 @@ class InvoiceService
             'class_id'         => $kelas?->id,
             'private_package_id' => $isPrivate ? $package->id : null,
             'home_visit_address' => $draftHomeVisit ? (trim((string) ($selection['home_visit_address'] ?? '')) ?: null) : null,
-            'registration_fee' => (float) \App\Models\Setting::get('registration_fee', 0),
-            'activity_fee'     => (float) \App\Models\Setting::get('activity_fee', 0),
+            // Siswa lama (Lanjut/Tambah Program) mengirim biaya sendiri lewat selection; calon siswa tidak,
+            // jadi tetap memakai Pengaturan.
+            'registration_fee' => (float) ($selection['registration_fee'] ?? \App\Models\Setting::get('registration_fee', 0)),
+            'activity_fee'     => (float) ($selection['activity_fee'] ?? \App\Models\Setting::get('activity_fee', 0)),
             'discount'         => (float) $draft->discount,
             'payment_scheme'   => $scheme,
             'termin_count'     => $terminCount,
@@ -285,6 +287,8 @@ class InvoiceService
         $tahap = $current !== []
             ? implode(' & ', array_map(fn (int $i) => $plan[$i]['label'], $current))
             : 'DP';
+
+        $tahap = $this->stageDisplay($tahap);
 
         $billDate = $current !== [] ? $plan[$current[0]]['due'] : null;
 
@@ -533,6 +537,8 @@ class InvoiceService
             ? implode(' & ', array_map(fn (int $i) => $plan[$i]['label'], $current))
             : (string) $payment->payment_stage;
 
+        $tahap = $this->stageDisplay($tahap);
+
         // Tanggal tagihan = jatuh tempo yang diinput admin; kalau kosong, pakai jarak otomatis seperti sebelumnya.
         // Kalau sudah lunas semua, tampilkan tanggal pembayaran terakhir ini.
         $billDate = $current !== []
@@ -564,7 +570,10 @@ class InvoiceService
 
             'tanggal_tagihan' => e($this->dateId($billDate)),
             'tahap' => e($tahap),
-            'status' => $unpaid ? 'Belum Lunas' : 'Lunas',
+            // Lunas = hijau; Belum Lunas ikut warna merah dari template
+            'status' => $unpaid
+                ? 'Belum Lunas'
+                : '<span style="color:#1E8E3E;font-weight:bold;">Lunas</span>',
             'rincian_tagihan' => $this->billingRows($plan, $current, $showDiscount ? $discount : 0.0),
             'alamat_home_visit' => filled($enrollment->home_visit_address)
                 ? nl2br(e(trim($enrollment->home_visit_address)))
@@ -686,6 +695,12 @@ class InvoiceService
 
         $manual = is_array($enrollment->form_manual) ? $enrollment->form_manual : [];
 
+        // Skema Lunas: kolom Rincian Bayar di invoice memakai nama paket, bukan kata "Lunas"
+        // (kolom Tahap tetap "Lunas" karena memakai 'label').
+        $lunasName = $enrollment->programPackage?->package_name
+            ?? $enrollment->privatePackage?->package_name
+            ?? $enrollment->class?->programPackage?->package_name;
+
         $manualDate = function (string ...$keys) use ($manual): ?Carbon {
             foreach ($keys as $key) {
                 $raw = $manual[$key] ?? null;
@@ -794,13 +809,17 @@ class InvoiceService
             ];
         }
 
+        // Invoice sebelum ada pembayaran mengasumsikan DP minimal. Kalau tidak ada biaya pendaftaran/aktivitas
+        // (siswa lama), batas minimal Rp1 di sistem hanya syarat input, bukan tagihan: jangan dikurangkan dari biaya les.
         $dp = $first
             ? (float) $first->amount_paid
-            : $this->installments->minimumDownPayment(
-                (float) $enrollment->registration_fee,
-                (float) $enrollment->activity_fee,
-                (float) ($this->installments->totalBillFor($enrollment) ?? 0),
-            );
+            : (((float) $enrollment->registration_fee > 0 || (float) $enrollment->activity_fee > 0)
+                ? $this->installments->minimumDownPayment(
+                    (float) $enrollment->registration_fee,
+                    (float) $enrollment->activity_fee,
+                    (float) ($this->installments->totalBillFor($enrollment) ?? 0),
+                )
+                : 0.0);
 
         if ($firstStage === 'Lunas') {
             // Dibayar sekaligus: biaya les masuk baris Lunas
@@ -809,6 +828,7 @@ class InvoiceService
             if ($les && $les['amount'] > 0) {
                 $lines[] = [
                     'label'     => 'Lunas',
+                    'display'   => $lunasName ?: 'Lunas',
                     'due'       => $manualDate('termin1_lunas_tanggal', 'termin1_tanggal'),
                     'amount'    => (float) $les['amount'],
                     'paid'      => true,
@@ -844,6 +864,7 @@ class InvoiceService
             if ($amount > 0) {
                 $lines[] = [
                     'label'     => 'Lunas',
+                    'display'   => $lunasName ?: 'Lunas',
                     'due'       => $manualDate('termin1_lunas_tanggal', 'termin1_tanggal'),
                     'amount'    => (float) $amount,
                     'paid'      => $isPaid,
@@ -958,7 +979,7 @@ class InvoiceService
             $paidDate = ($line['paid'] && $line['paid_date']) ? e($this->dateId($line['paid_date'])) : '-';
 
             $html .= '<tr>'
-                . '<td style="' . $row . '">' . e($line['label']) . '</td>'
+                . '<td style="' . $row . '">' . e($line['display'] ?? $line['label']) . '</td>'
                 . '<td style="' . $row . 'text-align:center;">' . ($line['due'] ? e($this->dateId($line['due'])) : '-') . '</td>'
                 . '<td style="' . $row . 'text-align:right;white-space:nowrap;">' . $this->rupiah($line['amount']) . '</td>'
                 . '<td style="' . $row . 'text-align:center;">' . $note . '</td>'
@@ -1278,6 +1299,18 @@ class InvoiceService
         }
 
         return 'Termin';
+    }
+
+    /**
+     * Nama tahap bayar untuk kolom Info Pembayaran: "Lunas" ditampilkan sebagai "Pelunasan".
+     * Tahap lain (DP, Termin 1, Biaya Aktivitas, dst.) tidak berubah. Rincian Bayar tetap memakai label aslinya.
+     */
+    private function stageDisplay(string $stage): string
+    {
+        return implode(' & ', array_map(
+            fn (string $part) => trim($part) === 'Lunas' ? 'Pelunasan' : trim($part),
+            explode(' & ', $stage)
+        ));
     }
 
     /** Satu baris tabel Rincian Biaya invoice biaya tambahan. */

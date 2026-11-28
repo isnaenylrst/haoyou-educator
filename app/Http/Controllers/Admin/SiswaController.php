@@ -9,6 +9,7 @@ use App\Models\ClassEnrollment;
 use App\Models\ClassModel;
 use App\Models\ClassSchedule;
 use App\Models\ClassSession;
+use App\Models\ConvertDraft;
 use App\Models\PrivatePackage;
 use App\Models\Program;
 use App\Models\ProgramLevel;
@@ -31,6 +32,7 @@ use App\Services\InvoiceService;
 use App\Services\EnrollmentExpiryService;
 use App\Services\PaymentInstallmentService;
 use App\Services\PointService;
+use App\Services\RegistrationFormService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -42,6 +44,9 @@ use Illuminate\Validation\ValidationException;
 class SiswaController extends Controller
 {
     private const CONTINUE_DRAFT = 'continue_draft.';
+
+    // Rencana tagihan step 2 (skema, diskon, catatan, jatuh tempo) Lanjut/Tambah Program, disimpan di session
+    private const CONTINUE_PLAN = 'continue_plan.';
 
     // Penanda "Tambah Program": siswa mengikuti program kedua bersamaan, bukan lanjut ke program berikutnya
     private const ADDITIONAL_FLAG = 'continue_additional.';
@@ -1372,49 +1377,136 @@ class SiswaController extends Controller
         return (bool) session(self::ADDITIONAL_FLAG . $siswa->id);
     }
 
-    // Biaya tambahan untuk siswa lama yang lanjut program: [biaya pendaftaran, biaya aktivitas, info]
+    /**
+     * Biaya untuk siswa lama (Lanjut Program DAN Tambah Program memakai aturan yang sama):
+     *   - Biaya pendaftaran: hanya dikenakan lagi kalau SEMUA program sebelumnya sudah berstatus Lulus
+     *     (lihat registrationFeeInfo). Selama masih ada program yang belum Lulus: Rp0.
+     *   - Biaya aktivitas: selalu Rp0, karena pengguna ini sudah berstatus siswa.
+     * Return: [biaya pendaftaran, biaya aktivitas, catatan untuk ringkasan tagihan]
+     */
     private function continueFees(Student $siswa): array
     {
-        [$applies, $lastEnd, $expiredStart] = $this->registrationFeeInfo($siswa);
+        [$applies, , $expiredStart] = $this->registrationFeeInfo($siswa);
 
         $registrationFee = $applies ? (float) Setting::get('registration_fee', 0) : 0.0;
-        // Biaya aktivitas hanya untuk siswa baru (saat convert). Siswa yang lanjut program sudah pasti
-        // pernah didaftarkan, jadi tidak ditagih lagi walau penanda activity_fee_paid_at kosong (data lama).
-        $activityFee     = 0.0;
+        $activityFee     = 0.0; // jangan ditagih lagi, berapa pun isi Setting activity_fee / activity_fee_paid_at
 
-        $note = ($applies && $expiredStart)
-            ? 'Biaya pendaftaran dikenakan lagi karena masa cuti sudah habis (expired sejak ' . $expiredStart->translatedFormat('d M Y') . ').'
-            : null;
+        $note = $applies
+            ? 'Biaya pendaftaran dikenakan kembali karena program sebelumnya sudah berstatus Lulus'
+                . ($expiredStart ? ' (sejak ' . $expiredStart->translatedFormat('d M Y') . ')' : '') . '.'
+            : 'Biaya pendaftaran tidak dikenakan karena siswa masih mengikuti program yang belum Lulus.';
 
-        return [$registrationFee, $activityFee, $note];
+        return [$registrationFee, $activityFee, $note . ' Biaya aktivitas tidak dikenakan untuk siswa.'];
     }
 
-    // Biaya pendaftaran dikenakan lagi kalau siswa sudah expired (masa cuti habis), aturan sama dengan status siswa:
-    //   - Reguler: expired mulai 1 bulan kalender + 1 hari setelah kelas berakhir.
-    //   - Private: expired mulai 2 bulan kalender setelah pertemuan pertama (expired paket + 1 bulan cuti).
-    // Tanggal akhir kelas diambil dari classes.end_date atau, untuk data historis tanpa kelas, last_class_date.
-    // Kalau tidak ada tanggal sama sekali, dianggap tidak dikenakan.
-    // Return: [dikenakan?, tanggal kelas terakhir, tanggal expired mulai]
+    /**
+     * Status Lulus dihitung PER PROGRAM (pendaftaran), bukan dari students.status:
+     * sebuah program Lulus kalau tanggal expired-nya sudah lewat (aturan di EnrollmentExpiryService:
+     * Reguler = 1 bulan kalender + 1 hari setelah kelas berakhir, Private = 2 bulan kalender setelah pertemuan pertama).
+     * Program Menunggu Kelas atau yang belum expired dianggap masih diikuti.
+     *
+     * Biaya pendaftaran dikenakan lagi hanya kalau ada minimal satu program Lulus DAN tidak ada program yang masih diikuti.
+     * Return: [dikenakan?, tanggal kelas terakhir, tanggal expired terjauh (dipakai juga oleh halaman detail)]
+     */
     private function registrationFeeInfo(Student $siswa): array
     {
         $expiry      = app(EnrollmentExpiryService::class);
-        $enrollments = $siswa->enrollments()->with('class:id,end_date')->get();
+        $enrollments = $siswa->enrollments()->with('class:id,end_date')->get()
+            ->reject(fn ($e) => $e->status === 'Cancelled');
 
         $lastEnd = $enrollments
             ->map(fn ($e) => $expiry->lastClassDate($e))
             ->filter()
             ->max();
 
-        $expiredStart = $enrollments
-            ->map(fn ($e) => $expiry->windows($e)['expired_start'] ?? null)
-            ->filter()
-            ->max();
+        $hasGraduated = false;
+        $stillOngoing = false;
+        $expiredDates = collect();
 
-        if (! $lastEnd || ! $expiredStart) {
-            return [false, null, null];
+        foreach ($enrollments as $e) {
+            if ($e->status === 'Waiting Class') {
+                $stillOngoing = true;
+
+                continue;
+            }
+
+            $expiredStart = $expiry->windows($e)['expired_start'] ?? null;
+
+            if (! $expiredStart) {
+                continue; // data historis tanpa tanggal: tidak menentukan apa pun
+            }
+
+            $expiredDates->push($expiredStart);
+
+            if (today()->gte($expiredStart)) {
+                $hasGraduated = true;
+            } else {
+                $stillOngoing = true;
+            }
         }
 
-        return [today()->gte($expiredStart), Carbon::parse($lastEnd), Carbon::parse($expiredStart)];
+        $expiredMax = $expiredDates->max();
+
+        return [
+            $hasGraduated && ! $stillOngoing,
+            $lastEnd ? Carbon::parse($lastEnd) : null,
+            $expiredMax ? Carbon::parse($expiredMax) : null,
+        ];
+    }
+
+    /**
+     * Skema, diskon, total tagihan, jumlah termin, dan tanggal jatuh tempo untuk Lanjut/Tambah Program.
+     * Dipakai simpan tagihan dan submit DP supaya hitungannya selalu sama (setara ConvertController::resolvePlan,
+     * tetapi biaya pendaftaran/aktivitas mengikuti aturan siswa lama).
+     */
+    private function continuePlan(Student $siswa, array $input, bool $isPrivate, $package, PaymentInstallmentService $payments): array
+    {
+        $canInstallment = $this->continueAllowsInstallment($payments, $isPrivate, $package);
+
+        // Termin hanya berlaku kalau paket boleh dicicil DAN punya jumlah termin; selain itu otomatis Lunas
+        $scheme = ($canInstallment
+            && ! $isPrivate
+            && $package->supportsInstallment()
+            && ($input['payment_scheme'] ?? 'Lunas') === 'Termin')
+            ? 'Termin'
+            : 'Lunas';
+
+        [$registrationFee, $activityFee] = $this->continueFees($siswa);
+
+        $lesTotal  = $scheme === 'Termin'
+            ? $package->totalFor('Termin')
+            : (float) $payments->packageTotalFor($package, $isPrivate);
+        $baseTotal = $lesTotal + $registrationFee + $activityFee;
+        $discount  = round((float) ($input['discount'] ?? 0), 2);
+
+        if ($discount >= $baseTotal) {
+            throw ValidationException::withMessages([
+                'discount' => 'Diskon harus lebih kecil dari total tagihan (Rp' . number_format($baseTotal, 0, ',', '.') . ').',
+            ]);
+        }
+
+        $terminCount = $scheme === 'Termin'
+            ? min(
+                max((int) ($package->installmentTermCount() ?? 3), PaymentInstallmentService::TERMIN_MIN),
+                PaymentInstallmentService::TERMIN_MAX
+            )
+            : 3;
+
+        $formManual = RegistrationFormService::cleanManual(
+            $input['form_manual'] ?? [],
+            $scheme === 'Termin' ? $terminCount : 1,
+        );
+
+        return [
+            'scheme'          => $scheme,
+            'registrationFee' => $registrationFee,
+            'activityFee'     => $activityFee,
+            'discount'        => $discount,
+            'totalBill'       => round($baseTotal - $discount, 2),
+            'terminCount'     => $terminCount,
+            'formManual'      => $formManual,
+            'notes'           => filled($input['notes'] ?? null) ? trim($input['notes']) : null,
+        ];
     }
 
     private function resolveContinuePackage(array $draft): array
@@ -1760,9 +1852,12 @@ class SiswaController extends Controller
             // Bentrok jadwal/ruangan dicek saat kelas dibuat (step 2), setelah kelas lama siswa ditutup.
             $classes = app(ClassScheduleService::class);
 
+            // Argumen ketiga true: ruangan tidak wajib untuk kelas private (sama dengan ConvertController),
+            // bisa diisi nanti lewat Ubah Jadwal.
             $validated['schedules'] = $classes->normalizeSchedules(
                 $validated['schedules'],
-                $validated['delivery_mode']
+                $validated['delivery_mode'],
+                true
             );
 
             if (empty($validated['end_date'])) {
@@ -1804,10 +1899,13 @@ class SiswaController extends Controller
         return redirect()->route('admin.siswa.continue.payment', $siswa);
     }
 
-    // STEP 2 (tampilan)
+    // STEP 2 (tampilan): satu halaman untuk Lanjut Program dan Tambah Program
+    //   1. Skema Pembayaran, 2. Jatuh Tempo (Edit Formulir Pendaftaran), 3. Pembayaran DP
     public function continuePayment(Student $siswa, PaymentInstallmentService $payments)
     {
-        if (! $this->isAdditional($siswa) && $this->hasOutstandingBalance($siswa->activeEnrollment)) {
+        $additional = $this->isAdditional($siswa);
+
+        if (! $additional && $this->hasOutstandingBalance($siswa->activeEnrollment)) {
             return redirect()->route('admin.siswa.settle', $siswa);
         }
 
@@ -1827,8 +1925,7 @@ class SiswaController extends Controller
         $lesTotal       = (float) $payments->packageTotalFor($package, $isPrivate);
         $totalBill      = $lesTotal + $registrationFee + $activityFee;
 
-        // Harga termin (installment_price x jumlah termin; paket tanpa harga termin memakai harga lunas).
-        // null = paket ini tidak bisa termin
+        // Harga termin (installment_price x jumlah termin); null = paket ini tidak bisa termin
         $lesTotalTermin = (! $isPrivate && $package->supportsInstallment())
             ? $package->totalFor('Termin')
             : null;
@@ -1836,16 +1933,41 @@ class SiswaController extends Controller
             ? $lesTotalTermin + $registrationFee + $activityFee
             : null;
 
+        // Kelas yang dipilih di step 1: tampilkan progres kalau kelas sudah berjalan (sama dengan alur calon siswa)
+        $chosenClassId  = $draft['join_class_id'] ?? $draft['class_id'] ?? null;
+        $chosenClass    = $chosenClassId ? ClassModel::find($chosenClassId) : null;
+        $chosenProgress = $chosenClass ? ($this->meetingProgressMap([$chosenClass])[$chosenClass->id] ?? null) : null;
+
+        // Rencana tagihan yang sudah disimpan admin (skema, diskon, catatan, jatuh tempo)
+        $saved = session(self::CONTINUE_PLAN . $siswa->id) ?: [];
+
+        $draftPlan = (object) [
+            'payment_scheme'    => $saved['payment_scheme'] ?? 'Lunas',
+            'discount'          => $saved['discount'] ?? 0,
+            'notes'             => $saved['notes'] ?? null,
+            'form_manual'       => $saved['form_manual'] ?? [],
+            'invoice_issued_at' => ! empty($saved['invoice_issued_at']) ? Carbon::parse($saved['invoice_issued_at']) : null,
+            'invoice_number'    => $saved['invoice_number'] ?? null,
+        ];
+
         return view('admin.calon-siswa.convert', [
             'step'             => 2,
             'stepDisplay'      => 2,
+            'invoiceFlow'      => true,          // layout 3 bagian yang sama dengan alur calon siswa
+            'hideZeroFees'     => true,          // biaya Rp0 tidak ditampilkan di bagian Jatuh Tempo
+            'additional'       => $additional,
             'personName'       => $siswa->name,
             'personLabel'      => 'Siswa',
-            'eyebrow'          => 'Lanjut Program:',
-            'subtitle'         => 'Catat pembayaran untuk program baru dan upload bukti pembayaran.',
+            'eyebrow'          => $additional ? 'Tambah Program:' : 'Lanjut Program:',
+            'subtitle'         => $additional
+                ? 'Atur skema pembayaran, jatuh tempo, dan catat DP untuk program tambahan.'
+                : 'Atur skema pembayaran, jatuh tempo, dan catat DP untuk program berikutnya.',
             'formAction'       => route('admin.siswa.continue.store', $siswa),
+            'planUrl'          => route('admin.siswa.continue.plan', $siswa),
+            'invoiceUrl'       => route('admin.siswa.continue.invoice', $siswa),
             'backUrl'          => route('admin.siswa.continue.program', $siswa),
             'cancelUrl'        => route('admin.siswa'),
+            'submitLabel'      => $additional ? 'Simpan & Tambah Program' : 'Simpan & Lanjut Program',
             'package'          => $package,
             'isPrivate'        => $isPrivate,
             'canInstallment'   => $canInstallment,
@@ -1857,6 +1979,122 @@ class SiswaController extends Controller
             'lesTotalTermin'   => $lesTotalTermin,
             'totalBill'        => $totalBill,
             'totalBillTermin'  => $totalBillTermin,
+            'draftPlan'        => $draftPlan,
+            'midClassNote'     => $this->midClassNote($chosenClass, $chosenProgress),
+            'chosenClass'      => $chosenClass,
+            'chosenProgress'   => $chosenProgress,
+        ]);
+    }
+
+    // STEP 2 (simpan tagihan / terbitkan invoice): skema, diskon, catatan, jatuh tempo, dan nomor invoice
+    // disimpan di session (tanpa tabel baru). Aturannya sama dengan ConvertController::savePlan.
+    public function continuePlanStore(Request $request, Student $siswa, PaymentInstallmentService $payments)
+    {
+        $draft = session(self::CONTINUE_DRAFT . $siswa->id);
+
+        if (! $draft) {
+            return redirect()->route('admin.siswa')->with('error', 'Sesi habis, pilih program lagi.');
+        }
+
+        $validated = $request->validate([
+            'payment_scheme' => ['nullable', 'in:Lunas,Termin'],
+            'discount'       => ['nullable', 'numeric', 'min:0'],
+            'notes'          => ['nullable', 'string', 'max:1000'],
+        ] + RegistrationFormService::manualRules('form_manual'));
+
+        [$isPrivate, $package] = $this->resolveContinuePackage($draft);
+
+        $plan  = $this->continuePlan($siswa, $validated, $isPrivate, $package, $payments);
+        $issue = $request->boolean('issue');
+
+        // Invoice tagihan wajib punya jatuh tempo di setiap baris yang ditagihkan
+        if ($issue) {
+            $required = [];
+
+            if ($plan['registrationFee'] > 0) {
+                $required[] = 'dp_pendaftaran_tanggal';
+            }
+
+            if ($plan['activityFee'] > 0) {
+                $required[] = 'dp_aktivitas_tanggal';
+            }
+
+            $required[] = 'termin1_lunas_tanggal';
+
+            if ($plan['scheme'] === 'Termin') {
+                for ($n = 2; $n <= $plan['terminCount']; $n++) {
+                    $required[] = "termin{$n}_tanggal";
+                }
+            }
+
+            $missing = array_filter($required, fn ($key) => empty($plan['formManual'][$key]));
+
+            if ($missing !== []) {
+                throw ValidationException::withMessages([
+                    'form_manual' => 'Isi semua tanggal jatuh tempo dulu sebelum menerbitkan invoice.',
+                ]);
+            }
+        }
+
+        $previous = session(self::CONTINUE_PLAN . $siswa->id) ?: [];
+
+        $saved = [
+            'payment_scheme'    => $plan['scheme'],
+            'discount'          => $plan['discount'],
+            'notes'             => $plan['notes'],
+            'form_manual'       => $plan['formManual'],
+            'invoice_number'    => $previous['invoice_number'] ?? null,
+            'invoice_issued_at' => $previous['invoice_issued_at'] ?? null,
+        ];
+
+        if ($issue) {
+            if (empty($saved['invoice_number'])) {
+                do {
+                    $number = $payments->generateInvoiceNumber();
+                } while (ConvertDraft::where('invoice_number', $number)->exists());
+
+                $saved['invoice_number'] = $number;
+            }
+
+            $saved['invoice_issued_at'] = $saved['invoice_issued_at'] ?: now()->toIso8601String();
+        }
+
+        session([self::CONTINUE_PLAN . $siswa->id => $saved]);
+
+        return redirect()
+            ->route('admin.siswa.continue.payment', $siswa)
+            ->with('success', $issue
+                ? 'Invoice tagihan ' . $saved['invoice_number'] . ' sudah diterbitkan. Klik "Lihat Invoice" untuk membuka file-nya.'
+                : 'Tagihan tersimpan. Admin bisa melanjutkan nanti dan tetap bisa mengeditnya.');
+    }
+
+    // PDF invoice tagihan sebelum DP, selalu mengikuti rencana tagihan terbaru di session.
+    // Memakai InvoiceService::generateForDraft dengan ConvertDraft sementara (tidak disimpan ke database).
+    public function continueInvoice(Student $siswa, InvoiceService $invoices)
+    {
+        $draft = session(self::CONTINUE_DRAFT . $siswa->id);
+        $saved = session(self::CONTINUE_PLAN . $siswa->id) ?: [];
+
+        abort_unless($draft && ! empty($saved['invoice_issued_at']), 404, 'Invoice tagihan belum diterbitkan.');
+
+        [$registrationFee, $activityFee] = $this->continueFees($siswa);
+
+        $row = new ConvertDraft([
+            // biaya siswa lama dikirim lewat selection supaya invoice tidak memakai Pengaturan (aktivitas Rp0, pendaftaran sesuai aturan Lulus)
+            'selection'         => $draft + ['registration_fee' => $registrationFee, 'activity_fee' => $activityFee],
+            'payment_scheme'    => $saved['payment_scheme'] ?? 'Lunas',
+            'discount'          => $saved['discount'] ?? 0,
+            'notes'             => $saved['notes'] ?? null,
+            'form_manual'       => $saved['form_manual'] ?? [],
+            'invoice_number'    => $saved['invoice_number'] ?? null,
+            'invoice_issued_at' => $saved['invoice_issued_at'],
+        ]);
+
+        $candidate = $siswa->candidateStudent ?? new CandidateStudent(['name' => $siswa->name]);
+
+        return response($invoices->generateForDraft($row, $candidate), 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $row->invoice_number . '.pdf"',
         ]);
     }
 
@@ -1879,44 +2117,27 @@ class SiswaController extends Controller
         $validated = $request->validate([
             'payment_scheme' => ['nullable', 'in:Lunas,Termin'],
             'discount'       => ['nullable', 'numeric', 'min:0'],
+            'notes'          => ['nullable', 'string', 'max:1000'],
             'amount_paid'    => ['required', 'numeric', 'min:1'],
             'payment_method' => ['required', Rule::in(['Transfer Bank', 'Cash', 'QRIS'])],
             'payment_date'   => ['required', 'date', 'before_or_equal:today'],
             'proof'          => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'],
-        ], [
+        ] + RegistrationFormService::manualRules('form_manual'), [
             'proof.required'               => 'Bukti pembayaran wajib diupload.',
             'payment_date.before_or_equal' => 'Tanggal pembayaran tidak boleh di masa depan.',
         ]);
 
         [$isPrivate, $package] = $this->resolveContinuePackage($draft);
-        [$registrationFee, $activityFee] = $this->continueFees($siswa);
 
-        $canInstallment = $this->continueAllowsInstallment($payments, $isPrivate, $package);
+        // Skema, diskon, biaya, total tagihan, jumlah termin, dan jatuh tempo: satu sumber yang sama dengan simpan tagihan
+        $plan = $this->continuePlan($siswa, $validated, $isPrivate, $package, $payments);
 
-        // Termin hanya berlaku kalau paket boleh dicicil DAN punya jumlah termin.
-        // Selain itu otomatis Lunas (private, HSK 4 ke atas, dll).
-        $scheme = ($canInstallment
-            && ! $isPrivate
-            && $package->supportsInstallment()
-            && ($validated['payment_scheme'] ?? 'Lunas') === 'Termin')
-            ? 'Termin'
-            : 'Lunas';
-
-        $lesTotal = $scheme === 'Termin'
-            ? $package->totalFor('Termin')
-            : (float) $payments->packageTotalFor($package, $isPrivate);
-
-        $baseTotal  = $lesTotal + $registrationFee + $activityFee;
-        $discount   = round((float) ($validated['discount'] ?? 0), 2);
-        $amountPaid = round((float) $validated['amount_paid'], 2);
-
-        if ($discount >= $baseTotal) {
-            throw ValidationException::withMessages([
-                'discount' => 'Diskon harus lebih kecil dari total tagihan (Rp' . number_format($baseTotal, 0, ',', '.') . ').',
-            ]);
-        }
-
-        $totalBill = round($baseTotal - $discount, 2);
+        $scheme          = $plan['scheme'];
+        $registrationFee = $plan['registrationFee'];
+        $activityFee     = $plan['activityFee']; // selalu 0 untuk siswa
+        $discount        = $plan['discount'];
+        $totalBill       = $plan['totalBill'];
+        $amountPaid      = round((float) $validated['amount_paid'], 2);
 
         // Aturan DP: pembayaran pertama minimal sebesar biaya pendaftaran (kalau tidak dikenakan: biaya aktivitas)
         // dan tidak boleh melebihi total tagihan. Berlaku untuk skema Lunas maupun Termin.
@@ -1934,6 +2155,10 @@ class SiswaController extends Controller
             ]);
         }
 
+        // Nomor invoice yang sudah diterbitkan sebelum bayar dipakai lagi oleh pembayaran pertama
+        $savedPlan     = session(self::CONTINUE_PLAN . $siswa->id) ?: [];
+        $invoiceNumber = ! empty($savedPlan['invoice_issued_at']) ? ($savedPlan['invoice_number'] ?? null) : null;
+
         $classId   = $isPrivate ? null : ($draft['class_id'] ?? null);
         $newClass  = null; // kelas private baru yang dibuat di transaksi (untuk diajukan ke guru)
         $levelId   = $isPrivate ? null : ($package->level_id ?: ($draft['level_id'] ?? null));
@@ -1942,7 +2167,7 @@ class SiswaController extends Controller
         try {
             $enrollment = DB::transaction(function () use (
                 $siswa, $currentEnrollment, $additional, $draft, $isPrivate, $validated, $payments,
-                $registrationFee, $activityFee, $discount, $amountPaid, $totalBill, $classId, $levelId, $proofPath, $scheme,
+                $registrationFee, $activityFee, $discount, $amountPaid, $totalBill, $classId, $levelId, $proofPath, $scheme, $plan, $invoiceNumber,
                 &$newClass
             ) {
                 // Lanjut Program: program lama selesai dan kelas private lama ditutup.
@@ -2026,12 +2251,10 @@ class SiswaController extends Controller
                     // Skema bayar menentukan total tagihan (Lunas = price, Termin = installment_price x lama paket)
                     'payment_scheme'     => $scheme,
                     // Jumlah termin dikunci mengikuti paket (selain Termin tetap 3)
-                    'termin_count'       => $scheme === 'Termin'
-                        ? min(
-                            max((int) ($package->installmentTermCount() ?? 3), PaymentInstallmentService::TERMIN_MIN),
-                            PaymentInstallmentService::TERMIN_MAX
-                        )
-                        : 3,
+                    'termin_count'       => $plan['terminCount'],
+                    // Catatan & tanggal jatuh tempo dari bagian 1 dan 2 (tercetak di invoice dan formulir pendaftaran)
+                    'notes'              => $plan['notes'],
+                    'form_manual'        => $plan['formManual'] ?: null,
                     'requested_material' => $isPrivate ? ($draft['requested_material'] ?? null) : null,
                 ]);
 
@@ -2047,6 +2270,7 @@ class SiswaController extends Controller
                     $validated['payment_method'],
                     $validated['payment_date'],
                     $proofPath,
+                    $invoiceNumber, // nomor invoice tagihan yang sudah terbit (kalau ada), sama dengan alur calon siswa
                 );
 
                 // join_date = tanggal pertama bergabung (dipakai kartu "Siswa Baru"), jangan ditimpa saat lanjut program
@@ -2070,7 +2294,7 @@ class SiswaController extends Controller
             throw $e;
         }
 
-        session()->forget([self::CONTINUE_DRAFT . $siswa->id, self::ADDITIONAL_FLAG . $siswa->id]);
+        session()->forget([self::CONTINUE_DRAFT . $siswa->id, self::CONTINUE_PLAN . $siswa->id, self::ADDITIONAL_FLAG . $siswa->id]);
 
         $message = $additional
             ? "Program tambahan untuk {$siswa->name} berhasil ditambahkan."
@@ -2177,6 +2401,19 @@ class SiswaController extends Controller
         }
 
         return $result;
+    }
+
+    /** Catatan otomatis untuk kelas yang sudah berjalan (null kalau belum ada pertemuan). Sama dengan alur calon siswa. */
+    private function midClassNote(?ClassModel $kelas, ?array $progress): ?string
+    {
+        if (! $kelas || ! $progress || $progress['done'] < 1) {
+            return null;
+        }
+
+        $dari = $progress['total'] > 0 ? " dari {$progress['total']}" : '';
+
+        return "Daftar di tengah kelas: kelas sudah berjalan {$progress['done']}{$dari} pertemuan, "
+            . "siswa mulai dari pertemuan ke-{$progress['next']}.";
     }
 
     /* =====================================================================

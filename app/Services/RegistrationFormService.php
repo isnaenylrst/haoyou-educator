@@ -189,6 +189,15 @@ class RegistrationFormService
         ));
     }
 
+    /** Nama paket untuk baris skema Lunas (kembali ke "Lunas" kalau paket tidak ditemukan). */
+    private function lunasLabel(ClassEnrollment $enrollment): string
+    {
+        return (string) ($enrollment->programPackage?->package_name
+            ?? $enrollment->privatePackage?->package_name
+            ?? $enrollment->class?->programPackage?->package_name
+            ?? 'Lunas');
+    }
+
     /**
      * Jadwal tagihan satu enrollment (dipakai invoice tagihan), satu entri per komponen:
      * Biaya Pendaftaran, Biaya Aktivitas, lalu Lunas (skema Lunas) atau Termin 1..N (skema Termin).
@@ -230,7 +239,8 @@ class RegistrationFormService
                 $lines[] = ['Termin ' . $n, 'termin' . $n];
             }
         } else {
-            $lines[] = ['Lunas', 'termin1_lunas'];
+            // Skema Lunas: baris memakai nama paket, bukan kata "Lunas"
+            $lines[] = [$this->lunasLabel($enrollment), 'termin1_lunas'];
         }
 
         $toDate = function ($raw): ?string {
@@ -699,7 +709,8 @@ class RegistrationFormService
                 $lines[] = ['Termin ' . $n, 'termin' . $n];
             }
         } else {
-            $lines[] = ['Lunas', 'termin1_lunas'];
+            // Skema Lunas: baris memakai nama paket (sudah di-escape di $values['paket']), bukan kata "Lunas"
+            $lines[] = [(($values['paket'] ?? '') !== '' ? $values['paket'] : 'Lunas'), 'termin1_lunas'];
         }
 
         // Baris dipadatkan kalau terlalu banyak supaya formulir tidak meluber ke halaman berikutnya
