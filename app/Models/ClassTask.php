@@ -50,6 +50,46 @@ class ClassTask extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function teacherMaterials()
+    {
+        return $this->hasMany(TeacherMaterial::class, 'task_id');
+    }
+
+    public function latestSubmission()
+    {
+        return $this->hasOne(TeacherMaterial::class, 'task_id')->latestOfMany();
+    }
+
+    /**
+     * Virtual display status untuk tugas perbaikan yang terintegrasi dengan pengajuan LP/PPT:
+     * - Selesai: jika task->status == 'Done'
+     * - Perlu Revisi: jika submission terbaru berstatus 'Perlu Revisi' atau 'Rejected'
+     * - Dikerjakan / Diajukan: jika submission terbaru berstatus 'Pending' atau 'Diajukan'
+     * - Ditugaskan: jika belum ada submission
+     */
+    public function getEffectiveStatusAttribute(): string
+    {
+        if ($this->status === 'Done') {
+            return 'Selesai';
+        }
+
+        $latest = $this->relationLoaded('latestSubmission')
+            ? $this->latestSubmission
+            : ($this->relationLoaded('teacherMaterials') ? $this->teacherMaterials->sortByDesc('id')->first() : $this->latestSubmission()->first());
+
+        if ($latest) {
+            if (in_array($latest->status, ['Perlu Revisi', 'Rejected'], true)) {
+                return 'Perlu Revisi';
+            }
+            if (in_array($latest->status, ['Approved', 'Disetujui'], true)) {
+                return 'Selesai';
+            }
+            return 'Diajukan';
+        }
+
+        return 'Ditugaskan';
+    }
+
     /** Tugas yang belum diselesaikan guru. */
     public function scopeOpen($query)
     {

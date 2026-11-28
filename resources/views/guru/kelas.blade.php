@@ -51,6 +51,59 @@
         </div>
     @endif
 
+    {{-- ================= TABS UTAMA ================= --}}
+    @php
+        $curTab = request()->query('tab', $activeTab ?? 'buat-lp');
+    @endphp
+
+    <ul class="nav nav-pills mb-4 gap-2" id="kelasMainTabs" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link rounded-pill fw-semibold {{ $curTab === 'buat-lp' ? 'active' : '' }}"
+               id="tab-buat-lp"
+               data-bs-toggle="pill"
+               href="#pane-buat-lp"
+               role="tab"
+               onclick="history.replaceState(null, '', '?tab=buat-lp')">
+                <i class="fa-solid fa-cloud-arrow-up me-1"></i> Buat LP & PPT Kelas Baru
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link rounded-pill fw-semibold {{ $curTab === 'tugas-materi' ? 'active' : '' }}"
+               id="tab-tugas-materi"
+               data-bs-toggle="pill"
+               href="#pane-tugas-materi"
+               role="tab"
+               onclick="history.replaceState(null, '', '?tab=tugas-materi')">
+                <i class="fa-solid fa-file-pen me-1"></i> Tugas Perbaikan Materi
+                @if (($pendingMaterialTasksCount ?? 0) > 0)
+                    <span class="badge bg-danger rounded-pill ms-1">{{ $pendingMaterialTasksCount }}</span>
+                @else
+                    <span class="badge bg-light text-muted rounded-pill ms-1">0</span>
+                @endif
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link rounded-pill fw-semibold {{ $curTab === 'tugas-kelas' ? 'active' : '' }}"
+               id="tab-tugas-kelas"
+               data-bs-toggle="pill"
+               href="#pane-tugas-kelas"
+               role="tab"
+               onclick="history.replaceState(null, '', '?tab=tugas-kelas')">
+                <i class="fa-solid fa-chalkboard-user me-1"></i> Tugas Perbaikan Kelas
+                @if (($pendingClassTasksCount ?? 0) > 0)
+                    <span class="badge bg-danger rounded-pill ms-1">{{ $pendingClassTasksCount }}</span>
+                @else
+                    <span class="badge bg-light text-muted rounded-pill ms-1">0</span>
+                @endif
+            </a>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="kelasMainTabContent">
+
+        {{-- ==================== TAB 1: BUAT LP & PPT KELAS BARU ==================== --}}
+        <div class="tab-pane fade {{ $curTab === 'buat-lp' ? 'show active' : '' }}" id="pane-buat-lp" role="tabpanel">
+
     {{-- ==================== FORM UPLOAD ==================== --}}
     <div class="card border-0 shadow-sm rounded-4 mb-4">
         <div class="card-body">
@@ -549,6 +602,447 @@
 
         </div>
     </div>
+
+        </div> {{-- End pane-buat-lp --}}
+
+        {{-- ==================== TAB 2: TUGAS PERBAIKAN MATERI ==================== --}}
+        <div class="tab-pane fade {{ $curTab === 'tugas-materi' ? 'show active' : '' }}" id="pane-tugas-materi" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h4 class="fw-bold mb-1">Tugas Perbaikan Materi Guru</h4>
+                            <p class="text-muted mb-0">
+                                Daftar tugas perbaikan materi / modul mengajar yang ditugaskan Kurikulum langsung kepada Anda.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="list-group list-group-flush">
+                        @forelse ($materialTasks as $t)
+                            @php
+                                $effStatus = $t->effective_status;
+                                $isOverdue = $t->is_overdue;
+                                $isDone = $t->status === 'Done';
+                                $sub = $t->latestSubmission;
+                            @endphp
+                            <div class="list-group-item py-3 px-0 border-bottom">
+                                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                                            <h5 class="fw-bold mb-0">{{ $t->title }}</h5>
+                                            <span class="badge bg-purple text-white" style="background-color: #6f42c1;">
+                                                <i class="fa-solid fa-file-pen me-1"></i> Perbaikan Materi
+                                            </span>
+
+                                            @if ($t->priority === 'High')
+                                                <span class="badge bg-danger">Prioritas Tinggi</span>
+                                            @elseif ($t->priority === 'Medium')
+                                                <span class="badge bg-warning text-dark">Prioritas Sedang</span>
+                                            @elseif ($t->priority === 'Low')
+                                                <span class="badge bg-light text-muted border">Prioritas Rendah</span>
+                                            @endif
+
+                                            @if ($effStatus === 'Selesai')
+                                                <span class="badge bg-success">
+                                                    <i class="fa-solid fa-check-circle me-1"></i> Selesai
+                                                </span>
+                                            @elseif ($effStatus === 'Perlu Revisi')
+                                                <span class="badge bg-danger">
+                                                    <i class="fa-solid fa-rotate-left me-1"></i> Perlu Revisi
+                                                </span>
+                                            @elseif ($effStatus === 'Diajukan')
+                                                <span class="badge bg-info text-dark">
+                                                    <i class="fa-solid fa-clock me-1"></i> Menunggu Review
+                                                </span>
+                                            @elseif ($isOverdue)
+                                                <span class="badge bg-danger">
+                                                    <i class="fa-solid fa-triangle-exclamation me-1"></i> Lewat Tenggat
+                                                </span>
+                                            @else
+                                                <span class="badge bg-warning text-dark">
+                                                    <i class="fa-solid fa-circle-dot me-1"></i> Ditugaskan
+                                                </span>
+                                            @endif
+                                        </div>
+
+                                        <div class="text-muted small mb-2">
+                                            <strong>Kelas:</strong> Tidak terkait kelas
+                                            · <strong>Materi Terkait:</strong> {{ $t->material ? $t->material->title . ' (Pertemuan ' . $t->material->meeting_number . ')' : 'Tidak terkait materi spesifik' }}
+                                            @if ($t->due_date)
+                                                · <strong>Tenggat:</strong>
+                                                <span class="{{ $isOverdue && !$isDone ? 'badge bg-danger text-white' : ($t->due_date->diffInDays(now()) <= 2 && !$isDone ? 'badge bg-warning text-dark' : 'fw-semibold') }}">
+                                                    {{ $t->due_date->translatedFormat('d M Y') }}
+                                                    @if ($isOverdue && !$isDone) (Terlewat) @endif
+                                                </span>
+                                            @endif
+                                            · Dibuat: {{ $t->created_at->translatedFormat('d M Y') }}
+                                            @if ($t->creator) oleh {{ $t->creator->name ?? $t->creator->username }} @endif
+                                        </div>
+
+                                        @if ($t->description)
+                                            <div class="p-3 rounded-3 bg-light border mb-2 small">
+                                                <strong>Instruksi & Poin Perbaikan:</strong>
+                                                <div class="mt-1">{!! nl2br(e($t->description)) !!}</div>
+                                            </div>
+                                        @endif
+
+                                        @if ($t->attachment_path)
+                                            <div class="small mb-2">
+                                                <i class="fa-solid fa-paperclip text-primary me-1"></i>
+                                                <a href="{{ Storage::url($t->attachment_path) }}" target="_blank" class="fw-semibold text-decoration-none">
+                                                    {{ $t->attachment_name ?? 'Unduh Lampiran Kurikulum' }}
+                                                </a>
+                                            </div>
+                                        @endif
+
+                                        @if ($sub && in_array($sub->status, ['Rejected', 'Perlu Revisi']) && $sub->review_note)
+                                            <div class="alert alert-warning py-2 px-3 small mb-2">
+                                                <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                                                <strong>Catatan Revisi dari Kurikulum:</strong> {{ $sub->review_note }}
+                                            </div>
+                                        @endif
+
+                                        @if ($sub)
+                                            <div class="small text-muted mt-1">
+                                                <i class="fa-solid fa-file-circle-check text-success me-1"></i>
+                                                Pengajuan perbaikan terakhir dikirim {{ $sub->created_at->translatedFormat('d M Y H:i') }} (v{{ $sub->current_version ?: 1 }} - Status: <strong>{{ $sub->status }}</strong>)
+                                            </div>
+                                        @endif
+                                    </div>
+
+                                    <div class="d-flex align-items-center gap-2">
+                                        @if ($effStatus === 'Selesai')
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2">
+                                                <i class="fa-solid fa-check me-1"></i> Tugas Tuntas
+                                            </span>
+                                        @elseif ($effStatus === 'Perlu Revisi' && $sub)
+                                            <button type="button" class="btn btn-danger btn-sm rounded-pill fw-semibold"
+                                                    data-bs-toggle="modal" data-bs-target="#reuploadModal{{ $sub->id }}">
+                                                <i class="fa-solid fa-rotate-left me-1"></i> Upload Ulang Perbaikan
+                                            </button>
+                                        @elseif ($effStatus === 'Diajukan' && $sub)
+                                            <button type="button" class="btn btn-outline-warning btn-sm rounded-pill fw-semibold"
+                                                    data-bs-toggle="modal" data-bs-target="#reuploadModal{{ $sub->id }}">
+                                                <i class="fa-solid fa-upload me-1"></i> Update Berkas
+                                            </button>
+                                        @else
+                                            <button type="button" class="btn btn-success btn-sm rounded-pill fw-semibold"
+                                                    data-bs-toggle="modal" data-bs-target="#uploadTaskModal{{ $t->id }}">
+                                                <i class="fa-solid fa-upload me-1"></i> Kerjakan / Upload Perbaikan
+                                            </button>
+                                        @endif
+                                    </div>
+                                </div>
+                            </div>
+
+                            {{-- MODAL UPLOAD PERBAIKAN UNTUK TUGAS INI --}}
+                            <div class="modal fade" id="uploadTaskModal{{ $t->id }}" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog modal-dialog-centered modal-lg">
+                                    <form class="modal-content rounded-4 border-0 shadow"
+                                          action="{{ route('teacher.kelas.store') }}"
+                                          method="POST"
+                                          enctype="multipart/form-data">
+                                        @csrf
+                                        <input type="hidden" name="task_id" value="{{ $t->id }}">
+                                        @if ($t->material_id)
+                                            <input type="hidden" name="material_id" value="{{ $t->material_id }}">
+                                        @endif
+
+                                        <div class="modal-header bg-light">
+                                            <div>
+                                                <h5 class="modal-title fw-bold mb-0">Upload Perbaikan Materi</h5>
+                                                <small class="text-muted">{{ $t->title }}</small>
+                                            </div>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+
+                                        <div class="modal-body p-4">
+                                            <div class="alert alert-info py-2 px-3 small mb-3">
+                                                <i class="fa-solid fa-circle-info me-1"></i>
+                                                Silakan unggah Lesson Plan dan PPT perbaikan untuk tugas ini. Setelah dikirim, pengajuan akan otomatis terhubung ke tugas dan direview oleh Kurikulum.
+                                            </div>
+
+                                            @if (!$t->material_id)
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-semibold">Pilih Materi Kurikulum (Opsional)</label>
+                                                    <select name="material_id" class="form-select">
+                                                        <option value="">-- Tidak terkait materi spesifik --</option>
+                                                        @foreach ($materials as $m)
+                                                            <option value="{{ $m->id }}">{{ $m->title }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                            @endif
+
+                                            <div class="row">
+                                                <div class="col-md-6 mb-3">
+                                                    <label class="form-label fw-semibold">Upload Lesson Plan (PDF) <span class="text-danger">*</span></label>
+                                                    <input type="file" name="lp_file" accept="application/pdf" class="form-control" required>
+                                                    <small class="text-muted">Format PDF, maksimal 10 MB.</small>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <label class="form-label fw-semibold">Upload PPT <span class="text-danger">*</span></label>
+                                                    <input type="file" name="ppt_file" accept=".pdf,.ppt,.pptx" class="form-control" required>
+                                                    <small class="text-muted">Format PDF / PPT / PPTX, maksimal 20 MB.</small>
+                                                </div>
+                                            </div>
+
+                                            <div class="mb-0">
+                                                <label class="form-label fw-semibold">Catatan Perbaikan (Opsional)</label>
+                                                <textarea name="notes" rows="3" class="form-control" placeholder="Tuliskan catatan penjelasan perubahan yang dilakukan..."></textarea>
+                                            </div>
+                                        </div>
+
+                                        <div class="modal-footer bg-light">
+                                            <button type="button" class="btn btn-light rounded-pill px-3" data-bs-dismiss="modal">Batal</button>
+                                            <button type="submit" class="btn btn-success rounded-pill px-4 fw-semibold">
+                                                <i class="fa-solid fa-paper-plane me-1"></i> Kirim Perbaikan ke Kurikulum
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="text-center py-5 text-muted">
+                                <i class="fa-solid fa-clipboard-check fs-1 text-secondary mb-3 d-block"></i>
+                                <h5>Belum ada tugas perbaikan materi</h5>
+                                <p class="mb-0">Semua materi Anda saat ini tidak memerlukan perbaikan atau revisi dari Kurikulum.</p>
+                            </div>
+                        @endforelse
+                    </div>
+                </div>
+            </div>
+        </div> {{-- End pane-tugas-materi --}}
+
+        {{-- ==================== TAB 3: TUGAS PERBAIKAN KELAS ==================== --}}
+        <div class="tab-pane fade {{ $curTab === 'tugas-kelas' ? 'show active' : '' }}" id="pane-tugas-kelas" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h4 class="fw-bold mb-1">Tugas Perbaikan Kelas</h4>
+                            <p class="text-muted mb-0">
+                                Daftar tugas perbaikan terkait kelas yang Anda ampu dari Kurikulum.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="list-group list-group-flush">
+                        @forelse ($classTasks as $t)
+                            @php
+                                $effStatus = $t->effective_status;
+                                $isOverdue = $t->is_overdue;
+                                $isDone = $t->status === 'Done';
+                                $sub = $t->latestSubmission;
+                            @endphp
+                            <div class="list-group-item py-3 px-0 border-bottom">
+                                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                                            <h5 class="fw-bold mb-0">{{ $t->title }}</h5>
+                                            <span class="badge bg-secondary">
+                                                <i class="fa-solid fa-chalkboard-user me-1"></i> Tugas Kelas
+                                            </span>
+
+                                            @if ($t->priority === 'High')
+                                                <span class="badge bg-danger">Prioritas Tinggi</span>
+                                            @elseif ($t->priority === 'Medium')
+                                                <span class="badge bg-warning text-dark">Prioritas Sedang</span>
+                                            @elseif ($t->priority === 'Low')
+                                                <span class="badge bg-light text-muted border">Prioritas Rendah</span>
+                                            @endif
+
+                                            @if ($effStatus === 'Selesai')
+                                                <span class="badge bg-success">
+                                                    <i class="fa-solid fa-check-circle me-1"></i> Selesai
+                                                </span>
+                                            @elseif ($effStatus === 'Perlu Revisi')
+                                                <span class="badge bg-danger">
+                                                    <i class="fa-solid fa-rotate-left me-1"></i> Perlu Revisi
+                                                </span>
+                                            @elseif ($effStatus === 'Diajukan')
+                                                <span class="badge bg-info text-dark">
+                                                    <i class="fa-solid fa-clock me-1"></i> Menunggu Review
+                                                </span>
+                                            @elseif ($isOverdue)
+                                                <span class="badge bg-danger">
+                                                    <i class="fa-solid fa-triangle-exclamation me-1"></i> Lewat Tenggat
+                                                </span>
+                                            @else
+                                                <span class="badge bg-warning text-dark">
+                                                    <i class="fa-solid fa-circle-dot me-1"></i> Ditugaskan
+                                                </span>
+                                            @endif
+                                        </div>
+
+                                        <div class="text-muted small mb-2">
+                                            <strong>Kelas Terkait:</strong> <span class="fw-semibold text-dark">{{ $t->class->class_name ?? 'Tidak terkait kelas' }}</span>
+                                            @if ($t->material)
+                                                · <strong>Materi:</strong> {{ $t->material->title }} (P-{{ $t->material->meeting_number }})
+                                            @endif
+                                            @if ($t->due_date)
+                                                · <strong>Tenggat:</strong>
+                                                <span class="{{ $isOverdue && !$isDone ? 'badge bg-danger text-white' : ($t->due_date->diffInDays(now()) <= 2 && !$isDone ? 'badge bg-warning text-dark' : 'fw-semibold') }}">
+                                                    {{ $t->due_date->translatedFormat('d M Y') }}
+                                                    @if ($isOverdue && !$isDone) (Terlewat) @endif
+                                                </span>
+                                            @endif
+                                            · Dibuat: {{ $t->created_at->translatedFormat('d M Y') }}
+                                            @if ($t->creator) oleh {{ $t->creator->name ?? $t->creator->username }} @endif
+                                        </div>
+
+                                        @if ($t->description)
+                                            <div class="p-3 rounded-3 bg-light border mb-2 small">
+                                                <strong>Instruksi & Poin Perbaikan:</strong>
+                                                <div class="mt-1">{!! nl2br(e($t->description)) !!}</div>
+                                            </div>
+                                        @endif
+
+                                        @if ($t->attachment_path)
+                                            <div class="small mb-2">
+                                                <i class="fa-solid fa-paperclip text-primary me-1"></i>
+                                                <a href="{{ Storage::url($t->attachment_path) }}" target="_blank" class="fw-semibold text-decoration-none">
+                                                    {{ $t->attachment_name ?? 'Unduh Lampiran Kurikulum' }}
+                                                </a>
+                                            </div>
+                                        @endif
+
+                                        @if ($sub && in_array($sub->status, ['Rejected', 'Perlu Revisi']) && $sub->review_note)
+                                            <div class="alert alert-warning py-2 px-3 small mb-2">
+                                                <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                                                <strong>Catatan Revisi dari Kurikulum:</strong> {{ $sub->review_note }}
+                                            </div>
+                                        @endif
+
+                                        @if ($sub)
+                                            <div class="small text-muted mt-1">
+                                                <i class="fa-solid fa-file-circle-check text-success me-1"></i>
+                                                Pengajuan perbaikan terakhir dikirim {{ $sub->created_at->translatedFormat('d M Y H:i') }} (v{{ $sub->current_version ?: 1 }} - Status: <strong>{{ $sub->status }}</strong>)
+                                            </div>
+                                        @endif
+                                    </div>
+
+                                    <div class="d-flex align-items-center gap-2">
+                                        @if ($effStatus === 'Selesai')
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2">
+                                                <i class="fa-solid fa-check me-1"></i> Tugas Tuntas
+                                            </span>
+                                        @elseif ($effStatus === 'Perlu Revisi' && $sub)
+                                            <button type="button" class="btn btn-danger btn-sm rounded-pill fw-semibold"
+                                                    data-bs-toggle="modal" data-bs-target="#reuploadModal{{ $sub->id }}">
+                                                <i class="fa-solid fa-rotate-left me-1"></i> Upload Ulang Perbaikan
+                                            </button>
+                                        @elseif ($effStatus === 'Diajukan' && $sub)
+                                            <button type="button" class="btn btn-outline-warning btn-sm rounded-pill fw-semibold"
+                                                    data-bs-toggle="modal" data-bs-target="#reuploadModal{{ $sub->id }}">
+                                                <i class="fa-solid fa-upload me-1"></i> Update Berkas
+                                            </button>
+                                        @else
+                                            <button type="button" class="btn btn-success btn-sm rounded-pill fw-semibold"
+                                                    data-bs-toggle="modal" data-bs-target="#uploadTaskModal{{ $t->id }}">
+                                                <i class="fa-solid fa-upload me-1"></i> Kerjakan / Upload Perbaikan
+                                            </button>
+                                        @endif
+                                    </div>
+                                </div>
+                            </div>
+
+                            {{-- MODAL UPLOAD PERBAIKAN UNTUK TUGAS KELAS INI --}}
+                            <div class="modal fade" id="uploadTaskModal{{ $t->id }}" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog modal-dialog-centered modal-lg">
+                                    <form class="modal-content rounded-4 border-0 shadow"
+                                          action="{{ route('teacher.kelas.store') }}"
+                                          method="POST"
+                                          enctype="multipart/form-data">
+                                        @csrf
+                                        <input type="hidden" name="task_id" value="{{ $t->id }}">
+                                        @if ($t->class_id)
+                                            <input type="hidden" name="class_id" value="{{ $t->class_id }}">
+                                        @endif
+                                        @if ($t->material_id)
+                                            <input type="hidden" name="material_id" value="{{ $t->material_id }}">
+                                        @endif
+
+                                        <div class="modal-header bg-light">
+                                            <div>
+                                                <h5 class="modal-title fw-bold mb-0">Upload Perbaikan Kelas</h5>
+                                                <small class="text-muted">{{ $t->title }} · {{ $t->class->class_name ?? 'Tidak terkait kelas' }}</small>
+                                            </div>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+
+                                        <div class="modal-body p-4">
+                                            <div class="alert alert-info py-2 px-3 small mb-3">
+                                                <i class="fa-solid fa-circle-info me-1"></i>
+                                                Silakan unggah Lesson Plan dan PPT perbaikan untuk kelas ini. Setelah dikirim, pengajuan akan otomatis terhubung ke tugas dan direview oleh Kurikulum.
+                                            </div>
+
+                                            @if (!$t->class_id)
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-semibold">Pilih Kelas yang Diampu (Opsional)</label>
+                                                    <select name="class_id" class="form-select">
+                                                        <option value="">-- Pilih Kelas --</option>
+                                                        @foreach ($myClasses as $c)
+                                                            <option value="{{ $c->id }}">{{ $c->class_name }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                            @endif
+
+                                            @if (!$t->material_id)
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-semibold">Pilih Materi Kurikulum (Opsional)</label>
+                                                    <select name="material_id" class="form-select">
+                                                        <option value="">-- Tidak terkait materi spesifik --</option>
+                                                        @foreach ($materials as $m)
+                                                            <option value="{{ $m->id }}">{{ $m->title }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                            @endif
+
+                                            <div class="row">
+                                                <div class="col-md-6 mb-3">
+                                                    <label class="form-label fw-semibold">Upload Lesson Plan (PDF) <span class="text-danger">*</span></label>
+                                                    <input type="file" name="lp_file" accept="application/pdf" class="form-control" required>
+                                                    <small class="text-muted">Format PDF, maksimal 10 MB.</small>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <label class="form-label fw-semibold">Upload PPT <span class="text-danger">*</span></label>
+                                                    <input type="file" name="ppt_file" accept=".pdf,.ppt,.pptx" class="form-control" required>
+                                                    <small class="text-muted">Format PDF / PPT / PPTX, maksimal 20 MB.</small>
+                                                </div>
+                                            </div>
+
+                                            <div class="mb-0">
+                                                <label class="form-label fw-semibold">Catatan Perbaikan (Opsional)</label>
+                                                <textarea name="notes" rows="3" class="form-control" placeholder="Tuliskan catatan perbaikan atau penjelasan perubahan yang dilakukan..."></textarea>
+                                            </div>
+                                        </div>
+
+                                        <div class="modal-footer bg-light">
+                                            <button type="button" class="btn btn-light rounded-pill px-3" data-bs-dismiss="modal">Batal</button>
+                                            <button type="submit" class="btn btn-success rounded-pill px-4 fw-semibold">
+                                                <i class="fa-solid fa-paper-plane me-1"></i> Kirim Perbaikan ke Kurikulum
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="text-center py-5 text-muted">
+                                <i class="fa-solid fa-clipboard-check fs-1 text-secondary mb-3 d-block"></i>
+                                <h5>Belum ada tugas perbaikan kelas</h5>
+                                <p class="mb-0">Semua kelas yang Anda ampu saat ini tidak memiliki tugas perbaikan dari Kurikulum.</p>
+                            </div>
+                        @endforelse
+                    </div>
+                </div>
+            </div>
+        </div> {{-- End pane-tugas-kelas --}}
+
+    </div> {{-- End tab-content kelasMainTabContent --}}
 
 </div>
 

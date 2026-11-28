@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Guru;
 
 use App\Http\Controllers\Controller;
 use App\Models\ClassModel;
+use App\Models\ClassTask;
 use App\Models\Consultation;
 use App\Models\Material;
 use App\Models\ProgramCategory;
@@ -56,6 +57,33 @@ class KelasController extends Controller
             ? $this->buildProgressSteps($activeSubmission)
             : null;
 
+        // Ambil tugas perbaikan yang ditujukan untuk guru login
+        $materialTasks = ClassTask::with(['material', 'creator', 'latestSubmission'])
+            ->where('teacher_id', $teacher->id)
+            ->where('task_type', 'material_revision')
+            ->orderByRaw(DB::getDriverName() === 'mysql' ? "FIELD(status,'Open','Done')" : "CASE status WHEN 'Open' THEN 1 ELSE 2 END")
+            ->orderByRaw('due_date IS NULL')
+            ->orderBy('due_date')
+            ->latest('id')
+            ->get();
+
+        $classTasks = ClassTask::with(['class', 'material', 'creator', 'latestSubmission'])
+            ->where(function ($q) use ($teacher) {
+                $q->where('teacher_id', $teacher->id)
+                  ->orWhereHas('class', fn ($c) => $c->where('teacher_id', $teacher->id));
+            })
+            ->where('task_type', '!=', 'material_revision')
+            ->orderByRaw(DB::getDriverName() === 'mysql' ? "FIELD(status,'Open','Done')" : "CASE status WHEN 'Open' THEN 1 ELSE 2 END")
+            ->orderByRaw('due_date IS NULL')
+            ->orderBy('due_date')
+            ->latest('id')
+            ->get();
+
+        $pendingMaterialTasksCount = $materialTasks->where('status', 'Open')->count();
+        $pendingClassTasksCount = $classTasks->where('status', 'Open')->count();
+
+        $activeTab = $request->query('tab', 'buat-lp');
+
         return view('guru.kelas', compact(
             'myClasses',
             'selectedClassId',
@@ -63,7 +91,12 @@ class KelasController extends Controller
             'materials',
             'submissions',
             'activeSubmission',
-            'progressSteps'
+            'progressSteps',
+            'materialTasks',
+            'classTasks',
+            'pendingMaterialTasksCount',
+            'pendingClassTasksCount',
+            'activeTab'
         ));
     }
 
@@ -157,27 +190,71 @@ class KelasController extends Controller
             abort(403, 'Akun Anda belum terhubung dengan data guru.');
         }
 
-        $request->validate([
-            'class_id'    => ['required', 'exists:classes,id'],
-            'material_id' => ['required', Rule::exists('materials', 'id')->where('audience', 'Guru')],
+        $taskId = $request->input('task_id');
+        $task = null;
+        if ($taskId) {
+            $task = ClassTask::findOrFail($taskId);
+            // Validasi kepemilikan tugas
+            $isOwner = (int) $task->teacher_id === (int) $teacher->id
+                || ($task->class && (int) $task->class->teacher_id === (int) $teacher->id);
+            abort_unless($isOwner, 403, 'Anda tidak memiliki akses ke tugas ini.');
+        }
+
+        $rules = [
             'lp_file'     => ['required', 'file', 'mimes:pdf', 'max:10240'],
             'ppt_file'    => ['required', 'file', 'mimes:pdf,ppt,pptx', 'max:20480'],
             'notes'       => ['nullable', 'string', 'max:1000'],
-        ]);
+            'task_id'     => ['nullable', 'exists:class_tasks,id'],
+        ];
+
+        if ($task) {
+            if ($task->task_type === 'material_revision') {
+                $rules['class_id'] = ['nullable', 'exists:classes,id'];
+                $rules['material_id'] = ['nullable', 'exists:materials,id'];
+            } else {
+                $rules['class_id'] = ['nullable', 'exists:classes,id'];
+                $rules['material_id'] = ['nullable', 'exists:materials,id'];
+            }
+        } else {
+            $rules['class_id'] = ['required', 'exists:classes,id'];
+            $rules['material_id'] = ['required', Rule::exists('materials', 'id')->where('audience', 'Guru')];
+        }
+
+        $request->validate($rules);
 
         try {
-            DB::transaction(function () use ($request, $teacher) {
+            DB::transaction(function () use ($request, $teacher, $task) {
                 $lpPath  = $request->file('lp_file')->store('teacher_materials/lp', 'public');
                 $pptPath = $request->file('ppt_file')->store('teacher_materials/ppt', 'public');
 
-                $material = Material::forGuru()->findOrFail($request->material_id);
-                $class    = ClassModel::findOrFail($request->class_id);
+                $classId = null;
+                $materialId = null;
+                $title = null;
+
+                if ($task) {
+                    $classId = $request->class_id ?? $task->class_id;
+                    $materialId = $request->material_id ?? $task->material_id;
+
+                    if ($materialId) {
+                        $mat = Material::find($materialId);
+                        $title = $mat ? $mat->title : $task->title;
+                    } else {
+                        $title = $task->title;
+                    }
+                } else {
+                    $material = Material::forGuru()->findOrFail($request->material_id);
+                    $class    = ClassModel::findOrFail($request->class_id);
+                    $classId = $class->id;
+                    $materialId = $material->id;
+                    $title = $material->title;
+                }
 
                 $submission = TeacherMaterial::create([
-                    'material_id'     => $request->material_id,
+                    'material_id'     => $materialId,
                     'teacher_id'      => $teacher->id,
-                    'class_id'        => $class->id,
-                    'ppt_title'       => $material->title,
+                    'class_id'        => $classId,
+                    'task_id'         => $task?->id,
+                    'ppt_title'       => $title,
                     'lp_file_path'    => $lpPath,
                     'ppt_file_path'   => $pptPath,
                     'status'          => 'Diajukan',
@@ -190,16 +267,24 @@ class KelasController extends Controller
                     'version_number'      => 1,
                     'lp_file_path'         => $lpPath,
                     'ppt_file_path'        => $pptPath,
-                    'notes'                => $request->notes ?? 'Versi awal',
+                    'notes'                => $request->notes ?? ($task ? 'Perbaikan dari tugas: ' . $task->title : 'Versi awal'),
                     'status'               => 'Diajukan',
                 ]);
 
                 // Notifikasi ke seluruh tim Kurikulum
                 $curriculums = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Curriculum'))->get();
+                $className = $submission->class?->class_name ?? 'Tidak terkait kelas';
+                $notifTitle = $task
+                    ? "Perbaikan Tugas Diunggah: {$task->title}"
+                    : "Revisi Dokumen Masuk: {$className}";
+                $notifMsg = $task
+                    ? "Guru {$teacher->name} mengunggah berkas perbaikan untuk tugas '{$task->title}'."
+                    : "Guru {$teacher->name} mengunggah Lesson Plan & PPT (Versi 1) untuk kelas {$className} ({$title}).";
+
                 foreach ($curriculums as $cUser) {
                     $cUser->notify(new AppNotification(
-                        title: "Revisi Dokumen Masuk: {$class->class_name}",
-                        message: "Guru {$teacher->name} mengunggah Lesson Plan & PPT (Versi 1) untuk kelas {$class->class_name} ({$material->title}).",
+                        title: $notifTitle,
+                        message: $notifMsg,
                         url: url('/kurikulum/review-pengajuan?tab=material'),
                         type: 'dokumen_kelas',
                         icon: 'fa-chalkboard'
@@ -207,9 +292,14 @@ class KelasController extends Controller
                 }
             });
 
+            $targetTab = 'buat-lp';
+            if ($task) {
+                $targetTab = $task->task_type === 'material_revision' ? 'tugas-materi' : 'tugas-kelas';
+            }
+
             return redirect()
-                ->route('teacher.kelas')
-                ->with('success', 'Lesson Plan & PPT berhasil dikirim untuk direview Kurikulum (Versi 1).');
+                ->route('teacher.kelas', ['tab' => $targetTab])
+                ->with('success', $task ? 'Berkas perbaikan berhasil dikirim ke Kurikulum untuk direview.' : 'Lesson Plan & PPT berhasil dikirim untuk direview Kurikulum (Versi 1).');
 
         } catch (\Exception $e) {
             return back()
@@ -271,12 +361,19 @@ class KelasController extends Controller
                 ]);
 
                 // Notifikasi ke Kurikulum
-                $className = $teacherMaterial->class?->class_name ?? 'Kelas';
+                $className = $teacherMaterial->class?->class_name ?? 'Tidak terkait kelas';
                 $curriculums = User::whereHas('level', fn ($q) => $q->where('nama_level', 'Curriculum'))->get();
+                $notifTitle = $teacherMaterial->task
+                    ? "Revisi Tugas Baru (Versi {$newVersion}): {$teacherMaterial->task->title}"
+                    : "Revisi Dokumen Baru (Versi {$newVersion}): {$className}";
+                $notifMsg = $teacherMaterial->task
+                    ? "Guru {$teacher->name} mengunggah revisi perbaikan versi {$newVersion} untuk tugas '{$teacherMaterial->task->title}'. Catatan: {$request->notes}"
+                    : "Guru {$teacher->name} mengunggah revisi versi {$newVersion} untuk kelas {$className}. Catatan guru: {$request->notes}";
+
                 foreach ($curriculums as $cUser) {
                     $cUser->notify(new AppNotification(
-                        title: "Revisi Dokumen Baru (Versi {$newVersion}): {$className}",
-                        message: "Guru {$teacher->name} mengunggah revisi versi {$newVersion} untuk kelas {$className}. Catatan guru: {$request->notes}",
+                        title: $notifTitle,
+                        message: $notifMsg,
                         url: url('/kurikulum/review-pengajuan?tab=material'),
                         type: 'dokumen_kelas',
                         icon: 'fa-chalkboard'
@@ -284,8 +381,13 @@ class KelasController extends Controller
                 }
             });
 
+            $targetTab = 'buat-lp';
+            if ($teacherMaterial->task) {
+                $targetTab = $teacherMaterial->task->task_type === 'material_revision' ? 'tugas-materi' : 'tugas-kelas';
+            }
+
             return redirect()
-                ->route('teacher.kelas')
+                ->route('teacher.kelas', ['tab' => $targetTab])
                 ->with('success', 'Revisi dokumen versi baru berhasil diupload dan dikirim kembali ke Kurikulum.');
 
         } catch (\Exception $e) {

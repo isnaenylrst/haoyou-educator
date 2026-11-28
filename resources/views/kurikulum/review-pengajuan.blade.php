@@ -291,10 +291,20 @@
                             <div>
                                 <div class="fw-semibold">
                                     {{ $item->teacher->name ?? '-' }} — {{ $item->ppt_title }}
-                                    ({{ $item->material->level->level_name ?? '-' }})
+                                    @if ($item->material?->level)
+                                        ({{ $item->material->level->level_name ?? '-' }})
+                                    @endif
+                                    @if ($item->task)
+                                        <span class="badge bg-primary text-white ms-1">
+                                            <i class="fa-solid fa-clipboard-check me-1"></i> Perbaikan dari tugas: {{ $item->task->title }}
+                                        </span>
+                                    @endif
                                 </div>
                                 <small class="text-muted d-block">
-                                    Pertemuan {{ $item->material->meeting_number ?? '-' }} · Diajukan {{ $item->created_at->diffForHumans() }}
+                                    @if ($item->material)
+                                        Pertemuan {{ $item->material->meeting_number ?? '-' }} ·
+                                    @endif
+                                    Diajukan {{ $item->created_at->diffForHumans() }}
                                 </small>
                                 <small class="d-block mt-1">
                                     Konsultasi Kurikulum: <strong>{{ $kons('LP_PPT')->status ?? 'belum diajukan' }}</strong>

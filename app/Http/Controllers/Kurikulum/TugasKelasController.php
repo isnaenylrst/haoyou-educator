@@ -157,7 +157,7 @@ class TugasKelasController extends Controller
                             $teacher->user->notify(new \App\Notifications\AppNotification(
                                 title: 'Tugas Perbaikan Materi: ' . $task->title,
                                 message: 'Kurikulum memberikan tugas perbaikan materi: ' . \Illuminate\Support\Str::limit($task->description, 100) . $dueTxt,
-                                url: url('/guru/tugas-kelas'),
+                                url: url('/guru/kelas?tab=tugas-materi'),
                                 type: 'tugas_materi',
                                 icon: 'fa-clipboard-check',
                                 actionLabel: 'Lihat Tugas'
@@ -228,7 +228,7 @@ class TugasKelasController extends Controller
                 $class->teacher->user->notify(new \App\Notifications\AppNotification(
                     title: 'Tugas Kelas: ' . $task->title,
                     message: 'Kurikulum menugaskan perbaikan untuk kelas ' . $class->class_name . $dueTxt,
-                    url: url('/guru/tugas-kelas'),
+                    url: url('/guru/kelas?tab=tugas-kelas'),
                     type: 'tugas_kelas',
                     icon: 'fa-clipboard-list',
                     actionLabel: 'Lihat Tugas'
