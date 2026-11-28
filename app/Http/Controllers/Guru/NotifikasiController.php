@@ -211,6 +211,8 @@ class NotifikasiController extends Controller
                 ? "Tugas perbaikan materi: {$task->title}"
                 : "Tugas perbaikan kelas {$className}: {$task->title}";
 
+            $tab = $task->task_type === 'material_revision' ? 'tugas-materi' : 'tugas-kelas';
+
             $notifications->push([
                 'title' => $notifTitle,
                 'category' => 'Tugas dari Kurikulum' . $due,
@@ -221,7 +223,7 @@ class NotifikasiController extends Controller
                 'attachment_path' => $task->attachment_path,
                 'attachment_name' => $task->attachment_name,
                 'action' => $task->status === 'Open'
-                    ? ['kind' => 'task', 'url' => route('teacher.tugas.complete', $task)]
+                    ? ['kind' => 'link', 'label' => 'Kerjakan / Upload', 'url' => route('teacher.kelas', ['tab' => $tab])]
                     : ['kind' => 'done'],
             ]);
         }

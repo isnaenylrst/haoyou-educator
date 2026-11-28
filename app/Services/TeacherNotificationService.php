@@ -423,15 +423,19 @@ class TeacherNotificationService
         ClassTask::with('class')->where('teacher_id', $t->id)
             ->where(fn ($q) => $q->where('status', 'Open')->orWhere('done_at', '>=', now()->subDays(14)))->get()
             ->each(function ($task) use ($push) {
-                $cn  = $task->class->class_name ?? '-';
+                $cn  = $task->class->class_name ?? 'Tidak terkait kelas';
                 $due = $task->due_date ? ' · batas ' . $task->due_date->translatedFormat('d M Y') : '';
                 $open = $task->status === 'Open';
+                $tab = $task->task_type === 'material_revision' ? 'tugas-materi' : 'tugas-kelas';
+                $title = ($task->task_type === 'material_revision')
+                    ? "Tugas perbaikan materi: {$task->title}"
+                    : "Tugas perbaikan kelas {$cn}: {$task->title}";
                 $push([
                     'key' => "task-{$task->id}", 'type' => $open ? 'task' : 'task_done',
-                    'title' => "Tugas perbaikan kelas {$cn}: {$task->title}",
+                    'title' => $title,
                     'category' => 'Tugas dari Kurikulum' . $due, 'time' => $task->created_at,
                     'note' => $task->description, 'actionable' => $open,
-                    'action' => $open ? ['kind' => 'task', 'url' => route('teacher.tugas.complete', $task)] : ['kind' => 'done'],
+                    'action' => $open ? ['kind' => 'link', 'label' => 'Kerjakan / Upload', 'url' => route('teacher.kelas', ['tab' => $tab])] : ['kind' => 'done'],
                 ]);
             });
 

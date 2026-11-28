@@ -15,6 +15,7 @@ class TeacherMaterial extends Model
         'material_id',
         'teacher_id',
         'class_id',
+        'task_id',
         'ppt_title',
         'ppt_file_path',
         'status',
@@ -33,6 +34,11 @@ class TeacherMaterial extends Model
     public function class()
     {
         return $this->belongsTo(ClassModel::class, 'class_id');
+    }
+
+    public function task()
+    {
+        return $this->belongsTo(ClassTask::class, 'task_id');
     }
 
     public function versions()

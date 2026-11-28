@@ -146,7 +146,7 @@ class ReviewPengajuanController extends Controller
 
         $materials = $page(
             $this->applyReviewFilters(
-                TeacherMaterial::with(['teacher', 'material.level', 'consultations'])->where('status', 'Pending'),
+                TeacherMaterial::with(['teacher', 'material.level', 'consultations', 'task'])->whereIn('status', ['Pending', 'Diajukan']),
                 $filters, 'created_at'
             )->oldest(),
             'material_page', 'material'
@@ -368,15 +368,39 @@ class ReviewPengajuanController extends Controller
                 $className = $teacherMaterial->class?->class_name ?? 'Kelas';
                 $isApproved = $data['decision'] === 'Approved';
 
+                $notifUrl = url('/guru/kelas');
+                if ($teacherMaterial->task) {
+                    $tab = $teacherMaterial->task->task_type === 'material_revision' ? 'tugas-materi' : 'tugas-kelas';
+                    $notifUrl = url('/guru/kelas?tab=' . $tab);
+                }
+
                 $teacher->user->notify(new AppNotification(
                     title: $isApproved ? "Dokumen Kelas Disetujui: {$className}" : "Dokumen Kelas Perlu Revisi: {$className}",
                     message: $isApproved
                         ? "Kurikulum telah menyetujui Lesson Plan & PPT untuk kelas {$className}."
                         : "Kurikulum meminta perbaikan LP & PPT kelas {$className}. Catatan: {$data['note']}",
-                    url: url('/guru/kelas'),
+                    url: $notifUrl,
                     type: 'dokumen_kelas',
                     icon: $isApproved ? 'fa-circle-check' : 'fa-circle-exclamation'
                 ));
+            }
+
+            // Hook pembaruan status tugas jika pengajuan ini terikat tugas
+            if ($teacherMaterial->task_id) {
+                $task = $teacherMaterial->task;
+                if ($task) {
+                    if ($data['decision'] === 'Approved') {
+                        $task->update([
+                            'status'  => 'Done',
+                            'done_at' => now(),
+                        ]);
+                    } elseif ($data['decision'] === 'Rejected') {
+                        $task->update([
+                            'status'  => 'Open',
+                            'done_at' => null,
+                        ]);
+                    }
+                }
             }
         });
 
